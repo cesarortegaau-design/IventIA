@@ -1,0 +1,58 @@
+import { Routes, Route, Navigate } from 'react-router-dom'
+import { useAuthStore } from '../stores/authStore'
+import MainLayout from '../layouts/MainLayout'
+import LoginPage from '../pages/auth/LoginPage'
+import EventsCalendarPage from '../pages/events/EventsCalendarPage'
+import EventDetailPage from '../pages/events/EventDetailPage'
+import EventFormPage from '../pages/events/EventFormPage'
+import OrderDetailPage from '../pages/orders/OrderDetailPage'
+import OrderFormWizard from '../pages/orders/OrderFormWizard'
+import ResourcesPage from '../pages/catalogs/resources/ResourcesPage'
+import ClientsPage from '../pages/catalogs/clients/ClientsPage'
+import PriceListsPage from '../pages/catalogs/priceLists/PriceListsPage'
+import DepartmentsPage from '../pages/catalogs/departments/DepartmentsPage'
+import UsersPage from '../pages/catalogs/users/UsersPage'
+import AccountingDashboard from '../pages/dashboard/AccountingDashboard'
+import OperationsDashboard from '../pages/dashboard/OperationsDashboard'
+import ClientDetailPage from '../pages/crm/ClientDetailPage'
+import CrmDashboard from '../pages/crm/CrmDashboard'
+
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  const token = useAuthStore((s) => s.accessToken)
+  if (!token) return <Navigate to="/login" replace />
+  return <>{children}</>
+}
+
+export function AppRouter() {
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route
+        path="/"
+        element={
+          <RequireAuth>
+            <MainLayout />
+          </RequireAuth>
+        }
+      >
+        <Route index element={<Navigate to="/eventos" replace />} />
+        <Route path="eventos" element={<EventsCalendarPage />} />
+        <Route path="eventos/nuevo" element={<EventFormPage />} />
+        <Route path="eventos/:id" element={<EventDetailPage />} />
+        <Route path="eventos/:id/editar" element={<EventFormPage />} />
+        <Route path="eventos/:eventId/ordenes/nueva" element={<OrderFormWizard />} />
+        <Route path="ordenes/:id" element={<OrderDetailPage />} />
+        <Route path="catalogos/recursos" element={<ResourcesPage />} />
+        <Route path="catalogos/clientes" element={<ClientsPage />} />
+        <Route path="catalogos/clientes/:clientId" element={<ClientDetailPage />} />
+        <Route path="crm" element={<CrmDashboard />} />
+        <Route path="catalogos/listas-precio" element={<PriceListsPage />} />
+        <Route path="catalogos/departamentos" element={<DepartmentsPage />} />
+        <Route path="catalogos/usuarios" element={<UsersPage />} />
+        <Route path="dashboard/contabilidad" element={<AccountingDashboard />} />
+        <Route path="dashboard/operaciones" element={<OperationsDashboard />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  )
+}

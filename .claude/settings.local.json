@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm:*)",
+      "Bash(docker compose:*)",
+      "Bash(npx ts-node:*)",
+      "Bash(DATABASE_URL=\"postgresql://iventia:iventia_dev_pass@localhost:5432/iventia_db\" npx prisma migrate dev --name crm_interactions_tasks)",
+      "Bash(pkill -f \"ts-node-dev\")",
+      "Bash(pkill -f \"src/index.ts\")",
+      "Bash(DATABASE_URL=\"postgresql://iventia:iventia_dev_pass@localhost:5432/iventia_db\" npx prisma generate)",
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}

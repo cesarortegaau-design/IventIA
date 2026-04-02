@@ -1,0 +1,173 @@
+import { Request, Response, NextFunction } from 'express'
+import { z } from 'zod'
+import { prisma } from '../config/database'
+import { AppError } from '../middleware/errorHandler'
+
+const createEventSchema = z.object({
+  name: z.string().min(1).max(300),
+  description: z.string().optional(),
+  venueLocation: z.string().optional(),
+  setupStart: z.string().datetime().optional(),
+  setupEnd: z.string().datetime().optional(),
+  eventStart: z.string().datetime().optional(),
+  eventEnd: z.string().datetime().optional(),
+  teardownStart: z.string().datetime().optional(),
+  teardownEnd: z.string().datetime().optional(),
+  primaryClientId: z.string().uuid().optional(),
+  priceListId: z.string().uuid().optional(),
+  eventType: z.string().optional(),
+  eventClass: z.string().optional(),
+  eventCategory: z.string().optional(),
+  coordinator: z.string().optional(),
+  executive: z.string().optional(),
+  notes: z.string().optional(),
+})
+
+const listQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  pageSize: z.coerce.number().min(1).max(500).default(20),
+  status: z.string().optional(),
+  search: z.string().optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
+})
+
+export async function listEvents(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { page, pageSize, status, search, from, to } = listQuerySchema.parse(req.query)
+    const tenantId = req.user!.tenantId
+
+    const where: any = { tenantId }
+    if (status) where.status = status
+    if (search) where.name = { contains: search, mode: 'insensitive' }
+    if (from || to) {
+      where.eventStart = {}
+      if (from) where.eventStart.gte = new Date(from)
+      if (to) where.eventStart.lte = new Date(to)
+    }
+
+    const [total, events] = await Promise.all([
+      prisma.event.count({ where }),
+      prisma.event.findMany({
+        where,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        orderBy: { eventStart: 'desc' },
+        include: {
+          primaryClient: { select: { id: true, companyName: true, firstName: true, lastName: true } },
+          priceList: { select: { id: true, name: true } },
+          _count: { select: { orders: true, stands: true } },
+        },
+      }),
+    ])
+
+    res.json({ success: true, data: events, meta: { total, page, pageSize } })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function getEvent(req: Request, res: Response, next: NextFunction) {
+  try {
+    const event = await prisma.event.findFirst({
+      where: { id: req.params.id, tenantId: req.user!.tenantId },
+      include: {
+        primaryClient: true,
+        priceList: true,
+        spaces: { include: { resource: true } },
+        stands: { include: { client: true, _count: { select: { orders: true } } } },
+        documents: true,
+        orders: {
+          include: {
+            client: { select: { id: true, companyName: true, firstName: true, lastName: true } },
+            stand: { select: { id: true, code: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    })
+    if (!event) throw new AppError(404, 'EVENT_NOT_FOUND', 'Event not found')
+    res.json({ success: true, data: event })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function createEvent(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = createEventSchema.parse(req.body)
+    const tenantId = req.user!.tenantId
+
+    // Generate event code: EVN-YYYY-NNN
+    const year = new Date().getFullYear()
+    const prefix = `EVN-${year}-`
+    const last = await prisma.event.findFirst({
+      where: { tenantId, code: { startsWith: prefix } },
+      orderBy: { code: 'desc' },
+    })
+    const lastNum = last ? parseInt(last.code.replace(prefix, ''), 10) : 0
+    const code = `${prefix}${String(lastNum + 1).padStart(3, '0')}`
+
+    const event = await prisma.event.create({
+      data: {
+        ...data,
+        tenantId,
+        code,
+        setupStart: data.setupStart ? new Date(data.setupStart) : undefined,
+        setupEnd: data.setupEnd ? new Date(data.setupEnd) : undefined,
+        eventStart: data.eventStart ? new Date(data.eventStart) : undefined,
+        eventEnd: data.eventEnd ? new Date(data.eventEnd) : undefined,
+        teardownStart: data.teardownStart ? new Date(data.teardownStart) : undefined,
+        teardownEnd: data.teardownEnd ? new Date(data.teardownEnd) : undefined,
+        createdById: req.user!.userId,
+      },
+    })
+    res.status(201).json({ success: true, data: event })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function updateEvent(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = createEventSchema.partial().parse(req.body)
+    const event = await prisma.event.findFirst({
+      where: { id: req.params.id, tenantId: req.user!.tenantId },
+    })
+    if (!event) throw new AppError(404, 'EVENT_NOT_FOUND', 'Event not found')
+
+    const updated = await prisma.event.update({
+      where: { id: req.params.id },
+      data: {
+        ...data,
+        setupStart: data.setupStart ? new Date(data.setupStart) : undefined,
+        setupEnd: data.setupEnd ? new Date(data.setupEnd) : undefined,
+        eventStart: data.eventStart ? new Date(data.eventStart) : undefined,
+        eventEnd: data.eventEnd ? new Date(data.eventEnd) : undefined,
+        teardownStart: data.teardownStart ? new Date(data.teardownStart) : undefined,
+        teardownEnd: data.teardownEnd ? new Date(data.teardownEnd) : undefined,
+      },
+    })
+    res.json({ success: true, data: updated })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function updateEventStatus(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { status } = z.object({ status: z.string() }).parse(req.body)
+    const event = await prisma.event.findFirst({
+      where: { id: req.params.id, tenantId: req.user!.tenantId },
+    })
+    if (!event) throw new AppError(404, 'EVENT_NOT_FOUND', 'Event not found')
+
+    const updated = await prisma.event.update({
+      where: { id: req.params.id },
+      data: { status: status as any },
+    })
+    res.json({ success: true, data: updated })
+  } catch (err) {
+    next(err)
+  }
+}

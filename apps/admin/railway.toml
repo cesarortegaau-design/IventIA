@@ -1,0 +1,6 @@
+[build]
+builder = "nixpacks"
+buildCommand = "pnpm install --frozen-lockfile && pnpm --filter @iventia/admin build"
+
+[deploy]
+startCommand = "npx serve -s apps/admin/dist -l $PORT"
