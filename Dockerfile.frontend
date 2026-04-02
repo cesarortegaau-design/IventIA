@@ -1,0 +1,24 @@
+FROM node:20-alpine
+
+RUN npm install -g pnpm@9 serve
+
+WORKDIR /app
+
+# Copy workspace config files
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json ./
+
+# Copy all packages
+COPY packages/ ./packages/
+COPY apps/admin/ ./apps/admin/
+
+# Install all dependencies
+RUN pnpm install --frozen-lockfile
+
+# Build frontend (VITE_API_URL is passed at build time)
+ARG VITE_API_URL
+ENV VITE_API_URL=$VITE_API_URL
+RUN pnpm --filter @iventia/admin build
+
+EXPOSE 3000
+
+CMD serve -s /app/apps/admin/dist -l ${PORT:-3000}
