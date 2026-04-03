@@ -14,13 +14,12 @@ COPY apps/api/ ./apps/api/
 # Install all dependencies
 RUN pnpm install --frozen-lockfile
 
+# Generate Prisma client (must run from monorepo root with schema path)
+RUN npx prisma generate --schema=./packages/prisma/schema.prisma
+
 # Build API
 RUN pnpm --filter @iventia/api build
 
-# Generate Prisma client
-RUN cd packages/prisma && npx prisma generate
-
 EXPOSE 3001
 
-# Run migrations (allow failure so server still starts) then launch
 CMD sh -c "npx prisma migrate deploy --schema /app/packages/prisma/schema.prisma || echo 'Migration warning - continuing' && node /app/apps/api/dist/index.js"
