@@ -10,19 +10,11 @@ COPY apps/api/ ./apps/api/
 
 RUN pnpm install --frozen-lockfile
 
-# Generate Prisma client (writes to /app/node_modules/.prisma/client)
-RUN npx prisma generate --schema=./packages/prisma/schema.prisma
-
-# pnpm virtual store has a stub .prisma/client that throws at runtime.
-# Replace it with the real generated client in every @prisma+client* path.
-RUN for dir in /app/node_modules/.pnpm/@prisma+client*/node_modules; do \
-      rm -rf "$dir/.prisma" && \
-      cp -r /app/node_modules/.prisma "$dir/.prisma"; \
-    done
-
-# Build API
+# Build API (esbuild, no prisma generate needed at build time)
 RUN pnpm --filter @iventia/api build
 
 EXPOSE 3001
 
-CMD ["sh", "-c", "npx prisma migrate deploy --schema /app/packages/prisma/schema.prisma && node /app/apps/api/dist/index.js"]
+# Generate Prisma client at startup so it targets the exact installed @prisma/client path,
+# then migrate, then start the server.
+CMD ["sh", "-c", "npx prisma generate --schema /app/packages/prisma/schema.prisma && npx prisma migrate deploy --schema /app/packages/prisma/schema.prisma && node /app/apps/api/dist/index.js"]
