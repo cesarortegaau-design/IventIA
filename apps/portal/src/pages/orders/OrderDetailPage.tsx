@@ -3,9 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom'
 import {
   Card, Descriptions, Tag, Table, Typography, Button, Space, Divider, Timeline, Skeleton
 } from 'antd'
-import { ArrowLeftOutlined, FileOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, FileOutlined, DownloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { ordersApi } from '../../api/orders'
+import { exportToCsv } from '../../utils/exportCsv'
 
 const { Title, Text } = Typography
 
@@ -75,7 +76,31 @@ export default function OrderDetailPage() {
         </Descriptions>
       </Card>
 
-      <Card title="Productos y servicios solicitados" style={{ marginBottom: 16 }}>
+      <Card
+        title="Productos y servicios solicitados"
+        style={{ marginBottom: 16 }}
+        extra={
+          <Button
+            icon={<DownloadOutlined />}
+            size="small"
+            onClick={() => exportToCsv(`solicitud-${order.orderNumber}`, (order.lineItems ?? []).map((li: any) => ({
+              recurso: li.description,
+              tipo: li.resource?.type ?? '',
+              precioUnit: Number(li.unitPrice).toFixed(2),
+              cantidad: Number(li.quantity),
+              total: Number(li.lineTotal).toFixed(2),
+            })), [
+              { header: 'Recurso', key: 'recurso' },
+              { header: 'Tipo', key: 'tipo' },
+              { header: 'Precio Unit.', key: 'precioUnit' },
+              { header: 'Cantidad', key: 'cantidad' },
+              { header: 'Total', key: 'total' },
+            ])}
+          >
+            Exportar CSV
+          </Button>
+        }
+      >
         <Table
           dataSource={order.lineItems ?? []}
           columns={lineColumns}

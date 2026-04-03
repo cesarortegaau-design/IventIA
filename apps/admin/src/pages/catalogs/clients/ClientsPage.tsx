@@ -4,9 +4,10 @@ import {
   Table, Button, Card, Input, Space, Tag, Modal, Form, Typography,
   Row, Col, App, Select, Tabs
 } from 'antd'
-import { PlusOutlined, EditOutlined, PoweroffOutlined, EyeOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, PoweroffOutlined, EyeOutlined, DownloadOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { clientsApi } from '../../../api/clients'
+import { exportToCsv } from '../../../utils/exportCsv'
 
 const { Title } = Typography
 
@@ -79,9 +80,31 @@ export default function ClientsPage() {
     <div>
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Title level={4} style={{ margin: 0 }}>Catálogo de Clientes</Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true) }}>
-          Agregar Cliente
-        </Button>
+        <Space>
+          <Button
+            icon={<DownloadOutlined />}
+            onClick={() => exportToCsv('clientes', (data?.data ?? []).map((r: any) => ({
+              tipo: r.personType === 'MORAL' ? 'Moral' : 'Física',
+              nombre: r.companyName || `${r.firstName} ${r.lastName}`,
+              rfc: r.rfc ?? '',
+              email: r.email ?? '',
+              telefono: r.phone ?? '',
+              activo: r.isActive ? 'Activo' : 'Inactivo',
+            })), [
+              { header: 'Tipo', key: 'tipo' },
+              { header: 'Nombre/Razón Social', key: 'nombre' },
+              { header: 'RFC', key: 'rfc' },
+              { header: 'Email', key: 'email' },
+              { header: 'Teléfono', key: 'telefono' },
+              { header: 'Activo', key: 'activo' },
+            ])}
+          >
+            Exportar CSV
+          </Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true) }}>
+            Agregar Cliente
+          </Button>
+        </Space>
       </Row>
 
       <Card>

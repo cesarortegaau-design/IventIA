@@ -4,8 +4,9 @@ import {
   Table, Button, Card, Input, Select, Space, Tag, Modal, Form, Typography,
   Row, Col, App, Switch, Tabs, InputNumber, Upload, Image, Popconfirm, Spin
 } from 'antd'
-import { PlusOutlined, EditOutlined, PoweroffOutlined, UploadOutlined, DeleteOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, PoweroffOutlined, UploadOutlined, DeleteOutlined, DownloadOutlined } from '@ant-design/icons'
 import { resourcesApi } from '../../../api/resources'
+import { exportToCsv } from '../../../utils/exportCsv'
 
 const { Title, Text } = Typography
 
@@ -290,7 +291,29 @@ export default function ResourcesPage() {
     <div>
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Title level={4} style={{ margin: 0 }}>Catálogo de Recursos</Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>Agregar Recurso</Button>
+        <Space>
+          <Button
+            icon={<DownloadOutlined />}
+            onClick={() => exportToCsv('recursos', (data?.data ?? []).map((r: any) => ({
+              codigo: r.code,
+              nombre: r.name,
+              tipo: TYPE_LABELS[r.type] ?? r.type,
+              unidad: r.unit ?? '',
+              portal: r.portalVisible ? 'Visible' : 'Oculto',
+              activo: r.isActive ? 'Activo' : 'Inactivo',
+            })), [
+              { header: 'Código', key: 'codigo' },
+              { header: 'Nombre', key: 'nombre' },
+              { header: 'Tipo', key: 'tipo' },
+              { header: 'Unidad', key: 'unidad' },
+              { header: 'Portal', key: 'portal' },
+              { header: 'Activo', key: 'activo' },
+            ])}
+          >
+            Exportar CSV
+          </Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>Agregar Recurso</Button>
+        </Space>
       </Row>
 
       <Card>

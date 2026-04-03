@@ -5,10 +5,11 @@ import {
   Card, Row, Col, Tag, Button, Descriptions, Table, Space, Statistic,
   Tabs, App, Select, Typography, Divider, InputNumber, Form, DatePicker, Modal, Switch, Badge
 } from 'antd'
-import { EditOutlined, PlusOutlined, ArrowLeftOutlined, CopyOutlined, StopOutlined, GlobalOutlined } from '@ant-design/icons'
+import { EditOutlined, PlusOutlined, ArrowLeftOutlined, CopyOutlined, StopOutlined, GlobalOutlined, DownloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { eventsApi } from '../../api/events'
 import { portalCodesApi } from '../../api/portalCodes'
+import { exportToCsv } from '../../utils/exportCsv'
 
 const { Title, Text } = Typography
 
@@ -167,30 +168,72 @@ export default function EventDetailPage() {
               key: 'orders',
               label: `Órdenes de Servicio (${event.orders?.length ?? 0})`,
               children: (
-                <Table
-                  dataSource={event.orders ?? []}
-                  columns={orderColumns}
-                  rowKey="id"
-                  size="small"
-                  pagination={false}
-                />
+                <>
+                  <div style={{ textAlign: 'right', marginBottom: 8 }}>
+                    <Button
+                      icon={<DownloadOutlined />}
+                      onClick={() => exportToCsv(`ordenes-${event.code}`, (event.orders ?? []).map((o: any) => ({
+                        numero: o.orderNumber,
+                        cliente: o.client?.companyName || `${o.client?.firstName} ${o.client?.lastName}`,
+                        stand: o.stand?.code ?? '',
+                        estado: ORDER_STATUS_LABELS[o.status] ?? o.status,
+                        total: Number(o.total).toFixed(2),
+                        fecha: dayjs(o.createdAt).format('DD/MM/YYYY'),
+                      })), [
+                        { header: 'Número', key: 'numero' },
+                        { header: 'Cliente', key: 'cliente' },
+                        { header: 'Stand', key: 'stand' },
+                        { header: 'Estado', key: 'estado' },
+                        { header: 'Total', key: 'total' },
+                        { header: 'Fecha', key: 'fecha' },
+                      ])}
+                    >
+                      Exportar CSV
+                    </Button>
+                  </div>
+                  <Table
+                    dataSource={event.orders ?? []}
+                    columns={orderColumns}
+                    rowKey="id"
+                    size="small"
+                    pagination={false}
+                  />
+                </>
               ),
             },
             {
               key: 'stands',
               label: `Stands (${event.stands?.length ?? 0})`,
               children: (
-                <Table
-                  dataSource={event.stands ?? []}
-                  rowKey="id"
-                  size="small"
-                  columns={[
-                    { title: 'Código', dataIndex: 'code' },
-                    { title: 'Cliente', render: (_: any, r: any) => r.client?.companyName || `${r.client?.firstName ?? ''} ${r.client?.lastName ?? ''}` },
-                    { title: 'Dimensiones', render: (_: any, r: any) => r.widthM ? `${r.widthM}m × ${r.depthM}m` : '—' },
-                    { title: 'Órdenes', render: (_: any, r: any) => r._count?.orders ?? 0 },
-                  ]}
-                />
+                <>
+                  <div style={{ textAlign: 'right', marginBottom: 8 }}>
+                    <Button
+                      icon={<DownloadOutlined />}
+                      onClick={() => exportToCsv(`stands-${event.code}`, (event.stands ?? []).map((s: any) => ({
+                        codigo: s.code,
+                        cliente: s.client?.companyName || `${s.client?.firstName ?? ''} ${s.client?.lastName ?? ''}`.trim(),
+                        dimensiones: s.widthM ? `${s.widthM}m x ${s.depthM}m` : '',
+                      })), [
+                        { header: 'Código', key: 'codigo' },
+                        { header: 'Cliente', key: 'cliente' },
+                        { header: 'Dimensiones', key: 'dimensiones' },
+                      ])}
+                    >
+                      Exportar CSV
+                    </Button>
+                  </div>
+                  <Table
+                    dataSource={event.stands ?? []}
+                    rowKey="id"
+                    size="small"
+                    columns={[
+                      { title: 'Código', dataIndex: 'code' },
+                      { title: 'Cliente', render: (_: any, r: any) => r.client?.companyName || `${r.client?.firstName ?? ''} ${r.client?.lastName ?? ''}` },
+                      { title: 'Dimensiones', render: (_: any, r: any) => r.widthM ? `${r.widthM}m × ${r.depthM}m` : '—' },
+                      { title: 'Órdenes', render: (_: any, r: any) => r._count?.orders ?? 0 },
+                    ]}
+                  />
+                </>
               ),
             },
             {

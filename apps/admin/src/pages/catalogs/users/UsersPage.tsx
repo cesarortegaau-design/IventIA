@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Table, Button, Card, Space, Tag, Modal, Form, Input, Select, Row, Col, App, Typography, Checkbox } from 'antd'
-import { PlusOutlined, EditOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, DownloadOutlined } from '@ant-design/icons'
 import { apiClient } from '../../../api/client'
 import { PRIVILEGES } from '@iventia/shared'
+import { exportToCsv } from '../../../utils/exportCsv'
 
 const { Title } = Typography
 
@@ -87,9 +88,27 @@ export default function UsersPage() {
     <div>
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Title level={4} style={{ margin: 0 }}>Usuarios y Privilegios</Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true) }}>
-          Nuevo Usuario
-        </Button>
+        <Space>
+          <Button
+            icon={<DownloadOutlined />}
+            onClick={() => exportToCsv('usuarios', (usersData?.data ?? []).map((r: any) => ({
+              nombre: `${r.firstName} ${r.lastName}`,
+              email: r.email,
+              rol: r.role,
+              activo: r.isActive ? 'Activo' : 'Inactivo',
+            })), [
+              { header: 'Nombre', key: 'nombre' },
+              { header: 'Email', key: 'email' },
+              { header: 'Rol', key: 'rol' },
+              { header: 'Activo', key: 'activo' },
+            ])}
+          >
+            Exportar CSV
+          </Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true) }}>
+            Nuevo Usuario
+          </Button>
+        </Space>
       </Row>
       <Card>
         <Table dataSource={usersData?.data ?? []} columns={columns} rowKey="id" loading={isLoading} size="small" />

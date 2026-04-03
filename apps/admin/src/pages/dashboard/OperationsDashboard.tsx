@@ -1,8 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
-import { Card, Table, Tag, Typography, Row, Col, Statistic } from 'antd'
+import { Card, Table, Tag, Typography, Row, Col, Statistic, Button, Space } from 'antd'
+import { DownloadOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { apiClient } from '../../api/client'
 import dayjs from 'dayjs'
+import { exportToCsv } from '../../utils/exportCsv'
 
 const { Title } = Typography
 
@@ -36,7 +38,29 @@ export default function OperationsDashboard() {
         <Col span={8}><Card><Statistic title="Órdenes Facturadas Pendientes Entrega" value={orders.length} valueStyle={{ color: '#08979c' }} /></Card></Col>
         <Col span={8}><Card><Statistic title="Total a Entregar" prefix="$" value={orders.reduce((s: number, o: any) => s + Number(o.total), 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })} /></Card></Col>
       </Row>
-      <Card title="Órdenes Facturadas — Pendientes de Entrega">
+      <Card
+        title="Órdenes Facturadas — Pendientes de Entrega"
+        extra={
+          <Button
+            icon={<DownloadOutlined />}
+            onClick={() => exportToCsv('operaciones-pendientes', orders.map((o: any) => ({
+              orden: o.orderNumber,
+              evento: o.event?.name ?? '',
+              cliente: o.client?.companyName || `${o.client?.firstName} ${o.client?.lastName}`,
+              stand: o.stand?.code ?? '',
+              total: Number(o.total).toFixed(2),
+            })), [
+              { header: 'Orden', key: 'orden' },
+              { header: 'Evento', key: 'evento' },
+              { header: 'Cliente', key: 'cliente' },
+              { header: 'Stand', key: 'stand' },
+              { header: 'Total', key: 'total' },
+            ])}
+          >
+            Exportar CSV
+          </Button>
+        }
+      >
         <Table dataSource={orders} columns={columns} rowKey="id" loading={isLoading} size="small" />
       </Card>
     </div>

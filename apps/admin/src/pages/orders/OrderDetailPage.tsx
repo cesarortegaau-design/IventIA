@@ -5,9 +5,10 @@ import {
   Card, Descriptions, Table, Tag, Button, Space, Timeline, Form,
   Input, InputNumber, Select, DatePicker, Modal, App, Typography, Row, Col, Statistic
 } from 'antd'
-import { ArrowLeftOutlined, DollarOutlined, PlusOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, DollarOutlined, PlusOutlined, DownloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { ordersApi } from '../../api/orders'
+import { exportToCsv } from '../../utils/exportCsv'
 
 const { Title, Text } = Typography
 
@@ -148,7 +149,28 @@ export default function OrderDetailPage() {
           </Descriptions.Item>
         </Descriptions>
 
-        <Title level={5}>Productos y Servicios</Title>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <Title level={5} style={{ margin: 0 }}>Productos y Servicios</Title>
+          <Button
+            icon={<DownloadOutlined />}
+            size="small"
+            onClick={() => exportToCsv(`orden-${order.orderNumber}-partidas`, (order.lineItems ?? []).map((li: any) => ({
+              descripcion: li.description,
+              precioUnit: Number(li.unitPrice).toFixed(2),
+              cantidad: Number(li.quantity),
+              descuento: `${li.discountPct}%`,
+              total: Number(li.lineTotal).toFixed(2),
+            })), [
+              { header: 'Descripción', key: 'descripcion' },
+              { header: 'Precio Unit.', key: 'precioUnit' },
+              { header: 'Cantidad', key: 'cantidad' },
+              { header: 'Descuento', key: 'descuento' },
+              { header: 'Total', key: 'total' },
+            ])}
+          >
+            Exportar CSV
+          </Button>
+        </div>
         <Table
           dataSource={order.lineItems}
           columns={lineColumns}

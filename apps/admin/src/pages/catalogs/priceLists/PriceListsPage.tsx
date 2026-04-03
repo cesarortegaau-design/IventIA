@@ -4,10 +4,11 @@ import {
   Table, Button, Card, Space, Tag, Modal, Form, Input, DatePicker,
   InputNumber, Typography, Row, Col, App, Select, Descriptions
 } from 'antd'
-import { PlusOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, EyeOutlined, DownloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { priceListsApi } from '../../../api/priceLists'
 import { resourcesApi } from '../../../api/resources'
+import { exportToCsv } from '../../../utils/exportCsv'
 
 const { Title } = Typography
 
@@ -90,9 +91,23 @@ export default function PriceListsPage() {
     <div>
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Title level={4} style={{ margin: 0 }}>Listas de Precio</Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true) }}>
-          Nueva Lista
-        </Button>
+        <Space>
+          <Button
+            icon={<DownloadOutlined />}
+            onClick={() => exportToCsv('listas-de-precio', (data?.data ?? []).map((r: any) => ({
+              nombre: r.name,
+              activo: r.isActive ? 'Activo' : 'Inactivo',
+            })), [
+              { header: 'Nombre', key: 'nombre' },
+              { header: 'Activo', key: 'activo' },
+            ])}
+          >
+            Exportar CSV
+          </Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true) }}>
+            Nueva Lista
+          </Button>
+        </Space>
       </Row>
 
       <Card>

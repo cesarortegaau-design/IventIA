@@ -11,10 +11,12 @@ import {
   TeamOutlined, FileTextOutlined, PlusOutlined, CheckOutlined,
   DeleteOutlined, EditOutlined, UserOutlined, CalendarOutlined,
   ShoppingCartOutlined, ClockCircleOutlined, LinkOutlined, DisconnectOutlined,
+  DownloadOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { crmApi } from '../../api/crm'
 import { clientsApi } from '../../api/clients'
+import { exportToCsv } from '../../utils/exportCsv'
 
 const { Title, Text } = Typography
 const { TextArea } = Input
@@ -371,6 +373,27 @@ export default function ClientDetailPage() {
             key: 'orders',
             label: `Órdenes (${orders.length})`,
             children: (
+              <>
+                <div style={{ textAlign: 'right', marginBottom: 8 }}>
+                  <Button
+                    icon={<DownloadOutlined />}
+                    onClick={() => exportToCsv(`ordenes-${clientDisplayName(client).replace(/\s+/g, '-')}`, orders.map((o: any) => ({
+                      numero: o.orderNumber,
+                      estado: ORDER_STATUS_LABELS[o.status] ?? o.status,
+                      evento: o.event?.name ?? '',
+                      total: Number(o.totalAmount).toFixed(2),
+                      fecha: dayjs(o.createdAt).format('DD/MM/YYYY'),
+                    })), [
+                      { header: 'Número', key: 'numero' },
+                      { header: 'Estado', key: 'estado' },
+                      { header: 'Evento', key: 'evento' },
+                      { header: 'Total', key: 'total' },
+                      { header: 'Fecha', key: 'fecha' },
+                    ])}
+                  >
+                    Exportar CSV
+                  </Button>
+                </div>
               <List
                 dataSource={orders}
                 locale={{ emptyText: 'Sin órdenes' }}
@@ -394,6 +417,7 @@ export default function ClientDetailPage() {
                   </List.Item>
                 )}
               />
+              </>
             ),
           },
           {

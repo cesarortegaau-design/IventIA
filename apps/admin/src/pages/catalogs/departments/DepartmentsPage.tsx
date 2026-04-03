@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Table, Button, Card, Space, Tag, Modal, Form, Input, Select, Row, Col, App, Typography } from 'antd'
-import { PlusOutlined, EditOutlined, PoweroffOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, PoweroffOutlined, DownloadOutlined } from '@ant-design/icons'
 import { apiClient } from '../../../api/client'
+import { exportToCsv } from '../../../utils/exportCsv'
 
 const { Title } = Typography
 
@@ -50,9 +51,25 @@ export default function DepartmentsPage() {
     <div>
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Title level={4} style={{ margin: 0 }}>Departamentos Operativos</Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true) }}>
-          Nuevo Departamento
-        </Button>
+        <Space>
+          <Button
+            icon={<DownloadOutlined />}
+            onClick={() => exportToCsv('departamentos', (data?.data ?? []).map((r: any) => ({
+              nombre: r.name,
+              tipo: r.type === 'INTERNAL' ? 'Interno' : 'Externo',
+              activo: r.isActive ? 'Activo' : 'Inactivo',
+            })), [
+              { header: 'Nombre', key: 'nombre' },
+              { header: 'Tipo', key: 'tipo' },
+              { header: 'Activo', key: 'activo' },
+            ])}
+          >
+            Exportar CSV
+          </Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true) }}>
+            Nuevo Departamento
+          </Button>
+        </Space>
       </Row>
       <Card>
         <Table dataSource={data?.data ?? []} columns={columns} rowKey="id" loading={isLoading} size="small" />
