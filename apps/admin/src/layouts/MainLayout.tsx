@@ -12,6 +12,7 @@ import {
   DollarOutlined,
   ToolOutlined,
   ContactsOutlined,
+  HomeOutlined,
 } from '@ant-design/icons'
 import { useAuthStore } from '../stores/authStore'
 
@@ -19,6 +20,11 @@ const { Sider, Header, Content } = Layout
 const { Text } = Typography
 
 const menuItems = [
+  {
+    key: '/',
+    icon: <HomeOutlined />,
+    label: 'Inicio',
+  },
   {
     key: '/eventos',
     icon: <CalendarOutlined />,

@@ -16,6 +16,7 @@ import AccountingDashboard from '../pages/dashboard/AccountingDashboard'
 import OperationsDashboard from '../pages/dashboard/OperationsDashboard'
 import ClientDetailPage from '../pages/crm/ClientDetailPage'
 import CrmDashboard from '../pages/crm/CrmDashboard'
+import HomePage from '../pages/home/HomePage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.accessToken)
@@ -35,7 +36,7 @@ export function AppRouter() {
           </RequireAuth>
         }
       >
-        <Route index element={<Navigate to="/eventos" replace />} />
+        <Route index element={<HomePage />} />
         <Route path="eventos" element={<EventsCalendarPage />} />
         <Route path="eventos/nuevo" element={<EventFormPage />} />
         <Route path="eventos/:id" element={<EventDetailPage />} />
