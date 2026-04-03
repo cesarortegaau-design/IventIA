@@ -23,4 +23,4 @@ RUN pnpm --filter @iventia/api build
 
 EXPOSE 3001
 
-CMD sh -c "npx prisma migrate deploy --schema /app/packages/prisma/schema.prisma || echo 'Migration warning - continuing' && node /app/apps/api/dist/index.js"
+CMD ["sh", "-c", "npx prisma migrate deploy --schema /app/packages/prisma/schema.prisma && node /app/apps/api/dist/index.js"]
