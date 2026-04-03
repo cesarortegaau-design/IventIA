@@ -10,11 +10,12 @@ COPY apps/api/ ./apps/api/
 
 RUN pnpm install --frozen-lockfile
 
-# Build API (esbuild, no prisma generate needed at build time)
+# Generate Prisma client to apps/api/src/generated/prisma (fixed path, no pnpm virtual store issues)
+RUN npx prisma generate --schema=./packages/prisma/schema.prisma
+
+# Build API
 RUN pnpm --filter @iventia/api build
 
 EXPOSE 3001
 
-# Generate Prisma client at startup so it targets the exact installed @prisma/client path,
-# then migrate, then start the server.
-CMD ["sh", "-c", "npx prisma generate --schema /app/packages/prisma/schema.prisma && npx prisma migrate deploy --schema /app/packages/prisma/schema.prisma && node /app/apps/api/dist/index.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy --schema /app/packages/prisma/schema.prisma && node /app/apps/api/dist/index.js"]
