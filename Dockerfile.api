@@ -10,7 +10,9 @@ COPY apps/api/ ./apps/api/
 
 RUN pnpm install --frozen-lockfile
 
-# Generate Prisma client to apps/api/src/generated/prisma (fixed path, no pnpm virtual store issues)
+# Generate Prisma client to /app/node_modules/.prisma-client
+# This is a plain node_modules package path — no pnpm virtual store,
+# no symlink resolution issues, esbuild treats it as external.
 RUN npx prisma generate --schema=./packages/prisma/schema.prisma
 
 # Build API
