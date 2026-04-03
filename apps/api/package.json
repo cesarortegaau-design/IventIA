@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --packages=external --outfile=dist/index.js",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node22 --external:@prisma/client --external:bcryptjs --external:bullmq --external:cors --external:decimal.js --external:dotenv --external:express --external:express-rate-limit --external:helmet --external:ioredis --external:jsonwebtoken --external:morgan --external:multer --external:nodemailer --external:uuid --external:zod --external:prisma-generated --outfile=dist/index.js",
     "start": "node dist/index.js",
     "lint": "eslint src/**/*.ts"
   },

@@ -15,9 +15,6 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 # Generate Prisma client using the locally installed binary.
 RUN node_modules/.bin/prisma generate --schema=./packages/prisma/schema.prisma
 
-# Build shared package to compiled JS (main field now points to dist/)
-RUN pnpm --filter @iventia/shared build
-
 # Build API
 RUN pnpm --filter @iventia/api build
 
