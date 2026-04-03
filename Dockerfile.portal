@@ -11,8 +11,8 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json .npmrc ./
 COPY packages/ ./packages/
 COPY apps/portal/ ./apps/portal/
 
-# Install all dependencies (no frozen-lockfile since portal deps may not be in lockfile yet)
-RUN pnpm install --no-frozen-lockfile
+# Install all dependencies
+RUN pnpm install --frozen-lockfile
 
 # Build portal (VITE_API_URL is passed at build time)
 ARG VITE_API_URL
