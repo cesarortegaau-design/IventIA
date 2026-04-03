@@ -4,19 +4,20 @@ RUN npm install -g pnpm@9
 
 WORKDIR /app
 
-# Copy workspace config files (including .npmrc for pnpm hoisting)
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json .npmrc ./
-
-# Copy all packages
 COPY packages/ ./packages/
 COPY apps/api/ ./apps/api/
 
-# Install all dependencies (public-hoist-pattern in .npmrc hoists @prisma/client to root node_modules)
 RUN pnpm install --frozen-lockfile
 
-# Generate Prisma client — outputs to /app/node_modules/.prisma/client/
-# which @prisma/client (now hoisted) can find via relative require
+# Generate Prisma client to default location (/app/node_modules/.prisma/client)
 RUN npx prisma generate --schema=./packages/prisma/schema.prisma
+
+# pnpm's virtual store resolves @prisma/client from its scoped path, which has
+# a stub .prisma/client that throws. Copy the generated client there too.
+RUN for dir in /app/node_modules/.pnpm/@prisma+client*/node_modules; do \
+      cp -rT /app/node_modules/.prisma "$dir/.prisma"; \
+    done
 
 # Build API
 RUN pnpm --filter @iventia/api build
