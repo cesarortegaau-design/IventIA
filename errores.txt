@@ -1,0 +1,97 @@
+Starting Container
+npm warn config production Use `--omit=dev` instead.
+    at Function._load (node:internal/modules/cjs/loader:1075:27)
+Prisma schema loaded from packages/prisma/schema.prisma
+Datasource "db": PostgreSQL database "railway", schema "public" at "postgres.railway.internal:5432"
+    at TracingChannel.traceSync (node:diagnostics_channel:315:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:218:24)
+4 migrations found in prisma/migrations
+    at Module.require (node:internal/modules/cjs/loader:1340:12)
+    at require (node:internal/modules/helpers:141:16)
+No pending migrations to apply.
+  ^
+node:internal/modules/cjs/loader:1252
+  throw err;
+Error: Cannot find module '.prisma-client'
+Require stack:
+- /app/apps/api/dist/index.js
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1249:15)
+    at src/config/database.ts (/app/apps/api/dist/index.js:40:16)
+    at __init (/app/apps/api/dist/index.js:8:56)
+    at Object.<anonymous> (/app/apps/api/dist/index.js:138:1)
+    at Module._compile (node:internal/modules/cjs/loader:1546:14) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [ '/app/apps/api/dist/index.js' ]
+}
+Node.js v22.11.0
+npm warn config production Use `--omit=dev` instead.
+No pending migrations to apply.
+Prisma schema loaded from packages/prisma/schema.prisma
+Datasource "db": PostgreSQL database "railway", schema "public" at "postgres.railway.internal:5432"
+4 migrations found in prisma/migrations
+node:internal/modules/cjs/loader:1252
+  throw err;
+  ^
+Error: Cannot find module '.prisma-client'
+Require stack:
+- /app/apps/api/dist/index.js
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1249:15)
+    at Function._load (node:internal/modules/cjs/loader:1075:27)
+    at TracingChannel.traceSync (node:diagnostics_channel:315:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:218:24)
+    at Module.require (node:internal/modules/cjs/loader:1340:12)
+    at require (node:internal/modules/helpers:141:16)
+    at src/config/database.ts (/app/apps/api/dist/index.js:40:16)
+    at __init (/app/apps/api/dist/index.js:8:56)
+    at Object.<anonymous> (/app/apps/api/dist/index.js:138:1)
+    at Module._compile (node:internal/modules/cjs/loader:1546:14) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [ '/app/apps/api/dist/index.js' ]
+}
+Node.js v22.11.0
+npm warn config production Use `--omit=dev` instead.
+Prisma schema loaded from packages/prisma/schema.prisma
+Datasource "db": PostgreSQL database "railway", schema "public" at "postgres.railway.internal:5432"
+4 migrations found in prisma/migrations
+No pending migrations to apply.
+node:internal/modules/cjs/loader:1252
+  throw err;
+  ^
+Error: Cannot find module '.prisma-client'
+Require stack:
+- /app/apps/api/dist/index.js
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1249:15)
+    at Function._load (node:internal/modules/cjs/loader:1075:27)
+    at TracingChannel.traceSync (node:diagnostics_channel:315:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:218:24)
+    at Module.require (node:internal/modules/cjs/loader:1340:12)
+    at require (node:internal/modules/helpers:141:16)
+    at src/config/database.ts (/app/apps/api/dist/index.js:40:16)
+    at __init (/app/apps/api/dist/index.js:8:56)
+    at Object.<anonymous> (/app/apps/api/dist/index.js:138:1)
+    at Module._compile (node:internal/modules/cjs/loader:1546:14) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [ '/app/apps/api/dist/index.js' ]
+}
+Node.js v22.11.0
+npm warn config production Use `--omit=dev` instead.
+node:internal/modules/cjs/loader:1252
+  throw err;
+    at require (node:internal/modules/helpers:141:16)
+  ^
+    at src/config/database.ts (/app/apps/api/dist/index.js:40:16)
+    at __init (/app/apps/api/dist/index.js:8:56)
+Error: Cannot find module '.prisma-client'
+Require stack:
+    at Object.<anonymous> (/app/apps/api/dist/index.js:138:1)
+    at Function._load (node:internal/modules/cjs/loader:1075:27)
+    at Module._compile (node:internal/modules/cjs/loader:1546:14) {
+- /app/apps/api/dist/index.js
+    at TracingChannel.traceSync (node:diagnostics_channel:315:14)
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1249:15)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:218:24)
+    at Module.require (node:internal/modules/cjs/loader:1340:12)
+Prisma schema loaded from packages/prisma/schema.prisma
+Datasource "db": PostgreSQL database "railway", schema "public" at "postgres.railway.internal:5432"
+4 migrations found in prisma/migrations
+No pending migrations to apply.

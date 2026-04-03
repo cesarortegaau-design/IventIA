@@ -5,6 +5,7 @@ import {
 } from '@ant-design/icons'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
+import ChatWidget from '../components/ChatWidget'
 
 const { Header, Content, Sider, Footer } = Layout
 const { Text } = Typography
@@ -69,5 +70,6 @@ export default function PortalLayout() {
         </Layout>
       </Layout>
     </Layout>
+    <ChatWidget />
   )
 }

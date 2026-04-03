@@ -11,6 +11,7 @@ import dashboardRoutes from './dashboard.routes'
 import crmRoutes from './crm.routes'
 import portalRoutes from './portal.routes'
 import portalCodesRoutes from './portal-codes.routes'
+import chatRoutes from './chat.routes'
 
 const router = Router()
 
@@ -26,5 +27,6 @@ router.use('/dashboards', dashboardRoutes)
 router.use('/crm', crmRoutes)
 router.use('/portal', portalRoutes)
 router.use('/events/:id/portal-codes', portalCodesRoutes)
+router.use('/chat', chatRoutes)
 
 export default router

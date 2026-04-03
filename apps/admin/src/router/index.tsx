@@ -17,6 +17,7 @@ import OperationsDashboard from '../pages/dashboard/OperationsDashboard'
 import ClientDetailPage from '../pages/crm/ClientDetailPage'
 import CrmDashboard from '../pages/crm/CrmDashboard'
 import HomePage from '../pages/home/HomePage'
+import ChatPage from '../pages/chat/ChatPage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.accessToken)
@@ -52,6 +53,7 @@ export function AppRouter() {
         <Route path="catalogos/usuarios" element={<UsersPage />} />
         <Route path="dashboard/contabilidad" element={<AccountingDashboard />} />
         <Route path="dashboard/operaciones" element={<OperationsDashboard />} />
+        <Route path="chat" element={<ChatPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

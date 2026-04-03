@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { Layout, Menu, Avatar, Dropdown, Typography, Space } from 'antd'
+import { Layout, Menu, Avatar, Dropdown, Typography, Space, Badge } from 'antd'
 import {
   CalendarOutlined,
   AppstoreOutlined,
@@ -13,8 +13,11 @@ import {
   ToolOutlined,
   ContactsOutlined,
   HomeOutlined,
+  MessageOutlined,
 } from '@ant-design/icons'
+import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '../stores/authStore'
+import { chatApi } from '../api/chat'
 
 const { Sider, Header, Content } = Layout
 const { Text } = Typography
@@ -48,6 +51,11 @@ const menuItems = [
     label: 'CRM',
   },
   {
+    key: '/chat',
+    icon: <MessageOutlined />,
+    label: 'Colabora',
+  },
+  {
     key: 'dashboards',
     icon: <BarChartOutlined />,
     label: 'Dashboards',
@@ -62,6 +70,13 @@ export default function MainLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const { user, clearAuth } = useAuthStore()
+
+  const { data: unreadData } = useQuery({
+    queryKey: ['chat', 'admin', 'unread'],
+    queryFn:  chatApi.unreadCount,
+    refetchInterval: 15000,
+  })
+  const unread = unreadData?.unread ?? 0
 
   const userMenuItems = [
     {
@@ -88,7 +103,11 @@ export default function MainLayout() {
           mode="inline"
           selectedKeys={[location.pathname]}
           defaultOpenKeys={['catalogos', 'dashboards']}
-          items={menuItems}
+          items={menuItems.map(item =>
+            item.key === '/chat'
+              ? { ...item, label: <Badge count={unread} size="small" offset={[8, 0]}>{item.label}</Badge> }
+              : item
+          )}
           onClick={({ key }) => navigate(key)}
           style={{ background: 'transparent', border: 'none', marginTop: 8 }}
         />
