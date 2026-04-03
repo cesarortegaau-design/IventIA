@@ -1,12 +1,14 @@
+import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Row, Col, Tag, Button, Descriptions, Table, Space, Statistic,
-  Tabs, App, Select, Typography, Divider
+  Tabs, App, Select, Typography, Divider, InputNumber, Form, DatePicker, Modal, Switch, Badge
 } from 'antd'
-import { EditOutlined, PlusOutlined, ArrowLeftOutlined } from '@ant-design/icons'
+import { EditOutlined, PlusOutlined, ArrowLeftOutlined, CopyOutlined, StopOutlined, GlobalOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { eventsApi } from '../../api/events'
+import { portalCodesApi } from '../../api/portalCodes'
 
 const { Title, Text } = Typography
 
@@ -28,6 +30,8 @@ export default function EventDetailPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
+  const [genModalOpen, setGenModalOpen] = useState(false)
+  const [genForm] = Form.useForm()
 
   const { data, isLoading } = useQuery({
     queryKey: ['event', id],
@@ -40,6 +44,32 @@ export default function EventDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['event', id] })
       message.success('Estado actualizado')
     },
+  })
+
+  const { data: codesData, refetch: refetchCodes } = useQuery({
+    queryKey: ['portal-codes', id],
+    queryFn: () => portalCodesApi.list(id!),
+    enabled: !!id,
+  })
+
+  const generateCodesMutation = useMutation({
+    mutationFn: (vals: any) => portalCodesApi.generate(id!, {
+      count: vals.count,
+      maxUses: vals.maxUses ?? 1,
+      expiresAt: vals.expiresAt ? vals.expiresAt.toISOString() : undefined,
+    }),
+    onSuccess: (res) => {
+      refetchCodes()
+      setGenModalOpen(false)
+      genForm.resetFields()
+      message.success(`${res.data.meta.created} código(s) generado(s)`)
+    },
+    onError: () => message.error('Error al generar códigos'),
+  })
+
+  const revokeCodeMutation = useMutation({
+    mutationFn: (codeId: string) => portalCodesApi.revoke(id!, codeId),
+    onSuccess: () => { refetchCodes(); message.success('Código revocado') },
   })
 
   const event = data?.data
@@ -161,6 +191,103 @@ export default function EventDetailPage() {
                     { title: 'Órdenes', render: (_: any, r: any) => r._count?.orders ?? 0 },
                   ]}
                 />
+              ),
+            },
+            {
+              key: 'portal',
+              label: (
+                <Space>
+                  <GlobalOutlined />
+                  Portal
+                  {event.portalEnabled && <Badge status="processing" color="purple" />}
+                </Space>
+              ),
+              children: (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+                    <Space>
+                      <Text>Portal habilitado:</Text>
+                      <Switch checked={!!event.portalEnabled} disabled checkedChildren="Sí" unCheckedChildren="No" />
+                      {event.portalEnabled && <Tag color="purple">Visible para expositores</Tag>}
+                    </Space>
+                    <Button type="primary" icon={<PlusOutlined />} onClick={() => setGenModalOpen(true)}>
+                      Generar códigos
+                    </Button>
+                  </div>
+
+                  <Table
+                    dataSource={codesData?.data?.data ?? []}
+                    rowKey="id"
+                    size="small"
+                    pagination={{ pageSize: 20 }}
+                    columns={[
+                      {
+                        title: 'Código', dataIndex: 'code',
+                        render: (v: string) => (
+                          <Space>
+                            <Text code>{v}</Text>
+                            <Button
+                              type="link" size="small" icon={<CopyOutlined />}
+                              onClick={() => { navigator.clipboard.writeText(v); message.success('Copiado') }}
+                            />
+                          </Space>
+                        ),
+                      },
+                      { title: 'Usos', render: (_: any, r: any) => `${r.usedCount} / ${r.maxUses}` },
+                      {
+                        title: 'Expira', dataIndex: 'expiresAt',
+                        render: (v: string) => v ? dayjs(v).format('DD/MM/YY') : '—',
+                      },
+                      {
+                        title: 'Estado', dataIndex: 'isActive',
+                        render: (v: boolean, r: any) => {
+                          if (!v) return <Tag color="red">Revocado</Tag>
+                          if (r.usedCount >= r.maxUses) return <Tag color="default">Agotado</Tag>
+                          return <Tag color="green">Disponible</Tag>
+                        },
+                      },
+                      {
+                        title: 'Registro(s)', render: (_: any, r: any) =>
+                          (r.usages ?? []).map((u: any) => (
+                            <div key={u.id} style={{ fontSize: 12 }}>{u.portalUser?.email}</div>
+                          )),
+                      },
+                      {
+                        title: '', render: (_: any, r: any) =>
+                          r.isActive && r.usedCount < r.maxUses ? (
+                            <Button
+                              size="small" danger icon={<StopOutlined />}
+                              onClick={() => revokeCodeMutation.mutate(r.id)}
+                              loading={revokeCodeMutation.isPending}
+                            >
+                              Revocar
+                            </Button>
+                          ) : null,
+                      },
+                    ]}
+                  />
+
+                  <Modal
+                    title="Generar códigos de acceso"
+                    open={genModalOpen}
+                    onCancel={() => setGenModalOpen(false)}
+                    onOk={() => genForm.validateFields().then(generateCodesMutation.mutate)}
+                    confirmLoading={generateCodesMutation.isPending}
+                    okText="Generar"
+                  >
+                    <Form form={genForm} layout="vertical" initialValues={{ count: 10, maxUses: 1 }}>
+                      <Form.Item name="count" label="Número de códigos" rules={[{ required: true }]}>
+                        <InputNumber min={1} max={200} style={{ width: '100%' }} />
+                      </Form.Item>
+                      <Form.Item name="maxUses" label="Usos máximos por código">
+                        <InputNumber min={1} style={{ width: '100%' }} />
+                      </Form.Item>
+                      <Form.Item name="expiresAt" label="Fecha de expiración (opcional)">
+                        <DatePicker style={{ width: '100%' }} />
+                      </Form.Item>
+                    </Form>
+                  </Modal>
+                </>
               ),
             },
           ]}

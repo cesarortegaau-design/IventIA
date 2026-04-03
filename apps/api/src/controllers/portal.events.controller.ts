@@ -1,0 +1,124 @@
+import { Request, Response, NextFunction } from 'express'
+import { prisma } from '../config/database'
+import { AppError } from '../middleware/errorHandler'
+
+export async function portalListEvents(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { portalUserId } = req.portalUser!
+
+    const userEvents = await prisma.portalUserEvent.findMany({
+      where: { portalUserId },
+      include: {
+        event: {
+          select: {
+            id: true, code: true, name: true, status: true,
+            eventStart: true, eventEnd: true, setupStart: true, teardownEnd: true,
+            venueLocation: true, portalEnabled: true,
+            portalSettings: true,
+            priceList: { select: { id: true, name: true } },
+          },
+        },
+      },
+      orderBy: { event: { eventStart: 'desc' } },
+    })
+
+    const events = userEvents
+      .map((ue) => ue.event)
+      .filter((e) => e.portalEnabled)
+
+    res.json({ success: true, data: events })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function portalGetEvent(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { portalUserId, tenantId } = req.portalUser!
+    const { eventId } = req.params
+
+    const access = await prisma.portalUserEvent.findUnique({
+      where: { portalUserId_eventId: { portalUserId, eventId } },
+    })
+    if (!access) throw new AppError(403, 'FORBIDDEN', 'No tienes acceso a este evento')
+
+    const event = await prisma.event.findFirst({
+      where: { id: eventId, tenantId, portalEnabled: true },
+      include: {
+        priceList: { select: { id: true, name: true, earlyCutoff: true, normalCutoff: true } },
+        documents: { select: { id: true, documentType: true, fileName: true, blobKey: true, createdAt: true } },
+        stands: {
+          where: { isActive: true },
+          select: {
+            id: true, code: true, widthM: true, depthM: true, heightM: true, locationNotes: true,
+            client: { select: { id: true, companyName: true, firstName: true, lastName: true } },
+          },
+        },
+      },
+    })
+    if (!event) throw new AppError(404, 'NOT_FOUND', 'Evento no encontrado')
+
+    res.json({ success: true, data: event })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function portalGetCatalog(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { portalUserId, tenantId } = req.portalUser!
+    const { eventId } = req.params
+
+    const access = await prisma.portalUserEvent.findUnique({
+      where: { portalUserId_eventId: { portalUserId, eventId } },
+    })
+    if (!access) throw new AppError(403, 'FORBIDDEN', 'No tienes acceso a este evento')
+
+    const event = await prisma.event.findFirst({
+      where: { id: eventId, tenantId, portalEnabled: true },
+      select: { priceListId: true },
+    })
+    if (!event?.priceListId) {
+      return res.json({ success: true, data: [] })
+    }
+
+    const items = await prisma.priceListItem.findMany({
+      where: {
+        priceListId: event.priceListId,
+        isActive: true,
+        resource: { portalVisible: true, isActive: true },
+      },
+      include: {
+        resource: {
+          select: {
+            id: true, code: true, name: true, type: true, unit: true,
+            portalDesc: true, portalBlobKey: true,
+          },
+        },
+      },
+      orderBy: { resource: { name: 'asc' } },
+    })
+
+    // Determine pricing tier based on today vs cutoffs
+    const priceList = await prisma.priceList.findUnique({ where: { id: event.priceListId } })
+    const now = new Date()
+    let tier: 'EARLY' | 'NORMAL' | 'LATE' = 'LATE'
+    if (priceList?.earlyCutoff && now <= priceList.earlyCutoff) tier = 'EARLY'
+    else if (priceList?.normalCutoff && now <= priceList.normalCutoff) tier = 'NORMAL'
+
+    const catalog = items.map((item) => ({
+      id: item.id,
+      resource: item.resource,
+      tier,
+      unitPrice: tier === 'EARLY' ? item.earlyPrice : tier === 'NORMAL' ? item.normalPrice : item.latePrice,
+      earlyPrice: item.earlyPrice,
+      normalPrice: item.normalPrice,
+      latePrice: item.latePrice,
+      unit: item.unit,
+    }))
+
+    res.json({ success: true, data: catalog })
+  } catch (err) {
+    next(err)
+  }
+}

@@ -99,16 +99,18 @@ model Tenant {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  users         User[]
-  departments   Department[]
-  resources     Resource[]
-  priceLists    PriceList[]
-  clients       Client[]
-  events        Event[]
-  orders        Order[]
-  notifications Notification[]
-  interactions  ClientInteraction[]
-  clientTasks   ClientTask[]
+  users             User[]
+  departments       Department[]
+  resources         Resource[]
+  priceLists        PriceList[]
+  clients           Client[]
+  events            Event[]
+  orders            Order[]
+  notifications     Notification[]
+  interactions      ClientInteraction[]
+  clientTasks       ClientTask[]
+  portalUsers       PortalUser[]
+  portalAccessCodes PortalAccessCode[]
 
   @@map("tenants")
 }
@@ -142,6 +144,7 @@ model User {
   createdInteractions  ClientInteraction[]  @relation("InteractionCreator")
   assignedTasks        ClientTask[]         @relation("TaskAssignee")
   createdTasks         ClientTask[]         @relation("TaskCreator")
+  createdPortalCodes   PortalAccessCode[]   @relation("PortalCodeCreator")
 
   @@index([tenantId, isActive])
   @@map("users")
@@ -301,6 +304,8 @@ model Client {
   events       Event[]
   interactions ClientInteraction[]
   tasks        ClientTask[]
+  portalUser   PortalUser?          @relation(fields: [portalUserId], references: [id])
+  portalCodes  PortalAccessCode[]
 
   @@index([tenantId, isActive])
   @@map("clients")
@@ -422,10 +427,12 @@ model Event {
   primaryClient Client?         @relation(fields: [primaryClientId], references: [id])
   priceList     PriceList?      @relation(fields: [priceListId], references: [id])
   createdBy     User            @relation("EventCreatedBy", fields: [createdById], references: [id])
-  spaces        EventSpace[]
-  documents     EventDocument[]
-  stands        Stand[]
-  orders        Order[]
+  spaces            EventSpace[]
+  documents         EventDocument[]
+  stands            Stand[]
+  orders            Order[]
+  portalAccessCodes PortalAccessCode[]
+  portalUserEvents  PortalUserEvent[]
 
   @@unique([tenantId, code])
   @@index([tenantId, status])
@@ -663,4 +670,65 @@ model AuditLog {
   @@index([tenantId, entityType, entityId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// ─── Portal de Expositores ────────────────────────────────────────────────────
+
+model PortalUser {
+  id           String   @id @default(uuid())
+  tenantId     String   @map("tenant_id") @db.VarChar(50)
+  email        String   @unique @db.VarChar(200)
+  passwordHash String   @map("password_hash")
+  firstName    String   @map("first_name") @db.VarChar(100)
+  lastName     String   @map("last_name") @db.VarChar(100)
+  phone        String?  @db.VarChar(30)
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant            @relation(fields: [tenantId], references: [id])
+  client Client?
+  events PortalUserEvent[]
+
+  @@index([tenantId])
+  @@map("portal_users")
+}
+
+model PortalAccessCode {
+  id          String    @id @default(uuid())
+  tenantId    String    @map("tenant_id") @db.VarChar(50)
+  eventId     String    @map("event_id")
+  code        String    @unique @db.VarChar(20)
+  clientId    String?   @map("client_id")
+  maxUses     Int       @default(1) @map("max_uses")
+  usedCount   Int       @default(0) @map("used_count")
+  expiresAt   DateTime? @map("expires_at")
+  isActive    Boolean   @default(true) @map("is_active")
+  createdById String    @map("created_by_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  tenant    Tenant            @relation(fields: [tenantId], references: [id])
+  event     Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  client    Client?           @relation(fields: [clientId], references: [id])
+  createdBy User              @relation("PortalCodeCreator", fields: [createdById], references: [id])
+  usages    PortalUserEvent[]
+
+  @@index([tenantId, eventId])
+  @@map("portal_access_codes")
+}
+
+model PortalUserEvent {
+  id           String   @id @default(uuid())
+  portalUserId String   @map("portal_user_id")
+  eventId      String   @map("event_id")
+  accessCodeId String   @map("access_code_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  portalUser PortalUser       @relation(fields: [portalUserId], references: [id], onDelete: Cascade)
+  event      Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  accessCode PortalAccessCode @relation(fields: [accessCodeId], references: [id])
+
+  @@unique([portalUserId, eventId])
+  @@map("portal_user_events")
 }

@@ -9,6 +9,8 @@ import departmentRoutes from './departments.routes'
 import userRoutes from './users.routes'
 import dashboardRoutes from './dashboard.routes'
 import crmRoutes from './crm.routes'
+import portalRoutes from './portal.routes'
+import portalCodesRoutes from './portal-codes.routes'
 
 const router = Router()
 
@@ -22,5 +24,7 @@ router.use('/departments', departmentRoutes)
 router.use('/users', userRoutes)
 router.use('/dashboards', dashboardRoutes)
 router.use('/crm', crmRoutes)
+router.use('/portal', portalRoutes)
+router.use('/events/:id/portal-codes', portalCodesRoutes)
 
 export default router
