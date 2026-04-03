@@ -18,6 +18,10 @@ const TYPE_COLORS: Record<string, string> = {
   FURNITURE: 'purple', SERVICE: 'cyan', DISCOUNT: 'red', TAX: 'gold',
 }
 
+const apiUrl = import.meta.env.VITE_API_URL || ''
+const imgSrc = (path: string | null | undefined) =>
+  path ? (path.startsWith('/uploads') ? `${apiUrl}${path}` : path) : undefined
+
 const IMAGE_SLOTS: { slot: 'main' | 'desc' | 'extra'; label: string; field: string }[] = [
   { slot: 'main',  label: 'Imagen Principal',   field: 'imageMain' },
   { slot: 'desc',  label: 'Imagen Descriptiva',  field: 'imageDesc' },
@@ -62,7 +66,7 @@ function ResourceImageSlot({
       {currentUrl ? (
         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
           <Image
-            src={currentUrl}
+            src={imgSrc(currentUrl)}
             width={120}
             height={90}
             style={{ objectFit: 'cover', borderRadius: 4 }}
@@ -150,7 +154,7 @@ export default function ResourcesPage() {
     {
       title: '', key: 'img', width: 52,
       render: (_: any, r: any) => r.imageMain
-        ? <Image src={r.imageMain} width={40} height={40} style={{ objectFit: 'cover', borderRadius: 4 }} preview={false} />
+        ? <Image src={imgSrc(r.imageMain)} width={40} height={40} style={{ objectFit: 'cover', borderRadius: 4 }} preview={false} />
         : <div style={{ width: 40, height: 40, background: '#f5f5f5', borderRadius: 4 }} />,
     },
     { title: 'Código', dataIndex: 'code', key: 'code', width: 100 },

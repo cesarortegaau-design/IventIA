@@ -11,6 +11,10 @@ import { ordersApi } from '../../api/orders'
 
 const { Title, Text } = Typography
 
+const apiUrl = import.meta.env.VITE_API_URL || ''
+const imgSrc = (path: string | null | undefined) =>
+  path ? (path.startsWith('/uploads') ? `${apiUrl}${path}` : path) : undefined
+
 const RESOURCE_TYPE_LABELS: Record<string, string> = {
   CONSUMABLE: 'Consumible', EQUIPMENT: 'Equipo', FURNITURE: 'Mobiliario',
   SERVICE: 'Servicio', SPACE: 'Espacio',
@@ -88,7 +92,7 @@ export default function NewOrderPage() {
 
   const catalogColumns = [
     { title: '', key: 'img', width: 64, render: (_: any, r: any) => r.resource.imageMain
-      ? <Image src={r.resource.imageMain} width={52} height={52} style={{ objectFit: 'cover', borderRadius: 4 }} />
+      ? <Image src={imgSrc(r.resource.imageMain)} width={52} height={52} style={{ objectFit: 'cover', borderRadius: 4 }} />
       : <div style={{ width: 52, height: 52, background: '#f5f5f5', borderRadius: 4 }} />
     },
     { title: 'Recurso', key: 'name', render: (_: any, r: any) => (
