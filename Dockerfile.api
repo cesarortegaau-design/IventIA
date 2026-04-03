@@ -8,18 +8,15 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json .npmrc ./
 COPY packages/ ./packages/
 COPY apps/api/ ./apps/api/
 
-# Install all deps (dev + prod), skip lifecycle scripts so pnpm
-# does not interfere with the generate step below.
-RUN pnpm install --frozen-lockfile --ignore-scripts
+# Install all deps — postinstall runs prisma generate automatically.
+# Do NOT use --ignore-scripts: esbuild needs its postinstall to download its binary.
+RUN pnpm install --frozen-lockfile
 
-# Generate Prisma client using the locally installed binary.
-RUN node_modules/.bin/prisma generate --schema=./packages/prisma/schema.prisma
-
-# Build API
+# Build API (esbuild bundles @iventia/shared inline, keeps npm packages external)
 RUN pnpm --filter @iventia/api build
 
 # Place the generated client inside dist/node_modules so Node.js finds it
-# at the FIRST lookup path — completely independent of pnpm's node_modules layout.
+# at the first lookup path, independent of pnpm's node_modules layout.
 RUN mkdir -p /app/apps/api/dist/node_modules && \
     cp -r /app/node_modules/prisma-generated /app/apps/api/dist/node_modules/prisma-generated
 
