@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { authenticate } from '../middleware/authenticate'
 import { authenticatePortal } from '../middleware/portalAuth.middleware'
 import {
-  listConversations, getConversation, sendAdminMessage, adminUnreadCount,
+  listConversations, getConversation, sendAdminMessage, adminUnreadCount, adminStartConversation,
   portalListConversations, portalGetConversation, portalStartConversation,
   portalSendMessage, portalUnreadCount,
 } from '../controllers/chat.controller'
@@ -11,6 +11,7 @@ const router = Router()
 
 // Admin routes
 router.get('/admin/conversations',              authenticate, listConversations)
+router.post('/admin/conversations',             authenticate, adminStartConversation)
 router.get('/admin/conversations/unread',       authenticate, adminUnreadCount)
 router.get('/admin/conversations/:id',          authenticate, getConversation)
 router.post('/admin/conversations/:id/messages', authenticate, sendAdminMessage)

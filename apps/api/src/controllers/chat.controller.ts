@@ -55,6 +55,37 @@ export async function sendAdminMessage(req: Request, res: Response) {
   res.json(message)
 }
 
+export async function adminStartConversation(req: Request, res: Response) {
+  const tenantId = req.user!.tenantId
+  const senderId = req.user!.userId
+  const { portalUserId, eventId, subject, content } = req.body
+
+  const portalUser = await prisma.portalUser.findFirst({ where: { id: portalUserId, tenantId } })
+  if (!portalUser) return res.status(404).json({ error: 'Portal user not found' })
+
+  let conv = eventId
+    ? await prisma.conversation.findFirst({ where: { portalUserId, eventId } })
+    : null
+
+  if (!conv) {
+    conv = await prisma.conversation.create({
+      data: { tenantId, portalUserId, eventId: eventId || null, subject: subject || null, unreadPortal: 1 },
+    })
+  }
+
+  const adminUser  = await prisma.user.findUnique({ where: { id: senderId } })
+  const senderName = adminUser ? `${adminUser.firstName} ${adminUser.lastName}` : 'Admin'
+
+  const message = await prisma.message.create({
+    data: { conversationId: conv.id, senderType: 'ADMIN', senderId, senderName, content },
+  })
+  await prisma.conversation.update({
+    where: { id: conv.id },
+    data: { updatedAt: new Date(), unreadPortal: { increment: 1 } },
+  })
+  res.json({ conversation: conv, message })
+}
+
 export async function adminUnreadCount(req: Request, res: Response) {
   const tenantId = req.user!.tenantId
   const result = await prisma.conversation.aggregate({
