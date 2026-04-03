@@ -1,4 +1,5 @@
 import 'dotenv/config'
+import path from 'path'
 import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
@@ -36,6 +37,9 @@ app.use(express.urlencoded({ extended: true }))
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', version: '1.0.0', env: env.NODE_ENV })
 })
+
+// Static uploads
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')))
 
 // API routes
 app.use('/api/v1', apiRoutes)

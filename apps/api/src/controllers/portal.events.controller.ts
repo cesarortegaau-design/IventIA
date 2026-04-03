@@ -93,6 +93,7 @@ export async function portalGetCatalog(req: Request, res: Response, next: NextFu
           select: {
             id: true, code: true, name: true, type: true, unit: true,
             portalDesc: true, portalBlobKey: true,
+            imageMain: true, imageDesc: true, imageExtra: true,
           },
         },
       },

@@ -91,6 +91,53 @@ export async function updateClient(req: Request, res: Response, next: NextFuncti
   }
 }
 
+export async function listPortalUsers(req: Request, res: Response, next: NextFunction) {
+  try {
+    const tenantId = req.user!.tenantId
+    const portalUsers = await prisma.portalUser.findMany({
+      where: { tenantId },
+      select: {
+        id: true, email: true, firstName: true, lastName: true, isActive: true, createdAt: true,
+        client: { select: { id: true, companyName: true, firstName: true, lastName: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+    res.json({ success: true, data: portalUsers })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function linkPortalUser(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { portalUserId } = req.body as { portalUserId: string | null }
+    const tenantId = req.user!.tenantId
+
+    const client = await prisma.client.findFirst({ where: { id: req.params.id, tenantId } })
+    if (!client) throw new AppError(404, 'CLIENT_NOT_FOUND', 'Client not found')
+
+    if (portalUserId) {
+      const portalUser = await prisma.portalUser.findFirst({
+        where: { id: portalUserId, tenantId },
+        include: { client: { select: { id: true } } },
+      })
+      if (!portalUser) throw new AppError(404, 'PORTAL_USER_NOT_FOUND', 'Usuario de portal no encontrado')
+      if (portalUser.client && portalUser.client.id !== client.id) {
+        throw new AppError(400, 'ALREADY_LINKED', 'Este usuario ya está vinculado a otro cliente')
+      }
+    }
+
+    const updated = await prisma.client.update({
+      where: { id: req.params.id },
+      data: { portalUserId: portalUserId ?? null },
+      include: { portalUser: { select: { id: true, email: true, firstName: true, lastName: true } } },
+    })
+    res.json({ success: true, data: updated })
+  } catch (err) {
+    next(err)
+  }
+}
+
 export async function toggleClientActive(req: Request, res: Response, next: NextFunction) {
   try {
     const client = await prisma.client.findFirst({

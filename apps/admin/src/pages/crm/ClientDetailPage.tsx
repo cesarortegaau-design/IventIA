@@ -10,10 +10,11 @@ import {
   ArrowLeftOutlined, PhoneOutlined, MailOutlined, MessageOutlined,
   TeamOutlined, FileTextOutlined, PlusOutlined, CheckOutlined,
   DeleteOutlined, EditOutlined, UserOutlined, CalendarOutlined,
-  ShoppingCartOutlined, ClockCircleOutlined,
+  ShoppingCartOutlined, ClockCircleOutlined, LinkOutlined, DisconnectOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { crmApi } from '../../api/crm'
+import { clientsApi } from '../../api/clients'
 
 const { Title, Text } = Typography
 const { TextArea } = Input
@@ -109,6 +110,16 @@ export default function ClientDetailPage() {
   const deleteTask = useMutation({
     mutationFn: (id: string) => crmApi.deleteTask(clientId!, id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['client-tasks', clientId] }) },
+  })
+
+  const { data: portalUsersData } = useQuery({
+    queryKey: ['portal-users'],
+    queryFn: () => clientsApi.listPortalUsers(),
+  })
+
+  const linkPortalUserMutation = useMutation({
+    mutationFn: (portalUserId: string | null) => clientsApi.linkPortalUser(clientId!, portalUserId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['client-summary', clientId] }),
   })
 
   if (isLoading) return <div style={{ padding: 40, textAlign: 'center' }}><Spin size="large" /></div>
@@ -407,6 +418,72 @@ export default function ClientDetailPage() {
                 )}
               />
             ),
+          },
+          {
+            key: 'portal',
+            label: 'Portal de Expositores',
+            children: (() => {
+              const linked = client.portalUser as any
+              const allPortalUsers = portalUsersData?.data ?? []
+              const available = allPortalUsers.filter((u: any) => !u.client || u.client.id === client.id)
+              return (
+                <div style={{ maxWidth: 500 }}>
+                  {linked ? (
+                    <Card size="small" style={{ marginBottom: 16, borderColor: '#6B46C1' }}>
+                      <Space>
+                        <Avatar icon={<UserOutlined />} style={{ backgroundColor: '#6B46C1' }} />
+                        <div>
+                          <div><Text strong>{linked.firstName} {linked.lastName}</Text></div>
+                          <div><Text type="secondary">{linked.email}</Text></div>
+                          <Tag color={linked.isActive ? 'green' : 'red'} style={{ marginTop: 4 }}>
+                            {linked.isActive ? 'Activo' : 'Inactivo'}
+                          </Tag>
+                        </div>
+                      </Space>
+                      <div style={{ marginTop: 12 }}>
+                        <Popconfirm
+                          title="¿Desvincular usuario del portal?"
+                          onConfirm={() => linkPortalUserMutation.mutate(null)}
+                        >
+                          <Button danger icon={<DisconnectOutlined />} size="small" loading={linkPortalUserMutation.isPending}>
+                            Desvincular
+                          </Button>
+                        </Popconfirm>
+                      </div>
+                    </Card>
+                  ) : (
+                    <Empty
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                      description="Sin cuenta de portal vinculada"
+                      style={{ marginBottom: 16 }}
+                    />
+                  )}
+                  <div>
+                    <Text strong style={{ display: 'block', marginBottom: 8 }}>
+                      {linked ? 'Cambiar cuenta vinculada' : 'Vincular cuenta de portal'}
+                    </Text>
+                    <Space.Compact style={{ width: '100%' }}>
+                      <Select
+                        showSearch
+                        allowClear
+                        placeholder="Buscar usuario por email o nombre..."
+                        style={{ width: '100%' }}
+                        optionFilterProp="label"
+                        loading={linkPortalUserMutation.isPending}
+                        options={available.map((u: any) => ({
+                          value: u.id,
+                          label: `${u.email} — ${u.firstName} ${u.lastName}`,
+                        }))}
+                        onSelect={(val: string) => linkPortalUserMutation.mutate(val)}
+                      />
+                    </Space.Compact>
+                    <Text type="secondary" style={{ fontSize: 12, marginTop: 4, display: 'block' }}>
+                      Solo se muestran usuarios sin cliente asignado.
+                    </Text>
+                  </div>
+                </div>
+              )
+            })(),
           },
           {
             key: 'contacts',

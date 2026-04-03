@@ -213,6 +213,9 @@ model Resource {
   portalVisible Boolean      @default(false) @map("portal_visible")
   portalDesc    String?      @map("portal_desc") @db.Text
   portalBlobKey String?      @map("portal_blob_key") @db.VarChar(500)
+  imageMain     String?      @map("image_main") @db.VarChar(500)
+  imageDesc     String?      @map("image_desc") @db.VarChar(500)
+  imageExtra    String?      @map("image_extra") @db.VarChar(500)
   isActive      Boolean      @default(true) @map("is_active")
   metadata      Json         @default("{}")
   createdAt     DateTime     @default(now()) @map("created_at")

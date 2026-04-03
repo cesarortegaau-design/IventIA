@@ -11,4 +11,13 @@ export const resourcesApi = {
     apiClient.put(`/resources/${id}`, data).then(r => r.data),
   toggle: (id: string) =>
     apiClient.patch(`/resources/${id}/toggle`).then(r => r.data),
+  uploadImage: (id: string, slot: 'main' | 'desc' | 'extra', file: File) => {
+    const form = new FormData()
+    form.append('image', file)
+    return apiClient.post(`/resources/${id}/images/${slot}`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data)
+  },
+  deleteImage: (id: string, slot: 'main' | 'desc' | 'extra') =>
+    apiClient.delete(`/resources/${id}/images/${slot}`).then(r => r.data),
 }

@@ -11,4 +11,8 @@ export const clientsApi = {
     apiClient.put(`/clients/${id}`, data).then(r => r.data),
   toggle: (id: string) =>
     apiClient.patch(`/clients/${id}/toggle`).then(r => r.data),
+  listPortalUsers: () =>
+    apiClient.get('/clients/portal-users').then(r => r.data),
+  linkPortalUser: (id: string, portalUserId: string | null) =>
+    apiClient.patch(`/clients/${id}/link-portal-user`, { portalUserId }).then(r => r.data),
 }

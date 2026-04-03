@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import {
   Card, Steps, Button, Table, InputNumber, Typography, Space, Tag, App,
-  Divider, Statistic, Row, Col, Input, Empty, Spin
+  Divider, Statistic, Row, Col, Input, Empty, Spin, Image
 } from 'antd'
 import { ArrowLeftOutlined, ShoppingCartOutlined, CheckCircleOutlined } from '@ant-design/icons'
 import { eventsApi } from '../../api/events'
@@ -87,6 +87,10 @@ export default function NewOrderPage() {
   const total = subtotal + tax
 
   const catalogColumns = [
+    { title: '', key: 'img', width: 64, render: (_: any, r: any) => r.resource.imageMain
+      ? <Image src={r.resource.imageMain} width={52} height={52} style={{ objectFit: 'cover', borderRadius: 4 }} />
+      : <div style={{ width: 52, height: 52, background: '#f5f5f5', borderRadius: 4 }} />
+    },
     { title: 'Recurso', key: 'name', render: (_: any, r: any) => (
       <div>
         <div>{r.resource.name}</div>
