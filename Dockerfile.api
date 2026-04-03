@@ -14,8 +14,8 @@ COPY apps/api/ ./apps/api/
 # Install all dependencies
 RUN pnpm install --frozen-lockfile
 
-# Generate Prisma client (must run from monorepo root with schema path)
-RUN npx prisma generate --schema=./packages/prisma/schema.prisma
+# Generate Prisma client via pnpm filter so Prisma detects the pnpm virtual store correctly
+RUN pnpm --filter @iventia/prisma run db:generate
 
 # Build API
 RUN pnpm --filter @iventia/api build
