@@ -1,6 +1,6 @@
 [build]
 builder = "nixpacks"
-buildCommand = "pnpm install --frozen-lockfile && pnpm --filter @iventia/api build"
+buildCommand = "pnpm install --frozen-lockfile && npx prisma generate --schema=./packages/prisma/schema.prisma && pnpm --filter @iventia/api build"
 
 [deploy]
 startCommand = "npx prisma migrate deploy --schema packages/prisma/schema.prisma && node apps/api/dist/index.js"
