@@ -65,8 +65,9 @@ export default function EventFormPage() {
       navigate(`/eventos/${data.data.id}`)
     },
     onError: (err: any) => {
-      const msg = err?.response?.data?.error?.message ?? err?.message ?? 'Error al guardar el evento'
-      message.error(msg)
+      const details = err?.response?.data?.error?.details?.fieldErrors
+      const fieldMsg = details ? Object.entries(details).map(([k, v]) => `${k}: ${(v as string[]).join(', ')}`).join(' | ') : null
+      message.error(fieldMsg ?? err?.response?.data?.error?.message ?? 'Error al guardar el evento')
     },
   })
 
