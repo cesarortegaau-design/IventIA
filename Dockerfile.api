@@ -1,4 +1,4 @@
-FROM node:20-alpine
+FROM node:22-alpine
 
 RUN npm install -g pnpm@9
 
@@ -8,12 +8,12 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json .npmrc ./
 COPY packages/ ./packages/
 COPY apps/api/ ./apps/api/
 
+# Install deps + run postinstall (prisma generate) in one step so generated
+# client is in the same layer as node_modules and cannot be wiped.
 RUN pnpm install --frozen-lockfile
 
-# Generate Prisma client to /app/node_modules/.prisma-client
-# This is a plain node_modules package path — no pnpm virtual store,
-# no symlink resolution issues, esbuild treats it as external.
-RUN npx prisma generate --schema=./packages/prisma/schema.prisma
+# Verify the generated client exists before building
+RUN ls /app/node_modules/prisma-generated
 
 # Build API
 RUN pnpm --filter @iventia/api build
