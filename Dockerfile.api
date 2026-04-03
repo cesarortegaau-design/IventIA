@@ -8,16 +8,21 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json .npmrc ./
 COPY packages/ ./packages/
 COPY apps/api/ ./apps/api/
 
-# Install deps + run postinstall (prisma generate) in one step so generated
-# client is in the same layer as node_modules and cannot be wiped.
-RUN pnpm install --frozen-lockfile
+# Install all deps (dev + prod), skip lifecycle scripts so pnpm
+# does not interfere with the generate step below.
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
-# Verify the generated client exists before building
-RUN ls /app/node_modules/prisma-generated
+# Generate Prisma client using the locally installed binary.
+RUN node_modules/.bin/prisma generate --schema=./packages/prisma/schema.prisma
 
 # Build API
 RUN pnpm --filter @iventia/api build
 
+# Place the generated client inside dist/node_modules so Node.js finds it
+# at the FIRST lookup path — completely independent of pnpm's node_modules layout.
+RUN mkdir -p /app/apps/api/dist/node_modules && \
+    cp -r /app/node_modules/prisma-generated /app/apps/api/dist/node_modules/prisma-generated
+
 EXPOSE 3001
 
-CMD ["sh", "-c", "npx prisma migrate deploy --schema /app/packages/prisma/schema.prisma && node /app/apps/api/dist/index.js"]
+CMD ["sh", "-c", "node_modules/.bin/prisma migrate deploy --schema /app/packages/prisma/schema.prisma && node /app/apps/api/dist/index.js"]
