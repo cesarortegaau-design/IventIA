@@ -50,7 +50,7 @@ export default function ClientsPage() {
 
   const columns = [
     {
-      title: 'Tipo', dataIndex: 'personType', key: 'type', width: 100,
+      title: 'Tipo', dataIndex: 'personType', key: 'type', width: 90,
       render: (v: string) => <Tag color={v === 'MORAL' ? 'blue' : 'green'}>{v === 'MORAL' ? 'Moral' : 'Física'}</Tag>,
     },
     {
@@ -61,13 +61,13 @@ export default function ClientsPage() {
     { title: 'Email', dataIndex: 'email', key: 'email' },
     { title: 'Teléfono', dataIndex: 'phone', key: 'phone' },
     {
-      title: 'Activo', dataIndex: 'isActive', key: 'active',
+      title: 'Activo', dataIndex: 'isActive', key: 'active', width: 80,
       render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? 'Activo' : 'Inactivo'}</Tag>,
     },
     {
-      title: '', key: 'actions',
+      title: '', key: 'actions', width: 110,
       render: (_: any, r: any) => (
-        <Space>
+        <Space size={4}>
           <Button size="small" icon={<EyeOutlined />} onClick={() => navigate(`/catalogos/clientes/${r.id}`)} />
           <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)} />
           <Button size="small" icon={<PoweroffOutlined />} onClick={() => toggleMutation.mutate(r.id)} />
@@ -78,9 +78,9 @@ export default function ClientsPage() {
 
   return (
     <div>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
+      <Row justify="space-between" align="middle" style={{ marginBottom: 16, gap: 8 }}>
         <Title level={4} style={{ margin: 0 }}>Catálogo de Clientes</Title>
-        <Space>
+        <Space wrap>
           <Button
             icon={<DownloadOutlined />}
             onClick={() => exportToCsv('clientes', (data?.data ?? []).map((r: any) => ({
@@ -112,7 +112,7 @@ export default function ClientsPage() {
           placeholder="Buscar por nombre, RFC, email..."
           onSearch={setSearch}
           allowClear
-          style={{ width: 360, marginBottom: 16 }}
+          style={{ width: '100%', maxWidth: 400, marginBottom: 16 }}
         />
         <Table
           dataSource={data?.data ?? []}
@@ -130,7 +130,7 @@ export default function ClientsPage() {
         open={modalOpen}
         onCancel={() => setModalOpen(false)}
         onOk={() => form.submit()}
-        width={700}
+        width="min(700px, 95vw)"
         confirmLoading={saveMutation.isPending}
       >
         <Form form={form} layout="vertical" onFinish={saveMutation.mutate}>
@@ -139,52 +139,52 @@ export default function ClientsPage() {
               key: 'general', label: 'Datos Generales',
               children: (
                 <Row gutter={16}>
-                  <Col span={12}>
+                  <Col xs={24} sm={12}>
                     <Form.Item name="personType" label="Tipo de Persona" rules={[{ required: true }]}>
                       <Select options={[{ value: 'MORAL', label: 'Persona Moral' }, { value: 'PHYSICAL', label: 'Persona Física' }]} />
                     </Form.Item>
                   </Col>
-                  <Col span={12}>
+                  <Col xs={24} sm={12}>
                     <Form.Item name="companyName" label="Razón Social">
                       <Input />
                     </Form.Item>
                   </Col>
-                  <Col span={12}>
+                  <Col xs={24} sm={12}>
                     <Form.Item name="firstName" label="Nombre">
                       <Input />
                     </Form.Item>
                   </Col>
-                  <Col span={12}>
+                  <Col xs={24} sm={12}>
                     <Form.Item name="lastName" label="Apellido(s)">
                       <Input />
                     </Form.Item>
                   </Col>
-                  <Col span={12}>
+                  <Col xs={24} sm={12}>
                     <Form.Item name="rfc" label="RFC / TAX ID">
                       <Input />
                     </Form.Item>
                   </Col>
-                  <Col span={12}>
+                  <Col xs={24} sm={12}>
                     <Form.Item name="taxRegime" label="Régimen Fiscal">
                       <Input />
                     </Form.Item>
                   </Col>
-                  <Col span={12}>
+                  <Col xs={24} sm={12}>
                     <Form.Item name="email" label="Email">
                       <Input type="email" />
                     </Form.Item>
                   </Col>
-                  <Col span={12}>
+                  <Col xs={24} sm={12}>
                     <Form.Item name="phone" label="Teléfono">
                       <Input />
                     </Form.Item>
                   </Col>
-                  <Col span={12}>
+                  <Col xs={24} sm={12}>
                     <Form.Item name="whatsapp" label="WhatsApp">
                       <Input />
                     </Form.Item>
                   </Col>
-                  <Col span={12}>
+                  <Col xs={24} sm={12}>
                     <Form.Item name="addressCountry" label="País" initialValue="MX">
                       <Input />
                     </Form.Item>
@@ -199,13 +199,13 @@ export default function ClientsPage() {
                   <Col span={24}>
                     <Form.Item name="addressStreet" label="Calle y Número"><Input /></Form.Item>
                   </Col>
-                  <Col span={8}>
+                  <Col xs={24} sm={8}>
                     <Form.Item name="addressCity" label="Ciudad"><Input /></Form.Item>
                   </Col>
-                  <Col span={8}>
+                  <Col xs={24} sm={8}>
                     <Form.Item name="addressState" label="Estado"><Input /></Form.Item>
                   </Col>
-                  <Col span={8}>
+                  <Col xs={24} sm={8}>
                     <Form.Item name="addressZip" label="C.P."><Input /></Form.Item>
                   </Col>
                 </Row>

@@ -115,30 +115,28 @@ export default function OrderFormWizard() {
   }
 
   const lineColumns = [
-    { title: 'Descripción', dataIndex: 'description', key: 'desc' },
-    { title: 'P. Anticipado', dataIndex: 'earlyPrice', render: (v: number) => `$${v.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` },
-    { title: 'P. Normal', dataIndex: 'normalPrice', render: (v: number) => `$${v.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` },
-    { title: 'P. Tardío', dataIndex: 'latePrice', render: (v: number) => `$${v.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` },
+    { title: 'Descripción', dataIndex: 'description', key: 'desc', width: 160 },
+    { title: 'P. Normal', dataIndex: 'normalPrice', width: 110, render: (v: number) => `$${v.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` },
     {
-      title: 'Cantidad', dataIndex: 'quantity', key: 'qty',
+      title: 'Cantidad', dataIndex: 'quantity', key: 'qty', width: 90,
       render: (v: number, r: any) => (
         <InputNumber min={0.001} value={v} onChange={val => updateLineItem(r.resourceId, 'quantity', val)} style={{ width: 80 }} />
       ),
     },
     {
-      title: 'Descuento %', dataIndex: 'discountPct', key: 'disc',
+      title: 'Desc. %', dataIndex: 'discountPct', key: 'disc', width: 80,
       render: (v: number, r: any) => (
         <InputNumber min={0} max={100} value={v} onChange={val => updateLineItem(r.resourceId, 'discountPct', val)} style={{ width: 70 }} />
       ),
     },
     {
-      title: 'Observaciones', dataIndex: 'observations', key: 'obs',
+      title: 'Observaciones', dataIndex: 'observations', key: 'obs', width: 160,
       render: (v: string, r: any) => (
         <Input value={v} onChange={e => updateLineItem(r.resourceId, 'observations', e.target.value)} />
       ),
     },
     {
-      title: '', key: 'del',
+      title: '', key: 'del', width: 48,
       render: (_: any, r: any) => (
         <Button danger size="small" icon={<DeleteOutlined />} onClick={() => removeLineItem(r.resourceId)} />
       ),
@@ -151,17 +149,17 @@ export default function OrderFormWizard() {
       content: (
         <Form form={form} layout="vertical">
           <Row gutter={16}>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item name="clientId" label="Cliente" rules={[{ required: true }]}>
-                <Select options={clientOptions} showSearch filterOption={(i, o) => o?.label?.toLowerCase().includes(i.toLowerCase()) ?? false} />
+                <Select options={clientOptions} showSearch filterOption={(i, o) => String(o?.label ?? '').toLowerCase().includes(i.toLowerCase())} />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item name="billingClientId" label="Cliente para Facturar">
-                <Select options={clientOptions} showSearch allowClear filterOption={(i, o) => o?.label?.toLowerCase().includes(i.toLowerCase()) ?? false} />
+                <Select options={clientOptions} showSearch allowClear filterOption={(i, o) => String(o?.label ?? '').toLowerCase().includes(i.toLowerCase())} />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item name="priceListId" label="Lista de Precios" rules={[{ required: true }]}>
                 <Select
                   options={(allPriceLists?.data ?? []).map((p: any) => ({ value: p.id, label: p.name }))}
@@ -170,7 +168,7 @@ export default function OrderFormWizard() {
                 />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item name="standId" label="Stand">
                 <Select options={standOptions} allowClear />
               </Form.Item>
@@ -185,23 +183,25 @@ export default function OrderFormWizard() {
       ),
     },
     {
-      title: 'Productos y Servicios',
+      title: 'Productos',
       content: (
         <div>
           <Card size="small" style={{ marginBottom: 16 }}>
-            <Text strong>Agregar recurso de la lista de precios: </Text>
-            <Select
-              style={{ width: 400, marginLeft: 8 }}
-              placeholder="Seleccionar recurso..."
-              showSearch
-              options={priceListItems.map((i: any) => ({
-                value: i.resourceId,
-                label: `${i.resource.name} — Normal: $${Number(i.normalPrice).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
-              }))}
-              onChange={addLineItem}
-              value={null}
-              filterOption={(input, opt) => opt?.label?.toLowerCase().includes(input.toLowerCase()) ?? false}
-            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <Text strong>Agregar recurso de la lista de precios:</Text>
+              <Select
+                style={{ width: '100%' }}
+                placeholder="Seleccionar recurso..."
+                showSearch
+                options={priceListItems.map((i: any) => ({
+                  value: i.resourceId,
+                  label: `${i.resource.name} — $${Number(i.normalPrice).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
+                }))}
+                onChange={addLineItem}
+                value={null}
+                filterOption={(input, opt) => String(opt?.label ?? '').toLowerCase().includes(input.toLowerCase())}
+              />
+            </div>
           </Card>
           <Table
             dataSource={lineItems}
@@ -209,11 +209,12 @@ export default function OrderFormWizard() {
             rowKey="resourceId"
             pagination={false}
             size="small"
+            scroll={{ x: 'max-content' }}
             footer={() => {
               const subtotal = lineItems.reduce((sum, li) => sum + (li.quantity * (li.normalPrice || 0) * (1 - (li.discountPct || 0) / 100)), 0)
               const tax = subtotal * 0.16
               return (
-                <Row justify="end" gutter={16}>
+                <Row justify="end" gutter={16} style={{ flexWrap: 'wrap' }}>
                   <Col><Statistic title="Subtotal" value={`$${subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`} /></Col>
                   <Col><Statistic title="IVA 16%" value={`$${tax.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`} /></Col>
                   <Col><Statistic title="Total Est." valueStyle={{ color: '#6B46C1', fontWeight: 'bold' }} value={`$${(subtotal + tax).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`} /></Col>
@@ -261,12 +262,17 @@ export default function OrderFormWizard() {
       </Space>
 
       <Card title={<Title level={4} style={{ margin: 0 }}>Nueva Orden de Servicio</Title>}>
-        <Steps current={step} items={steps.map(s => ({ title: s.title }))} style={{ marginBottom: 32 }} />
+        <Steps
+          current={step}
+          size="small"
+          items={steps.map(s => ({ title: s.title }))}
+          style={{ marginBottom: 24 }}
+        />
 
         {steps[step].content}
 
         <Divider />
-        <Space>
+        <Space wrap>
           {step > 0 && <Button onClick={() => setStep(0)}>Anterior</Button>}
           <Button
             type="primary"

@@ -117,12 +117,12 @@ export default function EventFormPage() {
                 children: (
                   <>
                     <Row gutter={16}>
-                      <Col span={16}>
+                      <Col xs={24} sm={16}>
                         <Form.Item name="name" label="Nombre del Evento" rules={[{ required: true }]}>
                           <Input size="large" />
                         </Form.Item>
                       </Col>
-                      <Col span={8}>
+                      <Col xs={24} sm={8}>
                         <Form.Item name="status" label="Estatus">
                           <Select options={[
                             { value: 'QUOTED', label: 'Cotizado' },
@@ -135,45 +135,68 @@ export default function EventFormPage() {
                       </Col>
                     </Row>
                     <Row gutter={16}>
-                      <Col span={12}>
+                      <Col xs={24} sm={12}>
                         <Form.Item name="primaryClientId" label="Cliente">
-                          <Select options={clientOptions} showSearch filterOption={(i, o) => o?.label?.toLowerCase().includes(i.toLowerCase()) ?? false} />
+                          <Select options={clientOptions} showSearch filterOption={(i, o) => String(o?.label ?? '').toLowerCase().includes(i.toLowerCase())} />
                         </Form.Item>
                       </Col>
-                      <Col span={8}>
+                      <Col xs={24} sm={12}>
                         <Form.Item name="priceListId" label="Lista de Precios">
                           <Select options={priceListOptions} />
                         </Form.Item>
                       </Col>
                     </Row>
+
+                    {/* Date ranges — each phase on its own row on mobile */}
                     <Row gutter={16}>
-                      <Col span={12}>
-                        <Form.Item label="Inicio Montaje">
-                          <Row gutter={8}>
-                            <Col span={14}><Form.Item name="setupStart" noStyle><DatePicker style={{ width: '100%' }} showTime format="DD/MM/YYYY HH:mm" /></Form.Item></Col>
-                            <Col span={10}><Form.Item name="setupEnd" noStyle><DatePicker style={{ width: '100%' }} showTime format="DD/MM/YYYY HH:mm" /></Form.Item></Col>
-                          </Row>
+                      <Col xs={24} sm={12}>
+                        <Form.Item label="Inicio de Montaje">
+                          <Form.Item name="setupStart" noStyle>
+                            <DatePicker style={{ width: '100%', marginBottom: 8 }} showTime format="DD/MM/YYYY HH:mm" placeholder="Inicio" />
+                          </Form.Item>
                         </Form.Item>
                       </Col>
-                      <Col span={12}>
-                        <Form.Item label="Fecha Evento">
-                          <Row gutter={8}>
-                            <Col span={12}><Form.Item name="eventStart" noStyle><DatePicker style={{ width: '100%' }} showTime format="DD/MM/YYYY HH:mm" /></Form.Item></Col>
-                            <Col span={12}><Form.Item name="eventEnd" noStyle><DatePicker style={{ width: '100%' }} showTime format="DD/MM/YYYY HH:mm" /></Form.Item></Col>
-                          </Row>
+                      <Col xs={24} sm={12}>
+                        <Form.Item label="Fin de Montaje">
+                          <Form.Item name="setupEnd" noStyle>
+                            <DatePicker style={{ width: '100%' }} showTime format="DD/MM/YYYY HH:mm" placeholder="Fin" />
+                          </Form.Item>
                         </Form.Item>
                       </Col>
                     </Row>
                     <Row gutter={16}>
-                      <Col span={12}>
-                        <Form.Item label="Desmontaje">
-                          <Row gutter={8}>
-                            <Col span={12}><Form.Item name="teardownStart" noStyle><DatePicker style={{ width: '100%' }} showTime format="DD/MM/YYYY HH:mm" /></Form.Item></Col>
-                            <Col span={12}><Form.Item name="teardownEnd" noStyle><DatePicker style={{ width: '100%' }} showTime format="DD/MM/YYYY HH:mm" /></Form.Item></Col>
-                          </Row>
+                      <Col xs={24} sm={12}>
+                        <Form.Item label="Inicio del Evento">
+                          <Form.Item name="eventStart" noStyle>
+                            <DatePicker style={{ width: '100%', marginBottom: 8 }} showTime format="DD/MM/YYYY HH:mm" placeholder="Inicio" />
+                          </Form.Item>
+                        </Form.Item>
+                      </Col>
+                      <Col xs={24} sm={12}>
+                        <Form.Item label="Fin del Evento">
+                          <Form.Item name="eventEnd" noStyle>
+                            <DatePicker style={{ width: '100%' }} showTime format="DD/MM/YYYY HH:mm" placeholder="Fin" />
+                          </Form.Item>
                         </Form.Item>
                       </Col>
                     </Row>
+                    <Row gutter={16}>
+                      <Col xs={24} sm={12}>
+                        <Form.Item label="Inicio de Desmontaje">
+                          <Form.Item name="teardownStart" noStyle>
+                            <DatePicker style={{ width: '100%', marginBottom: 8 }} showTime format="DD/MM/YYYY HH:mm" placeholder="Inicio" />
+                          </Form.Item>
+                        </Form.Item>
+                      </Col>
+                      <Col xs={24} sm={12}>
+                        <Form.Item label="Fin de Desmontaje">
+                          <Form.Item name="teardownEnd" noStyle>
+                            <DatePicker style={{ width: '100%' }} showTime format="DD/MM/YYYY HH:mm" placeholder="Fin" />
+                          </Form.Item>
+                        </Form.Item>
+                      </Col>
+                    </Row>
+
                     <Form.Item name="notes" label="Notas">
                       <Input.TextArea rows={3} />
                     </Form.Item>
@@ -185,27 +208,27 @@ export default function EventFormPage() {
                 label: 'Edición Avanzada',
                 children: (
                   <Row gutter={16}>
-                    <Col span={8}>
+                    <Col xs={24} sm={12} md={8}>
                       <Form.Item name="eventType" label="Tipo">
                         <Select options={['Cultural', 'Corporativo', 'Social', 'Educativo', 'Deportivo'].map(v => ({ value: v, label: v }))} allowClear />
                       </Form.Item>
                     </Col>
-                    <Col span={8}>
+                    <Col xs={24} sm={12} md={8}>
                       <Form.Item name="eventClass" label="Clase">
                         <Select options={['Feria', 'Congreso', 'Presentación', 'Ceremonia', 'Expo'].map(v => ({ value: v, label: v }))} allowClear />
                       </Form.Item>
                     </Col>
-                    <Col span={8}>
+                    <Col xs={24} sm={12} md={8}>
                       <Form.Item name="eventCategory" label="Categoría">
                         <Select options={['Grande', 'Mediano', 'Pequeño'].map(v => ({ value: v, label: v }))} allowClear />
                       </Form.Item>
                     </Col>
-                    <Col span={8}>
+                    <Col xs={24} sm={12} md={8}>
                       <Form.Item name="coordinator" label="Coordinador">
                         <Input />
                       </Form.Item>
                     </Col>
-                    <Col span={8}>
+                    <Col xs={24} sm={12} md={8}>
                       <Form.Item name="executive" label="Ejecutivo">
                         <Input />
                       </Form.Item>
@@ -215,7 +238,7 @@ export default function EventFormPage() {
               },
               {
                 key: 'portal',
-                label: 'Edición de Portal',
+                label: 'Portal',
                 children: (
                   <>
                     <Form.Item name={['portalSettings', 'description']} label="Descripción de Evento">
