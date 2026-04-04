@@ -12,7 +12,7 @@ export const clientsApi = {
   toggle: (id: string) =>
     apiClient.patch(`/clients/${id}/toggle`).then(r => r.data),
   listPortalUsers: () =>
-    apiClient.get('/clients/portal-users').then(r => r.data),
+    apiClient.get('/clients/portal-users').then(r => r.data.data),
   linkPortalUser: (id: string, portalUserId: string | null) =>
     apiClient.patch(`/clients/${id}/link-portal-user`, { portalUserId }).then(r => r.data),
 }
