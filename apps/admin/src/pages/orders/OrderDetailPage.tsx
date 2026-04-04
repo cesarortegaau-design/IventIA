@@ -5,10 +5,11 @@ import {
   Card, Descriptions, Table, Tag, Button, Space, Timeline, Form,
   Input, InputNumber, Select, DatePicker, Modal, App, Typography, Row, Col, Statistic
 } from 'antd'
-import { ArrowLeftOutlined, DollarOutlined, PlusOutlined, DownloadOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, DollarOutlined, FilePdfOutlined, DownloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { ordersApi } from '../../api/orders'
 import { exportToCsv } from '../../utils/exportCsv'
+import { OrderPdf } from '../../components/OrderPdf'
 
 const { Title, Text } = Typography
 
@@ -39,6 +40,26 @@ export default function OrderDetailPage() {
   const { message, modal } = App.useApp()
   const [paymentForm] = Form.useForm()
   const [paymentModalOpen, setPaymentModalOpen] = useState(false)
+  const [pdfLoading, setPdfLoading] = useState(false)
+
+  const downloadPdf = async () => {
+    if (!order) return
+    setPdfLoading(true)
+    try {
+      const { pdf } = await import('@react-pdf/renderer')
+      const blob = await pdf(<OrderPdf order={order} />).toBlob()
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `${order.orderNumber}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      message.error('Error al generar el PDF')
+    } finally {
+      setPdfLoading(false)
+    }
+  }
 
   const { data, isLoading } = useQuery({
     queryKey: ['order', id],
@@ -106,6 +127,14 @@ export default function OrderDetailPage() {
         }
         extra={
           <Space>
+            <Button
+              icon={<FilePdfOutlined />}
+              loading={pdfLoading}
+              onClick={downloadPdf}
+              style={{ borderColor: '#1a3a5c', color: '#1a3a5c' }}
+            >
+              Descargar PDF
+            </Button>
             {NEXT_STATUSES[order.status]?.map((s: string) => (
               <Button
                 key={s}
