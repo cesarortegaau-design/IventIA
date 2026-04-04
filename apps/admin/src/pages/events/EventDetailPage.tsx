@@ -3,12 +3,15 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Row, Col, Tag, Button, Descriptions, Table, Space, Statistic,
-  Tabs, App, Select, Typography, Divider, InputNumber, Form, DatePicker, Modal, Switch, Badge
+  Tabs, App, Select, Typography, Divider, InputNumber, Form, DatePicker, Modal, Switch, Badge,
+  Tooltip, Popconfirm, Input,
 } from 'antd'
-import { EditOutlined, PlusOutlined, ArrowLeftOutlined, CopyOutlined, StopOutlined, GlobalOutlined, DownloadOutlined } from '@ant-design/icons'
+import { EditOutlined, PlusOutlined, ArrowLeftOutlined, CopyOutlined, StopOutlined, GlobalOutlined, DownloadOutlined, DeleteOutlined, CalendarOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { eventsApi } from '../../api/events'
 import { portalCodesApi } from '../../api/portalCodes'
+import { eventSpacesApi } from '../../api/eventSpaces'
+import { resourcesApi } from '../../api/resources'
 import { exportToCsv } from '../../utils/exportCsv'
 
 const { Title, Text } = Typography
@@ -33,6 +36,9 @@ export default function EventDetailPage() {
   const { message } = App.useApp()
   const [genModalOpen, setGenModalOpen] = useState(false)
   const [genForm] = Form.useForm()
+  const [spaceModalOpen, setSpaceModalOpen] = useState(false)
+  const [editingSpace, setEditingSpace] = useState<any>(null)
+  const [spaceForm] = Form.useForm()
 
   const { data, isLoading } = useQuery({
     queryKey: ['event', id],
@@ -72,6 +78,65 @@ export default function EventDetailPage() {
     mutationFn: (codeId: string) => portalCodesApi.revoke(id!, codeId),
     onSuccess: () => { refetchCodes(); message.success('Código revocado') },
   })
+
+  // EventSpaces
+  const { data: spacesData, refetch: refetchSpaces } = useQuery({
+    queryKey: ['event-spaces', id],
+    queryFn: () => eventSpacesApi.list(id!),
+    enabled: !!id,
+  })
+  const spaces = spacesData?.data ?? []
+
+  const { data: resourcesData } = useQuery({
+    queryKey: ['resources-all'],
+    queryFn: () => resourcesApi.list({ pageSize: 500, isActive: true }),
+  })
+  const allResources = resourcesData?.data ?? []
+
+  const saveSpaceMutation = useMutation({
+    mutationFn: (values: any) => {
+      const payload = {
+        resourceId: values.resourceId,
+        phase: values.phase,
+        startTime: values.startTime.toISOString(),
+        endTime: values.endTime.toISOString(),
+        notes: values.notes ?? null,
+      }
+      return editingSpace
+        ? eventSpacesApi.update(id!, editingSpace.id, payload)
+        : eventSpacesApi.create(id!, payload)
+    },
+    onSuccess: () => {
+      refetchSpaces()
+      setSpaceModalOpen(false)
+      spaceForm.resetFields()
+      setEditingSpace(null)
+      message.success(editingSpace ? 'Reserva actualizada' : 'Reserva creada')
+    },
+    onError: () => message.error('Error al guardar la reserva'),
+  })
+
+  const deleteSpaceMutation = useMutation({
+    mutationFn: (spaceId: string) => eventSpacesApi.remove(id!, spaceId),
+    onSuccess: () => { refetchSpaces(); message.success('Reserva eliminada') },
+    onError: () => message.error('Error al eliminar'),
+  })
+
+  const openSpaceModal = (space?: any) => {
+    setEditingSpace(space ?? null)
+    if (space) {
+      spaceForm.setFieldsValue({
+        resourceId: space.resourceId,
+        phase: space.phase,
+        startTime: dayjs(space.startTime),
+        endTime: dayjs(space.endTime),
+        notes: space.notes,
+      })
+    } else {
+      spaceForm.resetFields()
+    }
+    setSpaceModalOpen(true)
+  }
 
   const event = data?.data
 
@@ -136,6 +201,134 @@ export default function EventDetailPage() {
 
         <Tabs
           items={[
+            {
+              key: 'spaces',
+              label: (
+                <Space>
+                  <CalendarOutlined />
+                  {`Espacios (${spaces.length})`}
+                </Space>
+              ),
+              children: (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+                    <Button type="primary" icon={<PlusOutlined />} onClick={() => openSpaceModal()}>
+                      Agregar reserva
+                    </Button>
+                  </div>
+                  <Table
+                    dataSource={spaces}
+                    rowKey="id"
+                    size="small"
+                    pagination={false}
+                    scroll={{ x: 'max-content' }}
+                    columns={[
+                      {
+                        title: 'Recurso / Espacio',
+                        render: (_: any, r: any) => (
+                          <div>
+                            <div style={{ fontWeight: 600 }}>{r.resource?.name}</div>
+                            <div style={{ fontSize: 11, color: '#94a3b8' }}>{r.resource?.code} · {r.resource?.type}</div>
+                          </div>
+                        ),
+                      },
+                      {
+                        title: 'Fase',
+                        dataIndex: 'phase',
+                        render: (v: string) => {
+                          const cfg: Record<string, { color: string; label: string }> = {
+                            SETUP:    { color: 'gold',   label: 'Montaje' },
+                            EVENT:    { color: 'blue',   label: 'Evento' },
+                            TEARDOWN: { color: 'orange', label: 'Desmontaje' },
+                          }
+                          return <Tag color={cfg[v]?.color}>{cfg[v]?.label ?? v}</Tag>
+                        },
+                      },
+                      {
+                        title: 'Inicio',
+                        dataIndex: 'startTime',
+                        render: (v: string) => dayjs(v).format('DD/MM/YYYY HH:mm'),
+                      },
+                      {
+                        title: 'Fin',
+                        dataIndex: 'endTime',
+                        render: (v: string) => dayjs(v).format('DD/MM/YYYY HH:mm'),
+                      },
+                      {
+                        title: 'Duración',
+                        render: (_: any, r: any) => {
+                          const hrs = dayjs(r.endTime).diff(dayjs(r.startTime), 'hour')
+                          return hrs >= 24 ? `${Math.round(hrs / 24)} días` : `${hrs}h`
+                        },
+                      },
+                      {
+                        title: 'Notas',
+                        dataIndex: 'notes',
+                        render: (v: string) => v
+                          ? <Tooltip title={v}><span style={{ color: '#64748b', fontSize: 12 }}>{v.slice(0, 40)}{v.length > 40 ? '…' : ''}</span></Tooltip>
+                          : '—',
+                      },
+                      {
+                        title: '',
+                        key: 'actions',
+                        render: (_: any, r: any) => (
+                          <Space>
+                            <Button size="small" icon={<EditOutlined />} onClick={() => openSpaceModal(r)} />
+                            <Popconfirm
+                              title="¿Eliminar esta reserva?"
+                              onConfirm={() => deleteSpaceMutation.mutate(r.id)}
+                              okText="Sí" cancelText="No"
+                            >
+                              <Button size="small" danger icon={<DeleteOutlined />} loading={deleteSpaceMutation.isPending} />
+                            </Popconfirm>
+                          </Space>
+                        ),
+                      },
+                    ]}
+                  />
+
+                  <Modal
+                    title={editingSpace ? 'Editar reserva de espacio' : 'Agregar reserva de espacio'}
+                    open={spaceModalOpen}
+                    onCancel={() => { setSpaceModalOpen(false); setEditingSpace(null); spaceForm.resetFields() }}
+                    onOk={() => spaceForm.validateFields().then(saveSpaceMutation.mutate)}
+                    confirmLoading={saveSpaceMutation.isPending}
+                    okText="Guardar"
+                    width={520}
+                  >
+                    <Form form={spaceForm} layout="vertical" style={{ marginTop: 16 }}>
+                      <Form.Item name="resourceId" label="Recurso / Espacio" rules={[{ required: true }]}>
+                        <Select
+                          showSearch
+                          placeholder="Seleccionar recurso"
+                          filterOption={(input, opt) => String(opt?.label ?? '').toLowerCase().includes(input.toLowerCase())}
+                          options={allResources.map((r: any) => ({
+                            value: r.id,
+                            label: `${r.name} (${r.code})`,
+                          }))}
+                        />
+                      </Form.Item>
+                      <Form.Item name="phase" label="Fase" rules={[{ required: true }]}>
+                        <Select options={[
+                          { value: 'SETUP',    label: 'Montaje' },
+                          { value: 'EVENT',    label: 'Evento principal' },
+                          { value: 'TEARDOWN', label: 'Desmontaje' },
+                        ]} />
+                      </Form.Item>
+                      <Form.Item name="startTime" label="Fecha y hora de inicio" rules={[{ required: true }]}>
+                        <DatePicker showTime format="DD/MM/YYYY HH:mm" style={{ width: '100%' }} />
+                      </Form.Item>
+                      <Form.Item name="endTime" label="Fecha y hora de fin" rules={[{ required: true }]}>
+                        <DatePicker showTime format="DD/MM/YYYY HH:mm" style={{ width: '100%' }} />
+                      </Form.Item>
+                      <Form.Item name="notes" label="Notas (opcional)">
+                        <Input.TextArea rows={2} placeholder="Observaciones sobre el uso del espacio" />
+                      </Form.Item>
+                    </Form>
+                  </Modal>
+                </>
+              ),
+            },
             {
               key: 'info',
               label: 'Información',
