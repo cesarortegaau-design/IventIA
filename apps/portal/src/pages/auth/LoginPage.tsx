@@ -18,7 +18,7 @@ export default function LoginPage() {
     try {
       const { data } = await authApi.login(values.email, values.password)
       setAuth(data.data.user, data.data.accessToken, data.data.refreshToken)
-      navigate('/')
+      navigate('/dashboard')
     } catch (err: any) {
       message.error(err?.response?.data?.error?.message ?? 'Error al iniciar sesión')
     } finally {

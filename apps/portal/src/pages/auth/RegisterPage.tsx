@@ -34,7 +34,7 @@ export default function RegisterPage() {
       const { data } = await authApi.register({ ...values, code: codeValue.trim() })
       setAuth(data.data.user, data.data.accessToken, data.data.refreshToken)
       message.success('Registro exitoso. ¡Bienvenido!')
-      navigate('/')
+      navigate('/dashboard')
     } catch (err: any) {
       message.error(err?.response?.data?.error?.message ?? 'Error en el registro')
     } finally {

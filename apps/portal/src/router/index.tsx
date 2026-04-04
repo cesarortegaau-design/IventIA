@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import PublicLayout from '../layouts/PublicLayout'
 import PortalLayout from '../layouts/PortalLayout'
+import LandingPage from '../pages/landing/LandingPage'
 import LoginPage from '../pages/auth/LoginPage'
 import RegisterPage from '../pages/auth/RegisterPage'
 import DashboardPage from '../pages/dashboard/DashboardPage'
@@ -21,13 +22,16 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 export default function AppRouter() {
   return (
     <Routes>
+      {/* Public landing page — self-contained, no layout wrapper */}
+      <Route path="/" element={<LandingPage />} />
+
       <Route element={<PublicLayout />}>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
       </Route>
 
       <Route element={<RequireAuth><PortalLayout /></RequireAuth>}>
-        <Route path="/" element={<DashboardPage />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/events/:eventId" element={<EventPortalPage />} />
         <Route path="/events/:eventId/new-order" element={<NewOrderPage />} />
         <Route path="/orders" element={<OrdersPage />} />

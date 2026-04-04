@@ -177,7 +177,7 @@ export default function EventDetailPage() {
           </Space>
         }
         extra={
-          <Space>
+          <Space wrap>
             <Select
               value={event.status}
               onChange={updateStatusMutation.mutate}
@@ -192,11 +192,11 @@ export default function EventDetailPage() {
           </Space>
         }
       >
-        <Row gutter={16} style={{ marginBottom: 24 }}>
-          <Col span={6}><Statistic title="Total Órdenes" value={event.orders?.length ?? 0} /></Col>
-          <Col span={6}><Statistic title="Confirmadas" value={confirmedOrders} /></Col>
-          <Col span={6}><Statistic title="Pagadas/Facturadas" value={paidOrders} /></Col>
-          <Col span={6}><Statistic title="Valor Total" prefix="$" value={totalOrders.toLocaleString('es-MX', { minimumFractionDigits: 2 })} /></Col>
+        <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+          <Col xs={12} sm={6}><Statistic title="Total Órdenes" value={event.orders?.length ?? 0} /></Col>
+          <Col xs={12} sm={6}><Statistic title="Confirmadas" value={confirmedOrders} /></Col>
+          <Col xs={12} sm={6}><Statistic title="Pagadas/Facturadas" value={paidOrders} /></Col>
+          <Col xs={12} sm={6}><Statistic title="Valor Total" prefix="$" value={totalOrders.toLocaleString('es-MX', { minimumFractionDigits: 2 })} /></Col>
         </Row>
 
         <Tabs
@@ -333,7 +333,7 @@ export default function EventDetailPage() {
               key: 'info',
               label: 'Información',
               children: (
-                <Descriptions bordered column={2}>
+                <Descriptions bordered column={{ xs: 1, sm: 2, lg: 3 }}>
                   <Descriptions.Item label="Cliente">
                     {event.primaryClient?.companyName || `${event.primaryClient?.firstName} ${event.primaryClient?.lastName}`}
                   </Descriptions.Item>

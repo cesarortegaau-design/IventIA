@@ -26,10 +26,10 @@ export default function PortalLayout() {
     ? '/calendar'
     : location.pathname.startsWith('/profile')
     ? '/profile'
-    : '/'
+    : '/dashboard'
 
   const navItems = [
-    { key: '/', icon: <HomeOutlined />, label: 'Mis Eventos' },
+    { key: '/dashboard', icon: <HomeOutlined />, label: 'Mis Eventos' },
     { key: '/orders', icon: <UnorderedListOutlined />, label: 'Solicitudes' },
     { key: '/calendar', icon: <ScheduleOutlined />, label: 'Calendario' },
     { key: '/profile', icon: <UserOutlined />, label: 'Mis Datos' },
@@ -40,7 +40,7 @@ export default function PortalLayout() {
   const userMenu = [
     { key: 'profile', icon: <UserOutlined />, label: 'Mis Datos', onClick: () => navigate('/profile') },
     { type: 'divider' as const },
-    { key: 'logout', icon: <LogoutOutlined />, label: 'Cerrar sesión', onClick: () => { clearAuth(); navigate('/login') } },
+    { key: 'logout', icon: <LogoutOutlined />, label: 'Cerrar sesión', onClick: () => { clearAuth(); navigate('/') } },
   ]
 
   return (

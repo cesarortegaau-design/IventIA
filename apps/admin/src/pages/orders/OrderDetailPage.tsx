@@ -126,7 +126,7 @@ export default function OrderDetailPage() {
           </Space>
         }
         extra={
-          <Space>
+          <Space wrap>
             <Button
               icon={<FilePdfOutlined />}
               loading={pdfLoading}
@@ -154,14 +154,14 @@ export default function OrderDetailPage() {
           </Space>
         }
       >
-        <Row gutter={16} style={{ marginBottom: 24 }}>
-          <Col span={6}><Statistic title="Subtotal" prefix="$" value={Number(order.subtotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })} /></Col>
-          <Col span={6}><Statistic title="Descuento" prefix="$" value={Number(order.discountAmount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} /></Col>
-          <Col span={6}><Statistic title="IVA" prefix="$" value={Number(order.taxAmount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} /></Col>
-          <Col span={6}><Statistic title="Total" prefix="$" valueStyle={{ color: '#6B46C1', fontWeight: 'bold' }} value={Number(order.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })} /></Col>
+        <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+          <Col xs={12} sm={6}><Statistic title="Subtotal" prefix="$" value={Number(order.subtotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })} /></Col>
+          <Col xs={12} sm={6}><Statistic title="Descuento" prefix="$" value={Number(order.discountAmount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} /></Col>
+          <Col xs={12} sm={6}><Statistic title="IVA" prefix="$" value={Number(order.taxAmount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} /></Col>
+          <Col xs={12} sm={6}><Statistic title="Total" prefix="$" valueStyle={{ color: '#6B46C1', fontWeight: 'bold' }} value={Number(order.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })} /></Col>
         </Row>
 
-        <Descriptions bordered column={2} style={{ marginBottom: 16 }}>
+        <Descriptions bordered column={{ xs: 1, sm: 2, lg: 3 }} style={{ marginBottom: 16 }}>
           <Descriptions.Item label="Cliente">
             {order.client?.companyName || `${order.client?.firstName} ${order.client?.lastName}`}
           </Descriptions.Item>

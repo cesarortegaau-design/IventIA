@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Row, Col, Typography, Tag, Button, Tabs, Timeline, List, Avatar,
   Form, Input, Select, DatePicker, Modal, Popconfirm, Badge, Empty, Spin,
-  Space, Tooltip, Divider,
+  Space, Tooltip, Divider, Table,
 } from 'antd'
 import {
   ArrowLeftOutlined, PhoneOutlined, MailOutlined, MessageOutlined,
@@ -178,7 +178,7 @@ export default function ClientDetailPage() {
   const overdueCount = allTasks.filter((t: any) => t.status === 'PENDING' && t.dueDate && dayjs(t.dueDate).isBefore(dayjs())).length
 
   return (
-    <div style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>
+    <div>
       {/* Header */}
       <div style={{ marginBottom: 24 }}>
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/catalogos/clientes')} style={{ marginBottom: 16 }}>
@@ -208,14 +208,14 @@ export default function ClientDetailPage() {
       </div>
 
       {/* KPI row */}
-      <Row gutter={16} style={{ marginBottom: 24 }}>
-        <Col span={6}>
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+        <Col xs={12} sm={6}>
           <Card size="small" style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 28, fontWeight: 700, color: '#6B46C1' }}>{allInteractions.length}</div>
             <div style={{ color: '#888', fontSize: 12 }}>Interacciones</div>
           </Card>
         </Col>
-        <Col span={6}>
+        <Col xs={12} sm={6}>
           <Card size="small" style={{ textAlign: 'center' }}>
             <Badge count={overdueCount} offset={[8, 0]}>
               <div style={{ fontSize: 28, fontWeight: 700, color: pendingCount > 0 ? '#fa8c16' : '#52c41a' }}>{pendingCount}</div>
@@ -223,13 +223,13 @@ export default function ClientDetailPage() {
             <div style={{ color: '#888', fontSize: 12 }}>Tareas pendientes</div>
           </Card>
         </Col>
-        <Col span={6}>
+        <Col xs={12} sm={6}>
           <Card size="small" style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 28, fontWeight: 700, color: '#1677ff' }}>{orders.length}</div>
             <div style={{ color: '#888', fontSize: 12 }}>Órdenes</div>
           </Card>
         </Col>
-        <Col span={6}>
+        <Col xs={12} sm={6}>
           <Card size="small" style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 28, fontWeight: 700, color: '#13c2c2' }}>{events.length}</div>
             <div style={{ color: '#888', fontSize: 12 }}>Eventos</div>
@@ -394,28 +394,20 @@ export default function ClientDetailPage() {
                     Exportar CSV
                   </Button>
                 </div>
-              <List
+              <Table
                 dataSource={orders}
+                rowKey="id"
+                size="small"
+                pagination={false}
+                scroll={{ x: 'max-content' }}
                 locale={{ emptyText: 'Sin órdenes' }}
-                renderItem={(order: any) => (
-                  <List.Item
-                    actions={[
-                      <Button size="small" key="view" onClick={() => navigate(`/ordenes/${order.id}`)}>Ver</Button>,
-                    ]}
-                  >
-                    <List.Item.Meta
-                      avatar={<Avatar icon={<ShoppingCartOutlined />} style={{ backgroundColor: '#6B46C1' }} />}
-                      title={<Space><Text strong>{order.orderNumber}</Text><Tag color={ORDER_STATUS_COLORS[order.status] ?? 'default'}>{ORDER_STATUS_LABELS[order.status] ?? order.status}</Tag></Space>}
-                      description={
-                        <Space>
-                          {order.event && <Text type="secondary">{order.event.name}</Text>}
-                          <Text type="secondary">{dayjs(order.createdAt).format('DD/MM/YYYY')}</Text>
-                          <Text strong>${Number(order.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</Text>
-                        </Space>
-                      }
-                    />
-                  </List.Item>
-                )}
+                columns={[
+                  { title: 'Número', dataIndex: 'orderNumber', render: (v: string, r: any) => <Button type="link" size="small" onClick={() => navigate(`/ordenes/${r.id}`)}>{v}</Button> },
+                  { title: 'Estado', dataIndex: 'status', render: (v: string) => <Tag color={ORDER_STATUS_COLORS[v] ?? 'default'}>{ORDER_STATUS_LABELS[v] ?? v}</Tag> },
+                  { title: 'Evento', render: (_: any, r: any) => r.event?.name ?? '—' },
+                  { title: 'Total', dataIndex: 'total', render: (v: number) => `$${Number(v).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` },
+                  { title: 'Fecha', dataIndex: 'createdAt', render: (v: string) => dayjs(v).format('DD/MM/YYYY') },
+                ]}
               />
               </>
             ),
@@ -424,22 +416,19 @@ export default function ClientDetailPage() {
             key: 'events',
             label: `Eventos (${events.length})`,
             children: (
-              <List
+              <Table
                 dataSource={events}
+                rowKey="id"
+                size="small"
+                pagination={false}
+                scroll={{ x: 'max-content' }}
                 locale={{ emptyText: 'Sin eventos' }}
-                renderItem={(event: any) => (
-                  <List.Item
-                    actions={[
-                      <Button size="small" key="view" onClick={() => navigate(`/eventos/${event.id}`)}>Ver</Button>,
-                    ]}
-                  >
-                    <List.Item.Meta
-                      avatar={<Avatar icon={<CalendarOutlined />} style={{ backgroundColor: '#13c2c2' }} />}
-                      title={<Space><Text strong>{event.name}</Text><Tag>{EVENT_STATUS_LABELS[event.status] ?? event.status}</Tag></Space>}
-                      description={event.eventStart ? `${dayjs(event.eventStart).format('DD/MM/YYYY')} — ${event.eventEnd ? dayjs(event.eventEnd).format('DD/MM/YYYY') : ''}` : ''}
-                    />
-                  </List.Item>
-                )}
+                columns={[
+                  { title: 'Nombre', dataIndex: 'name', render: (v: string, r: any) => <Button type="link" size="small" onClick={() => navigate(`/eventos/${r.id}`)}>{v}</Button> },
+                  { title: 'Estado', dataIndex: 'status', render: (v: string) => <Tag>{EVENT_STATUS_LABELS[v] ?? v}</Tag> },
+                  { title: 'Inicio', dataIndex: 'eventStart', render: (v: string) => v ? dayjs(v).format('DD/MM/YYYY') : '—' },
+                  { title: 'Fin', dataIndex: 'eventEnd', render: (v: string) => v ? dayjs(v).format('DD/MM/YYYY') : '—' },
+                ]}
               />
             ),
           },
@@ -451,7 +440,7 @@ export default function ClientDetailPage() {
               const allPortalUsers = portalUsersData ?? []
               const available = allPortalUsers.filter((u: any) => !u.client || u.client.id === client.id)
               return (
-                <div style={{ maxWidth: 500 }}>
+                <div style={{ maxWidth: 600 }}>
                   {linked ? (
                     <Card size="small" style={{ marginBottom: 16, borderColor: '#6B46C1' }}>
                       <Space>
@@ -539,6 +528,7 @@ export default function ClientDetailPage() {
         onCancel={() => { setInteractionModalOpen(false); setEditingInteraction(null); intForm.resetFields() }}
         onOk={() => intForm.submit()}
         confirmLoading={createInteraction.isPending || updateInteraction.isPending}
+        width="min(560px, 95vw)"
         destroyOnClose
       >
         <Form form={intForm} layout="vertical" onFinish={handleInteractionSubmit}>
@@ -564,6 +554,7 @@ export default function ClientDetailPage() {
         onCancel={() => { setTaskModalOpen(false); setEditingTask(null); taskForm.resetFields() }}
         onOk={() => taskForm.submit()}
         confirmLoading={createTask.isPending || updateTask.isPending}
+        width="min(520px, 95vw)"
         destroyOnClose
       >
         <Form form={taskForm} layout="vertical" onFinish={handleTaskSubmit}>
