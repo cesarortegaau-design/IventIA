@@ -10,6 +10,7 @@ import EventPortalPage from '../pages/event/EventPortalPage'
 import NewOrderPage from '../pages/orders/NewOrderPage'
 import OrdersPage from '../pages/orders/OrdersPage'
 import OrderDetailPage from '../pages/orders/OrderDetailPage'
+import CalendarPage from '../pages/calendar/CalendarPage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { accessToken } = useAuthStore()
@@ -31,6 +32,7 @@ export default function AppRouter() {
         <Route path="/events/:eventId/new-order" element={<NewOrderPage />} />
         <Route path="/orders" element={<OrdersPage />} />
         <Route path="/orders/:orderId" element={<OrderDetailPage />} />
+        <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/profile" element={<ProfilePage />} />
       </Route>
 

@@ -1,7 +1,7 @@
 import { Layout, Menu, Typography, Avatar, Dropdown, Space } from 'antd'
 import {
   CalendarOutlined, ShoppingCartOutlined, UserOutlined, LogoutOutlined,
-  HomeOutlined, UnorderedListOutlined,
+  HomeOutlined, UnorderedListOutlined, ScheduleOutlined,
 } from '@ant-design/icons'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
@@ -19,6 +19,8 @@ export default function PortalLayout() {
     ? '/events'
     : location.pathname.startsWith('/orders')
     ? '/orders'
+    : location.pathname.startsWith('/calendar')
+    ? '/calendar'
     : location.pathname.startsWith('/profile')
     ? '/profile'
     : '/'
@@ -26,6 +28,7 @@ export default function PortalLayout() {
   const menuItems = [
     { key: '/', icon: <HomeOutlined />, label: 'Mis Eventos', onClick: () => navigate('/') },
     { key: '/orders', icon: <UnorderedListOutlined />, label: 'Mis Solicitudes', onClick: () => navigate('/orders') },
+    { key: '/calendar', icon: <ScheduleOutlined />, label: 'Calendario', onClick: () => navigate('/calendar') },
     { key: '/profile', icon: <UserOutlined />, label: 'Mis Datos', onClick: () => navigate('/profile') },
   ]
 

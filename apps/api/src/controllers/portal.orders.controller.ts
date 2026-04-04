@@ -218,3 +218,115 @@ export async function portalCreateOrder(req: Request, res: Response, next: NextF
     next(err)
   }
 }
+
+// ── Booking Calendar ──────────────────────────────────────────────────────────
+// Returns all resources + bookings (orders) visible to the portal user
+// for a given event + month. Exhibitors see ALL bookings (not just their own)
+// so they can assess availability.
+export async function portalCalendar(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { tenantId, portalUserId } = req.portalUser!
+    const { eventId, year, month } = req.query as Record<string, string>
+
+    // Only expose events the portal user has access to
+    const userEventIds = (await prisma.portalUserEvent.findMany({
+      where: { portalUserId },
+      select: { eventId: true },
+    })).map(e => e.eventId)
+
+    if (userEventIds.length === 0) return res.json({ success: true, data: { resources: [], orders: [], events: [] } })
+
+    // Fetch accessible events for the selector
+    const events = await prisma.event.findMany({
+      where: { id: { in: userEventIds }, tenantId },
+      select: { id: true, name: true, code: true, eventStart: true, eventEnd: true },
+      orderBy: { eventStart: 'desc' },
+    })
+
+    // Resolve which event to show
+    const targetEventId = eventId && userEventIds.includes(eventId) ? eventId : userEventIds[0]
+    const targetEvent   = events.find(e => e.id === targetEventId)
+
+    // Build month date range
+    const y = parseInt(year  || String(new Date().getFullYear()))
+    const m = parseInt(month || String(new Date().getMonth() + 1))
+    const rangeStart = new Date(y, m - 1, 1)
+    const rangeEnd   = new Date(y, m, 0, 23, 59, 59) // last day of month
+
+    // Resources: all active resources that have at least one order line item in this event
+    const usedResourceIds = (await prisma.orderLineItem.findMany({
+      where: { order: { eventId: targetEventId, tenantId } },
+      select: { resourceId: true },
+      distinct: ['resourceId'],
+    })).map(r => r.resourceId)
+
+    const resources = await prisma.resource.findMany({
+      where: { id: { in: usedResourceIds }, isActive: true },
+      select: { id: true, name: true, type: true, code: true },
+      orderBy: [{ type: 'asc' }, { name: 'asc' }],
+    })
+
+    // Orders in the event that overlap with the month
+    const orders = await prisma.order.findMany({
+      where: {
+        eventId: targetEventId,
+        tenantId,
+        status: { not: 'CANCELLED' },
+        OR: [
+          // order has explicit dates
+          {
+            startDate: { not: null },
+            AND: [
+              { startDate: { lte: rangeEnd } },
+              { endDate: { gte: rangeStart } },
+            ],
+          },
+          // order has no dates — use event dates as fallback
+          {
+            startDate: null,
+            event: {
+              OR: [
+                { eventStart: null },
+                {
+                  AND: [
+                    { eventStart: { lte: rangeEnd } },
+                    { eventEnd:   { gte: rangeStart } },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+      },
+      include: {
+        client: { select: { companyName: true, firstName: true, lastName: true } },
+        event:  { select: { eventStart: true, eventEnd: true } },
+        lineItems: { select: { resourceId: true } },
+      },
+    })
+
+    // Normalize dates: use order dates when available, else event dates
+    const normalizedOrders = orders.map(o => ({
+      id:          o.id,
+      orderNumber: o.orderNumber,
+      status:      o.status,
+      startDate:   (o.startDate ?? o.event.eventStart)?.toISOString() ?? null,
+      endDate:     (o.endDate   ?? o.event.eventEnd  )?.toISOString() ?? null,
+      clientName:  o.client.companyName ?? `${o.client.firstName ?? ''} ${o.client.lastName ?? ''}`.trim(),
+      resourceIds: o.lineItems.map(li => li.resourceId),
+    }))
+
+    res.json({
+      success: true,
+      data: {
+        events,
+        selectedEventId: targetEventId,
+        resources,
+        orders: normalizedOrders,
+        month: { year: y, month: m },
+      },
+    })
+  } catch (err) {
+    next(err)
+  }
+}

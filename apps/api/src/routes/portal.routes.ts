@@ -7,7 +7,7 @@ import {
   portalVerifyCode, portalRegister, portalLogin, portalRefresh, portalMe, portalUpdateMe,
 } from '../controllers/portal.auth.controller'
 import { portalListEvents, portalGetEvent, portalGetCatalog } from '../controllers/portal.events.controller'
-import { portalListOrders, portalGetOrder, portalCreateOrder } from '../controllers/portal.orders.controller'
+import { portalListOrders, portalGetOrder, portalCreateOrder, portalCalendar } from '../controllers/portal.orders.controller'
 import {
   portalListConversations, portalGetConversation, portalStartConversation,
   portalSendMessage, portalUnreadCount, uploadChatFile,
@@ -52,6 +52,7 @@ router.post('/events/:eventId/orders', portalCreateOrder)
 
 router.get('/orders', portalListOrders)
 router.get('/orders/:orderId', portalGetOrder)
+router.get('/calendar', portalCalendar)
 
 // Chat routes (accessible via /api/v1/portal/chat/... to match portal apiClient base URL)
 router.get('/chat/conversations',               portalListConversations)
