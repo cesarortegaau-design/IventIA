@@ -1,6 +1,8 @@
 import { apiClient } from './client'
 
 export const ordersApi = {
+  report: (params?: Record<string, any>) =>
+    apiClient.get('/orders', { params }).then(r => r.data),
   get: (id: string) =>
     apiClient.get(`/orders/${id}`).then(r => r.data),
   updateStatus: (id: string, status: string, notes?: string) =>

@@ -14,6 +14,7 @@ import {
   ContactsOutlined,
   HomeOutlined,
   MessageOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '../stores/authStore'
@@ -54,6 +55,14 @@ const menuItems = [
     key: '/chat',
     icon: <MessageOutlined />,
     label: 'Colabora',
+  },
+  {
+    key: 'reportes',
+    icon: <FileTextOutlined />,
+    label: 'Reportes',
+    children: [
+      { key: '/reportes/ordenes', icon: <DollarOutlined />, label: 'Órdenes de Servicio' },
+    ],
   },
   {
     key: 'dashboards',
@@ -102,7 +111,7 @@ export default function MainLayout() {
           theme="dark"
           mode="inline"
           selectedKeys={[location.pathname]}
-          defaultOpenKeys={['catalogos', 'dashboards']}
+          defaultOpenKeys={['catalogos', 'reportes', 'dashboards']}
           items={menuItems.map(item =>
             item.key === '/chat'
               ? { ...item, label: <Badge count={unread} size="small" offset={[8, 0]}>{item.label}</Badge> }

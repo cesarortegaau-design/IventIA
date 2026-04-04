@@ -31,6 +31,70 @@ const addPaymentSchema = z.object({
   notes: z.string().optional(),
 })
 
+// ── Cross-event orders report ──────────────────────────────────────────────────
+export async function listOrdersReport(req: Request, res: Response, next: NextFunction) {
+  try {
+    const tenantId = req.user!.tenantId
+    const { eventId, status, dateFrom, dateTo, clientSearch } = req.query as Record<string, string>
+
+    const where: any = { tenantId, isCreditNote: false }
+
+    if (eventId)  where.eventId = eventId
+    if (status)   where.status  = status
+    if (dateFrom || dateTo) {
+      where.createdAt = {}
+      if (dateFrom) where.createdAt.gte = new Date(dateFrom)
+      if (dateTo)   where.createdAt.lte = new Date(new Date(dateTo).setHours(23, 59, 59, 999))
+    }
+    if (clientSearch) {
+      where.client = {
+        OR: [
+          { companyName: { contains: clientSearch, mode: 'insensitive' } },
+          { firstName:   { contains: clientSearch, mode: 'insensitive' } },
+          { lastName:    { contains: clientSearch, mode: 'insensitive' } },
+          { email:       { contains: clientSearch, mode: 'insensitive' } },
+          { rfc:         { contains: clientSearch, mode: 'insensitive' } },
+        ],
+      }
+    }
+
+    const [orders, totals] = await Promise.all([
+      prisma.order.findMany({
+        where,
+        include: {
+          event:  { select: { id: true, code: true, name: true } },
+          client: { select: { id: true, companyName: true, firstName: true, lastName: true, email: true, rfc: true, phone: true } },
+          stand:  { select: { id: true, code: true } },
+          lineItems: { select: { id: true, description: true, quantity: true, unitPrice: true, lineTotal: true, discountPct: true } },
+          _count: { select: { lineItems: true, payments: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.order.aggregate({
+        where,
+        _sum: { subtotal: true, discountAmount: true, taxAmount: true, total: true, paidAmount: true },
+        _count: { id: true },
+      }),
+    ])
+
+    res.json({
+      success: true,
+      data: orders,
+      totals: {
+        count:          totals._count.id,
+        subtotal:       Number(totals._sum.subtotal    ?? 0),
+        discountAmount: Number(totals._sum.discountAmount ?? 0),
+        taxAmount:      Number(totals._sum.taxAmount   ?? 0),
+        total:          Number(totals._sum.total       ?? 0),
+        paidAmount:     Number(totals._sum.paidAmount  ?? 0),
+        balance:        Number(totals._sum.total ?? 0) - Number(totals._sum.paidAmount ?? 0),
+      },
+    })
+  } catch (err) {
+    next(err)
+  }
+}
+
 export async function listOrdersForEvent(req: Request, res: Response, next: NextFunction) {
   try {
     const { eventId } = req.params
