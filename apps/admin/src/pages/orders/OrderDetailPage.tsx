@@ -206,6 +206,7 @@ export default function OrderDetailPage() {
           rowKey="id"
           pagination={false}
           size="small"
+          scroll={{ x: 'max-content' }}
           style={{ marginBottom: 24 }}
         />
 
@@ -216,6 +217,7 @@ export default function OrderDetailPage() {
           rowKey="id"
           pagination={false}
           size="small"
+          scroll={{ x: 'max-content' }}
           style={{ marginBottom: 24 }}
         />
 

@@ -17,7 +17,7 @@ function timeAgo(date: string) {
   return new Date(date).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })
 }
 
-export default function ChatWidget() {
+export default function ChatWidget({ isMobile = false }: { isMobile?: boolean }) {
   const qc     = useQueryClient()
   const socket = useSocket()
   const [open, setOpen]             = useState(false)
@@ -118,8 +118,11 @@ export default function ChatWidget() {
     sendMut.mutate(text.trim())
   }
 
+  const floatBottom = isMobile ? 90 : 24
+  const floatRight = isMobile ? 16 : 24
+
   return (
-    <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 1000 }}>
+    <div style={{ position: 'fixed', bottom: floatBottom, right: floatRight, zIndex: 1000 }}>
       {/* Floating button */}
       {!open && (
         <Badge count={unread} size="small">
@@ -136,11 +139,19 @@ export default function ChatWidget() {
 
       {/* Chat window */}
       {open && (
-        <div style={{
-          width: 360, height: 520, background: '#fff', borderRadius: 16,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column',
-          overflow: 'hidden',
-        }}>
+        <div style={
+          isMobile
+            ? {
+                position: 'fixed', inset: 0, width: '100vw', height: '100dvh',
+                background: '#fff', display: 'flex', flexDirection: 'column', overflow: 'hidden',
+                zIndex: 1001,
+              }
+            : {
+                width: 360, height: 520, background: '#fff', borderRadius: 16,
+                boxShadow: '0 8px 32px rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column',
+                overflow: 'hidden',
+              }
+        }>
           {/* Header */}
           <div style={{ background: PURPLE, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

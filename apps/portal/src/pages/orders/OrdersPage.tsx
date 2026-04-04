@@ -88,6 +88,7 @@ export default function OrdersPage() {
           rowKey="id"
           size="small"
           pagination={{ pageSize: 20 }}
+          scroll={{ x: 'max-content' }}
         />
       )}
     </div>

@@ -155,6 +155,7 @@ export default function NewOrderPage() {
               rowKey="id"
               size="small"
               pagination={false}
+              scroll={{ x: 'max-content' }}
             />
           )}
           <div style={{ marginTop: 16, textAlign: 'right' }}>
@@ -181,6 +182,7 @@ export default function NewOrderPage() {
             rowKey="priceListItemId"
             size="small"
             pagination={false}
+            scroll={{ x: 'max-content' }}
           />
           <Divider />
           <Row justify="end">

@@ -197,6 +197,7 @@ export default function EventDetailPage() {
                     rowKey="id"
                     size="small"
                     pagination={false}
+                    scroll={{ x: 'max-content' }}
                   />
                 </>
               ),
@@ -263,6 +264,7 @@ export default function EventDetailPage() {
                     rowKey="id"
                     size="small"
                     pagination={{ pageSize: 20 }}
+                    scroll={{ x: 'max-content' }}
                     columns={[
                       {
                         title: 'Código', dataIndex: 'code',

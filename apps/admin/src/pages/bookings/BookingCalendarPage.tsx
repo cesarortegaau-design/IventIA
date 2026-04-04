@@ -1,36 +1,39 @@
-import { useState, useMemo, useRef } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useState, useMemo } from 'react'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
   Select, Button, Input, Typography, Spin, Empty, Tag, Tooltip,
-  Badge, Space, Divider,
+  Badge, Space, Divider, Modal, Row, Col, Statistic, DatePicker,
 } from 'antd'
 import {
   LeftOutlined, RightOutlined, CalendarOutlined,
   WarningOutlined, SearchOutlined, ClearOutlined,
+  DownloadOutlined, TeamOutlined, AlertOutlined, UnorderedListOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import isoWeek from 'dayjs/plugin/isoWeek'
 import { bookingsApi } from '../../api/bookings'
 import { eventsApi } from '../../api/events'
+import { exportToCsv } from '../../utils/exportCsv'
 
 dayjs.extend(isoWeek)
 
 const { Title, Text } = Typography
+const { RangePicker } = DatePicker
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const NAVY      = '#1a3a5c'
-const DAY_W     = 40          // px per day column
-const LANE_H    = 44          // px per lane inside a row
-const NAME_W    = 200         // px for sticky resource name column
-const HDR_H1    = 28          // week-group header height
-const HDR_H2    = 22          // day-name header height
-const HDR_H3    = 22          // day-number header height
+const DAY_W     = 40
+const LANE_H    = 44
+const NAME_W    = 200
+const HDR_H1    = 28
+const HDR_H2    = 22
+const HDR_H3    = 22
 const HDR_TOTAL = HDR_H1 + HDR_H2 + HDR_H3
 
 const DAY_NAMES = ['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa']
 
-const VIEW_DAYS: Record<string, number> = { week: 7, month: 30, '2months': 60 }
+const VIEW_DAYS: Record<string, number> = { day: 1, week: 7, month: 30, '2months': 60 }
 
 const PHASE_STYLE: Record<string, { background: string; borderStyle: string; color: string; label: string }> = {
   SETUP:    { background: '#fffbe6', borderStyle: 'dashed', color: '#d48806', label: 'Montaje' },
@@ -55,6 +58,10 @@ const EVENT_STATUS_LABEL: Record<string, string> = {
 const ORDER_STATUS_COLOR: Record<string, string> = {
   QUOTED: '#1677ff', CONFIRMED: '#52c41a', IN_PAYMENT: '#fa8c16',
   PAID: '#722ed1', INVOICED: '#13c2c2', CANCELLED: '#ff4d4f',
+}
+const ORDER_STATUS_LABEL: Record<string, string> = {
+  QUOTED: 'Cotizada', CONFIRMED: 'Confirmada', IN_PAYMENT: 'En Pago',
+  PAID: 'Pagada', INVOICED: 'Facturada', CANCELLED: 'Cancelada',
 }
 
 const RESOURCE_TYPE_LABEL: Record<string, string> = {
@@ -85,87 +92,215 @@ function buildWeekGroups(days: dayjs.Dayjs[]) {
   return groups
 }
 
-// ── Tooltip content ───────────────────────────────────────────────────────────
-function BookingTooltip({ b, resourceName, navigate }: { b: any; resourceName: string; navigate: (p: string) => void }) {
+// ── Detail Modal ──────────────────────────────────────────────────────────────
+function BookingDetailModal({
+  booking, resourceName, open, onClose, onNavigate,
+}: {
+  booking: any; resourceName: string; open: boolean; onClose: () => void; onNavigate: (path: string) => void
+}) {
+  if (!booking) return null
+  const isSpace = booking.type === 'EVENT_SPACE'
+  const phase   = booking.phase ? PHASE_STYLE[booking.phase] : null
+
+  return (
+    <Modal
+      open={open}
+      onCancel={onClose}
+      footer={null}
+      title={
+        <Space>
+          <CalendarOutlined style={{ color: NAVY }} />
+          <span style={{ color: NAVY }}>{isSpace ? booking.event?.name : booking.order?.orderNumber}</span>
+        </Space>
+      }
+      width={520}
+    >
+      {isSpace ? (
+        <div>
+          <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+            <Col span={12}>
+              <div style={{ background: '#f8fafc', borderRadius: 8, padding: 12 }}>
+                <Text type="secondary" style={{ fontSize: 11 }}>Recurso</Text>
+                <div><Text strong>{resourceName}</Text></div>
+              </div>
+            </Col>
+            <Col span={12}>
+              <div style={{ background: '#f8fafc', borderRadius: 8, padding: 12 }}>
+                <Text type="secondary" style={{ fontSize: 11 }}>Fase</Text>
+                <div>
+                  <span style={{
+                    background: phase?.background, border: `1.5px ${phase?.borderStyle ?? 'solid'} ${phase?.color}`,
+                    color: phase?.color, borderRadius: 4, padding: '2px 8px', fontSize: 12, fontWeight: 600,
+                  }}>
+                    {phase?.label ?? booking.phase}
+                  </span>
+                </div>
+              </div>
+            </Col>
+            <Col span={12}>
+              <div style={{ background: '#f8fafc', borderRadius: 8, padding: 12 }}>
+                <Text type="secondary" style={{ fontSize: 11 }}>Inicio</Text>
+                <div><Text strong>{dayjs(booking.startTime).format('DD MMM YYYY HH:mm')}</Text></div>
+              </div>
+            </Col>
+            <Col span={12}>
+              <div style={{ background: '#f8fafc', borderRadius: 8, padding: 12 }}>
+                <Text type="secondary" style={{ fontSize: 11 }}>Fin</Text>
+                <div><Text strong>{dayjs(booking.endTime).format('DD MMM YYYY HH:mm')}</Text></div>
+              </div>
+            </Col>
+            {booking.event?.primaryClient && (
+              <Col span={24}>
+                <div style={{ background: '#f8fafc', borderRadius: 8, padding: 12 }}>
+                  <Text type="secondary" style={{ fontSize: 11 }}>Cliente</Text>
+                  <div><Text strong>
+                    {booking.event.primaryClient.companyName ??
+                      `${booking.event.primaryClient.firstName ?? ''} ${booking.event.primaryClient.lastName ?? ''}`.trim()}
+                  </Text></div>
+                </div>
+              </Col>
+            )}
+            <Col span={12}>
+              <div style={{ background: '#f8fafc', borderRadius: 8, padding: 12 }}>
+                <Text type="secondary" style={{ fontSize: 11 }}>Estatus del evento</Text>
+                <div><Tag color={EVENT_STATUS_COLOR[booking.event?.status]}>{EVENT_STATUS_LABEL[booking.event?.status] ?? booking.event?.status}</Tag></div>
+              </div>
+            </Col>
+            {(booking.ordersCount ?? 0) > 0 && (
+              <Col span={12}>
+                <div style={{ background: '#f8fafc', borderRadius: 8, padding: 12 }}>
+                  <Text type="secondary" style={{ fontSize: 11 }}>Órdenes vinculadas</Text>
+                  <div><Text strong>{booking.ordersCount} — {fmt(booking.ordersTotal ?? 0)}</Text></div>
+                </div>
+              </Col>
+            )}
+            {booking.notes && (
+              <Col span={24}>
+                <div style={{ background: '#fffbe6', border: '1px solid #ffe58f', borderRadius: 8, padding: 12 }}>
+                  <Text type="secondary" style={{ fontSize: 11 }}>Notas</Text>
+                  <div><Text>{booking.notes}</Text></div>
+                </div>
+              </Col>
+            )}
+          </Row>
+          <Button
+            type="primary"
+            style={{ background: NAVY, borderColor: NAVY }}
+            onClick={() => { onNavigate(`/eventos/${booking.event?.id}`); onClose() }}
+          >
+            Ver Evento →
+          </Button>
+        </div>
+      ) : (
+        <div>
+          <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+            <Col span={12}>
+              <div style={{ background: '#f8fafc', borderRadius: 8, padding: 12 }}>
+                <Text type="secondary" style={{ fontSize: 11 }}>Recurso</Text>
+                <div><Text strong>{resourceName}</Text></div>
+              </div>
+            </Col>
+            <Col span={12}>
+              <div style={{ background: '#f8fafc', borderRadius: 8, padding: 12 }}>
+                <Text type="secondary" style={{ fontSize: 11 }}>Estatus</Text>
+                <div><Tag color={booking.order?.status === 'CANCELLED' ? 'red' : 'blue'}>
+                  {ORDER_STATUS_LABEL[booking.order?.status] ?? booking.order?.status}
+                </Tag></div>
+              </div>
+            </Col>
+            <Col span={24}>
+              <div style={{ background: '#f8fafc', borderRadius: 8, padding: 12 }}>
+                <Text type="secondary" style={{ fontSize: 11 }}>Cliente</Text>
+                <div><Text strong>
+                  {booking.order?.client?.companyName ??
+                    `${booking.order?.client?.firstName ?? ''} ${booking.order?.client?.lastName ?? ''}`.trim()}
+                </Text></div>
+                {booking.order?.client?.rfc && <Text type="secondary" style={{ fontSize: 12 }}>{booking.order.client.rfc}</Text>}
+              </div>
+            </Col>
+            <Col span={12}>
+              <div style={{ background: '#f8fafc', borderRadius: 8, padding: 12 }}>
+                <Text type="secondary" style={{ fontSize: 11 }}>Inicio</Text>
+                <div><Text strong>{dayjs(booking.startTime).format('DD MMM YYYY')}</Text></div>
+              </div>
+            </Col>
+            <Col span={12}>
+              <div style={{ background: '#f8fafc', borderRadius: 8, padding: 12 }}>
+                <Text type="secondary" style={{ fontSize: 11 }}>Fin</Text>
+                <div><Text strong>{dayjs(booking.endTime).format('DD MMM YYYY')}</Text></div>
+              </div>
+            </Col>
+            <Col span={12}>
+              <div style={{ background: '#f8fafc', borderRadius: 8, padding: 12 }}>
+                <Text type="secondary" style={{ fontSize: 11 }}>Total</Text>
+                <div><Text strong style={{ color: '#6B46C1', fontSize: 16 }}>{fmt(booking.order?.total ?? 0)}</Text></div>
+              </div>
+            </Col>
+            {(booking.order?.lineItems ?? []).length > 0 && (
+              <Col span={24}>
+                <div style={{ background: '#f8fafc', borderRadius: 8, padding: 12 }}>
+                  <Text type="secondary" style={{ fontSize: 11 }}>Servicios contratados</Text>
+                  <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+                    {booking.order.lineItems.map((li: string, i: number) => (
+                      <li key={i} style={{ fontSize: 13 }}>{li}</li>
+                    ))}
+                  </ul>
+                </div>
+              </Col>
+            )}
+          </Row>
+          <Button
+            type="primary"
+            style={{ background: NAVY, borderColor: NAVY }}
+            onClick={() => { onNavigate(`/ordenes/${booking.order?.id}`); onClose() }}
+          >
+            Ver Orden →
+          </Button>
+        </div>
+      )}
+    </Modal>
+  )
+}
+
+// ── Tooltip (hover preview) ───────────────────────────────────────────────────
+function BookingTooltip({ b, resourceName }: { b: any; resourceName: string }) {
   const isSpace = b.type === 'EVENT_SPACE'
   const phase   = b.phase ? PHASE_STYLE[b.phase] : null
 
   return (
-    <div style={{ minWidth: 260, maxWidth: 320, fontSize: 12 }}>
+    <div style={{ minWidth: 220, maxWidth: 300, fontSize: 12 }}>
       {isSpace ? (
         <>
-          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6, color: '#fff' }}>
+          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4, color: '#fff' }}>
             📅 {b.event?.name}
           </div>
-          <Divider style={{ margin: '6px 0', borderColor: 'rgba(255,255,255,0.2)' }} />
-          <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: '4px 8px', color: 'rgba(255,255,255,0.9)' }}>
-            <span style={{ opacity: 0.65 }}>Recurso</span>    <span>{resourceName}</span>
-            <span style={{ opacity: 0.65 }}>Fase</span>       <span>{phase?.label ?? b.phase}</span>
-            <span style={{ opacity: 0.65 }}>Inicio</span>     <span>{dayjs(b.startTime).format('DD MMM YYYY HH:mm')}</span>
-            <span style={{ opacity: 0.65 }}>Fin</span>        <span>{dayjs(b.endTime).format('DD MMM YYYY HH:mm')}</span>
+          <Divider style={{ margin: '4px 0', borderColor: 'rgba(255,255,255,0.2)' }} />
+          <div style={{ display: 'grid', gridTemplateColumns: '76px 1fr', gap: '3px 6px', color: 'rgba(255,255,255,0.9)' }}>
+            <span style={{ opacity: 0.65 }}>Recurso</span>   <span>{resourceName}</span>
+            <span style={{ opacity: 0.65 }}>Fase</span>      <span>{phase?.label ?? b.phase}</span>
+            <span style={{ opacity: 0.65 }}>Fechas</span>    <span>{dayjs(b.startTime).format('DD MMM')} → {dayjs(b.endTime).format('DD MMM YYYY')}</span>
             {b.event?.primaryClient && (
               <>
                 <span style={{ opacity: 0.65 }}>Cliente</span>
                 <span>{b.event.primaryClient.companyName ?? `${b.event.primaryClient.firstName ?? ''} ${b.event.primaryClient.lastName ?? ''}`.trim()}</span>
               </>
             )}
-            <span style={{ opacity: 0.65 }}>Estatus</span>
-            <span><Tag color={EVENT_STATUS_COLOR[b.event?.status]} style={{ margin: 0 }}>{EVENT_STATUS_LABEL[b.event?.status] ?? b.event?.status}</Tag></span>
-            {b.notes && (
-              <>
-                <span style={{ opacity: 0.65 }}>Notas</span>
-                <span style={{ fontStyle: 'italic' }}>{b.notes}</span>
-              </>
-            )}
-            {(b.ordersCount ?? 0) > 0 && (
-              <>
-                <span style={{ opacity: 0.65 }}>Órdenes</span>
-                <span>{b.ordersCount} — {fmt(b.ordersTotal ?? 0)}</span>
-              </>
-            )}
+            <span style={{ opacity: 0.65 }}>Estatus</span>   <span>{EVENT_STATUS_LABEL[b.event?.status] ?? b.event?.status}</span>
           </div>
-          <Divider style={{ margin: '8px 0', borderColor: 'rgba(255,255,255,0.2)' }} />
-          <Button
-            size="small" type="link" style={{ color: '#a5d8ff', padding: 0 }}
-            onClick={() => navigate(`/eventos/${b.event?.id}`)}
-          >
-            Ver Evento →
-          </Button>
+          <div style={{ marginTop: 6, color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>Clic para ver detalle</div>
         </>
       ) : (
         <>
-          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6, color: '#fff' }}>
+          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4, color: '#fff' }}>
             🧾 {b.order?.orderNumber}
           </div>
-          <Divider style={{ margin: '6px 0', borderColor: 'rgba(255,255,255,0.2)' }} />
-          <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: '4px 8px', color: 'rgba(255,255,255,0.9)' }}>
-            <span style={{ opacity: 0.65 }}>Recurso</span>  <span>{resourceName}</span>
+          <Divider style={{ margin: '4px 0', borderColor: 'rgba(255,255,255,0.2)' }} />
+          <div style={{ display: 'grid', gridTemplateColumns: '76px 1fr', gap: '3px 6px', color: 'rgba(255,255,255,0.9)' }}>
             <span style={{ opacity: 0.65 }}>Cliente</span>  <span>{b.order?.client?.companyName ?? `${b.order?.client?.firstName ?? ''} ${b.order?.client?.lastName ?? ''}`.trim()}</span>
-            {b.order?.client?.rfc && (
-              <><span style={{ opacity: 0.65 }}>RFC</span><span>{b.order.client.rfc}</span></>
-            )}
-            <span style={{ opacity: 0.65 }}>Inicio</span>  <span>{dayjs(b.startTime).format('DD MMM YYYY')}</span>
-            <span style={{ opacity: 0.65 }}>Fin</span>      <span>{dayjs(b.endTime).format('DD MMM YYYY')}</span>
-            <span style={{ opacity: 0.65 }}>Estatus</span>  <span><Tag color={b.order?.status === 'CANCELLED' ? 'red' : 'blue'} style={{ margin: 0 }}>{b.order?.status}</Tag></span>
+            <span style={{ opacity: 0.65 }}>Fechas</span>   <span>{dayjs(b.startTime).format('DD MMM')} → {dayjs(b.endTime).format('DD MMM YYYY')}</span>
             <span style={{ opacity: 0.65 }}>Total</span>    <span style={{ fontWeight: 600 }}>{fmt(b.order?.total ?? 0)}</span>
           </div>
-          {(b.order?.lineItems ?? []).length > 0 && (
-            <>
-              <Divider style={{ margin: '6px 0', borderColor: 'rgba(255,255,255,0.2)' }} />
-              <div style={{ opacity: 0.75, marginBottom: 4 }}>Servicios:</div>
-              <ul style={{ margin: 0, paddingLeft: 16, color: 'rgba(255,255,255,0.9)' }}>
-                {b.order.lineItems.slice(0, 5).map((li: string, i: number) => <li key={i}>{li}</li>)}
-                {b.order.lineItems.length > 5 && <li>+{b.order.lineItems.length - 5} más…</li>}
-              </ul>
-            </>
-          )}
-          <Divider style={{ margin: '8px 0', borderColor: 'rgba(255,255,255,0.2)' }} />
-          <Button
-            size="small" type="link" style={{ color: '#a5d8ff', padding: 0 }}
-            onClick={() => navigate(`/ordenes/${b.order?.id}`)}
-          >
-            Ver Orden →
-          </Button>
+          <div style={{ marginTop: 6, color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>Clic para ver detalle</div>
         </>
       )}
     </div>
@@ -178,8 +313,9 @@ export default function BookingCalendarPage() {
   const today    = dayjs()
 
   // View state
-  const [view, setView]           = useState<'week' | 'month' | '2months'>('month')
+  const [view, setView]           = useState<'day' | 'week' | 'month' | '2months' | 'custom'>('month')
   const [anchor, setAnchor]       = useState(today.startOf('month'))
+  const [customRange, setCustomRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null)
 
   // Filters
   const [resourceType,   setResourceType]   = useState<string | undefined>()
@@ -188,8 +324,18 @@ export default function BookingCalendarPage() {
   const [resourceSearch, setResourceSearch] = useState('')
   const [searchInput,    setSearchInput]    = useState('')
 
-  const totalDays = VIEW_DAYS[view]
-  const days      = useMemo(() => buildDays(anchor, totalDays), [anchor, totalDays])
+  // Modal
+  const [selectedBooking,  setSelectedBooking]  = useState<any>(null)
+  const [selectedResource, setSelectedResource] = useState<string>('')
+  const [modalOpen,        setModalOpen]        = useState(false)
+
+  const totalDays = view === 'custom' && customRange
+    ? customRange[1].diff(customRange[0], 'day') + 1
+    : VIEW_DAYS[view] ?? 30
+
+  const anchorResolved = view === 'custom' && customRange ? customRange[0] : anchor
+
+  const days       = useMemo(() => buildDays(anchorResolved, totalDays), [anchorResolved, totalDays])
   const weekGroups = useMemo(() => buildWeekGroups(days), [days])
 
   const dateFrom = days[0].format('YYYY-MM-DD')
@@ -206,19 +352,26 @@ export default function BookingCalendarPage() {
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ['booking-calendar', dateFrom, dateTo, resourceType, eventId, eventStatus, resourceSearch],
     queryFn:  () => bookingsApi.calendar({ dateFrom, dateTo, resourceType, eventId, eventStatus, resourceSearch: resourceSearch || undefined }),
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
   })
 
-  const resources     = data?.data?.resources    ?? []
-  const bookings      = data?.data?.bookings      ?? []
-  const meta          = data?.data?.meta          ?? {}
+  const resources     = data?.data?.resources ?? []
+  const bookings      = data?.data?.bookings  ?? []
+  const meta          = data?.data?.meta      ?? {}
 
   // Navigate
-  const step = view === 'week' ? 7 : view === 'month' ? 1 : 2
-  const unit = view === 'week' ? 'week' : 'month'
-  const prev = () => setAnchor(a => view === 'week' ? a.subtract(step, 'day') : a.subtract(step, unit as any))
-  const next = () => setAnchor(a => view === 'week' ? a.add(step, 'day') : a.add(step, unit as any))
-  const goToday = () => setAnchor(view === 'week' ? today.startOf('isoWeek') : today.startOf('month'))
+  const step = view === 'day' ? 1 : view === 'week' ? 7 : view === 'month' ? 1 : 2
+  const unit = view === 'day' ? 'day' : view === 'week' ? 'week' : 'month'
+  const prev = () => setAnchor(a =>
+    view === 'week' || view === 'day' ? a.subtract(step, 'day') : a.subtract(step, unit as any)
+  )
+  const next = () => setAnchor(a =>
+    view === 'week' || view === 'day' ? a.add(step, 'day') : a.add(step, unit as any)
+  )
+  const goToday = () => {
+    setView(v => v === 'custom' ? 'month' : v)
+    setAnchor(view === 'week' ? today.startOf('isoWeek') : view === 'day' ? today : today.startOf('month'))
+  }
 
   const clearFilters = () => {
     setResourceType(undefined)
@@ -242,7 +395,12 @@ export default function BookingCalendarPage() {
     return map
   }, [bookings])
 
-  // Compute bar geometry
+  // Stats
+  const occupancyPct = meta.totalResources
+    ? Math.round(((meta.totalResources - (resources.filter((r: any) => !bookingsByResource.has(r.id)).length)) / meta.totalResources) * 100)
+    : 0
+
+  // Bar geometry
   function getBarStyle(b: any) {
     const start = dayjs(b.startTime)
     const end   = dayjs(b.endTime)
@@ -274,11 +432,48 @@ export default function BookingCalendarPage() {
 
   const gridWidth = totalDays * DAY_W
 
+  const openModal = (b: any, rName: string) => {
+    setSelectedBooking(b)
+    setSelectedResource(rName)
+    setModalOpen(true)
+  }
+
+  const handleExport = () => {
+    const rows = bookings.map((b: any) => ({
+      tipo: b.type === 'EVENT_SPACE' ? 'Espacio de Evento' : 'Orden',
+      recurso: resources.find((r: any) => r.id === b.resourceId)?.name ?? '',
+      fase: b.phase ? (PHASE_STYLE[b.phase]?.label ?? b.phase) : '',
+      inicio: dayjs(b.startTime).format('DD/MM/YYYY HH:mm'),
+      fin: dayjs(b.endTime).format('DD/MM/YYYY HH:mm'),
+      evento: b.event?.name ?? '',
+      orden: b.order?.orderNumber ?? '',
+      cliente: b.type === 'EVENT_SPACE'
+        ? (b.event?.primaryClient?.companyName ?? '')
+        : (b.order?.client?.companyName ?? `${b.order?.client?.firstName ?? ''} ${b.order?.client?.lastName ?? ''}`.trim()),
+      estatus: b.type === 'EVENT_SPACE'
+        ? (EVENT_STATUS_LABEL[b.event?.status] ?? '')
+        : (ORDER_STATUS_LABEL[b.order?.status] ?? ''),
+      total: b.order?.total ? Number(b.order.total).toFixed(2) : '',
+    }))
+    exportToCsv(`calendario-espacios-${dateFrom}-${dateTo}`, rows, [
+      { header: 'Tipo',    key: 'tipo' },
+      { header: 'Recurso', key: 'recurso' },
+      { header: 'Fase',    key: 'fase' },
+      { header: 'Inicio',  key: 'inicio' },
+      { header: 'Fin',     key: 'fin' },
+      { header: 'Evento',  key: 'evento' },
+      { header: 'Orden',   key: 'orden' },
+      { header: 'Cliente', key: 'cliente' },
+      { header: 'Estatus', key: 'estatus' },
+      { header: 'Total',   key: 'total' },
+    ])
+  }
+
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div>
       {/* ── Page header ──────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
         <Space>
           <div style={{ background: NAVY, borderRadius: 10, padding: '8px 12px', display: 'flex', alignItems: 'center' }}>
             <CalendarOutlined style={{ color: '#fff', fontSize: 20 }} />
@@ -286,20 +481,15 @@ export default function BookingCalendarPage() {
           <div>
             <Title level={4} style={{ margin: 0, color: NAVY }}>Calendario de Espacios</Title>
             <Text type="secondary" style={{ fontSize: 12 }}>
-              {meta.totalResources ?? 0} recursos · {meta.totalBookings ?? 0} reservas
-              {(meta.conflictsCount ?? 0) > 0 && (
-                <Text style={{ color: '#ff4d4f', marginLeft: 8 }}>
-                  <WarningOutlined /> {meta.conflictsCount} solapamientos
-                </Text>
-              )}
+              {days[0].format('DD MMM')} — {days[days.length - 1].format('DD MMM YYYY')}
             </Text>
           </div>
         </Space>
 
-        {/* View + navigation */}
         <Space wrap>
+          {/* View selector */}
           <Space.Compact>
-            {(['week', 'month', '2months'] as const).map(v => (
+            {(['day', 'week', 'month', '2months', 'custom'] as const).map(v => (
               <Button
                 key={v}
                 type={view === v ? 'primary' : 'default'}
@@ -307,20 +497,84 @@ export default function BookingCalendarPage() {
                 style={view === v ? { background: NAVY, borderColor: NAVY } : {}}
                 size="small"
               >
-                {v === 'week' ? 'Semana' : v === 'month' ? 'Mes' : '2 Meses'}
+                {v === 'day' ? 'Día' : v === 'week' ? 'Semana' : v === 'month' ? 'Mes' : v === '2months' ? '2 Meses' : 'Personalizado'}
               </Button>
             ))}
           </Space.Compact>
-          <Space.Compact>
-            <Button size="small" icon={<LeftOutlined />} onClick={prev} />
-            <Button size="small" onClick={goToday}>Hoy</Button>
-            <Button size="small" icon={<RightOutlined />} onClick={next} />
-          </Space.Compact>
-          <Text strong style={{ color: NAVY, minWidth: 160, textAlign: 'center' }}>
-            {days[0].format('DD MMM')} — {days[days.length - 1].format('DD MMM YYYY')}
-          </Text>
+
+          {/* Navigation (hidden in custom mode) */}
+          {view !== 'custom' && (
+            <Space.Compact>
+              <Button size="small" icon={<LeftOutlined />} onClick={prev} />
+              <Button size="small" onClick={goToday}>Hoy</Button>
+              <Button size="small" icon={<RightOutlined />} onClick={next} />
+            </Space.Compact>
+          )}
+
+          {/* Custom range picker */}
+          {view === 'custom' && (
+            <RangePicker
+              size="small"
+              format="DD/MM/YYYY"
+              value={customRange}
+              onChange={v => v && setCustomRange([v[0]!, v[1]!])}
+            />
+          )}
+
+          <Button size="small" icon={<DownloadOutlined />} onClick={handleExport} disabled={bookings.length === 0}>
+            Exportar CSV
+          </Button>
         </Space>
       </div>
+
+      {/* ── Stats bar ────────────────────────────────────────────────────── */}
+      <Row gutter={12} style={{ marginBottom: 16 }}>
+        <Col xs={12} sm={6}>
+          <div style={{ background: '#fff', borderRadius: 10, padding: '12px 16px', border: '1px solid #e8f0fe', textAlign: 'center' }}>
+            <Statistic
+              title={<Text style={{ fontSize: 11, color: '#64748b' }}>Recursos en vista</Text>}
+              value={meta.totalResources ?? 0}
+              prefix={<TeamOutlined style={{ color: NAVY }} />}
+              valueStyle={{ color: NAVY, fontSize: 22 }}
+            />
+          </div>
+        </Col>
+        <Col xs={12} sm={6}>
+          <div style={{ background: '#fff', borderRadius: 10, padding: '12px 16px', border: '1px solid #e8f0fe', textAlign: 'center' }}>
+            <Statistic
+              title={<Text style={{ fontSize: 11, color: '#64748b' }}>Total reservas</Text>}
+              value={meta.totalBookings ?? 0}
+              prefix={<UnorderedListOutlined style={{ color: '#6B46C1' }} />}
+              valueStyle={{ color: '#6B46C1', fontSize: 22 }}
+            />
+          </div>
+        </Col>
+        <Col xs={12} sm={6}>
+          <div style={{ background: '#fff', borderRadius: 10, padding: '12px 16px', border: '1px solid #e8f0fe', textAlign: 'center' }}>
+            <Statistic
+              title={<Text style={{ fontSize: 11, color: '#64748b' }}>% Ocupación</Text>}
+              value={occupancyPct}
+              suffix="%"
+              valueStyle={{ color: occupancyPct > 80 ? '#ff4d4f' : '#52c41a', fontSize: 22 }}
+            />
+          </div>
+        </Col>
+        <Col xs={12} sm={6}>
+          <div style={{
+            background: (meta.conflictsCount ?? 0) > 0 ? '#fff2f0' : '#fff',
+            borderRadius: 10, padding: '12px 16px',
+            border: `1px solid ${(meta.conflictsCount ?? 0) > 0 ? '#ffccc7' : '#e8f0fe'}`,
+            textAlign: 'center',
+          }}>
+            <Statistic
+              title={<Text style={{ fontSize: 11, color: '#64748b' }}>Solapamientos</Text>}
+              value={meta.conflictsCount ?? 0}
+              prefix={<AlertOutlined style={{ color: (meta.conflictsCount ?? 0) > 0 ? '#ff4d4f' : '#94a3b8' }} />}
+              valueStyle={{ color: (meta.conflictsCount ?? 0) > 0 ? '#ff4d4f' : '#94a3b8', fontSize: 22 }}
+            />
+          </div>
+        </Col>
+      </Row>
 
       {/* ── Filters ──────────────────────────────────────────────────────── */}
       <div style={{
@@ -387,7 +641,8 @@ export default function BookingCalendarPage() {
         </div>
         {(meta.conflictsCount ?? 0) > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Badge color="#ff4d4f" /> <Text style={{ fontSize: 11, color: '#ff4d4f' }}>Solapamiento</Text>
+            <Badge color="#ff4d4f" />
+            <Text style={{ fontSize: 11, color: '#ff4d4f' }}>Solapamiento detectado</Text>
           </div>
         )}
       </div>
@@ -405,7 +660,7 @@ export default function BookingCalendarPage() {
           opacity: isFetching ? 0.7 : 1,
           transition: 'opacity 0.2s',
         }}>
-          <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 320px)' }}>
+          <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 400px)' }}>
             <div style={{ minWidth: NAME_W + gridWidth, position: 'relative' }}>
 
               {/* ── Sticky header ── */}
@@ -428,9 +683,7 @@ export default function BookingCalendarPage() {
                       borderRight: '1px solid #e2e8f0',
                       display: 'flex', alignItems: 'center', paddingLeft: 8,
                     }}>
-                      <Text style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>
-                        {g.label}
-                      </Text>
+                      <Text style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>{g.label}</Text>
                     </div>
                   ))}
                 </div>
@@ -449,8 +702,7 @@ export default function BookingCalendarPage() {
                     return (
                       <div key={i} style={{
                         width: DAY_W, minWidth: DAY_W, flexShrink: 0,
-                        height: HDR_H2, textAlign: 'center',
-                        borderRight: '1px solid #e2e8f0',
+                        height: HDR_H2, borderRight: '1px solid #e2e8f0',
                         background: isToday ? '#dbeafe' : isWeekend ? '#f8f0ff' : '#f8fafc',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                       }}>
@@ -476,8 +728,7 @@ export default function BookingCalendarPage() {
                     return (
                       <div key={i} style={{
                         width: DAY_W, minWidth: DAY_W, flexShrink: 0,
-                        height: HDR_H3, textAlign: 'center',
-                        borderRight: '1px solid #e2e8f0',
+                        height: HDR_H3, borderRight: '1px solid #e2e8f0',
                         background: isToday ? '#dbeafe' : isWeekend ? '#f8f0ff' : '#fff',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                       }}>
@@ -554,29 +805,26 @@ export default function BookingCalendarPage() {
                         <div style={{
                           position: 'absolute',
                           left: todayIdx * DAY_W + DAY_W / 2,
-                          top: 0, bottom: 0,
-                          width: 2,
-                          background: '#1677ff',
-                          opacity: 0.4,
-                          zIndex: 3,
-                          pointerEvents: 'none',
+                          top: 0, bottom: 0, width: 2,
+                          background: '#1677ff', opacity: 0.4,
+                          zIndex: 3, pointerEvents: 'none',
                         }} />
                       )}
 
                       {/* Booking bars */}
                       {rowBookings.map((b: any) => {
                         const { left, width, background, borderColor, borderStyle, textColor, label } = getBarStyle(b)
-                        const top = b.lane * LANE_H + 5
+                        const top    = b.lane * LANE_H + 5
                         const height = LANE_H - 10
 
                         return (
                           <Tooltip
                             key={b.id}
-                            title={<BookingTooltip b={b} resourceName={resource.name} navigate={navigate} />}
+                            title={<BookingTooltip b={b} resourceName={resource.name} />}
                             color={NAVY}
-                            overlayInnerStyle={{ padding: '12px 14px' }}
-                            overlayStyle={{ maxWidth: 360 }}
-                            mouseEnterDelay={0.15}
+                            overlayInnerStyle={{ padding: '10px 12px' }}
+                            overlayStyle={{ maxWidth: 320 }}
+                            mouseEnterDelay={0.2}
                           >
                             <div
                               style={{
@@ -587,8 +835,7 @@ export default function BookingCalendarPage() {
                                 border: `2px ${borderStyle} ${borderColor}`,
                                 display: 'flex',
                                 alignItems: 'center',
-                                paddingLeft: 8,
-                                paddingRight: 6,
+                                paddingLeft: 8, paddingRight: 6,
                                 cursor: 'pointer',
                                 overflow: 'hidden',
                                 zIndex: 4,
@@ -596,10 +843,7 @@ export default function BookingCalendarPage() {
                               }}
                               onMouseEnter={e => (e.currentTarget.style.filter = 'brightness(0.93)')}
                               onMouseLeave={e => (e.currentTarget.style.filter = '')}
-                              onClick={() => b.type === 'EVENT_SPACE'
-                                ? navigate(`/eventos/${b.event?.id}`)
-                                : navigate(`/ordenes/${b.order?.id}`)
-                              }
+                              onClick={() => openModal(b, resource.name)}
                             >
                               <Text style={{
                                 fontSize: 11, fontWeight: 600, color: textColor,
@@ -619,6 +863,15 @@ export default function BookingCalendarPage() {
           </div>
         </div>
       )}
+
+      {/* ── Detail modal ─────────────────────────────────────────────────── */}
+      <BookingDetailModal
+        booking={selectedBooking}
+        resourceName={selectedResource}
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onNavigate={navigate}
+      />
     </div>
   )
 }

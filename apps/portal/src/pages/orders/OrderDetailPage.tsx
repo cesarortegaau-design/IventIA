@@ -107,6 +107,7 @@ export default function OrderDetailPage() {
           rowKey="id"
           size="small"
           pagination={false}
+          scroll={{ x: 'max-content' }}
         />
       </Card>
 

@@ -381,7 +381,7 @@ export default function ClientDetailPage() {
                       numero: o.orderNumber,
                       estado: ORDER_STATUS_LABELS[o.status] ?? o.status,
                       evento: o.event?.name ?? '',
-                      total: Number(o.totalAmount).toFixed(2),
+                      total: Number(o.total).toFixed(2),
                       fecha: dayjs(o.createdAt).format('DD/MM/YYYY'),
                     })), [
                       { header: 'Número', key: 'numero' },
@@ -410,7 +410,7 @@ export default function ClientDetailPage() {
                         <Space>
                           {order.event && <Text type="secondary">{order.event.name}</Text>}
                           <Text type="secondary">{dayjs(order.createdAt).format('DD/MM/YYYY')}</Text>
-                          <Text strong>${Number(order.totalAmount).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</Text>
+                          <Text strong>${Number(order.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</Text>
                         </Space>
                       }
                     />
@@ -436,7 +436,7 @@ export default function ClientDetailPage() {
                     <List.Item.Meta
                       avatar={<Avatar icon={<CalendarOutlined />} style={{ backgroundColor: '#13c2c2' }} />}
                       title={<Space><Text strong>{event.name}</Text><Tag>{EVENT_STATUS_LABELS[event.status] ?? event.status}</Tag></Space>}
-                      description={event.startDate ? `${dayjs(event.startDate).format('DD/MM/YYYY')} — ${event.endDate ? dayjs(event.endDate).format('DD/MM/YYYY') : ''}` : ''}
+                      description={event.eventStart ? `${dayjs(event.eventStart).format('DD/MM/YYYY')} — ${event.eventEnd ? dayjs(event.eventEnd).format('DD/MM/YYYY') : ''}` : ''}
                     />
                   </List.Item>
                 )}
@@ -448,7 +448,7 @@ export default function ClientDetailPage() {
             label: 'Portal de Expositores',
             children: (() => {
               const linked = client.portalUser as any
-              const allPortalUsers = portalUsersData?.data ?? []
+              const allPortalUsers = portalUsersData ?? []
               const available = allPortalUsers.filter((u: any) => !u.client || u.client.id === client.id)
               return (
                 <div style={{ maxWidth: 500 }}>

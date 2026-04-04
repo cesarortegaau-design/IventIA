@@ -340,6 +340,7 @@ export default function ResourcesPage() {
           loading={isLoading}
           size="small"
           pagination={{ pageSize: 20, total: data?.meta?.total }}
+          scroll={{ x: 'max-content' }}
         />
       </Card>
 
