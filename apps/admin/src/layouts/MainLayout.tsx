@@ -61,7 +61,8 @@ const menuItems = [
     icon: <FileTextOutlined />,
     label: 'Reportes',
     children: [
-      { key: '/reportes/ordenes', icon: <DollarOutlined />, label: 'Órdenes de Servicio' },
+      { key: '/reportes/ordenes',    icon: <DollarOutlined />,   label: 'Órdenes de Servicio' },
+      { key: '/booking-calendar',    icon: <CalendarOutlined />, label: 'Calendario de Espacios' },
     ],
   },
   {

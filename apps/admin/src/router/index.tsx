@@ -19,6 +19,7 @@ import CrmDashboard from '../pages/crm/CrmDashboard'
 import HomePage from '../pages/home/HomePage'
 import ChatPage from '../pages/chat/ChatPage'
 import OrdersReportPage from '../pages/reports/OrdersReportPage'
+import BookingCalendarPage from '../pages/bookings/BookingCalendarPage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.accessToken)
@@ -56,6 +57,7 @@ export function AppRouter() {
         <Route path="dashboard/operaciones" element={<OperationsDashboard />} />
         <Route path="chat" element={<ChatPage />} />
         <Route path="reportes/ordenes" element={<OrdersReportPage />} />
+        <Route path="booking-calendar" element={<BookingCalendarPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
