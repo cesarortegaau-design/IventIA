@@ -1,5 +1,14 @@
+import path from 'path'
+import fs from 'fs'
 import { Request, Response } from 'express'
 import { prisma } from '../config/database'
+
+export async function uploadChatFile(req: Request, res: Response) {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
+  const fileUrl  = `/uploads/chat/${req.file.filename}`
+  const fileName = req.file.originalname
+  res.json({ fileUrl, fileName })
+}
 
 // ── Admin handlers ────────────────────────────────────────────────────────────
 
@@ -37,7 +46,7 @@ export async function sendAdminMessage(req: Request, res: Response) {
   const tenantId = req.user!.tenantId
   const senderId = req.user!.userId
   const { id }   = req.params
-  const { content } = req.body
+  const { content, fileUrl, fileName } = req.body
 
   const adminUser  = await prisma.user.findUnique({ where: { id: senderId } })
   const senderName = adminUser ? `${adminUser.firstName} ${adminUser.lastName}` : 'Admin'
@@ -46,7 +55,7 @@ export async function sendAdminMessage(req: Request, res: Response) {
   if (!conv) return res.status(404).json({ error: 'Not found' })
 
   const message = await prisma.message.create({
-    data: { conversationId: id, senderType: 'ADMIN', senderId, senderName, content },
+    data: { conversationId: id, senderType: 'ADMIN', senderId, senderName, content, fileUrl: fileUrl || null, fileName: fileName || null },
   })
   await prisma.conversation.update({
     where: { id },
@@ -156,7 +165,7 @@ export async function portalStartConversation(req: Request, res: Response) {
 export async function portalSendMessage(req: Request, res: Response) {
   const portalUserId = req.portalUser!.portalUserId
   const { id }       = req.params
-  const { content }  = req.body
+  const { content, fileUrl, fileName } = req.body
 
   const conv = await prisma.conversation.findFirst({ where: { id, portalUserId } })
   if (!conv) return res.status(404).json({ error: 'Not found' })
@@ -165,7 +174,7 @@ export async function portalSendMessage(req: Request, res: Response) {
   const senderName = portalUser ? `${portalUser.firstName} ${portalUser.lastName}` : 'Expositor'
 
   const message = await prisma.message.create({
-    data: { conversationId: id, senderType: 'PORTAL_USER', senderId: portalUserId, senderName, content },
+    data: { conversationId: id, senderType: 'PORTAL_USER', senderId: portalUserId, senderName, content, fileUrl: fileUrl || null, fileName: fileName || null },
   })
   await prisma.conversation.update({
     where: { id },

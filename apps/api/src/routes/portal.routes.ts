@@ -1,4 +1,7 @@
 import { Router } from 'express'
+import path from 'path'
+import multer from 'multer'
+import { v4 as uuidv4 } from 'uuid'
 import { authenticatePortal } from '../middleware/portalAuth.middleware'
 import {
   portalVerifyCode, portalRegister, portalLogin, portalRefresh, portalMe, portalUpdateMe,
@@ -7,8 +10,26 @@ import { portalListEvents, portalGetEvent, portalGetCatalog } from '../controlle
 import { portalListOrders, portalGetOrder, portalCreateOrder } from '../controllers/portal.orders.controller'
 import {
   portalListConversations, portalGetConversation, portalStartConversation,
-  portalSendMessage, portalUnreadCount,
+  portalSendMessage, portalUnreadCount, uploadChatFile,
 } from '../controllers/chat.controller'
+
+const chatStorage = multer.diskStorage({
+  destination: path.join(process.cwd(), 'uploads', 'chat'),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase()
+    cb(null, `${uuidv4()}${ext}`)
+  },
+})
+const chatUpload = multer({
+  storage: chatStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['image/', 'application/pdf', 'application/msword',
+      'application/vnd.openxmlformats-officedocument', 'text/']
+    if (allowed.some(t => file.mimetype.startsWith(t))) cb(null, true)
+    else cb(new Error('Tipo de archivo no permitido'))
+  },
+})
 
 const router = Router()
 
@@ -33,10 +54,11 @@ router.get('/orders', portalListOrders)
 router.get('/orders/:orderId', portalGetOrder)
 
 // Chat routes (accessible via /api/v1/portal/chat/... to match portal apiClient base URL)
-router.get('/chat/conversations',              portalListConversations)
-router.get('/chat/conversations/unread',       portalUnreadCount)
-router.get('/chat/conversations/:id',          portalGetConversation)
-router.post('/chat/conversations',             portalStartConversation)
+router.get('/chat/conversations',               portalListConversations)
+router.get('/chat/conversations/unread',        portalUnreadCount)
+router.get('/chat/conversations/:id',           portalGetConversation)
+router.post('/chat/conversations',              portalStartConversation)
 router.post('/chat/conversations/:id/messages', portalSendMessage)
+router.post('/chat/upload',                     chatUpload.single('file'), uploadChatFile)
 
 export default router

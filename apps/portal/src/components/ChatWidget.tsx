@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Badge, Button, Input, Typography, Avatar, Spin, Empty } from 'antd'
-import { MessageOutlined, SendOutlined, CloseOutlined, ArrowLeftOutlined, CustomerServiceOutlined } from '@ant-design/icons'
+import { Badge, Button, Input, Typography, Avatar, Spin, Empty, message as antMessage } from 'antd'
+import { MessageOutlined, SendOutlined, CloseOutlined, ArrowLeftOutlined, CustomerServiceOutlined, PaperClipOutlined, FileOutlined, LoadingOutlined } from '@ant-design/icons'
 import { chatApi } from '../api/chat'
 import { useSocket } from '../hooks/useSocket'
 
@@ -20,13 +20,17 @@ function timeAgo(date: string) {
 export default function ChatWidget() {
   const qc     = useQueryClient()
   const socket = useSocket()
-  const [open, setOpen]           = useState(false)
-  const [view, setView]           = useState<'list' | 'conv'>('list')
+  const [open, setOpen]             = useState(false)
+  const [view, setView]             = useState<'list' | 'conv'>('list')
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [text, setText]           = useState('')
+  const [text, setText]             = useState('')
   const [newSubject, setNewSubject] = useState('')
-  const [showNew, setShowNew]     = useState(false)
-  const bottomRef                 = useRef<HTMLDivElement>(null)
+  const [showNew, setShowNew]       = useState(false)
+  const [pendingFile, setPendingFile] = useState<{ fileUrl: string; fileName: string } | null>(null)
+  const [uploading, setUploading]   = useState(false)
+  const bottomRef                   = useRef<HTMLDivElement>(null)
+  const fileInputRef                = useRef<HTMLInputElement>(null)
+  const apiBase = (import.meta as any).env?.VITE_API_URL ?? ''
 
   const { data: conversations = [] } = useQuery({
     queryKey: ['chat', 'portal', 'conversations'],
@@ -51,10 +55,11 @@ export default function ChatWidget() {
   const sendMut = useMutation({
     mutationFn: (content: string) =>
       selectedId
-        ? chatApi.sendMessage(selectedId, content)
+        ? chatApi.sendMessage(selectedId, content, pendingFile?.fileUrl, pendingFile?.fileName)
         : chatApi.startConversation({ subject: newSubject || undefined, content }),
     onSuccess: (data: any) => {
       setText('')
+      setPendingFile(null)
       setShowNew(false)
       setNewSubject('')
       if (!selectedId && data.conversation) {
@@ -64,6 +69,21 @@ export default function ChatWidget() {
       qc.invalidateQueries({ queryKey: ['chat', 'portal'] })
     },
   })
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      const result = await chatApi.uploadFile(file)
+      setPendingFile({ fileUrl: result.fileUrl, fileName: result.fileName })
+    } catch {
+      antMessage.error('Error al subir el archivo')
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
 
   // Real-time
   useEffect(() => {
@@ -94,7 +114,7 @@ export default function ChatWidget() {
   }
 
   const send = () => {
-    if (!text.trim()) return
+    if (!text.trim() && !pendingFile) return
     sendMut.mutate(text.trim())
   }
 
@@ -204,7 +224,15 @@ export default function ChatWidget() {
                           <Text style={{ fontSize: 11, color: isAdmin ? 'rgba(255,255,255,0.6)' : '#94a3b8', display: 'block' }}>
                             {msg.senderName}
                           </Text>
-                          <Text style={{ color: isAdmin ? '#fff' : '#1e293b', fontSize: 13 }}>{msg.content}</Text>
+                          {msg.content && <Text style={{ color: isAdmin ? '#fff' : '#1e293b', fontSize: 13 }}>{msg.content}</Text>}
+                          {msg.fileUrl && (
+                            msg.fileUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i)
+                              ? <img src={`${apiBase}${msg.fileUrl}`} alt={msg.fileName} style={{ maxWidth: '100%', borderRadius: 6, marginTop: msg.content ? 4 : 0, display: 'block' }} />
+                              : <a href={`${apiBase}${msg.fileUrl}`} target="_blank" rel="noreferrer"
+                                  style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: msg.content ? 4 : 0, color: isAdmin ? '#c4b5fd' : PURPLE, fontSize: 12 }}>
+                                  <FileOutlined />{msg.fileName}
+                                </a>
+                          )}
                           <Text style={{ fontSize: 10, color: isAdmin ? 'rgba(255,255,255,0.4)' : '#cbd5e1', display: 'block', textAlign: 'right', marginTop: 2 }}>
                             {new Date(msg.createdAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
                           </Text>
@@ -215,23 +243,43 @@ export default function ChatWidget() {
                 )}
                 <div ref={bottomRef} />
               </div>
-              <div style={{ padding: '10px 12px', borderTop: '1px solid #f1f5f9', display: 'flex', gap: 8 }}>
-                <Input
-                  value={text}
-                  onChange={e => setText(e.target.value)}
-                  onPressEnter={send}
-                  placeholder="Escribe un mensaje..."
-                  style={{ borderRadius: 20, fontSize: 13 }}
-                />
-                <Button
-                  type="primary"
-                  shape="circle"
-                  icon={<SendOutlined />}
-                  onClick={send}
-                  loading={sendMut.isPending}
-                  disabled={!text.trim()}
-                  style={{ background: PURPLE, borderColor: PURPLE }}
-                />
+              <div style={{ padding: '10px 12px', borderTop: '1px solid #f1f5f9' }}>
+                {pendingFile && (
+                  <div style={{ marginBottom: 6, padding: '4px 8px', background: '#f5f3ff', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 11, color: PURPLE, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <FileOutlined />{pendingFile.fileName}
+                    </span>
+                    <button onClick={() => setPendingFile(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 12 }}>✕</button>
+                  </div>
+                )}
+                <input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={handleFileChange}
+                  accept="image/*,.pdf,.doc,.docx,.txt,.xls,.xlsx" />
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <Button
+                    shape="circle"
+                    size="small"
+                    icon={uploading ? <LoadingOutlined style={{ fontSize: 12 }} /> : <PaperClipOutlined style={{ fontSize: 12 }} />}
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    style={{ flexShrink: 0 }}
+                  />
+                  <Input
+                    value={text}
+                    onChange={e => setText(e.target.value)}
+                    onPressEnter={send}
+                    placeholder="Escribe un mensaje..."
+                    style={{ borderRadius: 20, fontSize: 13 }}
+                  />
+                  <Button
+                    type="primary"
+                    shape="circle"
+                    icon={<SendOutlined />}
+                    onClick={send}
+                    loading={sendMut.isPending}
+                    disabled={!text.trim() && !pendingFile}
+                    style={{ background: PURPLE, borderColor: PURPLE, flexShrink: 0 }}
+                  />
+                </div>
               </div>
             </>
           )}
