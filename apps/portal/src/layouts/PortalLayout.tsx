@@ -83,10 +83,10 @@ export default function PortalLayout() {
             </Sider>
           )}
 
-          <Layout style={{ padding: isMobile ? '12px 12px 80px' : '24px' }}>
+          <Layout style={{ padding: isMobile ? '8px 8px 80px' : '24px' }}>
             <Content style={{
               background: '#fff',
-              padding: isMobile ? 16 : 24,
+              padding: isMobile ? 10 : 24,
               borderRadius: 8,
               minHeight: 400,
             }}>

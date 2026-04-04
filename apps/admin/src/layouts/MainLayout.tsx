@@ -194,7 +194,7 @@ export default function MainLayout() {
           </Dropdown>
         </Header>
 
-        <Content style={{ padding: isMobile ? 12 : 24, background: '#f5f5f5', minHeight: 'calc(100vh - 64px)' }}>
+        <Content style={{ padding: isMobile ? 8 : 24, background: '#f5f5f5', minHeight: 'calc(100vh - 64px)' }}>
           <Outlet />
         </Content>
       </Layout>

@@ -41,11 +41,11 @@ export default function EventPortalPage() {
   return (
     <div>
       <Space style={{ marginBottom: 16 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/')}>Mis Eventos</Button>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/dashboard')}>Mis Eventos</Button>
       </Space>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <Space>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, gap: 8, flexWrap: 'wrap' }}>
+        <Space wrap size={4}>
           <Tag color="purple">{event.code}</Tag>
           <Title level={4} style={{ margin: 0 }}>{event.name}</Title>
           <Tag color={STATUS_COLORS[event.status]}>{STATUS_LABELS[event.status]}</Tag>
@@ -110,6 +110,7 @@ export default function EventPortalPage() {
                 rowKey="id"
                 size="small"
                 pagination={false}
+                scroll={{ x: 'max-content' }}
               />
             ),
           },

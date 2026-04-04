@@ -139,52 +139,52 @@ export default function ClientsPage() {
               key: 'general', label: 'Datos Generales',
               children: (
                 <Row gutter={16}>
-                  <Col xs={24} sm={12}>
+                  <Col xs={12}>
                     <Form.Item name="personType" label="Tipo de Persona" rules={[{ required: true }]}>
                       <Select options={[{ value: 'MORAL', label: 'Persona Moral' }, { value: 'PHYSICAL', label: 'Persona Física' }]} />
                     </Form.Item>
                   </Col>
-                  <Col xs={24} sm={12}>
+                  <Col xs={12}>
                     <Form.Item name="companyName" label="Razón Social">
                       <Input />
                     </Form.Item>
                   </Col>
-                  <Col xs={24} sm={12}>
+                  <Col xs={12}>
                     <Form.Item name="firstName" label="Nombre">
                       <Input />
                     </Form.Item>
                   </Col>
-                  <Col xs={24} sm={12}>
+                  <Col xs={12}>
                     <Form.Item name="lastName" label="Apellido(s)">
                       <Input />
                     </Form.Item>
                   </Col>
-                  <Col xs={24} sm={12}>
+                  <Col xs={12}>
                     <Form.Item name="rfc" label="RFC / TAX ID">
                       <Input />
                     </Form.Item>
                   </Col>
-                  <Col xs={24} sm={12}>
+                  <Col xs={12}>
                     <Form.Item name="taxRegime" label="Régimen Fiscal">
                       <Input />
                     </Form.Item>
                   </Col>
-                  <Col xs={24} sm={12}>
+                  <Col xs={12}>
                     <Form.Item name="email" label="Email">
                       <Input type="email" />
                     </Form.Item>
                   </Col>
-                  <Col xs={24} sm={12}>
+                  <Col xs={12}>
                     <Form.Item name="phone" label="Teléfono">
                       <Input />
                     </Form.Item>
                   </Col>
-                  <Col xs={24} sm={12}>
+                  <Col xs={12}>
                     <Form.Item name="whatsapp" label="WhatsApp">
                       <Input />
                     </Form.Item>
                   </Col>
-                  <Col xs={24} sm={12}>
+                  <Col xs={12}>
                     <Form.Item name="addressCountry" label="País" initialValue="MX">
                       <Input />
                     </Form.Item>
@@ -199,13 +199,13 @@ export default function ClientsPage() {
                   <Col span={24}>
                     <Form.Item name="addressStreet" label="Calle y Número"><Input /></Form.Item>
                   </Col>
-                  <Col xs={24} sm={8}>
+                  <Col xs={8}>
                     <Form.Item name="addressCity" label="Ciudad"><Input /></Form.Item>
                   </Col>
-                  <Col xs={24} sm={8}>
+                  <Col xs={8}>
                     <Form.Item name="addressState" label="Estado"><Input /></Form.Item>
                   </Col>
-                  <Col xs={24} sm={8}>
+                  <Col xs={8}>
                     <Form.Item name="addressZip" label="C.P."><Input /></Form.Item>
                   </Col>
                 </Row>

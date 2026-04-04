@@ -149,17 +149,17 @@ export default function OrderFormWizard() {
       content: (
         <Form form={form} layout="vertical">
           <Row gutter={16}>
-            <Col xs={24} sm={12}>
+            <Col xs={12}>
               <Form.Item name="clientId" label="Cliente" rules={[{ required: true }]}>
                 <Select options={clientOptions} showSearch filterOption={(i, o) => String(o?.label ?? '').toLowerCase().includes(i.toLowerCase())} />
               </Form.Item>
             </Col>
-            <Col xs={24} sm={12}>
+            <Col xs={12}>
               <Form.Item name="billingClientId" label="Cliente para Facturar">
                 <Select options={clientOptions} showSearch allowClear filterOption={(i, o) => String(o?.label ?? '').toLowerCase().includes(i.toLowerCase())} />
               </Form.Item>
             </Col>
-            <Col xs={24} sm={12}>
+            <Col xs={12}>
               <Form.Item name="priceListId" label="Lista de Precios" rules={[{ required: true }]}>
                 <Select
                   options={(allPriceLists?.data ?? []).map((p: any) => ({ value: p.id, label: p.name }))}
@@ -168,7 +168,7 @@ export default function OrderFormWizard() {
                 />
               </Form.Item>
             </Col>
-            <Col xs={24} sm={12}>
+            <Col xs={12}>
               <Form.Item name="standId" label="Stand">
                 <Select options={standOptions} allowClear />
               </Form.Item>
