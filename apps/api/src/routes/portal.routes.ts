@@ -1,7 +1,5 @@
 import { Router } from 'express'
-import path from 'path'
 import multer from 'multer'
-import { v4 as uuidv4 } from 'uuid'
 import { authenticatePortal } from '../middleware/portalAuth.middleware'
 import {
   portalVerifyCode, portalRegister, portalLogin, portalRefresh, portalMe, portalUpdateMe,
@@ -13,15 +11,8 @@ import {
   portalSendMessage, portalUnreadCount, uploadChatFile,
 } from '../controllers/chat.controller'
 
-const chatStorage = multer.diskStorage({
-  destination: path.join(process.cwd(), 'uploads', 'chat'),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase()
-    cb(null, `${uuidv4()}${ext}`)
-  },
-})
 const chatUpload = multer({
-  storage: chatStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowed = ['image/', 'application/pdf', 'application/msword',

@@ -1,9 +1,8 @@
 import { Request, Response, NextFunction } from 'express'
 import { z } from 'zod'
-import path from 'path'
-import fs from 'fs'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
+import { uploadToCloudinary, deleteFromCloudinary } from '../lib/cloudinary'
 
 const SLOT_FIELDS: Record<string, 'imageMain' | 'imageDesc' | 'imageExtra'> = {
   main: 'imageMain',
@@ -130,14 +129,13 @@ export async function uploadResourceImage(req: Request, res: Response, next: Nex
 
     if (!req.file) throw new AppError(400, 'NO_FILE', 'No se recibió ningún archivo')
 
-    // Delete old image file if exists
+    // Delete old image from Cloudinary if it was a cloud URL
     const oldPath = (resource as any)[field] as string | null
-    if (oldPath) {
-      const abs = path.join(process.cwd(), 'uploads', oldPath.replace(/^\/uploads\//, ''))
-      if (fs.existsSync(abs)) fs.unlinkSync(abs)
+    if (oldPath?.includes('cloudinary.com')) {
+      await deleteFromCloudinary(oldPath, 'image')
     }
 
-    const imageUrl = `/uploads/resources/${req.file.filename}`
+    const { url: imageUrl } = await uploadToCloudinary(req.file.buffer, 'iventia/resources', 'image')
     const updated = await prisma.resource.update({
       where: { id },
       data: { [field]: imageUrl },
@@ -160,9 +158,8 @@ export async function deleteResourceImage(req: Request, res: Response, next: Nex
     if (!resource) throw new AppError(404, 'RESOURCE_NOT_FOUND', 'Resource not found')
 
     const oldPath = (resource as any)[field] as string | null
-    if (oldPath) {
-      const abs = path.join(process.cwd(), 'uploads', oldPath.replace(/^\/uploads\//, ''))
-      if (fs.existsSync(abs)) fs.unlinkSync(abs)
+    if (oldPath?.includes('cloudinary.com')) {
+      await deleteFromCloudinary(oldPath, 'image')
     }
 
     const updated = await prisma.resource.update({

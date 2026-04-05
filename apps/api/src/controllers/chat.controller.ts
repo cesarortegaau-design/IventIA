@@ -1,11 +1,10 @@
-import path from 'path'
-import fs from 'fs'
 import { Request, Response } from 'express'
 import { prisma } from '../config/database'
+import { uploadToCloudinary } from '../lib/cloudinary'
 
 export async function uploadChatFile(req: Request, res: Response) {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
-  const fileUrl  = `/uploads/chat/${req.file.filename}`
+  const { url: fileUrl } = await uploadToCloudinary(req.file.buffer, 'iventia/chat', 'auto')
   const fileName = req.file.originalname
   res.json({ fileUrl, fileName })
 }

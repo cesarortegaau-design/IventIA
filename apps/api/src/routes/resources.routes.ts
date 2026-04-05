@@ -1,20 +1,10 @@
 import { Router } from 'express'
-import path from 'path'
 import multer from 'multer'
-import { v4 as uuidv4 } from 'uuid'
 import { authenticate } from '../middleware/authenticate'
 import { listResources, getResource, createResource, updateResource, toggleResourceActive, uploadResourceImage, deleteResourceImage } from '../controllers/resources.controller'
 
-const storage = multer.diskStorage({
-  destination: path.join(process.cwd(), 'uploads', 'resources'),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase()
-    cb(null, `${uuidv4()}${ext}`)
-  },
-})
-
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (file.mimetype.startsWith('image/')) cb(null, true)
