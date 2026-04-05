@@ -17,6 +17,7 @@ import {
   MessageOutlined,
   FileTextOutlined,
   MenuOutlined,
+  ScheduleOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '../stores/authStore'
@@ -36,6 +37,11 @@ const menuItems = [
     key: '/eventos',
     icon: <CalendarOutlined />,
     label: 'Eventos',
+  },
+  {
+    key: '/booking-calendar',
+    icon: <ScheduleOutlined />,
+    label: 'Calendario de Reservas',
   },
   {
     key: 'catalogos',
@@ -64,8 +70,7 @@ const menuItems = [
     icon: <FileTextOutlined />,
     label: 'Reportes',
     children: [
-      { key: '/reportes/ordenes',    icon: <DollarOutlined />,   label: 'Órdenes de Servicio' },
-      { key: '/booking-calendar',    icon: <CalendarOutlined />, label: 'Calendario de Espacios' },
+      { key: '/reportes/ordenes', icon: <DollarOutlined />, label: 'Órdenes de Servicio' },
     ],
   },
   {
