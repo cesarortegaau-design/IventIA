@@ -168,30 +168,28 @@ export default function EventDetailPage() {
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/eventos')}>Eventos</Button>
       </Space>
 
-      <Card
-        title={
-          <Space>
-            <Tag color="purple">{event.code}</Tag>
-            <Title level={4} style={{ margin: 0 }}>{event.name}</Title>
-            <Tag color={STATUS_COLORS[event.status]}>{STATUS_LABELS[event.status]}</Tag>
-          </Space>
-        }
-        extra={
-          <Space wrap>
-            <Select
-              value={event.status}
-              onChange={updateStatusMutation.mutate}
-              loading={updateStatusMutation.isPending}
-              style={{ width: 160 }}
-              options={Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }))}
-            />
-            <Button icon={<EditOutlined />} onClick={() => navigate(`/eventos/${id}/editar`)}>Editar</Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate(`/eventos/${id}/ordenes/nueva`)}>
-              Nueva OS
-            </Button>
-          </Space>
-        }
-      >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+        <Space wrap size={4}>
+          <Tag color="purple">{event.code}</Tag>
+          <Title level={4} style={{ margin: 0 }}>{event.name}</Title>
+          <Tag color={STATUS_COLORS[event.status]}>{STATUS_LABELS[event.status]}</Tag>
+        </Space>
+        <Space wrap>
+          <Select
+            value={event.status}
+            onChange={updateStatusMutation.mutate}
+            loading={updateStatusMutation.isPending}
+            style={{ width: 160 }}
+            options={Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }))}
+          />
+          <Button icon={<EditOutlined />} onClick={() => navigate(`/eventos/${id}/editar`)}>Editar</Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate(`/eventos/${id}/ordenes/nueva`)}>
+            Nueva OS
+          </Button>
+        </Space>
+      </div>
+
+      <Card>
         <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
           <Col xs={12} sm={6}><Statistic title="Total Órdenes" value={event.orders?.length ?? 0} /></Col>
           <Col xs={12} sm={6}><Statistic title="Confirmadas" value={confirmedOrders} /></Col>

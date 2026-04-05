@@ -35,6 +35,10 @@ export default function ClientsPage() {
       form.resetFields()
       message.success(editingId ? 'Cliente actualizado' : 'Cliente creado')
     },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error?.message ?? 'Error al guardar el cliente'
+      message.error(msg)
+    },
   })
 
   const toggleMutation = useMutation({

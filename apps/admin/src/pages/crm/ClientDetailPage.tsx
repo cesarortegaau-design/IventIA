@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Row, Col, Typography, Tag, Button, Tabs, Timeline, List, Avatar,
   Form, Input, Select, DatePicker, Modal, Popconfirm, Badge, Empty, Spin,
-  Space, Tooltip, Divider, Table,
+  Space, Tooltip, Divider, Table, App,
 } from 'antd'
 import {
   ArrowLeftOutlined, PhoneOutlined, MailOutlined, MessageOutlined,
@@ -51,6 +51,10 @@ export default function ClientDetailPage() {
   const { clientId } = useParams<{ clientId: string }>()
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const { message } = App.useApp()
+
+  const [editClientOpen, setEditClientOpen] = useState(false)
+  const [editClientForm] = Form.useForm()
 
   const [interactionModalOpen, setInteractionModalOpen] = useState(false)
   const [editingInteraction, setEditingInteraction] = useState<any>(null)
@@ -112,6 +116,21 @@ export default function ClientDetailPage() {
   const deleteTask = useMutation({
     mutationFn: (id: string) => crmApi.deleteTask(clientId!, id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['client-tasks', clientId] }) },
+  })
+
+  const updateClientMutation = useMutation({
+    mutationFn: (values: any) => clientsApi.update(clientId!, values),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['client-summary', clientId] })
+      qc.invalidateQueries({ queryKey: ['clients'] })
+      setEditClientOpen(false)
+      editClientForm.resetFields()
+      message.success('Cliente actualizado')
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error?.message ?? 'Error al guardar los cambios'
+      message.error(msg)
+    },
   })
 
   const { data: portalUsersData } = useQuery({
@@ -198,10 +217,19 @@ export default function ClientDetailPage() {
             </Space>
           </Col>
           <Col>
-            <Space>
+            <Space wrap>
               {client.email && <Tooltip title={client.email}><Button icon={<MailOutlined />} href={`mailto:${client.email}`} /></Tooltip>}
               {client.phone && <Tooltip title={client.phone}><Button icon={<PhoneOutlined />} href={`tel:${client.phone}`} /></Tooltip>}
               {client.whatsapp && <Tooltip title={client.whatsapp}><Button icon={<MessageOutlined />} style={{ color: '#25D366', borderColor: '#25D366' }} /></Tooltip>}
+              <Button
+                icon={<EditOutlined />}
+                onClick={() => {
+                  editClientForm.setFieldsValue(client)
+                  setEditClientOpen(true)
+                }}
+              >
+                Editar
+              </Button>
             </Space>
           </Col>
         </Row>
@@ -544,6 +572,80 @@ export default function ClientDetailPage() {
           <Form.Item name="notes" label="Notas">
             <TextArea rows={4} />
           </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Edit Client Modal */}
+      <Modal
+        open={editClientOpen}
+        title="Editar Cliente"
+        onCancel={() => { setEditClientOpen(false); editClientForm.resetFields() }}
+        onOk={() => editClientForm.submit()}
+        confirmLoading={updateClientMutation.isPending}
+        width="min(700px, 95vw)"
+        destroyOnClose
+      >
+        <Form form={editClientForm} layout="vertical" onFinish={updateClientMutation.mutate}>
+          <Tabs items={[
+            {
+              key: 'general', label: 'Datos Generales',
+              children: (
+                <Row gutter={16}>
+                  <Col xs={12}>
+                    <Form.Item name="personType" label="Tipo de Persona" rules={[{ required: true }]}>
+                      <Select options={[{ value: 'MORAL', label: 'Persona Moral' }, { value: 'PHYSICAL', label: 'Persona Física' }]} />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={12}>
+                    <Form.Item name="companyName" label="Razón Social"><Input /></Form.Item>
+                  </Col>
+                  <Col xs={12}>
+                    <Form.Item name="firstName" label="Nombre"><Input /></Form.Item>
+                  </Col>
+                  <Col xs={12}>
+                    <Form.Item name="lastName" label="Apellido(s)"><Input /></Form.Item>
+                  </Col>
+                  <Col xs={12}>
+                    <Form.Item name="rfc" label="RFC / TAX ID"><Input /></Form.Item>
+                  </Col>
+                  <Col xs={12}>
+                    <Form.Item name="taxRegime" label="Régimen Fiscal"><Input /></Form.Item>
+                  </Col>
+                  <Col xs={12}>
+                    <Form.Item name="email" label="Email"><Input type="email" /></Form.Item>
+                  </Col>
+                  <Col xs={12}>
+                    <Form.Item name="phone" label="Teléfono"><Input /></Form.Item>
+                  </Col>
+                  <Col xs={12}>
+                    <Form.Item name="whatsapp" label="WhatsApp"><Input /></Form.Item>
+                  </Col>
+                  <Col xs={12}>
+                    <Form.Item name="addressCountry" label="País"><Input /></Form.Item>
+                  </Col>
+                </Row>
+              ),
+            },
+            {
+              key: 'address', label: 'Dirección',
+              children: (
+                <Row gutter={16}>
+                  <Col span={24}>
+                    <Form.Item name="addressStreet" label="Calle y Número"><Input /></Form.Item>
+                  </Col>
+                  <Col xs={8}>
+                    <Form.Item name="addressCity" label="Ciudad"><Input /></Form.Item>
+                  </Col>
+                  <Col xs={8}>
+                    <Form.Item name="addressState" label="Estado"><Input /></Form.Item>
+                  </Col>
+                  <Col xs={8}>
+                    <Form.Item name="addressZip" label="C.P."><Input /></Form.Item>
+                  </Col>
+                </Row>
+              ),
+            },
+          ]} />
         </Form>
       </Modal>
 
