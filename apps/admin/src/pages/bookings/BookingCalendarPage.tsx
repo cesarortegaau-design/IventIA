@@ -1132,16 +1132,18 @@ export default function BookingCalendarPage() {
                             onClick={() => openDetailModal(b, resource.name)}
                           >
                             <Text style={{
-                              fontSize: 11, fontWeight: b.overlapCount > 1 && b.overlapRank === 1 ? 700 : 'normal', color: textColor,
+                              fontSize: 11, fontWeight: 600, color: textColor,
                               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1,
+                              background: b.overlapCount > 1 && b.overlapRank === 1 ? 'rgba(239, 68, 68, 0.1)' : 'transparent',
+                              paddingLeft: 4, paddingRight: 4, borderRadius: 3,
                             }}>
                               {label}
                             </Text>
                             {b.overlapCount > 1 && (
                               <span style={{
                                 flexShrink: 0, marginLeft: 4,
-                                background: borderColor, color: '#fff',
-                                borderRadius: 10, fontSize: 13, fontWeight: b.overlapRank === 1 ? 700 : 'normal',
+                                background: b.overlapRank === 1 ? '#ef4444' : borderColor, color: '#fff',
+                                borderRadius: 10, fontSize: 13, fontWeight: 600,
                                 padding: '1px 7px', lineHeight: '18px', opacity: 0.95,
                               }}>
                                 #{b.overlapRank}/{b.overlapCount}
@@ -1153,8 +1155,11 @@ export default function BookingCalendarPage() {
                         return selectionMode ? (
                           <div key={b.id} style={{ position: 'absolute', left, top, width, height, zIndex: 4, pointerEvents: 'none', opacity: 0.5,
                             borderRadius: 6, background, border: `2px ${borderStyle} ${borderColor}` }}>
-                            <Text style={{ fontSize: 11, fontWeight: b.overlapCount > 1 && b.overlapRank === 1 ? 700 : 'normal', color: textColor,
-                              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', paddingLeft: 8 }}>
+                            <Text style={{ fontSize: 11, fontWeight: 600, color: textColor,
+                              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', paddingLeft: 8,
+                              background: b.overlapCount > 1 && b.overlapRank === 1 ? 'rgba(239, 68, 68, 0.1)' : 'transparent',
+                              paddingRight: 4, borderRadius: 3,
+                            }}>
                               {label}
                             </Text>
                           </div>
