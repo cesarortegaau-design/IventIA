@@ -12,6 +12,7 @@ import NewOrderPage from '../pages/orders/NewOrderPage'
 import OrdersPage from '../pages/orders/OrdersPage'
 import OrderDetailPage from '../pages/orders/OrderDetailPage'
 import CalendarPage from '../pages/calendar/CalendarPage'
+import CatalogPage from '../pages/catalog/CatalogPage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { accessToken } = useAuthStore()
@@ -34,6 +35,7 @@ export default function AppRouter() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/events/:eventId" element={<EventPortalPage />} />
         <Route path="/events/:eventId/new-order" element={<NewOrderPage />} />
+        <Route path="/events/:eventId/catalog" element={<CatalogPage />} />
         <Route path="/orders" element={<OrdersPage />} />
         <Route path="/orders/:orderId" element={<OrderDetailPage />} />
         <Route path="/calendar" element={<CalendarPage />} />

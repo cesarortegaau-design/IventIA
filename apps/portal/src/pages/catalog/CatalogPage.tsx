@@ -1,0 +1,738 @@
+import { useState, useMemo } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { useQuery, useMutation } from '@tanstack/react-query'
+import {
+  Button, Drawer, Tag, Typography, Space, InputNumber, Divider,
+  Empty, Spin, Badge, App, Input, Image, Row, Col,
+} from 'antd'
+import {
+  ArrowLeftOutlined, ShoppingCartOutlined, PlusOutlined, MinusOutlined,
+  DeleteOutlined, CheckCircleOutlined, CloseOutlined,
+} from '@ant-design/icons'
+import { eventsApi } from '../../api/events'
+import { ordersApi } from '../../api/orders'
+
+const { Title, Text } = Typography
+
+const apiUrl = import.meta.env.VITE_API_URL || ''
+const imgSrc = (path: string | null | undefined) =>
+  path ? (path.startsWith('/uploads') ? `${apiUrl}${path}` : path) : undefined
+
+const TYPE_LABELS: Record<string, string> = {
+  SPACE: 'Espacio', EQUIPMENT: 'Equipo', FURNITURE: 'Mobiliario',
+  SERVICE: 'Servicio', CONSUMABLE: 'Consumible',
+}
+const TYPE_COLORS: Record<string, string> = {
+  SPACE: 'purple', EQUIPMENT: 'blue', FURNITURE: 'cyan',
+  SERVICE: 'green', CONSUMABLE: 'orange',
+}
+const TIER_LABELS: Record<string, string> = { EARLY: 'Anticipado', NORMAL: 'Normal', LATE: 'Tardío' }
+const TIER_COLORS: Record<string, string> = { EARLY: '#16a34a', NORMAL: '#2563eb', LATE: '#ea580c' }
+
+interface CartItem {
+  priceListItemId: string
+  resourceId: string
+  name: string
+  type: string
+  unit: string | null
+  unitPrice: number
+  tier: string
+  quantity: number
+  observations?: string
+  image: string | null
+}
+
+// ── Product Card ───────────────────────────────────────────────────────────────
+function ProductCard({ item, cartQty, onAdd, onRemove, onClick }: {
+  item: any
+  cartQty: number
+  onAdd: () => void
+  onRemove: () => void
+  onClick: () => void
+}) {
+  const [hovered, setHovered] = useState(false)
+  const img = imgSrc(item.resource.imageMain)
+  const price = Number(item.unitPrice)
+
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: '#fff',
+        borderRadius: 12,
+        overflow: 'hidden',
+        cursor: 'pointer',
+        boxShadow: hovered ? '0 8px 32px rgba(0,0,0,0.12)' : '0 2px 8px rgba(0,0,0,0.06)',
+        transform: hovered ? 'translateY(-2px)' : 'none',
+        transition: 'all 0.2s ease',
+        border: cartQty > 0 ? '2px solid #531dab' : '2px solid transparent',
+      }}
+    >
+      {/* Image area */}
+      <div style={{ position: 'relative', paddingTop: '75%', background: '#f8f6ff', overflow: 'hidden' }}>
+        {img ? (
+          <img
+            src={img}
+            alt={item.resource.name}
+            style={{
+              position: 'absolute', inset: 0, width: '100%', height: '100%',
+              objectFit: 'cover',
+              transform: hovered ? 'scale(1.04)' : 'scale(1)',
+              transition: 'transform 0.3s ease',
+            }}
+          />
+        ) : (
+          <div style={{
+            position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
+            justifyContent: 'center', fontSize: 36,
+          }}>
+            {item.resource.type === 'SPACE' ? '🏛️'
+              : item.resource.type === 'EQUIPMENT' ? '🔧'
+              : item.resource.type === 'FURNITURE' ? '🪑'
+              : item.resource.type === 'SERVICE' ? '⚙️' : '📦'}
+          </div>
+        )}
+        {/* Type badge */}
+        <div style={{ position: 'absolute', top: 8, left: 8 }}>
+          <span style={{
+            background: '#531dab', color: '#fff', borderRadius: 20,
+            padding: '2px 10px', fontSize: 11, fontWeight: 600,
+          }}>
+            {TYPE_LABELS[item.resource.type] ?? item.resource.type}
+          </span>
+        </div>
+        {/* Cart qty badge */}
+        {cartQty > 0 && (
+          <div style={{
+            position: 'absolute', top: 8, right: 8,
+            background: '#531dab', color: '#fff', borderRadius: '50%',
+            width: 28, height: 28, display: 'flex', alignItems: 'center',
+            justifyContent: 'center', fontWeight: 700, fontSize: 13,
+          }}>
+            {cartQty}
+          </div>
+        )}
+      </div>
+
+      {/* Info area */}
+      <div style={{ padding: '12px 14px 14px' }}>
+        <div style={{ fontWeight: 700, fontSize: 14, color: '#1a1a2e', marginBottom: 2, lineHeight: 1.3 }}>
+          {item.resource.name}
+        </div>
+        {item.resource.portalDesc && (
+          <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8, lineHeight: 1.4,
+            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            {item.resource.portalDesc}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 16, color: '#531dab' }}>
+              ${price.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+            </div>
+            <div style={{ fontSize: 11, color: TIER_COLORS[item.tier], fontWeight: 600, marginTop: 1 }}>
+              {TIER_LABELS[item.tier]}
+            </div>
+          </div>
+
+          {/* Add / quantity controls */}
+          <div onClick={e => e.stopPropagation()}>
+            {cartQty === 0 ? (
+              <button
+                onClick={onAdd}
+                style={{
+                  background: '#531dab', color: '#fff', border: 'none',
+                  borderRadius: 8, padding: '6px 14px', fontWeight: 700,
+                  fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                }}
+              >
+                <PlusOutlined style={{ fontSize: 11 }} /> Agregar
+              </button>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <button onClick={onRemove} style={{
+                  background: '#f3f0ff', color: '#531dab', border: 'none', borderRadius: 6,
+                  width: 28, height: 28, cursor: 'pointer', fontWeight: 700, fontSize: 16,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>−</button>
+                <span style={{ fontWeight: 700, minWidth: 18, textAlign: 'center', color: '#531dab' }}>{cartQty}</span>
+                <button onClick={onAdd} style={{
+                  background: '#531dab', color: '#fff', border: 'none', borderRadius: 6,
+                  width: 28, height: 28, cursor: 'pointer', fontWeight: 700, fontSize: 16,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>+</button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Product Detail Drawer ──────────────────────────────────────────────────────
+function ProductDetailDrawer({ item, cartQty, onAdd, onRemove, onClose, open }: {
+  item: any | null
+  cartQty: number
+  onAdd: () => void
+  onRemove: () => void
+  onClose: () => void
+  open: boolean
+}) {
+  if (!item) return null
+  const images = [item.resource.imageMain, item.resource.imageDesc, item.resource.imageExtra]
+    .filter(Boolean).map(imgSrc).filter(Boolean) as string[]
+  const price = Number(item.unitPrice)
+
+  return (
+    <Drawer
+      open={open}
+      onClose={onClose}
+      width={Math.min(560, window.innerWidth)}
+      styles={{ body: { padding: 0 }, header: { background: '#f8f6ff' } }}
+      title={
+        <Space>
+          <Tag color={TYPE_COLORS[item.resource.type] ?? 'default'}>
+            {TYPE_LABELS[item.resource.type] ?? item.resource.type}
+          </Tag>
+          <span style={{ fontWeight: 700 }}>{item.resource.name}</span>
+        </Space>
+      }
+    >
+      {/* Image gallery */}
+      {images.length > 0 ? (
+        <div style={{ background: '#f8f6ff' }}>
+          <Image.PreviewGroup>
+            <div style={{ display: 'flex', gap: 6, padding: 12, overflowX: 'auto' }}>
+              {images.map((src, i) => (
+                <Image
+                  key={i}
+                  src={src}
+                  width={i === 0 ? '100%' : 100}
+                  height={i === 0 ? 260 : 100}
+                  style={{ objectFit: 'cover', borderRadius: 8, flexShrink: 0 }}
+                  preview={{ src }}
+                />
+              ))}
+            </div>
+          </Image.PreviewGroup>
+        </div>
+      ) : (
+        <div style={{
+          height: 200, background: '#f8f6ff', display: 'flex',
+          alignItems: 'center', justifyContent: 'center', fontSize: 64,
+        }}>
+          {item.resource.type === 'SPACE' ? '🏛️' : item.resource.type === 'EQUIPMENT' ? '🔧'
+            : item.resource.type === 'FURNITURE' ? '🪑' : item.resource.type === 'SERVICE' ? '⚙️' : '📦'}
+        </div>
+      )}
+
+      <div style={{ padding: 24 }}>
+        <Title level={4} style={{ margin: '0 0 8px' }}>{item.resource.name}</Title>
+
+        {/* Price & tier */}
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 16 }}>
+          <span style={{ fontSize: 28, fontWeight: 800, color: '#531dab' }}>
+            ${price.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+          </span>
+          {item.resource.unit && (
+            <Text type="secondary" style={{ fontSize: 13 }}>por {item.resource.unit}</Text>
+          )}
+          <Tag color={item.tier === 'EARLY' ? 'green' : item.tier === 'LATE' ? 'orange' : 'blue'}>
+            Precio {TIER_LABELS[item.tier]}
+          </Tag>
+        </div>
+
+        {/* Description */}
+        {(item.resource.portalDesc || item.resource.description) && (
+          <div style={{ marginBottom: 20 }}>
+            <Text style={{ lineHeight: 1.7, color: '#374151' }}>
+              {item.resource.portalDesc || item.resource.description}
+            </Text>
+          </div>
+        )}
+
+        {/* Specs */}
+        {(item.resource.brand || item.resource.model || item.resource.code) && (
+          <div style={{
+            background: '#f8f6ff', borderRadius: 10, padding: '12px 16px', marginBottom: 20,
+          }}>
+            {item.resource.brand && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>Marca</Text>
+                <Text strong style={{ fontSize: 12 }}>{item.resource.brand}</Text>
+              </div>
+            )}
+            {item.resource.model && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>Modelo</Text>
+                <Text strong style={{ fontSize: 12 }}>{item.resource.model}</Text>
+              </div>
+            )}
+            {item.resource.code && (
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>Código</Text>
+                <Text strong style={{ fontSize: 12 }}>{item.resource.code}</Text>
+              </div>
+            )}
+          </div>
+        )}
+
+        <Divider />
+
+        {/* Add to cart controls */}
+        {cartQty === 0 ? (
+          <button
+            onClick={onAdd}
+            style={{
+              width: '100%', background: '#531dab', color: '#fff',
+              border: 'none', borderRadius: 10, padding: '14px 0',
+              fontWeight: 700, fontSize: 16, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            }}
+          >
+            <ShoppingCartOutlined /> Agregar al carrito
+          </button>
+        ) : (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 12 }}>
+              <button onClick={onRemove} style={{
+                background: '#f3f0ff', color: '#531dab', border: 'none', borderRadius: 8,
+                width: 40, height: 40, cursor: 'pointer', fontWeight: 700, fontSize: 20,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>−</button>
+              <span style={{ fontWeight: 800, fontSize: 24, color: '#531dab', minWidth: 36, textAlign: 'center' }}>
+                {cartQty}
+              </span>
+              <button onClick={onAdd} style={{
+                background: '#531dab', color: '#fff', border: 'none', borderRadius: 8,
+                width: 40, height: 40, cursor: 'pointer', fontWeight: 700, fontSize: 20,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>+</button>
+            </div>
+            <Text type="secondary" style={{ display: 'block', textAlign: 'center', fontSize: 13 }}>
+              Subtotal: <strong style={{ color: '#531dab' }}>
+                ${(price * cartQty).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+              </strong>
+            </Text>
+          </div>
+        )}
+      </div>
+    </Drawer>
+  )
+}
+
+// ── Cart Drawer ────────────────────────────────────────────────────────────────
+function CartDrawer({ open, cart, onClose, onQtyChange, onRemove, onSubmit, submitting, eventId }: {
+  open: boolean
+  cart: CartItem[]
+  onClose: () => void
+  onQtyChange: (id: string, qty: number) => void
+  onRemove: (id: string) => void
+  onSubmit: (notes: string) => void
+  submitting: boolean
+  eventId: string
+}) {
+  const [notes, setNotes] = useState('')
+  const subtotal = cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
+  const tax = subtotal * 0.16
+
+  return (
+    <Drawer
+      open={open}
+      onClose={onClose}
+      width={Math.min(420, window.innerWidth)}
+      title={
+        <Space>
+          <ShoppingCartOutlined style={{ color: '#531dab' }} />
+          <span>Carrito ({cart.reduce((s, i) => s + i.quantity, 0)} ítems)</span>
+        </Space>
+      }
+      styles={{ body: { display: 'flex', flexDirection: 'column', padding: 0 } }}
+      footer={
+        <div style={{ padding: '0 0 4px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+            <Text type="secondary">Subtotal</Text>
+            <Text>${subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</Text>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+            <Text type="secondary">IVA (16%)</Text>
+            <Text>${tax.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</Text>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+            <Text strong style={{ fontSize: 16 }}>Total estimado</Text>
+            <Text strong style={{ fontSize: 18, color: '#531dab' }}>
+              ${(subtotal + tax).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+            </Text>
+          </div>
+          <button
+            disabled={cart.length === 0 || submitting}
+            onClick={() => onSubmit(notes)}
+            style={{
+              width: '100%', background: cart.length === 0 ? '#e5e7eb' : '#531dab',
+              color: cart.length === 0 ? '#9ca3af' : '#fff',
+              border: 'none', borderRadius: 10, padding: '14px 0',
+              fontWeight: 700, fontSize: 15, cursor: cart.length === 0 ? 'default' : 'pointer',
+            }}
+          >
+            {submitting ? 'Enviando...' : 'Confirmar solicitud'}
+          </button>
+        </div>
+      }
+    >
+      {cart.length === 0 ? (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+          justifyContent: 'center', color: '#94a3b8', padding: 40 }}>
+          <ShoppingCartOutlined style={{ fontSize: 48, marginBottom: 16, opacity: 0.3 }} />
+          <Text type="secondary">Tu carrito está vacío</Text>
+        </div>
+      ) : (
+        <div style={{ flex: 1, overflowY: 'auto', padding: '8px 20px' }}>
+          {cart.map(item => (
+            <div key={item.priceListItemId} style={{
+              display: 'flex', gap: 12, padding: '14px 0',
+              borderBottom: '1px solid #f3f4f6', alignItems: 'flex-start',
+            }}>
+              {/* Image */}
+              <div style={{
+                width: 56, height: 56, borderRadius: 8, flexShrink: 0,
+                background: '#f8f6ff', overflow: 'hidden',
+              }}>
+                {item.image ? (
+                  <img src={item.image} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center',
+                    justifyContent: 'center', fontSize: 22 }}>
+                    {item.type === 'SPACE' ? '🏛️' : item.type === 'EQUIPMENT' ? '🔧'
+                      : item.type === 'FURNITURE' ? '🪑' : '📦'}
+                  </div>
+                )}
+              </div>
+              {/* Info */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 13, color: '#1a1a2e', marginBottom: 2 }}>
+                  {item.name}
+                </div>
+                <div style={{ fontSize: 13, color: '#531dab', fontWeight: 700 }}>
+                  ${item.unitPrice.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                  <button onClick={() => onQtyChange(item.priceListItemId, item.quantity - 1)} style={{
+                    background: '#f3f0ff', color: '#531dab', border: 'none', borderRadius: 5,
+                    width: 24, height: 24, cursor: 'pointer', fontWeight: 700, fontSize: 14,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>−</button>
+                  <span style={{ fontWeight: 700, minWidth: 16, textAlign: 'center', fontSize: 14 }}>
+                    {item.quantity}
+                  </span>
+                  <button onClick={() => onQtyChange(item.priceListItemId, item.quantity + 1)} style={{
+                    background: '#531dab', color: '#fff', border: 'none', borderRadius: 5,
+                    width: 24, height: 24, cursor: 'pointer', fontWeight: 700, fontSize: 14,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>+</button>
+                </div>
+              </div>
+              {/* Line total + remove */}
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: '#1a1a2e', marginBottom: 6 }}>
+                  ${(item.unitPrice * item.quantity).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                </div>
+                <button onClick={() => onRemove(item.priceListItemId)} style={{
+                  background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer',
+                  padding: 2, fontSize: 14,
+                }}>
+                  <DeleteOutlined />
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {/* Notes */}
+          <div style={{ paddingTop: 16 }}>
+            <Text style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 6 }}>
+              Notas adicionales
+            </Text>
+            <Input.TextArea
+              rows={3}
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              placeholder="Instrucciones especiales, fechas de entrega, etc."
+              style={{ borderRadius: 8 }}
+            />
+          </div>
+        </div>
+      )}
+    </Drawer>
+  )
+}
+
+// ── Main Page ──────────────────────────────────────────────────────────────────
+export default function CatalogPage() {
+  const { eventId } = useParams<{ eventId: string }>()
+  const navigate = useNavigate()
+  const { message } = App.useApp()
+
+  const [cart, setCart] = useState<CartItem[]>([])
+  const [activeType, setActiveType] = useState<string>('ALL')
+  const [search, setSearch] = useState('')
+  const [detailItem, setDetailItem] = useState<any>(null)
+  const [cartOpen, setCartOpen] = useState(false)
+  const [orderDone, setOrderDone] = useState<any>(null)
+
+  const { data: catalogData, isLoading } = useQuery({
+    queryKey: ['portal-catalog', eventId],
+    queryFn: () => eventsApi.getCatalog(eventId!),
+  })
+
+  const { data: eventData } = useQuery({
+    queryKey: ['portal-event', eventId],
+    queryFn: () => eventsApi.get(eventId!),
+  })
+
+  const catalog: any[] = catalogData?.data?.data ?? []
+  const eventName = eventData?.data?.data?.name ?? ''
+
+  // Group types for filter tabs
+  const types = useMemo(() => {
+    const seen = new Set<string>()
+    catalog.forEach(i => seen.add(i.resource.type))
+    return Array.from(seen)
+  }, [catalog])
+
+  const filtered = useMemo(() => {
+    let list = catalog
+    if (activeType !== 'ALL') list = list.filter(i => i.resource.type === activeType)
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      list = list.filter(i =>
+        i.resource.name?.toLowerCase().includes(q) ||
+        i.resource.portalDesc?.toLowerCase().includes(q) ||
+        i.resource.description?.toLowerCase().includes(q)
+      )
+    }
+    return list
+  }, [catalog, activeType, search])
+
+  const cartTotal = cart.reduce((s, i) => s + i.quantity, 0)
+
+  function getQty(id: string) {
+    return cart.find(c => c.priceListItemId === id)?.quantity ?? 0
+  }
+
+  function addItem(item: any) {
+    setCart(prev => {
+      const existing = prev.find(c => c.priceListItemId === item.id)
+      if (existing) return prev.map(c => c.priceListItemId === item.id ? { ...c, quantity: c.quantity + 1 } : c)
+      return [...prev, {
+        priceListItemId: item.id,
+        resourceId: item.resource.id,
+        name: item.resource.name,
+        type: item.resource.type,
+        unit: item.unit ?? item.resource.unit,
+        unitPrice: Number(item.unitPrice),
+        tier: item.tier,
+        quantity: 1,
+        image: imgSrc(item.resource.imageMain) ?? null,
+      }]
+    })
+  }
+
+  function removeItem(item: any) {
+    setCart(prev => {
+      const existing = prev.find(c => c.priceListItemId === item.id)
+      if (!existing) return prev
+      if (existing.quantity <= 1) return prev.filter(c => c.priceListItemId !== item.id)
+      return prev.map(c => c.priceListItemId === item.id ? { ...c, quantity: c.quantity - 1 } : c)
+    })
+  }
+
+  function setQty(id: string, qty: number) {
+    if (qty <= 0) {
+      setCart(prev => prev.filter(c => c.priceListItemId !== id))
+    } else {
+      setCart(prev => prev.map(c => c.priceListItemId === id ? { ...c, quantity: qty } : c))
+    }
+  }
+
+  const createMutation = useMutation({
+    mutationFn: (notes: string) => ordersApi.create(eventId!, {
+      items: cart.map(i => ({ priceListItemId: i.priceListItemId, quantity: i.quantity })),
+      notes,
+    }),
+    onSuccess: res => {
+      setOrderDone(res.data.data)
+      setCart([])
+      setCartOpen(false)
+    },
+    onError: (err: any) => {
+      message.error(err?.response?.data?.error?.message ?? 'Error al crear la solicitud')
+    },
+  })
+
+  // ── Success screen ───────────────────────────────────────────────────────────
+  if (orderDone) {
+    return (
+      <div style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', padding: 40 }}>
+        <div style={{ fontSize: 72, marginBottom: 16 }}>🎉</div>
+        <Title level={3} style={{ color: '#531dab', margin: '0 0 8px' }}>¡Solicitud enviada!</Title>
+        <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 15 }}>
+          Solicitud <strong>{orderDone.orderNumber}</strong> recibida correctamente.
+        </Text>
+        <Text type="secondary" style={{ display: 'block', marginBottom: 28, textAlign: 'center' }}>
+          El equipo del evento revisará tu solicitud y te notificará.
+        </Text>
+        <Space>
+          <Button onClick={() => navigate('/orders')}>Ver mis solicitudes</Button>
+          <Button type="primary" style={{ background: '#531dab', borderColor: '#531dab' }}
+            onClick={() => { setOrderDone(null) }}>
+            Seguir comprando
+          </Button>
+        </Space>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#fafafa' }}>
+      {/* Header */}
+      <div style={{
+        background: '#fff', borderBottom: '1px solid #f0f0f0',
+        padding: '12px 16px', position: 'sticky', top: 0, zIndex: 50,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <Space>
+            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(`/events/${eventId}`)} size="small" />
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 15, color: '#1a1a2e', lineHeight: 1.2 }}>Catálogo</div>
+              {eventName && <div style={{ fontSize: 12, color: '#64748b' }}>{eventName}</div>}
+            </div>
+          </Space>
+          <Badge count={cartTotal} size="small" color="#531dab">
+            <Button
+              icon={<ShoppingCartOutlined />}
+              onClick={() => setCartOpen(true)}
+              style={{ borderColor: cartTotal > 0 ? '#531dab' : undefined, color: cartTotal > 0 ? '#531dab' : undefined }}
+            >
+              {cartTotal > 0 ? `Carrito (${cartTotal})` : 'Carrito'}
+            </Button>
+          </Badge>
+        </div>
+
+        {/* Search */}
+        <div style={{ marginTop: 10 }}>
+          <Input
+            placeholder="Buscar productos y servicios..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            allowClear
+            style={{ borderRadius: 8 }}
+          />
+        </div>
+
+        {/* Type filter tabs */}
+        {types.length > 1 && (
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, overflowX: 'auto', paddingBottom: 2 }}>
+            {['ALL', ...types].map(t => (
+              <button
+                key={t}
+                onClick={() => setActiveType(t)}
+                style={{
+                  flexShrink: 0, padding: '4px 14px', borderRadius: 20,
+                  border: '1.5px solid',
+                  borderColor: activeType === t ? '#531dab' : '#e5e7eb',
+                  background: activeType === t ? '#531dab' : '#fff',
+                  color: activeType === t ? '#fff' : '#374151',
+                  fontWeight: activeType === t ? 700 : 400,
+                  fontSize: 13, cursor: 'pointer',
+                }}
+              >
+                {t === 'ALL' ? 'Todo' : (TYPE_LABELS[t] ?? t)}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Grid */}
+      <div style={{ padding: '16px 12px 120px' }}>
+        {isLoading ? (
+          <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>
+        ) : filtered.length === 0 ? (
+          <Empty description="No hay productos en este catálogo" style={{ marginTop: 60 }} />
+        ) : (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+            gap: 12,
+          }}>
+            {filtered.map(item => (
+              <ProductCard
+                key={item.id}
+                item={item}
+                cartQty={getQty(item.id)}
+                onAdd={() => addItem(item)}
+                onRemove={() => removeItem(item)}
+                onClick={() => setDetailItem(item)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Floating cart bar (mobile) */}
+      {cartTotal > 0 && (
+        <div style={{
+          position: 'fixed', bottom: 72, left: 12, right: 12, zIndex: 100,
+        }}>
+          <button
+            onClick={() => setCartOpen(true)}
+            style={{
+              width: '100%', background: '#531dab', color: '#fff', border: 'none',
+              borderRadius: 14, padding: '14px 20px', fontWeight: 700, fontSize: 15,
+              cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              boxShadow: '0 8px 24px rgba(83,29,171,0.35)',
+            }}
+          >
+            <span style={{
+              background: 'rgba(255,255,255,0.25)', borderRadius: 6,
+              padding: '2px 10px', fontSize: 13, fontWeight: 700,
+            }}>
+              {cartTotal} ítem{cartTotal !== 1 ? 's' : ''}
+            </span>
+            <span>Ver carrito</span>
+            <span style={{ fontWeight: 800 }}>
+              ${cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
+                .toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+            </span>
+          </button>
+        </div>
+      )}
+
+      {/* Product Detail Drawer */}
+      <ProductDetailDrawer
+        item={detailItem}
+        open={!!detailItem}
+        cartQty={detailItem ? getQty(detailItem.id) : 0}
+        onAdd={() => detailItem && addItem(detailItem)}
+        onRemove={() => detailItem && removeItem(detailItem)}
+        onClose={() => setDetailItem(null)}
+      />
+
+      {/* Cart Drawer */}
+      <CartDrawer
+        open={cartOpen}
+        cart={cart}
+        onClose={() => setCartOpen(false)}
+        onQtyChange={setQty}
+        onRemove={id => setCart(prev => prev.filter(c => c.priceListItemId !== id))}
+        onSubmit={notes => createMutation.mutate(notes)}
+        submitting={createMutation.isPending}
+        eventId={eventId!}
+      />
+    </div>
+  )
+}

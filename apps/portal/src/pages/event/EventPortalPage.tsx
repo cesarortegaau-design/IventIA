@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import {
   Card, Typography, Tag, Descriptions, Button, Row, Col, Table, Space, Skeleton, Tabs
 } from 'antd'
-import { ShoppingCartOutlined, ArrowLeftOutlined, FileOutlined } from '@ant-design/icons'
+import { ShoppingCartOutlined, ArrowLeftOutlined, FileOutlined, AppstoreOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { eventsApi } from '../../api/events'
 
@@ -50,13 +50,23 @@ export default function EventPortalPage() {
           <Title level={4} style={{ margin: 0 }}>{event.name}</Title>
           <Tag color={STATUS_COLORS[event.status]}>{STATUS_LABELS[event.status]}</Tag>
         </Space>
-        <Button
-          type="primary"
-          icon={<ShoppingCartOutlined />}
-          onClick={() => navigate(`/events/${eventId}/new-order`)}
-        >
-          Nueva Solicitud
-        </Button>
+        <Space wrap>
+          <Button
+            icon={<AppstoreOutlined />}
+            onClick={() => navigate(`/events/${eventId}/catalog`)}
+            style={{ borderColor: '#531dab', color: '#531dab' }}
+          >
+            Ver Catálogo
+          </Button>
+          <Button
+            type="primary"
+            icon={<ShoppingCartOutlined />}
+            onClick={() => navigate(`/events/${eventId}/new-order`)}
+            style={{ background: '#531dab', borderColor: '#531dab' }}
+          >
+            Nueva Solicitud
+          </Button>
+        </Space>
       </div>
 
       <Tabs
