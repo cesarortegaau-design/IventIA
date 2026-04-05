@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { uploadToCloudinary, deleteFromCloudinary } from '../lib/cloudinary'
+import { auditService } from '../services/audit.service'
 
 // ── Event Documents ────────────────────────────────────────────────────────────
 
@@ -27,6 +28,13 @@ export async function uploadEventDocument(req: Request, res: Response, next: Nex
         uploadedById: userId,
       },
     })
+
+    await auditService.log(tenantId, userId, 'EventDocument', doc.id, 'CREATE', null, {
+      documentType,
+      fileName: doc.fileName,
+      fileSize: req.file.size,
+    }, req?.ip)
+
     res.status(201).json({ success: true, data: doc })
   } catch (err) {
     next(err)
@@ -48,6 +56,12 @@ export async function deleteEventDocument(req: Request, res: Response, next: Nex
       await deleteFromCloudinary(doc.blobKey, 'auto')
     }
     await prisma.eventDocument.delete({ where: { id: docId } })
+
+    await auditService.log(tenantId, req.user!.userId, 'EventDocument', docId, 'DELETE', {
+      documentType: doc.documentType,
+      fileName: doc.fileName,
+    }, null, req?.ip)
+
     res.json({ success: true })
   } catch (err) {
     next(err)
@@ -78,6 +92,13 @@ export async function uploadClientDocument(req: Request, res: Response, next: Ne
         uploadedById: userId,
       },
     })
+
+    await auditService.log(tenantId, userId, 'ClientDocument', doc.id, 'CREATE', null, {
+      documentType,
+      fileName: doc.fileName,
+      fileSize: req.file.size,
+    }, req?.ip)
+
     res.status(201).json({ success: true, data: doc })
   } catch (err) {
     next(err)
@@ -99,6 +120,12 @@ export async function deleteClientDocument(req: Request, res: Response, next: Ne
       await deleteFromCloudinary(doc.blobKey, 'auto')
     }
     await prisma.clientDocument.delete({ where: { id: docId } })
+
+    await auditService.log(tenantId, req.user!.userId, 'ClientDocument', docId, 'DELETE', {
+      documentType: doc.documentType,
+      fileName: doc.fileName,
+    }, null, req?.ip)
+
     res.json({ success: true })
   } catch (err) {
     next(err)
@@ -129,6 +156,13 @@ export async function uploadOrderDocument(req: Request, res: Response, next: Nex
         uploadedById: userId,
       },
     })
+
+    await auditService.log(tenantId, userId, 'OrderDocument', doc.id, 'CREATE', null, {
+      documentType,
+      fileName: doc.fileName,
+      fileSize: req.file.size,
+    }, req?.ip)
+
     res.status(201).json({ success: true, data: doc })
   } catch (err) {
     next(err)
@@ -150,6 +184,12 @@ export async function deleteOrderDocument(req: Request, res: Response, next: Nex
       await deleteFromCloudinary(doc.blobKey, 'auto')
     }
     await prisma.orderDocument.delete({ where: { id: docId } })
+
+    await auditService.log(tenantId, req.user!.userId, 'OrderDocument', docId, 'DELETE', {
+      documentType: doc.documentType,
+      fileName: doc.fileName,
+    }, null, req?.ip)
+
     res.json({ success: true })
   } catch (err) {
     next(err)
