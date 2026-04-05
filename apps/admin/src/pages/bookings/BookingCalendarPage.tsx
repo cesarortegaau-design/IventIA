@@ -167,14 +167,15 @@ function BookingDetailModal({
                 </div>
               </Col>
             )}
-            {booking.laneCount > 1 && (
+            {booking.overlapCount > 1 && (
               <Col span={12}>
                 <div style={{ background: '#fff7e6', border: '1px solid #ffd591', borderRadius: 8, padding: 12 }}>
                   <Text type="secondary" style={{ fontSize: 11 }}>Posición en lista de espera</Text>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                    <Text strong style={{ fontSize: 20, color: '#d46b08' }}>{booking.lane + 1}</Text>
-                    <Text type="secondary" style={{ fontSize: 12 }}>de {booking.laneCount} reservas solapadas</Text>
+                    <Text strong style={{ fontSize: 20, color: '#d46b08' }}>{booking.overlapRank}</Text>
+                    <Text type="secondary" style={{ fontSize: 12 }}>de {booking.overlapCount} reservas solapadas</Text>
                   </div>
+                  <Text type="secondary" style={{ fontSize: 11 }}>Ordenado por fecha de creación</Text>
                 </div>
               </Col>
             )}
@@ -248,6 +249,18 @@ function BookingDetailModal({
                 </div>
               </Col>
             )}
+            {booking.overlapCount > 1 && (
+              <Col span={12}>
+                <div style={{ background: '#fff7e6', border: '1px solid #ffd591', borderRadius: 8, padding: 12 }}>
+                  <Text type="secondary" style={{ fontSize: 11 }}>Posición en lista de espera</Text>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                    <Text strong style={{ fontSize: 20, color: '#d46b08' }}>{booking.overlapRank}</Text>
+                    <Text type="secondary" style={{ fontSize: 12 }}>de {booking.overlapCount} reservas solapadas</Text>
+                  </div>
+                  <Text type="secondary" style={{ fontSize: 11 }}>Ordenado por fecha de creación</Text>
+                </div>
+              </Col>
+            )}
           </Row>
           <Button type="primary" style={{ background: NAVY, borderColor: NAVY }}
             onClick={() => { onNavigate(`/ordenes/${booking.order?.id}`); onClose() }}>
@@ -282,11 +295,11 @@ function BookingTooltip({ b, resourceName }: { b: any; resourceName: string }) {
             )}
             <span style={{ opacity: 0.65 }}>Estatus</span>   <span>{EVENT_STATUS_LABEL[b.event?.status] ?? b.event?.status}</span>
           </div>
-          {b.laneCount > 1 && (
+          {b.overlapCount > 1 && (
             <div style={{ marginTop: 5, display: 'inline-flex', alignItems: 'center', gap: 4,
               background: 'rgba(255,255,255,0.15)', borderRadius: 8, padding: '2px 7px', fontSize: 11 }}>
-              <span style={{ opacity: 0.7 }}>Posición en cola:</span>
-              <span style={{ fontWeight: 700, color: '#ffd666' }}>{b.lane + 1} de {b.laneCount}</span>
+              <span style={{ opacity: 0.7 }}>Lista de espera:</span>
+              <span style={{ fontWeight: 700, color: '#ffd666' }}>#{b.overlapRank} de {b.overlapCount}</span>
             </div>
           )}
           <div style={{ marginTop: 6, color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>Clic para ver detalle</div>
@@ -300,11 +313,11 @@ function BookingTooltip({ b, resourceName }: { b: any; resourceName: string }) {
             <span style={{ opacity: 0.65 }}>Fechas</span>   <span>{dayjs(b.startTime).format('DD MMM')} → {dayjs(b.endTime).format('DD MMM YYYY')}</span>
             <span style={{ opacity: 0.65 }}>Total</span>    <span style={{ fontWeight: 600 }}>{fmt(b.order?.total ?? 0)}</span>
           </div>
-          {b.laneCount > 1 && (
+          {b.overlapCount > 1 && (
             <div style={{ marginTop: 5, display: 'inline-flex', alignItems: 'center', gap: 4,
               background: 'rgba(255,255,255,0.15)', borderRadius: 8, padding: '2px 7px', fontSize: 11 }}>
-              <span style={{ opacity: 0.7 }}>Posición en cola:</span>
-              <span style={{ fontWeight: 700, color: '#ffd666' }}>{b.lane + 1} de {b.laneCount}</span>
+              <span style={{ opacity: 0.7 }}>Lista de espera:</span>
+              <span style={{ fontWeight: 700, color: '#ffd666' }}>#{b.overlapRank} de {b.overlapCount}</span>
             </div>
           )}
           <div style={{ marginTop: 6, color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>Clic para ver detalle</div>
@@ -683,9 +696,9 @@ export default function BookingCalendarPage() {
     return { left, width, background, borderColor, borderStyle, textColor, label }
   }
 
-  const openDetailModal = (b: any, rName: string, laneCount: number) => {
+  const openDetailModal = (b: any, rName: string) => {
     if (selectionMode) return
-    setSelectedBooking({ ...b, laneCount })
+    setSelectedBooking(b)
     setSelectedResource(rName)
     setDetailModalOpen(true)
   }
@@ -1116,7 +1129,7 @@ export default function BookingCalendarPage() {
                             }}
                             onMouseEnter={e => { if (!selectionMode) (e.currentTarget.style.filter = 'brightness(0.93)') }}
                             onMouseLeave={e => { if (!selectionMode) (e.currentTarget.style.filter = '') }}
-                            onClick={() => openDetailModal(b, resource.name, resource.laneCount)}
+                            onClick={() => openDetailModal(b, resource.name)}
                           >
                             <Text style={{
                               fontSize: 11, fontWeight: 600, color: textColor,
@@ -1124,14 +1137,14 @@ export default function BookingCalendarPage() {
                             }}>
                               {label}
                             </Text>
-                            {resource.laneCount > 1 && (
+                            {b.overlapCount > 1 && (
                               <span style={{
                                 flexShrink: 0, marginLeft: 4,
                                 background: borderColor, color: '#fff',
                                 borderRadius: 10, fontSize: 9, fontWeight: 700,
                                 padding: '1px 5px', lineHeight: '14px', opacity: 0.9,
                               }}>
-                                {b.lane + 1}/{resource.laneCount}
+                                #{b.overlapRank}/{b.overlapCount}
                               </span>
                             )}
                           </div>

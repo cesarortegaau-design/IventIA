@@ -68,6 +68,7 @@ export async function getBookingCalendar(req: Request, res: Response, next: Next
         },
         resource: { select: { id: true, code: true, name: true, type: true } },
       },
+      orderBy: { createdAt: 'asc' },
     })
 
     // ── 2. Orders with line items (secondary source) ─────────────────────────
@@ -129,7 +130,10 @@ export async function getBookingCalendar(req: Request, res: Response, next: Next
       phase?: string
       startTime: Date
       endTime: Date
+      createdAt: Date
       lane: number
+      overlapRank: number
+      overlapCount: number
       notes?: string | null
       event?: any
       order?: any
@@ -137,7 +141,7 @@ export async function getBookingCalendar(req: Request, res: Response, next: Next
       ordersTotal?: number
     }
 
-    const rawBookings: Omit<Booking, 'lane'>[] = []
+    const rawBookings: Omit<Booking, 'lane' | 'overlapRank' | 'overlapCount'>[] = []
 
     // From EventSpaces
     for (const es of eventSpaces) {
@@ -154,6 +158,7 @@ export async function getBookingCalendar(req: Request, res: Response, next: Next
         phase:      es.phase,
         startTime:  es.startTime,
         endTime:    es.endTime,
+        createdAt:  es.createdAt,
         notes:      es.notes,
         event: {
           id:     es.event.id,
@@ -186,6 +191,7 @@ export async function getBookingCalendar(req: Request, res: Response, next: Next
           type:       'ORDER',
           startTime:  new Date(startTime),
           endTime:    new Date(endTime),
+          createdAt:  o.createdAt,
           order: {
             id:          o.id,
             orderNumber: o.orderNumber,
@@ -198,7 +204,7 @@ export async function getBookingCalendar(req: Request, res: Response, next: Next
       }
     }
 
-    // ── 5. Assign lanes per resource ─────────────────────────────────────────
+    // ── 5. Assign lanes + overlap rank per resource ──────────────────────────
     const bookingsByResource = new Map<string, typeof rawBookings>()
     for (const b of rawBookings) {
       if (!bookingsByResource.has(b.resourceId)) bookingsByResource.set(b.resourceId, [])
@@ -207,18 +213,37 @@ export async function getBookingCalendar(req: Request, res: Response, next: Next
 
     const laneCountByResource: Record<string, number> = {}
     const allLanes: Record<string, number> = {}
+    // overlapRank: 1-based position within the set of bookings that overlap with
+    // this booking on the same resource, sorted chronologically by createdAt.
+    const allOverlapRanks:  Record<string, number> = {}
+    const allOverlapCounts: Record<string, number> = {}
 
     for (const [rId, bList] of bookingsByResource.entries()) {
+      // Visual lanes (unchanged rendering logic)
       const { lanes, laneCount } = assignLanes(
         bList.map(b => ({ id: b.id, startTime: b.startTime, endTime: b.endTime }))
       )
       Object.assign(allLanes, lanes)
       laneCountByResource[rId] = laneCount
+
+      // Waitlist rank: for each booking, find all bookings it overlaps with
+      // (including itself), sort by createdAt, assign 1-based position.
+      for (const b of bList) {
+        const overlapping = bList
+          .filter(other => b.startTime < other.endTime && other.startTime < b.endTime)
+          .sort((x, y) => x.createdAt.getTime() - y.createdAt.getTime())
+
+        const rank = overlapping.findIndex(o => o.id === b.id) + 1
+        allOverlapRanks[b.id]  = rank
+        allOverlapCounts[b.id] = overlapping.length
+      }
     }
 
     const bookings: Booking[] = rawBookings.map(b => ({
       ...b,
-      lane: allLanes[b.id] ?? 0,
+      lane:         allLanes[b.id] ?? 0,
+      overlapRank:  allOverlapRanks[b.id]  ?? 1,
+      overlapCount: allOverlapCounts[b.id] ?? 1,
       startTime: b.startTime,
       endTime:   b.endTime,
     }))
