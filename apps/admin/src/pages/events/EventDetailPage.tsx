@@ -1,17 +1,18 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Row, Col, Tag, Button, Descriptions, Table, Space, Statistic,
   Tabs, App, Select, Typography, Divider, InputNumber, Form, DatePicker, Modal, Switch, Badge,
-  Tooltip, Popconfirm, Input, Upload,
+  Tooltip, Popconfirm, Input, Upload, Timeline, Spin, Alert,
 } from 'antd'
-import { EditOutlined, PlusOutlined, ArrowLeftOutlined, CopyOutlined, StopOutlined, GlobalOutlined, DownloadOutlined, DeleteOutlined, CalendarOutlined, FileOutlined, UploadOutlined } from '@ant-design/icons'
+import { EditOutlined, PlusOutlined, ArrowLeftOutlined, CopyOutlined, StopOutlined, GlobalOutlined, DownloadOutlined, DeleteOutlined, CalendarOutlined, FileOutlined, UploadOutlined, AuditOutlined, WarningOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { eventsApi } from '../../api/events'
 import { portalCodesApi } from '../../api/portalCodes'
 import { eventSpacesApi } from '../../api/eventSpaces'
 import { resourcesApi } from '../../api/resources'
+import { bookingsApi } from '../../api/bookings'
 import { exportToCsv } from '../../utils/exportCsv'
 
 const { Title, Text } = Typography
@@ -40,6 +41,7 @@ export default function EventDetailPage() {
   const [editingSpace, setEditingSpace] = useState<any>(null)
   const [spaceForm] = Form.useForm()
   const [docUploading, setDocUploading] = useState(false)
+  const [auditSpace, setAuditSpace] = useState<any>(null)
 
   const deleteDocMutation = useMutation({
     mutationFn: (docId: string) => eventsApi.deleteDocument(id!, docId),
@@ -107,6 +109,60 @@ export default function EventDetailPage() {
     enabled: !!id,
   })
   const spaces = spacesData?.data ?? []
+
+  // Audit log for a selected space
+  const { data: auditData, isLoading: auditLoading } = useQuery({
+    queryKey: ['event-space-audit', id, auditSpace?.id],
+    queryFn: () => eventSpacesApi.audit(id!, auditSpace!.id),
+    enabled: !!auditSpace,
+  })
+
+  // Detect overlaps: query booking calendar across all events for the spaces' date range
+  const spaceDateFrom = useMemo(() => {
+    if (!spaces.length) return null
+    return spaces.reduce((min: dayjs.Dayjs, s: any) =>
+      dayjs(s.startTime).isBefore(min) ? dayjs(s.startTime) : min, dayjs(spaces[0].startTime))
+  }, [spaces])
+  const spaceDateTo = useMemo(() => {
+    if (!spaces.length) return null
+    return spaces.reduce((max: dayjs.Dayjs, s: any) =>
+      dayjs(s.endTime).isAfter(max) ? dayjs(s.endTime) : max, dayjs(spaces[0].endTime))
+  }, [spaces])
+
+  const { data: calendarData } = useQuery({
+    queryKey: ['bookings-overlap', spaceDateFrom?.toISOString(), spaceDateTo?.toISOString()],
+    queryFn: () => bookingsApi.calendar({
+      dateFrom: spaceDateFrom!.format('YYYY-MM-DD'),
+      dateTo: spaceDateTo!.format('YYYY-MM-DD'),
+    }),
+    enabled: !!spaceDateFrom && !!spaceDateTo,
+  })
+
+  // Map spaceId → conflicting events (from OTHER events on the same resource)
+  const overlapMap = useMemo(() => {
+    const map: Record<string, { count: number; events: string[] }> = {}
+    if (!calendarData?.data) return map
+    const allBookings: any[] = calendarData.data.bookings ?? []
+    for (const space of spaces) {
+      const spaceStart = new Date(space.startTime)
+      const spaceEnd = new Date(space.endTime)
+      const conflicting = allBookings.filter(b =>
+        b.resourceId === space.resourceId &&
+        b.id !== space.id &&
+        new Date(b.startTime) < spaceEnd &&
+        new Date(b.endTime) > spaceStart
+      )
+      if (conflicting.length > 0) {
+        map[space.id] = {
+          count: conflicting.length,
+          events: conflicting.map((b: any) =>
+            b.event ? `${b.event.code} – ${b.event.name}` : `OS ${b.order?.orderNumber ?? ''}`
+          ),
+        }
+      }
+    }
+    return map
+  }, [calendarData, spaces])
 
   const { data: resourcesData } = useQuery({
     queryKey: ['resources-all'],
@@ -288,10 +344,35 @@ export default function EventDetailPage() {
                           : '—',
                       },
                       {
+                        title: 'Conflictos',
+                        key: 'conflicts',
+                        render: (_: any, r: any) => {
+                          const overlap = overlapMap[r.id]
+                          if (!overlap) return <Tag color="green">Sin conflictos</Tag>
+                          return (
+                            <Tooltip
+                              title={
+                                <div>
+                                  <div style={{ marginBottom: 4 }}>Solapamiento con:</div>
+                                  {overlap.events.map((e, i) => <div key={i}>• {e}</div>)}
+                                </div>
+                              }
+                            >
+                              <Tag color="red" icon={<WarningOutlined />}>
+                                {overlap.count} conflicto{overlap.count > 1 ? 's' : ''}
+                              </Tag>
+                            </Tooltip>
+                          )
+                        },
+                      },
+                      {
                         title: '',
                         key: 'actions',
                         render: (_: any, r: any) => (
                           <Space>
+                            <Tooltip title="Auditoría">
+                              <Button size="small" icon={<AuditOutlined />} onClick={() => setAuditSpace(r)} />
+                            </Tooltip>
                             <Button size="small" icon={<EditOutlined />} onClick={() => openSpaceModal(r)} />
                             <Popconfirm
                               title="¿Eliminar esta reserva?"
@@ -305,6 +386,64 @@ export default function EventDetailPage() {
                       },
                     ]}
                   />
+
+                  <Modal
+                    title={`Auditoría – ${auditSpace?.resource?.name ?? ''}`}
+                    open={!!auditSpace}
+                    onCancel={() => setAuditSpace(null)}
+                    footer={<Button onClick={() => setAuditSpace(null)}>Cerrar</Button>}
+                    width={560}
+                  >
+                    {auditLoading ? (
+                      <div style={{ textAlign: 'center', padding: 32 }}><Spin /></div>
+                    ) : (
+                      <Timeline
+                        style={{ marginTop: 16 }}
+                        items={(auditData?.data ?? []).map((log: any) => ({
+                          color: log.action === 'CREATE' ? 'green' : log.action === 'DELETE' ? 'red' : 'blue',
+                          children: (
+                            <div>
+                              <div style={{ fontWeight: 600 }}>
+                                {log.action === 'CREATE' ? 'Creado' : log.action === 'DELETE' ? 'Eliminado' : 'Modificado'}
+                                {' · '}
+                                <span style={{ fontWeight: 400, color: '#64748b', fontSize: 12 }}>
+                                  {dayjs(log.createdAt).format('DD/MM/YYYY HH:mm')}
+                                  {' · '}
+                                  {log.user ? `${log.user.firstName} ${log.user.lastName}` : 'Sistema'}
+                                </span>
+                              </div>
+                              {log.action === 'UPDATE' && log.oldValues && log.newValues && (
+                                <div style={{ fontSize: 12, color: '#475569', marginTop: 4 }}>
+                                  {Object.keys(log.newValues as Record<string, any>)
+                                    .filter(k => (log.oldValues as any)[k] !== (log.newValues as any)[k])
+                                    .map(k => (
+                                      <div key={k}>
+                                        <span style={{ textTransform: 'capitalize' }}>{k}</span>:{' '}
+                                        <span style={{ textDecoration: 'line-through', color: '#94a3b8' }}>{String((log.oldValues as any)[k])}</span>
+                                        {' → '}
+                                        <span>{String((log.newValues as any)[k])}</span>
+                                      </div>
+                                    ))}
+                                </div>
+                              )}
+                              {log.action === 'CREATE' && log.newValues && (
+                                <div style={{ fontSize: 12, color: '#475569', marginTop: 4 }}>
+                                  {Object.entries(log.newValues as Record<string, any>)
+                                    .filter(([, v]) => v !== null && v !== '')
+                                    .map(([k, v]) => (
+                                      <div key={k}><span style={{ textTransform: 'capitalize' }}>{k}</span>: {String(v)}</div>
+                                    ))}
+                                </div>
+                              )}
+                            </div>
+                          ),
+                        }))}
+                      />
+                    )}
+                    {!auditLoading && (auditData?.data ?? []).length === 0 && (
+                      <Alert type="info" message="Sin registros de auditoría" />
+                    )}
+                  </Modal>
 
                   <Modal
                     title={editingSpace ? 'Editar reserva de espacio' : 'Agregar reserva de espacio'}

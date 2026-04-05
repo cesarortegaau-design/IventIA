@@ -1141,8 +1141,8 @@ export default function BookingCalendarPage() {
                               <span style={{
                                 flexShrink: 0, marginLeft: 4,
                                 background: borderColor, color: '#fff',
-                                borderRadius: 10, fontSize: 9, fontWeight: 700,
-                                padding: '1px 5px', lineHeight: '14px', opacity: 0.9,
+                                borderRadius: 10, fontSize: 13, fontWeight: 800,
+                                padding: '1px 7px', lineHeight: '18px', opacity: 0.95,
                               }}>
                                 #{b.overlapRank}/{b.overlapCount}
                               </span>

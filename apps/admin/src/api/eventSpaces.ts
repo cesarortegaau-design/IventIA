@@ -9,4 +9,6 @@ export const eventSpacesApi = {
     apiClient.put(`/events/${eventId}/spaces/${spaceId}`, data).then(r => r.data),
   remove: (eventId: string, spaceId: string) =>
     apiClient.delete(`/events/${eventId}/spaces/${spaceId}`).then(r => r.data),
+  audit: (eventId: string, spaceId: string) =>
+    apiClient.get(`/events/${eventId}/spaces/${spaceId}/audit`).then(r => r.data),
 }

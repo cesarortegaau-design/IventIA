@@ -3,7 +3,7 @@ import multer from 'multer'
 import { authenticate } from '../middleware/authenticate'
 import { listEvents, getEvent, createEvent, updateEvent, updateEventStatus } from '../controllers/events.controller'
 import { listOrdersForEvent, createOrder } from '../controllers/orders.controller'
-import { listEventSpaces, createEventSpace, updateEventSpace, deleteEventSpace } from '../controllers/eventSpaces.controller'
+import { listEventSpaces, createEventSpace, updateEventSpace, deleteEventSpace, getEventSpaceAudit } from '../controllers/eventSpaces.controller'
 import { uploadEventDocument, deleteEventDocument } from '../controllers/documents.controller'
 
 const docUpload = multer({
@@ -30,6 +30,7 @@ router.get('/:eventId/spaces', listEventSpaces)
 router.post('/:eventId/spaces', createEventSpace)
 router.put('/:eventId/spaces/:spaceId', updateEventSpace)
 router.delete('/:eventId/spaces/:spaceId', deleteEventSpace)
+router.get('/:eventId/spaces/:spaceId/audit', getEventSpaceAudit)
 
 // Documents
 router.post('/:id/documents', docUpload.single('file'), uploadEventDocument)
