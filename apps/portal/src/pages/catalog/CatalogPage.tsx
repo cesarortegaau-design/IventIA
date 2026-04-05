@@ -76,6 +76,7 @@ function ProductCard({ item, cartQty, onAdd, onRemove, onClick }: {
           <img
             src={img}
             alt={item.resource.name}
+            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
             style={{
               position: 'absolute', inset: 0, width: '100%', height: '100%',
               objectFit: 'cover',
@@ -402,7 +403,7 @@ function CartDrawer({ open, cart, onClose, onQtyChange, onRemove, onSubmit, subm
                 background: '#f8f6ff', overflow: 'hidden',
               }}>
                 {item.image ? (
-                  <img src={item.image} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <img src={item.image} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
                   <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center',
                     justifyContent: 'center', fontSize: 22 }}>

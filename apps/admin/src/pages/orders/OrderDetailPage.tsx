@@ -3,9 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Descriptions, Table, Tag, Button, Space, Timeline, Form,
-  Input, InputNumber, Select, DatePicker, Modal, App, Typography, Row, Col, Statistic
+  Input, InputNumber, Select, DatePicker, Modal, App, Typography, Row, Col, Statistic, Upload, List, Avatar, Popconfirm
 } from 'antd'
-import { ArrowLeftOutlined, DollarOutlined, FilePdfOutlined, DownloadOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, DollarOutlined, FilePdfOutlined, DownloadOutlined, FileOutlined, UploadOutlined, DeleteOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { ordersApi } from '../../api/orders'
 import { exportToCsv } from '../../utils/exportCsv'
@@ -41,6 +41,27 @@ export default function OrderDetailPage() {
   const [paymentForm] = Form.useForm()
   const [paymentModalOpen, setPaymentModalOpen] = useState(false)
   const [pdfLoading, setPdfLoading] = useState(false)
+  const [docUploading, setDocUploading] = useState(false)
+
+  const deleteDocMutation = useMutation({
+    mutationFn: (docId: string) => ordersApi.deleteDocument(id!, docId),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['order', id] }); message.success('Documento eliminado') },
+    onError: () => message.error('Error al eliminar documento'),
+  })
+
+  async function handleDocUpload(file: File) {
+    setDocUploading(true)
+    try {
+      await ordersApi.uploadDocument(id!, file, 'GENERAL')
+      queryClient.invalidateQueries({ queryKey: ['order', id] })
+      message.success('Documento subido')
+    } catch {
+      message.error('Error al subir documento')
+    } finally {
+      setDocUploading(false)
+    }
+    return false
+  }
 
   const downloadPdf = async () => {
     if (!order) return
@@ -220,6 +241,41 @@ export default function OrderDetailPage() {
           scroll={{ x: 'max-content' }}
           style={{ marginBottom: 24 }}
         />
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <Title level={5} style={{ margin: 0 }}>Documentos ({order.documents?.length ?? 0})</Title>
+          <Upload beforeUpload={handleDocUpload} showUploadList={false}>
+            <Button size="small" icon={<UploadOutlined />} loading={docUploading}>Subir</Button>
+          </Upload>
+        </div>
+        {(order.documents ?? []).length > 0 && (
+          <List
+            size="small"
+            dataSource={order.documents}
+            style={{ marginBottom: 24 }}
+            renderItem={(doc: any) => (
+              <List.Item
+                actions={[
+                  doc.blobKey && (
+                    <Button key="dl" size="small" icon={<DownloadOutlined />} href={doc.blobKey} target="_blank" rel="noopener noreferrer" />
+                  ),
+                  <Popconfirm key="del" title="¿Eliminar documento?" onConfirm={() => deleteDocMutation.mutate(doc.id)}>
+                    <Button size="small" danger icon={<DeleteOutlined />} loading={deleteDocMutation.isPending} />
+                  </Popconfirm>,
+                ].filter(Boolean)}
+              >
+                <List.Item.Meta
+                  avatar={<Avatar size="small" icon={<FileOutlined />} />}
+                  title={doc.fileName}
+                  description={<Text type="secondary" style={{ fontSize: 12 }}>{doc.documentType}</Text>}
+                />
+              </List.Item>
+            )}
+          />
+        )}
+        {(order.documents ?? []).length === 0 && (
+          <Text type="secondary" style={{ display: 'block', marginBottom: 24 }}>Sin documentos adjuntos</Text>
+        )}
 
         <Title level={5}>Historial de Estatus</Title>
         <Timeline

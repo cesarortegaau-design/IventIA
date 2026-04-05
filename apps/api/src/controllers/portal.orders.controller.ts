@@ -38,7 +38,7 @@ export async function portalListOrders(req: Request, res: Response, next: NextFu
           orderBy: { sortOrder: 'asc' },
         },
         payments: true,
-        documents: true,
+        documents: { select: { id: true, documentType: true, fileName: true, blobKey: true, createdAt: true } },
         statusHistory: { orderBy: { createdAt: 'desc' }, take: 5 },
       },
       orderBy: { createdAt: 'desc' },
@@ -70,7 +70,7 @@ export async function portalGetOrder(req: Request, res: Response, next: NextFunc
           orderBy: { sortOrder: 'asc' },
         },
         payments: true,
-        documents: { select: { id: true, documentType: true, fileName: true, createdAt: true } },
+        documents: { select: { id: true, documentType: true, fileName: true, blobKey: true, createdAt: true } },
         statusHistory: { orderBy: { createdAt: 'desc' } },
       },
     })

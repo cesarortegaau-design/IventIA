@@ -114,10 +114,23 @@ export default function OrderDetailPage() {
       {(order.documents ?? []).length > 0 && (
         <Card title="Documentos" style={{ marginBottom: 16 }}>
           {order.documents.map((doc: any) => (
-            <Space key={doc.id} style={{ marginBottom: 8 }}>
-              <FileOutlined />
-              <Text>{doc.fileName}</Text>
-              <Tag>{doc.documentType}</Tag>
+            <Space key={doc.id} style={{ marginBottom: 8, width: '100%', justifyContent: 'space-between' }}>
+              <Space>
+                <FileOutlined />
+                <Text>{doc.fileName}</Text>
+                <Tag>{doc.documentType}</Tag>
+              </Space>
+              {doc.blobKey && (
+                <Button
+                  size="small"
+                  icon={<DownloadOutlined />}
+                  href={doc.blobKey}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Descargar
+                </Button>
+              )}
             </Space>
           ))}
         </Card>

@@ -9,4 +9,12 @@ export const ordersApi = {
     apiClient.patch(`/orders/${id}/status`, { status, notes }).then(r => r.data),
   addPayment: (id: string, data: any) =>
     apiClient.post(`/orders/${id}/payments`, data).then(r => r.data),
+  uploadDocument: (id: string, file: File, documentType: string) => {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('documentType', documentType)
+    return apiClient.post(`/orders/${id}/documents`, form, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data)
+  },
+  deleteDocument: (id: string, docId: string) =>
+    apiClient.delete(`/orders/${id}/documents/${docId}`).then(r => r.data),
 }

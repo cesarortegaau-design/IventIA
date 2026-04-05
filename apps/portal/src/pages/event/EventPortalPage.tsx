@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import {
   Card, Typography, Tag, Descriptions, Button, Row, Col, Table, Space, Skeleton, Tabs
 } from 'antd'
-import { ShoppingCartOutlined, ArrowLeftOutlined, FileOutlined, AppstoreOutlined } from '@ant-design/icons'
+import { ShoppingCartOutlined, ArrowLeftOutlined, FileOutlined, AppstoreOutlined, DownloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { eventsApi } from '../../api/events'
 
@@ -135,12 +135,25 @@ export default function EventPortalPage() {
                   event.documents.map((doc: any) => (
                     <Col xs={24} sm={12} md={8} key={doc.id}>
                       <Card size="small">
-                        <Space>
-                          <FileOutlined />
-                          <div>
-                            <div>{doc.fileName}</div>
-                            <Text type="secondary" style={{ fontSize: 12 }}>{doc.documentType}</Text>
-                          </div>
+                        <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                          <Space>
+                            <FileOutlined />
+                            <div>
+                              <div>{doc.fileName}</div>
+                              <Text type="secondary" style={{ fontSize: 12 }}>{doc.documentType}</Text>
+                            </div>
+                          </Space>
+                          {doc.blobKey && (
+                            <Button
+                              size="small"
+                              icon={<DownloadOutlined />}
+                              href={doc.blobKey}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              Descargar
+                            </Button>
+                          )}
                         </Space>
                       </Card>
                     </Col>

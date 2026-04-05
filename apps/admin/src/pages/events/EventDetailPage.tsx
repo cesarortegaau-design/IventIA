@@ -4,9 +4,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Row, Col, Tag, Button, Descriptions, Table, Space, Statistic,
   Tabs, App, Select, Typography, Divider, InputNumber, Form, DatePicker, Modal, Switch, Badge,
-  Tooltip, Popconfirm, Input,
+  Tooltip, Popconfirm, Input, Upload,
 } from 'antd'
-import { EditOutlined, PlusOutlined, ArrowLeftOutlined, CopyOutlined, StopOutlined, GlobalOutlined, DownloadOutlined, DeleteOutlined, CalendarOutlined } from '@ant-design/icons'
+import { EditOutlined, PlusOutlined, ArrowLeftOutlined, CopyOutlined, StopOutlined, GlobalOutlined, DownloadOutlined, DeleteOutlined, CalendarOutlined, FileOutlined, UploadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { eventsApi } from '../../api/events'
 import { portalCodesApi } from '../../api/portalCodes'
@@ -39,6 +39,27 @@ export default function EventDetailPage() {
   const [spaceModalOpen, setSpaceModalOpen] = useState(false)
   const [editingSpace, setEditingSpace] = useState<any>(null)
   const [spaceForm] = Form.useForm()
+  const [docUploading, setDocUploading] = useState(false)
+
+  const deleteDocMutation = useMutation({
+    mutationFn: (docId: string) => eventsApi.deleteDocument(id!, docId),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['event', id] }); message.success('Documento eliminado') },
+    onError: () => message.error('Error al eliminar documento'),
+  })
+
+  async function handleDocUpload(file: File) {
+    setDocUploading(true)
+    try {
+      await eventsApi.uploadDocument(id!, file, 'GENERAL')
+      queryClient.invalidateQueries({ queryKey: ['event', id] })
+      message.success('Documento subido')
+    } catch {
+      message.error('Error al subir documento')
+    } finally {
+      setDocUploading(false)
+    }
+    return false
+  }
 
   const { data, isLoading } = useQuery({
     queryKey: ['event', id],
@@ -425,6 +446,54 @@ export default function EventDetailPage() {
                       { title: 'Órdenes', render: (_: any, r: any) => r._count?.orders ?? 0 },
                     ]}
                   />
+                </>
+              ),
+            },
+            {
+              key: 'documents',
+              label: `Documentos (${event.documents?.length ?? 0})`,
+              children: (
+                <>
+                  <div style={{ marginBottom: 12 }}>
+                    <Upload beforeUpload={handleDocUpload} showUploadList={false}>
+                      <Button icon={<UploadOutlined />} loading={docUploading}>Subir documento</Button>
+                    </Upload>
+                  </div>
+                  {(event.documents ?? []).length === 0 ? (
+                    <Text type="secondary">Sin documentos adjuntos</Text>
+                  ) : (
+                    <Row gutter={[12, 12]}>
+                      {event.documents.map((doc: any) => (
+                        <Col xs={24} sm={12} md={8} key={doc.id}>
+                          <Card size="small">
+                            <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                              <Space>
+                                <FileOutlined />
+                                <div>
+                                  <div style={{ fontSize: 13 }}>{doc.fileName}</div>
+                                  <Text type="secondary" style={{ fontSize: 11 }}>{doc.documentType}</Text>
+                                </div>
+                              </Space>
+                              <Space>
+                                {doc.blobKey && (
+                                  <Button
+                                    size="small"
+                                    icon={<DownloadOutlined />}
+                                    href={doc.blobKey}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  />
+                                )}
+                                <Popconfirm title="¿Eliminar documento?" onConfirm={() => deleteDocMutation.mutate(doc.id)}>
+                                  <Button size="small" danger icon={<DeleteOutlined />} loading={deleteDocMutation.isPending} />
+                                </Popconfirm>
+                              </Space>
+                            </Space>
+                          </Card>
+                        </Col>
+                      ))}
+                    </Row>
+                  )}
                 </>
               ),
             },

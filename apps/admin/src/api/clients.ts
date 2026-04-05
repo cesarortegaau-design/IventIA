@@ -15,4 +15,12 @@ export const clientsApi = {
     apiClient.get('/clients/portal-users').then(r => r.data.data),
   linkPortalUser: (id: string, portalUserId: string | null) =>
     apiClient.patch(`/clients/${id}/link-portal-user`, { portalUserId }).then(r => r.data),
+  uploadDocument: (id: string, file: File, documentType: string) => {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('documentType', documentType)
+    return apiClient.post(`/clients/${id}/documents`, form, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data)
+  },
+  deleteDocument: (id: string, docId: string) =>
+    apiClient.delete(`/clients/${id}/documents/${docId}`).then(r => r.data),
 }

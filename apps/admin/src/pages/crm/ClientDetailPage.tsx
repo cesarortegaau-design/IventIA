@@ -4,14 +4,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Row, Col, Typography, Tag, Button, Tabs, Timeline, List, Avatar,
   Form, Input, Select, DatePicker, Modal, Popconfirm, Badge, Empty, Spin,
-  Space, Tooltip, Divider, Table, App,
+  Space, Tooltip, Divider, Table, App, Upload,
 } from 'antd'
 import {
   ArrowLeftOutlined, PhoneOutlined, MailOutlined, MessageOutlined,
   TeamOutlined, FileTextOutlined, PlusOutlined, CheckOutlined,
   DeleteOutlined, EditOutlined, UserOutlined, CalendarOutlined,
   ShoppingCartOutlined, ClockCircleOutlined, LinkOutlined, DisconnectOutlined,
-  DownloadOutlined,
+  DownloadOutlined, FileOutlined, UploadOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { crmApi } from '../../api/crm'
@@ -132,6 +132,28 @@ export default function ClientDetailPage() {
       message.error(msg)
     },
   })
+
+  const [docUploading, setDocUploading] = useState(false)
+
+  const deleteDocMutation = useMutation({
+    mutationFn: (docId: string) => clientsApi.deleteDocument(clientId!, docId),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['client-summary', clientId] }); message.success('Documento eliminado') },
+    onError: () => message.error('Error al eliminar documento'),
+  })
+
+  async function handleDocUpload(file: File) {
+    setDocUploading(true)
+    try {
+      await clientsApi.uploadDocument(clientId!, file, 'GENERAL')
+      qc.invalidateQueries({ queryKey: ['client-summary', clientId] })
+      message.success('Documento subido')
+    } catch {
+      message.error('Error al subir documento')
+    } finally {
+      setDocUploading(false)
+    }
+    return false
+  }
 
   const { data: portalUsersData } = useQuery({
     queryKey: ['portal-users'],
@@ -525,6 +547,44 @@ export default function ClientDetailPage() {
                 </div>
               )
             })(),
+          },
+          {
+            key: 'documents',
+            label: `Documentos (${client.documents?.length ?? 0})`,
+            children: (
+              <>
+                <div style={{ marginBottom: 12 }}>
+                  <Upload beforeUpload={handleDocUpload} showUploadList={false}>
+                    <Button icon={<UploadOutlined />} loading={docUploading}>Subir documento</Button>
+                  </Upload>
+                </div>
+                {(client.documents ?? []).length === 0 ? (
+                  <Empty description="Sin documentos adjuntos" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                ) : (
+                  <List
+                    dataSource={client.documents}
+                    renderItem={(doc: any) => (
+                      <List.Item
+                        actions={[
+                          doc.blobKey && (
+                            <Button key="dl" size="small" icon={<DownloadOutlined />} href={doc.blobKey} target="_blank" rel="noopener noreferrer" />
+                          ),
+                          <Popconfirm key="del" title="¿Eliminar documento?" onConfirm={() => deleteDocMutation.mutate(doc.id)}>
+                            <Button size="small" danger icon={<DeleteOutlined />} loading={deleteDocMutation.isPending} />
+                          </Popconfirm>,
+                        ].filter(Boolean)}
+                      >
+                        <List.Item.Meta
+                          avatar={<Avatar icon={<FileOutlined />} />}
+                          title={doc.fileName}
+                          description={doc.documentType}
+                        />
+                      </List.Item>
+                    )}
+                  />
+                )}
+              </>
+            ),
           },
           {
             key: 'contacts',
