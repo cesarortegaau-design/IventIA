@@ -42,6 +42,10 @@ interface CartItem {
   image: string | null
 }
 
+const TYPE_EMOJIS: Record<string, string> = {
+  SPACE: '🏛️', EQUIPMENT: '🔧', FURNITURE: '🪑', SERVICE: '⚙️', CONSUMABLE: '📦',
+}
+
 // ── Product Card ───────────────────────────────────────────────────────────────
 function ProductCard({ item, cartQty, onAdd, onRemove, onClick }: {
   item: any
@@ -51,7 +55,9 @@ function ProductCard({ item, cartQty, onAdd, onRemove, onClick }: {
   onClick: () => void
 }) {
   const [hovered, setHovered] = useState(false)
+  const [imgFailed, setImgFailed] = useState(false)
   const img = imgSrc(item.resource.imageMain)
+  const showImg = img && !imgFailed
   const price = Number(item.unitPrice)
 
   return (
@@ -64,39 +70,49 @@ function ProductCard({ item, cartQty, onAdd, onRemove, onClick }: {
         borderRadius: 12,
         overflow: 'hidden',
         cursor: 'pointer',
+        display: 'flex',
+        flexDirection: 'column',
         boxShadow: hovered ? '0 8px 32px rgba(0,0,0,0.12)' : '0 2px 8px rgba(0,0,0,0.06)',
         transform: hovered ? 'translateY(-2px)' : 'none',
         transition: 'all 0.2s ease',
         border: cartQty > 0 ? '2px solid #531dab' : '2px solid transparent',
       }}
     >
-      {/* Image area */}
-      <div style={{ position: 'relative', paddingTop: '75%', background: '#f8f6ff', overflow: 'hidden' }}>
-        {img ? (
+      {/* Image area — fixed height, strictly clipped */}
+      <div style={{
+        position: 'relative',
+        height: 160,
+        flexShrink: 0,
+        background: '#f8f6ff',
+        overflow: 'hidden',
+      }}>
+        {showImg && (
           <img
             src={img}
             alt={item.resource.name}
-            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+            onError={() => setImgFailed(true)}
             style={{
-              position: 'absolute', inset: 0, width: '100%', height: '100%',
+              position: 'absolute', inset: 0,
+              width: '100%', height: '100%',
               objectFit: 'cover',
-              transform: hovered ? 'scale(1.04)' : 'scale(1)',
+              transform: hovered ? 'scale(1.05)' : 'scale(1)',
               transition: 'transform 0.3s ease',
             }}
           />
-        ) : (
+        )}
+        {/* Emoji placeholder — always present, visible when no image */}
+        {!showImg && (
           <div style={{
-            position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
-            justifyContent: 'center', fontSize: 36,
+            position: 'absolute', inset: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 42,
           }}>
-            {item.resource.type === 'SPACE' ? '🏛️'
-              : item.resource.type === 'EQUIPMENT' ? '🔧'
-              : item.resource.type === 'FURNITURE' ? '🪑'
-              : item.resource.type === 'SERVICE' ? '⚙️' : '📦'}
+            {TYPE_EMOJIS[item.resource.type] ?? '📦'}
           </div>
         )}
+
         {/* Type badge */}
-        <div style={{ position: 'absolute', top: 8, left: 8 }}>
+        <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 1 }}>
           <span style={{
             background: '#531dab', color: '#fff', borderRadius: 20,
             padding: '2px 10px', fontSize: 11, fontWeight: 600,
@@ -104,10 +120,11 @@ function ProductCard({ item, cartQty, onAdd, onRemove, onClick }: {
             {TYPE_LABELS[item.resource.type] ?? item.resource.type}
           </span>
         </div>
+
         {/* Cart qty badge */}
         {cartQty > 0 && (
           <div style={{
-            position: 'absolute', top: 8, right: 8,
+            position: 'absolute', top: 8, right: 8, zIndex: 1,
             background: '#531dab', color: '#fff', borderRadius: '50%',
             width: 28, height: 28, display: 'flex', alignItems: 'center',
             justifyContent: 'center', fontWeight: 700, fontSize: 13,
@@ -117,19 +134,36 @@ function ProductCard({ item, cartQty, onAdd, onRemove, onClick }: {
         )}
       </div>
 
-      {/* Info area */}
-      <div style={{ padding: '12px 14px 14px' }}>
-        <div style={{ fontWeight: 700, fontSize: 14, color: '#1a1a2e', marginBottom: 2, lineHeight: 1.3 }}>
+      {/* Info area — fills remaining height, flex column */}
+      <div style={{
+        padding: '12px 14px 14px',
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+      }}>
+        {/* Name */}
+        <div style={{
+          fontWeight: 700, fontSize: 14, color: '#1a1a2e',
+          lineHeight: 1.3, marginBottom: 4,
+        }}>
           {item.resource.name}
         </div>
-        {item.resource.portalDesc && (
-          <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8, lineHeight: 1.4,
-            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-            {item.resource.portalDesc}
-          </div>
-        )}
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+        {/* Description — clamped, grows to fill space */}
+        <div style={{ flex: 1, minHeight: 32 }}>
+          {item.resource.portalDesc && (
+            <div style={{
+              fontSize: 12, color: '#64748b', lineHeight: 1.4,
+              display: '-webkit-box', WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical', overflow: 'hidden',
+            }}>
+              {item.resource.portalDesc}
+            </div>
+          )}
+        </div>
+
+        {/* Price + controls — always at bottom */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
           <div>
             <div style={{ fontWeight: 800, fontSize: 16, color: '#531dab' }}>
               ${price.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
@@ -139,7 +173,6 @@ function ProductCard({ item, cartQty, onAdd, onRemove, onClick }: {
             </div>
           </div>
 
-          {/* Add / quantity controls */}
           <div onClick={e => e.stopPropagation()}>
             {cartQty === 0 ? (
               <button
@@ -667,8 +700,9 @@ export default function CatalogPage() {
         ) : (
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
-            gap: 12,
+            gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 200px))',
+            gap: 14,
+            justifyContent: 'center',
           }}>
             {filtered.map(item => (
               <ProductCard
