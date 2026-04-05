@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express'
 import { z } from 'zod'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
+import { auditService } from '../services/audit.service'
 
 function generateCode(length = 8): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -53,6 +54,13 @@ export async function generatePortalCodes(req: Request, res: Response, next: Nex
       orderBy: { createdAt: 'desc' },
     })
 
+    // Audit code generation (as a batch action)
+    await auditService.log(tenantId, req.user!.userId, 'PortalAccessCode', eventId, 'CREATE', null, {
+      codesGenerated: created.count,
+      maxUses,
+      expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+    }, req?.ip)
+
     res.status(201).json({ success: true, data: result, meta: { created: created.count } })
   } catch (err) {
     next(err)
@@ -96,6 +104,12 @@ export async function revokePortalCode(req: Request, res: Response, next: NextFu
       where: { id: codeId },
       data: { isActive: false },
     })
+
+    await auditService.log(tenantId, req.user!.userId, 'PortalAccessCode', codeId, 'UPDATE',
+      { isActive: code.isActive },
+      { isActive: updated.isActive },
+      req?.ip)
+
     res.json({ success: true, data: updated })
   } catch (err) {
     next(err)

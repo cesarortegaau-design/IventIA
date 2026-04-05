@@ -6,6 +6,7 @@ import { prisma } from '../config/database'
 import { env } from '../config/env'
 import { AppError } from '../middleware/errorHandler'
 import { PortalTokenPayload } from '../middleware/portalAuth.middleware'
+import { auditService } from '../services/audit.service'
 
 function signPortalTokens(portalUserId: string, tenantId: string, email: string) {
   const payload: PortalTokenPayload = { portalUserId, tenantId, email, type: 'portal' }
@@ -119,6 +120,14 @@ export async function portalRegister(req: Request, res: Response, next: NextFunc
       }),
     ])
 
+    // Audit portal user creation
+    await auditService.log(portalUser.tenantId, portalUser.id, 'PortalUser', portalUser.id, 'CREATE', null, {
+      email: portalUser.email,
+      firstName: portalUser.firstName,
+      lastName: portalUser.lastName,
+      phone: portalUser.phone,
+    }, req?.ip)
+
     const tokens = signPortalTokens(portalUser.id, portalUser.tenantId, portalUser.email)
     res.status(201).json({
       success: true,
@@ -187,10 +196,21 @@ export async function portalUpdateMe(req: Request, res: Response, next: NextFunc
     })
     const data = schema.parse(req.body)
 
+    const existing = await prisma.portalUser.findUnique({ where: { id: req.portalUser!.portalUserId } })
+    if (!existing) throw new AppError(404, 'NOT_FOUND', 'Usuario no encontrado')
+
     const user = await prisma.portalUser.update({
       where: { id: req.portalUser!.portalUserId },
       data,
     })
+
+    if (data.firstName || data.lastName || data.phone !== undefined) {
+      await auditService.log(user.tenantId, user.id, 'PortalUser', user.id, 'UPDATE',
+        { firstName: existing.firstName, lastName: existing.lastName, phone: existing.phone },
+        { firstName: user.firstName, lastName: user.lastName, phone: user.phone },
+        req?.ip)
+    }
+
     res.json({ success: true, data: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, phone: user.phone } })
   } catch (err) {
     next(err)
