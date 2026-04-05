@@ -3,6 +3,7 @@ import { z } from 'zod'
 import Decimal from 'decimal.js'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
+import { auditService } from '../services/audit.service'
 
 export async function portalListOrders(req: Request, res: Response, next: NextFunction) {
   try {
@@ -212,6 +213,16 @@ export async function portalCreateOrder(req: Request, res: Response, next: NextF
         lineItems: { include: { resource: { select: { id: true, name: true, type: true } } } },
       },
     })
+
+    // Audit portal order creation
+    await auditService.log(tenantId, portalUserId, 'Order', order.id, 'CREATE', null, {
+      orderNumber: order.orderNumber,
+      status: order.status,
+      clientName: portalUser.client.companyName || `${portalUser.client.firstName} ${portalUser.client.lastName}`,
+      total: order.total.toString(),
+      source: 'Portal',
+      itemCount: order.lineItems.length,
+    }, req?.ip)
 
     res.status(201).json({ success: true, data: order })
   } catch (err) {
