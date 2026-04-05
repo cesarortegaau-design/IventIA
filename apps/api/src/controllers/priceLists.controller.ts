@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express'
 import { z } from 'zod'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
+import { auditService } from '../services/audit.service'
 
 const priceListSchema = z.object({
   name: z.string().min(1).max(200),
@@ -54,14 +55,21 @@ export async function getPriceList(req: Request, res: Response, next: NextFuncti
 export async function createPriceList(req: Request, res: Response, next: NextFunction) {
   try {
     const data = priceListSchema.parse(req.body)
+    const tenantId = req.user!.tenantId
     const priceList = await prisma.priceList.create({
       data: {
         ...data,
-        tenantId: req.user!.tenantId,
+        tenantId,
         earlyCutoff: data.earlyCutoff ? new Date(data.earlyCutoff) : undefined,
         normalCutoff: data.normalCutoff ? new Date(data.normalCutoff) : undefined,
       },
     })
+
+    await auditService.log(tenantId, req.user!.userId, 'PriceList', priceList.id, 'CREATE', null, {
+      name: priceList.name,
+      discountPct: priceList.discountPct,
+    }, req?.ip)
+
     res.status(201).json({ success: true, data: priceList })
   } catch (err) {
     next(err)
@@ -71,8 +79,9 @@ export async function createPriceList(req: Request, res: Response, next: NextFun
 export async function updatePriceList(req: Request, res: Response, next: NextFunction) {
   try {
     const data = priceListSchema.partial().parse(req.body)
+    const tenantId = req.user!.tenantId
     const priceList = await prisma.priceList.findFirst({
-      where: { id: req.params.id, tenantId: req.user!.tenantId },
+      where: { id: req.params.id, tenantId },
     })
     if (!priceList) throw new AppError(404, 'PRICE_LIST_NOT_FOUND', 'Price list not found')
     const updated = await prisma.priceList.update({
@@ -83,6 +92,12 @@ export async function updatePriceList(req: Request, res: Response, next: NextFun
         normalCutoff: data.normalCutoff ? new Date(data.normalCutoff) : undefined,
       },
     })
+
+    await auditService.log(tenantId, req.user!.userId, 'PriceList', req.params.id, 'UPDATE',
+      { name: priceList.name, discountPct: priceList.discountPct },
+      { name: updated.name, discountPct: updated.discountPct },
+      req?.ip)
+
     res.json({ success: true, data: updated })
   } catch (err) {
     next(err)

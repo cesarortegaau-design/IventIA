@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express'
 import { z } from 'zod'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
+import { auditService } from '../services/audit.service'
 
 // ─── Interactions ────────────────────────────────────────────────────────────
 
@@ -55,6 +56,13 @@ export async function createInteraction(req: Request, res: Response, next: NextF
         createdBy: { select: { id: true, firstName: true, lastName: true } },
       },
     })
+
+    await auditService.log(tenantId, req.user!.userId, 'ClientInteraction', interaction.id, 'CREATE', null, {
+      type: interaction.type,
+      subject: interaction.subject,
+      notes: interaction.notes,
+    }, req?.ip)
+
     res.status(201).json({ success: true, data: interaction })
   } catch (err) {
     next(err)
@@ -79,6 +87,12 @@ export async function updateInteraction(req: Request, res: Response, next: NextF
         createdBy: { select: { id: true, firstName: true, lastName: true } },
       },
     })
+
+    await auditService.log(tenantId, req.user!.userId, 'ClientInteraction', id, 'UPDATE',
+      { type: existing.type, subject: existing.subject, notes: existing.notes },
+      { type: interaction.type, subject: interaction.subject, notes: interaction.notes },
+      req?.ip)
+
     res.json({ success: true, data: interaction })
   } catch (err) {
     next(err)
@@ -92,6 +106,12 @@ export async function deleteInteraction(req: Request, res: Response, next: NextF
     const existing = await prisma.clientInteraction.findFirst({ where: { id, clientId, tenantId } })
     if (!existing) throw new AppError(404, 'NOT_FOUND', 'Interaction not found')
     await prisma.clientInteraction.delete({ where: { id } })
+
+    await auditService.log(tenantId, req.user!.userId, 'ClientInteraction', id, 'DELETE',
+      { type: existing.type, subject: existing.subject, notes: existing.notes },
+      null,
+      req?.ip)
+
     res.json({ success: true })
   } catch (err) {
     next(err)
@@ -175,6 +195,13 @@ export async function createTask(req: Request, res: Response, next: NextFunction
         createdBy: { select: { id: true, firstName: true, lastName: true } },
       },
     })
+
+    await auditService.log(tenantId, req.user!.userId, 'ClientTask', task.id, 'CREATE', null, {
+      title: task.title,
+      status: task.status,
+      dueDate: task.dueDate?.toISOString(),
+    }, req?.ip)
+
     res.status(201).json({ success: true, data: task })
   } catch (err) {
     next(err)
@@ -200,6 +227,12 @@ export async function updateTask(req: Request, res: Response, next: NextFunction
         createdBy: { select: { id: true, firstName: true, lastName: true } },
       },
     })
+
+    await auditService.log(tenantId, req.user!.userId, 'ClientTask', id, 'UPDATE',
+      { title: existing.title, status: existing.status, dueDate: existing.dueDate?.toISOString() },
+      { title: task.title, status: task.status, dueDate: task.dueDate?.toISOString() },
+      req?.ip)
+
     res.json({ success: true, data: task })
   } catch (err) {
     next(err)
@@ -220,6 +253,12 @@ export async function completeTask(req: Request, res: Response, next: NextFuncti
         assignedTo: { select: { id: true, firstName: true, lastName: true } },
       },
     })
+
+    await auditService.log(tenantId, req.user!.userId, 'ClientTask', id, 'UPDATE',
+      { status: existing.status },
+      { status: 'DONE' },
+      req?.ip)
+
     res.json({ success: true, data: task })
   } catch (err) {
     next(err)
@@ -233,6 +272,12 @@ export async function deleteTask(req: Request, res: Response, next: NextFunction
     const existing = await prisma.clientTask.findFirst({ where: { id, clientId, tenantId } })
     if (!existing) throw new AppError(404, 'NOT_FOUND', 'Task not found')
     await prisma.clientTask.delete({ where: { id } })
+
+    await auditService.log(tenantId, req.user!.userId, 'ClientTask', id, 'DELETE',
+      { title: existing.title, status: existing.status },
+      null,
+      req?.ip)
+
     res.json({ success: true })
   } catch (err) {
     next(err)
