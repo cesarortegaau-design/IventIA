@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { uploadToCloudinary, deleteFromCloudinary } from '../lib/cloudinary'
+import { auditService } from '../services/audit.service'
 
 const SLOT_FIELDS: Record<string, 'imageMain' | 'imageDesc' | 'imageExtra'> = {
   main: 'imageMain',
@@ -78,6 +79,16 @@ export async function createResource(req: Request, res: Response, next: NextFunc
     if (exists) throw new AppError(409, 'DUPLICATE_CODE', 'Resource code already exists')
 
     const resource = await prisma.resource.create({ data: { ...data, tenantId } })
+
+    await auditService.log(tenantId, req.user!.userId, 'Resource', resource.id, 'CREATE', null, {
+      code: resource.code,
+      name: resource.name,
+      type: resource.type,
+      description: resource.description,
+      stock: resource.stock,
+      isActive: resource.isActive,
+    }, req?.ip)
+
     res.status(201).json({ success: true, data: resource })
   } catch (err) {
     next(err)
@@ -93,6 +104,26 @@ export async function updateResource(req: Request, res: Response, next: NextFunc
     if (!resource) throw new AppError(404, 'RESOURCE_NOT_FOUND', 'Resource not found')
 
     const updated = await prisma.resource.update({ where: { id: req.params.id }, data })
+
+    const oldValues: any = {
+      code: resource.code,
+      name: resource.name,
+      type: resource.type,
+      description: resource.description,
+      stock: resource.stock,
+      isActive: resource.isActive,
+    }
+    const newValues: any = {
+      code: updated.code,
+      name: updated.name,
+      type: updated.type,
+      description: updated.description,
+      stock: updated.stock,
+      isActive: updated.isActive,
+    }
+
+    await auditService.log(req.user!.tenantId, req.user!.userId, 'Resource', req.params.id, 'UPDATE', oldValues, newValues, req?.ip)
+
     res.json({ success: true, data: updated })
   } catch (err) {
     next(err)
@@ -110,6 +141,12 @@ export async function toggleResourceActive(req: Request, res: Response, next: Ne
       where: { id: req.params.id },
       data: { isActive: !resource.isActive },
     })
+
+    await auditService.log(req.user!.tenantId, req.user!.userId, 'Resource', req.params.id, 'UPDATE',
+      { isActive: resource.isActive },
+      { isActive: updated.isActive },
+      req?.ip)
+
     res.json({ success: true, data: updated })
   } catch (err) {
     next(err)

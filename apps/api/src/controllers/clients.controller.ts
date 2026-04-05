@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express'
 import { z } from 'zod'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
+import { auditService } from '../services/audit.service'
 
 const clientSchema = z.object({
   personType: z.enum(['PHYSICAL', 'MORAL']),
@@ -68,9 +69,21 @@ export async function getClient(req: Request, res: Response, next: NextFunction)
 export async function createClient(req: Request, res: Response, next: NextFunction) {
   try {
     const data = clientSchema.parse(req.body)
+    const tenantId = req.user!.tenantId
     const client = await prisma.client.create({
-      data: { ...data, tenantId: req.user!.tenantId },
+      data: { ...data, tenantId },
     })
+
+    await auditService.log(tenantId, req.user!.userId, 'Client', client.id, 'CREATE', null, {
+      personType: client.personType,
+      companyName: client.companyName,
+      firstName: client.firstName,
+      lastName: client.lastName,
+      email: client.email,
+      phone: client.phone,
+      rfc: client.rfc,
+    }, req?.ip)
+
     res.status(201).json({ success: true, data: client })
   } catch (err) {
     next(err)
@@ -80,11 +93,34 @@ export async function createClient(req: Request, res: Response, next: NextFuncti
 export async function updateClient(req: Request, res: Response, next: NextFunction) {
   try {
     const data = clientSchema.partial().parse(req.body)
+    const tenantId = req.user!.tenantId
     const client = await prisma.client.findFirst({
-      where: { id: req.params.id, tenantId: req.user!.tenantId },
+      where: { id: req.params.id, tenantId },
     })
     if (!client) throw new AppError(404, 'CLIENT_NOT_FOUND', 'Client not found')
     const updated = await prisma.client.update({ where: { id: req.params.id }, data })
+
+    const oldValues: any = {
+      personType: client.personType,
+      companyName: client.companyName,
+      firstName: client.firstName,
+      lastName: client.lastName,
+      email: client.email,
+      phone: client.phone,
+      rfc: client.rfc,
+    }
+    const newValues: any = {
+      personType: updated.personType,
+      companyName: updated.companyName,
+      firstName: updated.firstName,
+      lastName: updated.lastName,
+      email: updated.email,
+      phone: updated.phone,
+      rfc: updated.rfc,
+    }
+
+    await auditService.log(tenantId, req.user!.userId, 'Client', req.params.id, 'UPDATE', oldValues, newValues, req?.ip)
+
     res.json({ success: true, data: updated })
   } catch (err) {
     next(err)

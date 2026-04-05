@@ -1,31 +1,9 @@
 import { Request, Response, NextFunction } from 'express'
 import { prisma } from '../config/database'
+import { auditService } from '../services/audit.service'
 
 const PHASE_LABEL: Record<string, string> = {
   SETUP: 'Montaje', EVENT: 'Evento', TEARDOWN: 'Desmontaje',
-}
-
-async function writeAudit(
-  tenantId: string,
-  userId: string,
-  entityId: string,
-  action: 'CREATE' | 'UPDATE' | 'DELETE',
-  oldValues?: object | null,
-  newValues?: object | null,
-  req?: Request,
-) {
-  await prisma.auditLog.create({
-    data: {
-      tenantId,
-      userId,
-      entityType: 'EventSpace',
-      entityId,
-      action,
-      oldValues: oldValues ?? undefined,
-      newValues: newValues ?? undefined,
-      ipAddress: req?.ip ?? undefined,
-    },
-  })
 }
 
 export async function listEventSpaces(req: Request, res: Response, next: NextFunction) {
@@ -62,14 +40,14 @@ export async function createEventSpace(req: Request, res: Response, next: NextFu
       },
     })
 
-    await writeAudit(tenantId, userId, space.id, 'CREATE', null, {
+    await auditService.log(tenantId, userId, 'EventSpace', space.id, 'CREATE', null, {
       resourceId,
       resourceName: space.resource.name,
       phase: PHASE_LABEL[phase] ?? phase,
       startTime,
       endTime,
       notes: notes ?? null,
-    }, req)
+    }, req?.ip)
 
     res.status(201).json({ success: true, data: space })
   } catch (err) { next(err) }
@@ -96,7 +74,7 @@ export async function updateEventSpace(req: Request, res: Response, next: NextFu
       },
     })
 
-    await writeAudit(tenantId, userId, spaceId, 'UPDATE', {
+    await auditService.log(tenantId, userId, 'EventSpace', spaceId, 'UPDATE', {
       resourceId: existing.resourceId,
       resourceName: existing.resource.name,
       phase: PHASE_LABEL[existing.phase] ?? existing.phase,
@@ -110,7 +88,7 @@ export async function updateEventSpace(req: Request, res: Response, next: NextFu
       startTime,
       endTime,
       notes: notes ?? null,
-    }, req)
+    }, req?.ip)
 
     res.json({ success: true, data: space })
   } catch (err) { next(err) }
@@ -130,14 +108,14 @@ export async function deleteEventSpace(req: Request, res: Response, next: NextFu
 
     await prisma.eventSpace.delete({ where: { id: spaceId } })
 
-    await writeAudit(tenantId, userId, spaceId, 'DELETE', {
+    await auditService.log(tenantId, userId, 'EventSpace', spaceId, 'DELETE', {
       resourceId: existing.resourceId,
       resourceName: existing.resource.name,
       phase: PHASE_LABEL[existing.phase] ?? existing.phase,
       startTime: existing.startTime.toISOString(),
       endTime: existing.endTime.toISOString(),
       notes: existing.notes,
-    }, null, req)
+    }, null, req?.ip)
 
     res.json({ success: true })
   } catch (err) { next(err) }

@@ -2,6 +2,7 @@ import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { ORDER_STATUS_TRANSITIONS, OrderStatus } from '@iventia/shared'
 import { determinePricingTier, getPriceForTier, calculateLineTotal, calculateOrderTotals } from './pricing.service'
+import { auditService } from './audit.service'
 import Decimal from 'decimal.js'
 
 // Generate sequential order number: ORD-YYYY-NNNN
@@ -160,7 +161,7 @@ export async function transitionOrderStatus(
     }
   }
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const updated = await tx.order.update({
       where: { id: orderId },
       data: { status: toStatus, updatedAt: new Date() },
@@ -178,6 +179,14 @@ export async function transitionOrderStatus(
 
     return updated
   })
+
+  // Audit the status change
+  await auditService.log(order.tenantId, userId, 'Order', orderId, 'UPDATE',
+    { status: order.status },
+    { status: toStatus },
+  )
+
+  return result
 }
 
 export async function addPayment(

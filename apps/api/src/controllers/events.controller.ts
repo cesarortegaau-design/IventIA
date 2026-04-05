@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express'
 import { z } from 'zod'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
+import { auditService } from '../services/audit.service'
 
 const createEventSchema = z.object({
   name: z.string().min(1).max(300),
@@ -125,6 +126,21 @@ export async function createEvent(req: Request, res: Response, next: NextFunctio
         createdById: req.user!.userId,
       },
     })
+
+    await auditService.log(tenantId, req.user!.userId, 'Event', event.id, 'CREATE', null, {
+      code: event.code,
+      name: event.name,
+      status: event.status,
+      description: event.description,
+      venueLocation: event.venueLocation,
+      eventStart: event.eventStart?.toISOString(),
+      eventEnd: event.eventEnd?.toISOString(),
+      setupStart: event.setupStart?.toISOString(),
+      setupEnd: event.setupEnd?.toISOString(),
+      teardownStart: event.teardownStart?.toISOString(),
+      teardownEnd: event.teardownEnd?.toISOString(),
+    }, req?.ip)
+
     res.status(201).json({ success: true, data: event })
   } catch (err) {
     next(err)
@@ -151,6 +167,34 @@ export async function updateEvent(req: Request, res: Response, next: NextFunctio
         teardownEnd: data.teardownEnd ? new Date(data.teardownEnd) : undefined,
       },
     })
+
+    const oldValues: any = {
+      name: event.name,
+      status: event.status,
+      description: event.description,
+      venueLocation: event.venueLocation,
+      eventStart: event.eventStart?.toISOString(),
+      eventEnd: event.eventEnd?.toISOString(),
+      setupStart: event.setupStart?.toISOString(),
+      setupEnd: event.setupEnd?.toISOString(),
+      teardownStart: event.teardownStart?.toISOString(),
+      teardownEnd: event.teardownEnd?.toISOString(),
+    }
+    const newValues: any = {
+      name: updated.name,
+      status: updated.status,
+      description: updated.description,
+      venueLocation: updated.venueLocation,
+      eventStart: updated.eventStart?.toISOString(),
+      eventEnd: updated.eventEnd?.toISOString(),
+      setupStart: updated.setupStart?.toISOString(),
+      setupEnd: updated.setupEnd?.toISOString(),
+      teardownStart: updated.teardownStart?.toISOString(),
+      teardownEnd: updated.teardownEnd?.toISOString(),
+    }
+
+    await auditService.log(req.user!.tenantId, req.user!.userId, 'Event', req.params.id, 'UPDATE', oldValues, newValues, req?.ip)
+
     res.json({ success: true, data: updated })
   } catch (err) {
     next(err)
@@ -169,6 +213,12 @@ export async function updateEventStatus(req: Request, res: Response, next: NextF
       where: { id: req.params.id },
       data: { status: status as any },
     })
+
+    await auditService.log(req.user!.tenantId, req.user!.userId, 'Event', req.params.id, 'UPDATE',
+      { status: event.status },
+      { status: updated.status },
+      req?.ip)
+
     res.json({ success: true, data: updated })
   } catch (err) {
     next(err)
