@@ -13,6 +13,7 @@ import portalRoutes from './portal.routes'
 import portalCodesRoutes from './portal-codes.routes'
 import chatRoutes from './chat.routes'
 import bookingsRoutes from './bookings.routes'
+import auditRoutes from './audit.routes'
 
 const router = Router()
 
@@ -30,5 +31,6 @@ router.use('/portal', portalRoutes)
 router.use('/events/:id/portal-codes', portalCodesRoutes)
 router.use('/chat', chatRoutes)
 router.use('/bookings', bookingsRoutes)
+router.use('/audit', auditRoutes)
 
 export default router

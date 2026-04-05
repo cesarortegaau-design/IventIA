@@ -13,7 +13,9 @@ import { portalCodesApi } from '../../api/portalCodes'
 import { eventSpacesApi } from '../../api/eventSpaces'
 import { resourcesApi } from '../../api/resources'
 import { bookingsApi } from '../../api/bookings'
+import { auditApi } from '../../api/audit'
 import { exportToCsv } from '../../utils/exportCsv'
+import AuditTimeline from '../../components/AuditTimeline'
 
 const { Title, Text } = Typography
 
@@ -66,6 +68,12 @@ export default function EventDetailPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['event', id],
     queryFn: () => eventsApi.get(id!),
+  })
+
+  const { data: auditData, isLoading: auditLoading } = useQuery({
+    queryKey: ['event-audit', id],
+    queryFn: () => auditApi.getLog('Event', id!),
+    enabled: !!id,
   })
 
   const updateStatusMutation = useMutation({
@@ -733,6 +741,16 @@ export default function EventDetailPage() {
                   </Modal>
                 </>
               ),
+            },
+            {
+              key: 'audit',
+              label: (
+                <Space>
+                  <AuditOutlined />
+                  Auditoría
+                </Space>
+              ),
+              children: <AuditTimeline data={auditData?.data ?? []} loading={auditLoading} />,
             },
           ]}
         />

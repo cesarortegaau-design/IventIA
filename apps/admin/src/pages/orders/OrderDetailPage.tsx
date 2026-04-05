@@ -8,8 +8,10 @@ import {
 import { ArrowLeftOutlined, DollarOutlined, FilePdfOutlined, DownloadOutlined, FileOutlined, UploadOutlined, DeleteOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { ordersApi } from '../../api/orders'
+import { auditApi } from '../../api/audit'
 import { exportToCsv } from '../../utils/exportCsv'
 import { OrderPdf } from '../../components/OrderPdf'
+import AuditTimeline from '../../components/AuditTimeline'
 
 const { Title, Text } = Typography
 
@@ -85,6 +87,12 @@ export default function OrderDetailPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['order', id],
     queryFn: () => ordersApi.get(id!),
+  })
+
+  const { data: auditData, isLoading: auditLoading } = useQuery({
+    queryKey: ['order-audit', id],
+    queryFn: () => auditApi.getLog('Order', id!),
+    enabled: !!id,
   })
 
   const statusMutation = useMutation({
@@ -294,6 +302,10 @@ export default function OrderDetailPage() {
             ),
           }))}
         />
+      </Card>
+
+      <Card title="Auditoría" style={{ marginBottom: 24 }}>
+        <AuditTimeline data={auditData?.data ?? []} loading={auditLoading} />
       </Card>
 
       <Modal
