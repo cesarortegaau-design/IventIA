@@ -1144,11 +1144,17 @@ export default function BookingCalendarPage() {
                             {b.overlapCount > 1 && (
                               <span style={{
                                 flexShrink: 0, marginLeft: 4,
-                                background: b.overlapRank === 1 ? '#ef4444' : borderColor, color: '#fff',
-                                borderRadius: 10, fontSize: 13, fontWeight: 600,
-                                padding: '1px 7px', lineHeight: '18px', opacity: 0.95,
+                                background: b.overlapRank === 1 ? '#000000' : borderColor,
+                                color: b.overlapRank === 1 ? '#FFD700' : '#fff',
+                                borderRadius: 10,
+                                fontSize: b.overlapRank === 1 ? 15 : 13,
+                                fontWeight: b.overlapRank === 1 ? 900 : 600,
+                                padding: b.overlapRank === 1 ? '2px 8px' : '1px 7px',
+                                lineHeight: '18px',
+                                opacity: 1,
+                                border: b.overlapRank === 1 ? '2px solid #FFD700' : 'none',
                               }}>
-                                #{b.overlapRank}/{b.overlapCount}
+                                {b.overlapRank === 1 ? '⭐ #1' : `#${b.overlapRank}`}/{b.overlapCount}
                               </span>
                             )}
                           </div>
