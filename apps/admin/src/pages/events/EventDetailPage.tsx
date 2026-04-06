@@ -396,7 +396,7 @@ export default function EventDetailPage() {
                               }
                             >
                               <Tag color="red" icon={<WarningOutlined />}>
-                                #{overlap.ownRank}/{overlap.count + 1} · {overlap.count} conflicto{overlap.count > 1 ? 's' : ''}
+                                <strong>#{overlap.ownRank}/{overlap.count + 1}</strong> · {overlap.count} conflicto{overlap.count > 1 ? 's' : ''}
                               </Tag>
                             </Tooltip>
                           )
