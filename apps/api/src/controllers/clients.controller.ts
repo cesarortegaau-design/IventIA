@@ -19,7 +19,7 @@ const clientSchema = z.object({
   addressState: z.string().optional(),
   addressZip: z.string().optional(),
   addressCountry: z.string().default('MX'),
-})
+}).strip()
 
 export async function listClients(req: Request, res: Response, next: NextFunction) {
   try {
