@@ -1116,17 +1116,18 @@ export default function BookingCalendarPage() {
                               position: 'absolute',
                               left, top, width, height,
                               borderRadius: 6,
-                              background: isFirstPosition ? '#fecaca' : background,
-                              border: `2px ${borderStyle} ${isFirstPosition ? '#dc2626' : borderColor}`,
+                              background: isFirstPosition ? '#ff6b6b !important' : background,
+                              border: isFirstPosition ? '3px solid #cc0000 !important' : `2px ${borderStyle} ${borderColor}`,
                               display: 'flex',
                               alignItems: 'center',
                               paddingLeft: 8, paddingRight: 6,
                               cursor: selectionMode ? 'crosshair' : 'pointer',
                               overflow: 'hidden',
-                              zIndex: 4,
+                              zIndex: isFirstPosition ? 5 : 4,
                               transition: 'filter 0.15s',
                               pointerEvents: selectionMode ? 'none' : 'auto',
                               opacity: selectionMode ? 0.5 : 1,
+                              boxShadow: isFirstPosition ? '0 0 10px rgba(255, 0, 0, 0.8)' : 'none',
                             }}
                             onMouseEnter={e => { if (!selectionMode) (e.currentTarget.style.filter = 'brightness(0.93)') }}
                             onMouseLeave={e => { if (!selectionMode) (e.currentTarget.style.filter = '') }}
