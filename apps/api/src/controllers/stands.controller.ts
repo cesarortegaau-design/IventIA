@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express'
 import { z } from 'zod'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
+import { auditService } from '../services/audit.service'
 
 const standRowSchema = z.object({
   codigo:           z.string().min(1),
@@ -44,6 +45,12 @@ export async function importStands(req: Request, res: Response, next: NextFuncti
         })
       )
     )
+
+    // Audit stand import (as a batch action)
+    await auditService.log(tenantId, req.user!.userId, 'Stand', eventId, 'CREATE', null, {
+      standsImported: results.length,
+      importTimestamp: new Date().toISOString(),
+    }, req?.ip)
 
     res.json({ success: true, data: { imported: results.length } })
   } catch (err) {
