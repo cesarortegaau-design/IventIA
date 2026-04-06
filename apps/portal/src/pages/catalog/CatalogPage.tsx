@@ -177,10 +177,10 @@ function ProductCard({ item, cartQty, onAdd, onRemove, onClick }: {
         {/* Price + controls — always at bottom */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
           <div>
-            <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.primary }}>
+            <div style={{ fontWeight: 300, fontSize: 17, color: COLORS.primary, letterSpacing: '-0.3px' }}>
               ${price.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
             </div>
-            <div style={{ fontSize: 11, color: COLORS.secondary, fontWeight: 600, marginTop: 1 }}>
+            <div style={{ fontSize: 11, color: COLORS.secondary, fontWeight: 400, marginTop: 1 }}>
               {TIER_LABELS[item.tier]}
             </div>
           </div>
@@ -191,8 +191,9 @@ function ProductCard({ item, cartQty, onAdd, onRemove, onClick }: {
                 onClick={onAdd}
                 style={{
                   background: COLORS.primary, color: '#fff', border: 'none',
-                  borderRadius: 8, padding: '6px 14px', fontWeight: 500,
+                  borderRadius: 8, padding: '6px 14px', fontWeight: 400,
                   fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                  letterSpacing: '0.2px', fontFamily: 'Inter, sans-serif',
                 }}
               >
                 <PlusOutlined style={{ fontSize: 11 }} /> Agregar
@@ -201,14 +202,16 @@ function ProductCard({ item, cartQty, onAdd, onRemove, onClick }: {
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <button onClick={onRemove} style={{
                   background: COLORS.offWhite, color: COLORS.primary, border: 'none', borderRadius: 6,
-                  width: 28, height: 28, cursor: 'pointer', fontWeight: 500, fontSize: 16,
+                  width: 28, height: 28, cursor: 'pointer', fontWeight: 300, fontSize: 18,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontFamily: 'Inter, sans-serif',
                 }}>−</button>
-                <span style={{ fontWeight: 500, minWidth: 18, textAlign: 'center', color: COLORS.primary }}>{cartQty}</span>
+                <span style={{ fontWeight: 400, minWidth: 18, textAlign: 'center', color: COLORS.primary }}>{cartQty}</span>
                 <button onClick={onAdd} style={{
                   background: COLORS.primary, color: '#fff', border: 'none', borderRadius: 6,
-                  width: 28, height: 28, cursor: 'pointer', fontWeight: 500, fontSize: 16,
+                  width: 28, height: 28, cursor: 'pointer', fontWeight: 300, fontSize: 18,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontFamily: 'Inter, sans-serif',
                 }}>+</button>
               </div>
             )}
@@ -281,7 +284,7 @@ function ProductDetailDrawer({ item, cartQty, onAdd, onRemove, onClose, open }: 
 
         {/* Price & tier */}
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 16 }}>
-          <span style={{ fontSize: 28, fontWeight: 800, color: COLORS.primary }}>
+          <span style={{ fontSize: 30, fontWeight: 300, color: COLORS.primary, letterSpacing: '-0.5px', fontFamily: 'Inter, sans-serif' }}>
             ${price.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
           </span>
           {item.resource.unit && (
@@ -336,8 +339,9 @@ function ProductDetailDrawer({ item, cartQty, onAdd, onRemove, onClose, open }: 
             style={{
               width: '100%', background: COLORS.primary, color: '#fff',
               border: 'none', borderRadius: 10, padding: '14px 0',
-              fontWeight: 500, fontSize: 16, cursor: 'pointer',
+              fontWeight: 400, fontSize: 15, cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              letterSpacing: '0.3px', fontFamily: 'Inter, sans-serif',
             }}
           >
             <ShoppingCartOutlined /> Agregar al carrito
@@ -347,16 +351,18 @@ function ProductDetailDrawer({ item, cartQty, onAdd, onRemove, onClose, open }: 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 12 }}>
               <button onClick={onRemove} style={{
                 background: COLORS.offWhite, color: COLORS.primary, border: 'none', borderRadius: 8,
-                width: 40, height: 40, cursor: 'pointer', fontWeight: 500, fontSize: 20,
+                width: 40, height: 40, cursor: 'pointer', fontWeight: 300, fontSize: 22,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: 'Inter, sans-serif',
               }}>−</button>
-              <span style={{ fontWeight: 800, fontSize: 24, color: COLORS.primary, minWidth: 36, textAlign: 'center' }}>
+              <span style={{ fontWeight: 300, fontSize: 26, color: COLORS.primary, minWidth: 36, textAlign: 'center', fontFamily: 'Inter, sans-serif' }}>
                 {cartQty}
               </span>
               <button onClick={onAdd} style={{
                 background: COLORS.primary, color: '#fff', border: 'none', borderRadius: 8,
-                width: 40, height: 40, cursor: 'pointer', fontWeight: 500, fontSize: 20,
+                width: 40, height: 40, cursor: 'pointer', fontWeight: 300, fontSize: 22,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: 'Inter, sans-serif',
               }}>+</button>
             </div>
             <Text type="secondary" style={{ display: 'block', textAlign: 'center', fontSize: 13, color: COLORS.textSecondary }}>
@@ -409,8 +415,8 @@ function CartDrawer({ open, cart, onClose, onQtyChange, onRemove, onSubmit, subm
             <Text style={{ color: COLORS.textPrimary }}>${tax.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</Text>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-            <Text strong style={{ fontSize: 16, color: COLORS.textPrimary }}>Total estimado</Text>
-            <Text strong style={{ fontSize: 18, color: COLORS.primary }}>
+            <Text style={{ fontSize: 15, fontWeight: 400, color: COLORS.textPrimary, fontFamily: 'Inter, sans-serif' }}>Total estimado</Text>
+            <Text style={{ fontSize: 20, fontWeight: 300, color: COLORS.primary, letterSpacing: '-0.3px', fontFamily: 'Inter, sans-serif' }}>
               ${(subtotal + tax).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
             </Text>
           </div>
@@ -421,7 +427,8 @@ function CartDrawer({ open, cart, onClose, onQtyChange, onRemove, onSubmit, subm
               width: '100%', background: cart.length === 0 ? COLORS.offWhite : COLORS.primary,
               color: cart.length === 0 ? COLORS.textTertiary : '#fff',
               border: 'none', borderRadius: 10, padding: '14px 0',
-              fontWeight: 500, fontSize: 15, cursor: cart.length === 0 ? 'default' : 'pointer',
+              fontWeight: 400, fontSize: 14, cursor: cart.length === 0 ? 'default' : 'pointer',
+              letterSpacing: '0.3px', fontFamily: 'Inter, sans-serif',
             }}
           >
             {submitting ? 'Enviando...' : 'Confirmar solicitud'}
@@ -462,7 +469,7 @@ function CartDrawer({ open, cart, onClose, onQtyChange, onRemove, onSubmit, subm
                 <div style={{ fontWeight: 600, fontSize: 13, color: COLORS.textPrimary, marginBottom: 2 }}>
                   {item.name}
                 </div>
-                <div style={{ fontSize: 13, color: COLORS.primary, fontWeight: 500 }}>
+                <div style={{ fontSize: 14, color: COLORS.primary, fontWeight: 300, letterSpacing: '-0.2px', fontFamily: 'Inter, sans-serif' }}>
                   ${item.unitPrice.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
