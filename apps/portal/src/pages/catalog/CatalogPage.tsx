@@ -746,19 +746,20 @@ export default function CatalogPage() {
             onClick={() => setCartOpen(true)}
             style={{
               width: '100%', background: COLORS.primary, color: '#fff', border: 'none',
-              borderRadius: 14, padding: '14px 20px', fontWeight: 500, fontSize: 15,
+              borderRadius: 10, padding: '9px 16px', fontWeight: 300, fontSize: 13,
               cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              boxShadow: '0 4px 16px rgba(26,26,26,0.15)',
+              boxShadow: '0 2px 8px rgba(26,26,26,0.10)',
+              fontFamily: 'Inter, sans-serif', letterSpacing: '0.2px',
             }}
           >
             <span style={{
-              background: 'rgba(255,255,255,0.25)', borderRadius: 6,
-              padding: '2px 10px', fontSize: 13, fontWeight: 500,
+              background: 'rgba(255,255,255,0.18)', borderRadius: 5,
+              padding: '1px 8px', fontSize: 12, fontWeight: 400,
             }}>
               {cartTotal} ítem{cartTotal !== 1 ? 's' : ''}
             </span>
-            <span>Ver carrito</span>
-            <span style={{ fontWeight: 800 }}>
+            <span style={{ fontWeight: 400 }}>Ver carrito</span>
+            <span style={{ fontWeight: 300, letterSpacing: '-0.2px' }}>
               ${cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
                 .toLocaleString('es-MX', { minimumFractionDigits: 2 })}
             </span>

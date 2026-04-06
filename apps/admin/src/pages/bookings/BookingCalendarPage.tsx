@@ -1116,14 +1116,14 @@ export default function BookingCalendarPage() {
                               position: 'absolute',
                               left, top, width, height,
                               borderRadius: 6,
-                              background: isFirstPosition ? '#ff6b6b !important' : background,
-                              border: isFirstPosition ? '4px solid #000000 !important' : `2px ${borderStyle} ${borderColor}`,
+                              background,
+                              border: `2px ${borderStyle} ${borderColor}`,
                               display: 'flex',
                               alignItems: 'center',
                               paddingLeft: 8, paddingRight: 6,
                               cursor: selectionMode ? 'crosshair' : 'pointer',
                               overflow: 'hidden',
-                              zIndex: isFirstPosition ? 5 : 4,
+                              zIndex: 4,
                               transition: 'filter 0.15s',
                               pointerEvents: selectionMode ? 'none' : 'auto',
                               opacity: selectionMode ? 0.5 : 1,
@@ -1136,7 +1136,7 @@ export default function BookingCalendarPage() {
                             <Text style={{
                               fontSize: 11, fontWeight: 600, color: textColor,
                               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1,
-                              background: b.overlapCount > 1 && b.overlapRank === 1 ? 'rgba(239, 68, 68, 0.1)' : 'transparent',
+                              background: 'transparent',
                               paddingLeft: 4, paddingRight: 4, borderRadius: 3,
                             }}>
                               {label}
@@ -1166,7 +1166,7 @@ export default function BookingCalendarPage() {
                             borderRadius: 6, background, border: `2px ${borderStyle} ${borderColor}` }}>
                             <Text style={{ fontSize: 11, fontWeight: 600, color: textColor,
                               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', paddingLeft: 8,
-                              background: b.overlapCount > 1 && b.overlapRank === 1 ? 'rgba(239, 68, 68, 0.1)' : 'transparent',
+                              background: 'transparent',
                               paddingRight: 4, borderRadius: 3,
                             }}>
                               {label}
