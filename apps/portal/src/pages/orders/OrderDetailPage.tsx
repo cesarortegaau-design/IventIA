@@ -150,6 +150,31 @@ export default function OrderDetailPage() {
         />
       )}
 
+      {/* Payment details section */}
+      {(order.payments && order.payments.length > 0) && (
+        <Card title="Datos de Pago" style={{ marginBottom: 16 }}>
+          <div>
+            {order.payments.map((payment: any, idx: number) => (
+              <div key={idx}>
+                {idx > 0 && <Divider />}
+                <Descriptions column={{ xs: 1, sm: 2 }} size="small">
+                  <Descriptions.Item label="Método">
+                    <Text strong>{payment.method === 'TRANSFER' ? 'Transferencia' : payment.method === 'CHECK' ? 'Cheque' : payment.method === 'CREDIT_CARD' ? 'Tarjeta de crédito' : payment.method === 'CASH' ? 'Efectivo' : payment.method === 'SWIFT' ? 'Swift' : payment.method}</Text>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Fecha">
+                    <Text>{dayjs(payment.paymentDate).format('DD/MM/YYYY')}</Text>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Monto">
+                    <Text strong>${Number(payment.amount).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</Text>
+                  </Descriptions.Item>
+                  {payment.reference && <Descriptions.Item label="Referencia">{payment.reference}</Descriptions.Item>}
+                </Descriptions>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
       <Card
         title="Productos y servicios solicitados"
         style={{ marginBottom: 16 }}
