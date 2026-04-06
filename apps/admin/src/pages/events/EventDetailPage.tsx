@@ -120,7 +120,7 @@ export default function EventDetailPage() {
   const spaces = spacesData?.data ?? []
 
   // Audit log for a selected space
-  const { data: auditData, isLoading: auditLoading } = useQuery({
+  const { data: auditSpaceData, isLoading: auditSpaceLoading } = useQuery({
     queryKey: ['event-space-audit', id, auditSpace?.id],
     queryFn: () => eventSpacesApi.audit(id!, auditSpace!.id),
     enabled: !!auditSpace,
@@ -410,12 +410,12 @@ export default function EventDetailPage() {
                     footer={<Button onClick={() => setAuditSpace(null)}>Cerrar</Button>}
                     width={560}
                   >
-                    {auditLoading ? (
+                    {auditSpaceLoading ? (
                       <div style={{ textAlign: 'center', padding: 32 }}><Spin /></div>
                     ) : (
                       <Timeline
                         style={{ marginTop: 16 }}
-                        items={(auditData?.data ?? []).map((log: any) => ({
+                        items={(auditSpaceData?.data ?? []).map((log: any) => ({
                           color: log.action === 'CREATE' ? 'green' : log.action === 'DELETE' ? 'red' : 'blue',
                           children: (
                             <div>
@@ -456,7 +456,7 @@ export default function EventDetailPage() {
                         }))}
                       />
                     )}
-                    {!auditLoading && (auditData?.data ?? []).length === 0 && (
+                    {!auditSpaceLoading && (auditSpaceData?.data ?? []).length === 0 && (
                       <Alert type="info" message="Sin registros de auditoría" />
                     )}
                   </Modal>
