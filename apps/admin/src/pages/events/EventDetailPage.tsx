@@ -149,9 +149,12 @@ export default function EventDetailPage() {
 
   // Map spaceId → conflicting events (from OTHER events on the same resource)
   const overlapMap = useMemo(() => {
-    const map: Record<string, { count: number; items: { label: string; createdAt: string }[] }> = {}
+    const map: Record<string, { count: number; ownRank: number; items: { label: string; createdAt: string }[] }> = {}
     if (!calendarData?.data) return map
     const allBookings: any[] = calendarData.data.bookings ?? []
+    // Build rank lookup: bookingId → overlapRank from calendar response
+    const rankById: Record<string, number> = {}
+    for (const b of allBookings) rankById[b.id] = b.overlapRank ?? 1
     for (const space of spaces) {
       const spaceStart = new Date(space.startTime)
       const spaceEnd = new Date(space.endTime)
@@ -164,6 +167,7 @@ export default function EventDetailPage() {
       if (conflicting.length > 0) {
         map[space.id] = {
           count: conflicting.length,
+          ownRank: rankById[space.id] ?? 1,
           items: conflicting.map((b: any) => ({
             label: b.event ? `${b.event.code} – ${b.event.name}` : `OS ${b.order?.orderNumber ?? ''}`,
             createdAt: b.createdAt ?? '',
@@ -392,7 +396,7 @@ export default function EventDetailPage() {
                               }
                             >
                               <Tag color="red" icon={<WarningOutlined />}>
-                                {overlap.count} conflicto{overlap.count > 1 ? 's' : ''}
+                                #{overlap.ownRank}/{overlap.count + 1} · {overlap.count} conflicto{overlap.count > 1 ? 's' : ''}
                               </Tag>
                             </Tooltip>
                           )
