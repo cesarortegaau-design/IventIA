@@ -52,12 +52,73 @@ export async function createStripeCheckout(req: Request, res: Response, next: Ne
         },
         quantity: 1,
       }],
-      success_url: `${env.STRIPE_SUCCESS_URL}?session_id={CHECKOUT_SESSION_ID}&order_id=${order.id}`,
-      cancel_url: `${env.STRIPE_CANCEL_URL}?order_id=${order.id}`,
+      success_url: `${env.STRIPE_SUCCESS_URL}/${order.id}?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${env.STRIPE_CANCEL_URL}/${order.id}`,
       metadata: { orderId: order.id, tenantId },
     })
 
     res.json({ success: true, data: { url: session.url } })
+  } catch (err) {
+    next(err)
+  }
+}
+
+// ── POST /portal/orders/:orderId/verify-stripe-payment ───────────────────────
+// Called by the portal immediately after Stripe redirects the user back.
+// Retrieves the session from Stripe and confirms payment without relying on webhooks.
+export async function verifyStripePayment(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!stripe) throw new AppError(503, 'STRIPE_NOT_CONFIGURED', 'Pago en línea no disponible')
+
+    const { portalUserId, tenantId } = req.portalUser!
+    const { sessionId } = z.object({ sessionId: z.string().min(1) }).parse(req.body)
+
+    const order = await resolvePortalOrder(portalUserId, tenantId, req.params.orderId)
+
+    // Already paid — idempotent
+    if (order.status === 'PAID') return res.json({ success: true, data: { status: 'PAID' } })
+
+    const session = await stripe.checkout.sessions.retrieve(sessionId)
+
+    if (session.payment_status !== 'paid') {
+      return res.json({ success: true, data: { status: order.status } })
+    }
+
+    // Verify this session belongs to this order
+    if (session.metadata?.orderId !== order.id) {
+      throw new AppError(400, 'SESSION_MISMATCH', 'Sesión de pago no corresponde a esta orden')
+    }
+
+    const systemUser = await getSystemUser(tenantId)
+
+    await prisma.$transaction([
+      prisma.orderPayment.create({
+        data: {
+          orderId: order.id,
+          method: 'CREDIT_CARD',
+          amount: order.total,
+          paymentDate: new Date(),
+          reference: typeof session.payment_intent === 'string' ? session.payment_intent : session.id,
+          notes: 'Pago en línea confirmado vía Stripe',
+          recordedById: systemUser.id,
+        },
+      }),
+      prisma.order.update({
+        where: { id: order.id },
+        data: { status: 'PAID', paidAmount: order.total, updatedAt: new Date() },
+      }),
+      prisma.orderStatusHistory.create({
+        data: {
+          orderId: order.id,
+          fromStatus: order.status as any,
+          toStatus: 'PAID',
+          changedById: systemUser.id,
+          notes: `Pago en línea confirmado (Stripe session: ${session.id})`,
+        },
+      }),
+    ])
+
+    res.json({ success: true, data: { status: 'PAID' } })
   } catch (err) {
     next(err)
   }
@@ -142,43 +203,71 @@ export async function stripeWebhook(req: Request, res: Response, next: NextFunct
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object
       const { orderId, tenantId } = session.metadata ?? {}
-      if (!orderId || !tenantId) return res.json({ received: true })
+
+      console.log('[Stripe Webhook] checkout.session.completed received', {
+        sessionId: session.id,
+        orderId,
+        tenantId,
+        metadata: session.metadata,
+      })
+
+      if (!orderId || !tenantId) {
+        console.log('[Stripe Webhook] Missing orderId or tenantId in metadata')
+        return res.json({ received: true })
+      }
 
       const order = await prisma.order.findFirst({ where: { id: orderId, tenantId } })
-      if (!order || order.status === 'PAID') return res.json({ received: true })
+      if (!order) {
+        console.log('[Stripe Webhook] Order not found', { orderId, tenantId })
+        return res.json({ received: true })
+      }
+      if (order.status === 'PAID') {
+        console.log('[Stripe Webhook] Order already paid', { orderId })
+        return res.json({ received: true })
+      }
 
       const systemUser = await getSystemUser(tenantId)
 
-      await prisma.$transaction([
-        prisma.orderPayment.create({
-          data: {
-            orderId,
-            method: 'CREDIT_CARD',
-            amount: order.total,
-            paymentDate: new Date(),
-            reference: session.payment_intent ?? session.id,
-            notes: 'Pago completado vía Stripe',
-            recordedById: systemUser.id,
-          },
-        }),
-        prisma.order.update({
-          where: { id: orderId },
-          data: { status: 'PAID', paidAmount: order.total, updatedAt: new Date() },
-        }),
-        prisma.orderStatusHistory.create({
-          data: {
-            orderId,
-            fromStatus: order.status as any,
-            toStatus: 'PAID',
-            changedById: systemUser.id,
-            notes: `Pago en línea confirmado por Stripe (session: ${session.id})`,
-          },
-        }),
-      ])
+      console.log('[Stripe Webhook] Processing payment for order', { orderId, total: order.total })
+
+      try {
+        await prisma.$transaction([
+          prisma.orderPayment.create({
+            data: {
+              orderId,
+              method: 'CREDIT_CARD',
+              amount: order.total,
+              paymentDate: new Date(),
+              reference: session.payment_intent ?? session.id,
+              notes: 'Pago completado vía Stripe',
+              recordedById: systemUser.id,
+            },
+          }),
+          prisma.order.update({
+            where: { id: orderId },
+            data: { status: 'PAID', paidAmount: order.total, updatedAt: new Date() },
+          }),
+          prisma.orderStatusHistory.create({
+            data: {
+              orderId,
+              fromStatus: order.status as any,
+              toStatus: 'PAID',
+              changedById: systemUser.id,
+              notes: `Pago en línea confirmado por Stripe (session: ${session.id})`,
+            },
+          }),
+        ])
+        console.log('[Stripe Webhook] Payment processed successfully for order', { orderId })
+      } catch (txErr) {
+        console.error('[Stripe Webhook] Error processing payment transaction', { orderId, error: txErr })
+        throw txErr
+      }
     }
 
     res.json({ received: true })
   } catch (err) {
-    next(err)
+    console.error('[Stripe Webhook] Error:', err)
+    // Return 200 to prevent Stripe from retrying, but log the error
+    res.json({ received: true, error: true })
   }
 }

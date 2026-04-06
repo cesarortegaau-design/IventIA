@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Card, Descriptions, Tag, Table, Typography, Button, Space, Divider, Timeline, Skeleton,
   Modal, Form, Select, Input, Upload, App, Alert,
@@ -27,6 +27,7 @@ const PAYABLE_STATUSES = ['QUOTED', 'CONFIRMED']
 export default function OrderDetailPage() {
   const { orderId } = useParams<{ orderId: string }>()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
 
@@ -34,10 +35,36 @@ export default function OrderDetailPage() {
   const [voucherFile, setVoucherFile] = useState<File | null>(null)
   const [voucherForm] = Form.useForm()
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, refetch } = useQuery({
     queryKey: ['portal-order', orderId],
     queryFn: () => ordersApi.get(orderId!),
   })
+
+  // Auto-verify Stripe payment when returning from checkout
+  const verifyMutation = useMutation({
+    mutationFn: (sessionId: string) => ordersApi.verifyStripePayment(orderId!, sessionId),
+    onSuccess: (res) => {
+      if (res.data?.status === 'PAID') {
+        message.success('¡Pago confirmado! Tu orden ha sido pagada.')
+        queryClient.invalidateQueries({ queryKey: ['portal-order', orderId] })
+        queryClient.invalidateQueries({ queryKey: ['portal-orders'] })
+        refetch()
+      }
+      // Remove session_id from URL
+      setSearchParams({})
+    },
+    onError: () => {
+      message.error('No se pudo confirmar el pago. Contacta a soporte si el cargo ya fue realizado.')
+      setSearchParams({})
+    },
+  })
+
+  useEffect(() => {
+    const sessionId = searchParams.get('session_id')
+    if (sessionId && orderId) {
+      verifyMutation.mutate(sessionId)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const stripeMutation = useMutation({
     mutationFn: () => ordersApi.createStripeCheckout(orderId!),

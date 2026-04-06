@@ -11,6 +11,8 @@ export const ordersApi = {
     apiClient.get('/calendar', { params }).then(r => r.data.data),
   createStripeCheckout: (orderId: string) =>
     apiClient.post(`/orders/${orderId}/stripe-checkout`).then(r => r.data),
+  verifyStripePayment: (orderId: string, sessionId: string) =>
+    apiClient.post(`/orders/${orderId}/verify-stripe-payment`, { sessionId }).then(r => r.data),
   uploadPaymentVoucher: (orderId: string, file: File, method: string, reference?: string, notes?: string) => {
     const form = new FormData()
     form.append('file', file)

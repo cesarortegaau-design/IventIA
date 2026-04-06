@@ -6,7 +6,7 @@ import {
 } from '../controllers/portal.auth.controller'
 import { portalListEvents, portalGetEvent, portalGetCatalog } from '../controllers/portal.events.controller'
 import { portalListOrders, portalGetOrder, portalCreateOrder, portalCalendar } from '../controllers/portal.orders.controller'
-import { createStripeCheckout, uploadPaymentVoucher } from '../controllers/portal.payments.controller'
+import { createStripeCheckout, uploadPaymentVoucher, verifyStripePayment } from '../controllers/portal.payments.controller'
 import {
   portalListConversations, portalGetConversation, portalStartConversation,
   portalSendMessage, portalUnreadCount, uploadChatFile,
@@ -50,6 +50,7 @@ router.post('/events/:eventId/orders', portalCreateOrder)
 router.get('/orders', portalListOrders)
 router.get('/orders/:orderId', portalGetOrder)
 router.post('/orders/:orderId/stripe-checkout', createStripeCheckout)
+router.post('/orders/:orderId/verify-stripe-payment', verifyStripePayment)
 router.post('/orders/:orderId/payment-voucher', voucherUpload.single('file'), uploadPaymentVoucher)
 router.get('/calendar', portalCalendar)
 
