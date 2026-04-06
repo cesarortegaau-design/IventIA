@@ -685,10 +685,11 @@ export default function BookingCalendarPage() {
 
     const isSpace   = b.type === 'EVENT_SPACE'
     const phase     = b.phase ? PHASE_STYLE[b.phase] : null
-    const background  = isSpace ? (phase?.background ?? '#e6f4ff') : `${ORDER_STATUS_COLOR[b.order?.status] ?? '#1677ff'}22`
-    const borderColor = isSpace ? (phase?.color ?? '#1677ff')      : (ORDER_STATUS_COLOR[b.order?.status] ?? '#1677ff')
+    const isConfirmed = isSpace && b.event?.status === 'CONFIRMED'
+    const background  = isConfirmed ? '#f6ffed' : (isSpace ? (phase?.background ?? '#e6f4ff') : `${ORDER_STATUS_COLOR[b.order?.status] ?? '#1677ff'}22`)
+    const borderColor = isConfirmed ? '#52c41a' : (isSpace ? (phase?.color ?? '#1677ff')      : (ORDER_STATUS_COLOR[b.order?.status] ?? '#1677ff'))
     const borderStyle = phase?.borderStyle ?? 'solid'
-    const textColor   = isSpace ? (phase?.color ?? '#1677ff')      : (ORDER_STATUS_COLOR[b.order?.status] ?? '#1677ff')
+    const textColor   = isConfirmed ? '#389e0d' : (isSpace ? (phase?.color ?? '#1677ff')      : (ORDER_STATUS_COLOR[b.order?.status] ?? '#1677ff'))
     const label       = isSpace
       ? (b.event?.name ?? '—')
       : `${b.order?.client?.companyName ?? `${b.order?.client?.firstName ?? ''} ${b.order?.client?.lastName ?? ''}`.trim()} · ${b.order?.orderNumber}`
