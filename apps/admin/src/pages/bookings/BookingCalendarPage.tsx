@@ -1108,6 +1108,7 @@ export default function BookingCalendarPage() {
                         const { left, width, background, borderColor, borderStyle, textColor, label } = getBarStyle(b)
                         const top    = b.lane * LANE_H + 5
                         const height = LANE_H - 10
+                        const isFirstPosition = b.overlapCount > 1 && b.overlapRank === 1
 
                         const barDiv = (
                           <div
@@ -1115,8 +1116,8 @@ export default function BookingCalendarPage() {
                               position: 'absolute',
                               left, top, width, height,
                               borderRadius: 6,
-                              background,
-                              border: `2px ${borderStyle} ${borderColor}`,
+                              background: isFirstPosition ? '#fecaca' : background,
+                              border: `2px ${borderStyle} ${isFirstPosition ? '#dc2626' : borderColor}`,
                               display: 'flex',
                               alignItems: 'center',
                               paddingLeft: 8, paddingRight: 6,
