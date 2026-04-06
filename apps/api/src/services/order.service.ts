@@ -90,7 +90,7 @@ export async function createOrder(input: CreateOrderInput) {
 
   const orderNumber = await generateOrderNumber(input.tenantId)
 
-  return prisma.$transaction(async (tx) => {
+  const order = await prisma.$transaction(async (tx) => {
     const order = await tx.order.create({
       data: {
         tenantId: input.tenantId,
@@ -129,6 +129,16 @@ export async function createOrder(input: CreateOrderInput) {
 
     return order
   })
+
+  // Audit the order creation
+  await auditService.log(input.tenantId, input.createdById, 'Order', order.id, 'CREATE', null, {
+    orderNumber: order.orderNumber,
+    status: order.status,
+    total: Number(order.total),
+    lineItemsCount: order.lineItems.length,
+  })
+
+  return order
 }
 
 export async function transitionOrderStatus(

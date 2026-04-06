@@ -1,0 +1,57 @@
+
+
+El proceso de reserva de espacios es gestionado así:
+
+Aquí se describe el proceso general:
+- Búsqueda y disponibilidad: búsqueda para encontrar salas disponibles, permitiendo a los usuarios filtrar por 
+capacidad, ubicación o características.
+- Gestión de detalles del evento: Permite registrar todos los detalles de la reserva, incluyendo instrucciones 
+especiales o requisitos técnicos.
+- Asignación y resolución de conflictos: Si una sala ya está reservada, el sistema ofrece opciones para asignar 
+otra habitación, omitir la fecha conflictiva o gestionar la superposición.
+Al gestionar la superposición se debe:
+
+Proceso de Gestión de Superposiciones 
+- Detección Automática de Conflictos: Cuando un usuario intenta agregar una reserva (booking) a un evento en una 
+fecha/hora donde el espacio ya está ocupado, no bloquear automáticamente el proceso, sino que identificar el 
+conflicto y marca la nueva reserva con un "estado de conflicto" (conflict status).
+
+- Visualización de la Superposición: Al intentar confirmar la reserva, el sistema notifica al usuario qué días u
+ horas específicos tienen conflictos. Esto incluye una funcionalidad donde el sistema muestra los espacios no 
+disponibles y la razón por la cual no se pueden reservar (por ejemplo, "conflicto" o "sala demasiado pequeña").
+
+- Opciones de Resolución de Conflictos: Al detectar la superposición, se ofrece tres opciones principales al usuario:
+Asignar una sala diferente (Assign Room): Cambiar el espacio para la fecha conflictiva a uno disponible.
+Omitir la fecha (Skip): Eliminar la fecha específica del conflicto de la serie de reservas sin cancelar todo el evento.
+Mantener el conflicto: Dejar la reserva en estado de "conflicto" para que un planificador de eventos la revise 
+posteriormente.
+Uso de la "Conflict Status": Los planificadores pueden configurar un estado especial de "Conflicto" que permite guardar
+ la reserva sin finalizarla, permitiendo la resolución manual más tarde estableciendo que número ocupa
+en  la lista de espera provocado por otras reservaciones previas
+
+- Características Clave en el Manejo de Superposiciones
+ Cuando se cancela una reservación se "desaloja" y marca a los eventos preexistentes 
+que se superponen, en una nueva lista de espera considerando la cronología en el que se crearon las reservas
+
+Gestión de Series: Si se realiza una reserva recurrente (ej. todos los lunes), se muestra exactamente qué días
+ de la serie tienen conflictos de espacio y cuáles están disponibles.
+Evitar errores: La configuración de capacidad de la sala determina si se permiten múltiples reservas; 
+configurar la capacidad de la sala a "1" evita la mayoría de las superposiciones de espacios de tipo "doble-booking"
+
+
+- Gestión de recursos: El sistema permite visualizar la disponibilidad de equipos (sillas, proyectores, etc.) y 
+alerta automáticamente si no hay suficientes recursos para cubrir el evento.
+- Confirmación: Una vez seleccionada la sala y los recursos, el sistema finaliza la reserva y puede emitir 
+confirmaciones. 
+
+-Las reservas pueden ser creadas desde un evento directamente o sombreando celdas desde el calendario de espacios
+
+-El calendario de espacios debe mostrar una sección en la reserva que indique en que número de la lista de espera de
+superposiciones se encuentra, ese número ordena la lista cronológicamente por fecha y hora de creación
+
+
+- el calendario de reservas debe de mostrar todos los espacios, tengan o no reservas
+
+- el calendario de reservas debe tener una funcionalidad que al sombrear celdas se puedan crear reservas para un evento existente
+o para un evento nuevo
+	

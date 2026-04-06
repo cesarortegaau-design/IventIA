@@ -1,0 +1,9 @@
+-En el portal las ordenes pueden ser paga por 2 metodos:
+	- Pago en línea con Stripe
+	- Pago diferido con comprobante
+
+- Para Stripe por favor implementa la integración con Stripe, la orden cambia estado a Pagada
+- Para pago diferido, el usuario del portal debe anexar en un movimiento posterior la evidencia de que pagó por
+transferencia, cheque o depósito, esto agregando yn comprobante digital. Al hacer esto se notifica a contabilidad y 
+aparece en su dashboard, la orden cambia a En Pago. En admin en el dashboard de contabilidad se puede
+revisar el archivo anexo y poner la orden en estado Pagada
