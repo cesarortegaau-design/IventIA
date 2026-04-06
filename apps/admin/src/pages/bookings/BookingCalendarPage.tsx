@@ -1117,7 +1117,7 @@ export default function BookingCalendarPage() {
                               left, top, width, height,
                               borderRadius: 6,
                               background: isFirstPosition ? '#ff6b6b !important' : background,
-                              border: isFirstPosition ? '3px solid #000000 !important' : `2px ${borderStyle} ${borderColor}`,
+                              border: isFirstPosition ? '4px solid #000000 !important' : `2px ${borderStyle} ${borderColor}`,
                               display: 'flex',
                               alignItems: 'center',
                               paddingLeft: 8, paddingRight: 6,
@@ -1127,7 +1127,7 @@ export default function BookingCalendarPage() {
                               transition: 'filter 0.15s',
                               pointerEvents: selectionMode ? 'none' : 'auto',
                               opacity: selectionMode ? 0.5 : 1,
-                              boxShadow: isFirstPosition ? '0 0 10px rgba(255, 0, 0, 0.8)' : 'none',
+                              boxShadow: isFirstPosition ? '0 0 10px rgba(0, 0, 0, 0.5)' : 'none',
                             }}
                             onMouseEnter={e => { if (!selectionMode) (e.currentTarget.style.filter = 'brightness(0.93)') }}
                             onMouseLeave={e => { if (!selectionMode) (e.currentTarget.style.filter = '') }}

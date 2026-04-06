@@ -139,7 +139,7 @@ function ProductCard({ item, cartQty, onAdd, onRemove, onClick }: {
             position: 'absolute', top: 8, right: 8, zIndex: 1,
             background: COLORS.secondary, color: COLORS.primary, borderRadius: '50%',
             width: 28, height: 28, display: 'flex', alignItems: 'center',
-            justifyContent: 'center', fontWeight: 700, fontSize: 13,
+            justifyContent: 'center', fontWeight: 500, fontSize: 13,
           }}>
             {cartQty}
           </div>
@@ -191,7 +191,7 @@ function ProductCard({ item, cartQty, onAdd, onRemove, onClick }: {
                 onClick={onAdd}
                 style={{
                   background: COLORS.primary, color: '#fff', border: 'none',
-                  borderRadius: 8, padding: '6px 14px', fontWeight: 700,
+                  borderRadius: 8, padding: '6px 14px', fontWeight: 500,
                   fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
                 }}
               >
@@ -201,13 +201,13 @@ function ProductCard({ item, cartQty, onAdd, onRemove, onClick }: {
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <button onClick={onRemove} style={{
                   background: COLORS.offWhite, color: COLORS.primary, border: 'none', borderRadius: 6,
-                  width: 28, height: 28, cursor: 'pointer', fontWeight: 700, fontSize: 16,
+                  width: 28, height: 28, cursor: 'pointer', fontWeight: 500, fontSize: 16,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>−</button>
-                <span style={{ fontWeight: 700, minWidth: 18, textAlign: 'center', color: COLORS.primary }}>{cartQty}</span>
+                <span style={{ fontWeight: 500, minWidth: 18, textAlign: 'center', color: COLORS.primary }}>{cartQty}</span>
                 <button onClick={onAdd} style={{
                   background: COLORS.primary, color: '#fff', border: 'none', borderRadius: 6,
-                  width: 28, height: 28, cursor: 'pointer', fontWeight: 700, fontSize: 16,
+                  width: 28, height: 28, cursor: 'pointer', fontWeight: 500, fontSize: 16,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>+</button>
               </div>
@@ -336,7 +336,7 @@ function ProductDetailDrawer({ item, cartQty, onAdd, onRemove, onClose, open }: 
             style={{
               width: '100%', background: COLORS.primary, color: '#fff',
               border: 'none', borderRadius: 10, padding: '14px 0',
-              fontWeight: 700, fontSize: 16, cursor: 'pointer',
+              fontWeight: 500, fontSize: 16, cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             }}
           >
@@ -347,7 +347,7 @@ function ProductDetailDrawer({ item, cartQty, onAdd, onRemove, onClose, open }: 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 12 }}>
               <button onClick={onRemove} style={{
                 background: COLORS.offWhite, color: COLORS.primary, border: 'none', borderRadius: 8,
-                width: 40, height: 40, cursor: 'pointer', fontWeight: 700, fontSize: 20,
+                width: 40, height: 40, cursor: 'pointer', fontWeight: 500, fontSize: 20,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>−</button>
               <span style={{ fontWeight: 800, fontSize: 24, color: COLORS.primary, minWidth: 36, textAlign: 'center' }}>
@@ -355,7 +355,7 @@ function ProductDetailDrawer({ item, cartQty, onAdd, onRemove, onClose, open }: 
               </span>
               <button onClick={onAdd} style={{
                 background: COLORS.primary, color: '#fff', border: 'none', borderRadius: 8,
-                width: 40, height: 40, cursor: 'pointer', fontWeight: 700, fontSize: 20,
+                width: 40, height: 40, cursor: 'pointer', fontWeight: 500, fontSize: 20,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>+</button>
             </div>
@@ -421,7 +421,7 @@ function CartDrawer({ open, cart, onClose, onQtyChange, onRemove, onSubmit, subm
               width: '100%', background: cart.length === 0 ? COLORS.offWhite : COLORS.primary,
               color: cart.length === 0 ? COLORS.textTertiary : '#fff',
               border: 'none', borderRadius: 10, padding: '14px 0',
-              fontWeight: 700, fontSize: 15, cursor: cart.length === 0 ? 'default' : 'pointer',
+              fontWeight: 500, fontSize: 15, cursor: cart.length === 0 ? 'default' : 'pointer',
             }}
           >
             {submitting ? 'Enviando...' : 'Confirmar solicitud'}
@@ -462,28 +462,28 @@ function CartDrawer({ open, cart, onClose, onQtyChange, onRemove, onSubmit, subm
                 <div style={{ fontWeight: 600, fontSize: 13, color: COLORS.textPrimary, marginBottom: 2 }}>
                   {item.name}
                 </div>
-                <div style={{ fontSize: 13, color: COLORS.primary, fontWeight: 700 }}>
+                <div style={{ fontSize: 13, color: COLORS.primary, fontWeight: 500 }}>
                   ${item.unitPrice.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
                   <button onClick={() => onQtyChange(item.priceListItemId, item.quantity - 1)} style={{
                     background: COLORS.offWhite, color: COLORS.primary, border: 'none', borderRadius: 5,
-                    width: 24, height: 24, cursor: 'pointer', fontWeight: 700, fontSize: 14,
+                    width: 24, height: 24, cursor: 'pointer', fontWeight: 500, fontSize: 14,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>−</button>
-                  <span style={{ fontWeight: 700, minWidth: 16, textAlign: 'center', fontSize: 14, color: COLORS.primary }}>
+                  <span style={{ fontWeight: 500, minWidth: 16, textAlign: 'center', fontSize: 14, color: COLORS.primary }}>
                     {item.quantity}
                   </span>
                   <button onClick={() => onQtyChange(item.priceListItemId, item.quantity + 1)} style={{
                     background: COLORS.primary, color: '#fff', border: 'none', borderRadius: 5,
-                    width: 24, height: 24, cursor: 'pointer', fontWeight: 700, fontSize: 14,
+                    width: 24, height: 24, cursor: 'pointer', fontWeight: 500, fontSize: 14,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>+</button>
                 </div>
               </div>
               {/* Line total + remove */}
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 13, color: COLORS.textPrimary, marginBottom: 6 }}>
+                <div style={{ fontWeight: 500, fontSize: 13, color: COLORS.textPrimary, marginBottom: 6 }}>
                   ${(item.unitPrice * item.quantity).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                 </div>
                 <button onClick={() => onRemove(item.priceListItemId)} style={{
@@ -632,8 +632,8 @@ export default function CatalogPage() {
           El equipo del evento revisará tu solicitud y te notificará.
         </Text>
         <Space>
-          <Button onClick={() => navigate('/orders')}>Ver mis solicitudes</Button>
-          <Button type="primary" style={{ background: COLORS.primary, borderColor: COLORS.primary }}
+          <Button onClick={() => navigate('/orders')} style={{ fontWeight: 500 }}>Ver mis solicitudes</Button>
+          <Button type="primary" style={{ background: COLORS.primary, borderColor: COLORS.primary, fontWeight: 500 }}
             onClick={() => { setOrderDone(null) }}>
             Seguir comprando
           </Button>
@@ -739,14 +739,14 @@ export default function CatalogPage() {
             onClick={() => setCartOpen(true)}
             style={{
               width: '100%', background: COLORS.primary, color: '#fff', border: 'none',
-              borderRadius: 14, padding: '14px 20px', fontWeight: 700, fontSize: 15,
+              borderRadius: 14, padding: '14px 20px', fontWeight: 500, fontSize: 15,
               cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               boxShadow: '0 4px 16px rgba(26,26,26,0.15)',
             }}
           >
             <span style={{
               background: 'rgba(255,255,255,0.25)', borderRadius: 6,
-              padding: '2px 10px', fontSize: 13, fontWeight: 700,
+              padding: '2px 10px', fontSize: 13, fontWeight: 500,
             }}>
               {cartTotal} ítem{cartTotal !== 1 ? 's' : ''}
             </span>
