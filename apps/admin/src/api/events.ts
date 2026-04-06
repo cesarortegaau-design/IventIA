@@ -23,4 +23,6 @@ export const eventsApi = {
   },
   deleteDocument: (id: string, docId: string) =>
     apiClient.delete(`/events/${id}/documents/${docId}`).then(r => r.data),
+  importStands: (eventId: string, rows: any[]) =>
+    apiClient.post(`/events/${eventId}/stands/import`, rows).then(r => r.data),
 }

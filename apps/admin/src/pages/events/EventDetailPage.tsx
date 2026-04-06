@@ -6,7 +6,7 @@ import {
   Tabs, App, Select, Typography, Divider, InputNumber, Form, DatePicker, Modal, Switch, Badge,
   Tooltip, Popconfirm, Input, Upload, Timeline, Spin, Alert,
 } from 'antd'
-import { EditOutlined, PlusOutlined, ArrowLeftOutlined, CopyOutlined, StopOutlined, GlobalOutlined, DownloadOutlined, DeleteOutlined, CalendarOutlined, FileOutlined, UploadOutlined, AuditOutlined, WarningOutlined } from '@ant-design/icons'
+import { EditOutlined, PlusOutlined, ArrowLeftOutlined, CopyOutlined, StopOutlined, GlobalOutlined, DownloadOutlined, DeleteOutlined, CalendarOutlined, FileOutlined, UploadOutlined, AuditOutlined, WarningOutlined, ImportOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { eventsApi } from '../../api/events'
 import { portalCodesApi } from '../../api/portalCodes'
@@ -45,6 +45,8 @@ export default function EventDetailPage() {
   const [spaceForm] = Form.useForm()
   const [docUploading, setDocUploading] = useState(false)
   const [auditSpace, setAuditSpace] = useState<any>(null)
+  const [standsImportPreview, setStandsImportPreview] = useState<any[] | null>(null)
+  const [standsImportModalOpen, setStandsImportModalOpen] = useState(false)
 
   const deleteDocMutation = useMutation({
     mutationFn: (docId: string) => eventsApi.deleteDocument(id!, docId),
@@ -212,6 +214,60 @@ export default function EventDetailPage() {
     onSuccess: () => { refetchSpaces(); message.success('Reserva eliminada') },
     onError: () => message.error('Error al eliminar'),
   })
+
+  const importStandsMutation = useMutation({
+    mutationFn: (rows: any[]) => eventsApi.importStands(id!, rows),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['event', id] })
+      setStandsImportModalOpen(false)
+      setStandsImportPreview(null)
+      message.success(`${res.data.imported} stand(s) importados`)
+    },
+    onError: () => message.error('Error al importar stands'),
+  })
+
+  function downloadStandsTemplate() {
+    const header = 'codigo,ancho_m,largo_m,alto_m,notas_ubicacion'
+    const example = 'A01,3,3,2.5,Esquina norte'
+    const blob = new Blob([header + '\n' + example + '\n'], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `plantilla-stands-${event?.code ?? 'evento'}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function parseStandsCsv(text: string): any[] {
+    const lines = text.replace(/\r/g, '').split('\n').filter(l => l.trim())
+    if (lines.length < 2) return []
+    const headers = lines[0].split(',').map(h => h.trim())
+    return lines.slice(1).map(line => {
+      const cols = line.split(',').map(c => c.trim())
+      const row: Record<string, string> = {}
+      headers.forEach((h, i) => { row[h] = cols[i] ?? '' })
+      return {
+        codigo:          row['codigo'] ?? '',
+        ancho_m:         row['ancho_m'] !== '' ? Number(row['ancho_m']) : null,
+        largo_m:         row['largo_m'] !== '' ? Number(row['largo_m']) : null,
+        alto_m:          row['alto_m'] !== '' ? Number(row['alto_m']) : null,
+        notas_ubicacion: row['notas_ubicacion'] || null,
+      }
+    }).filter(r => r.codigo)
+  }
+
+  function handleStandsCsvUpload(file: File) {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const text = e.target?.result as string
+      const rows = parseStandsCsv(text)
+      if (!rows.length) { message.error('El CSV no contiene filas válidas'); return }
+      setStandsImportPreview(rows)
+      setStandsImportModalOpen(true)
+    }
+    reader.readAsText(file)
+    return false
+  }
 
   const openSpaceModal = (space?: any) => {
     setEditingSpace(space ?? null)
@@ -595,7 +651,20 @@ export default function EventDetailPage() {
               label: `Stands (${event.stands?.length ?? 0})`,
               children: (
                 <>
-                  <div style={{ textAlign: 'right', marginBottom: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 8 }}>
+                    <Button
+                      icon={<DownloadOutlined />}
+                      onClick={downloadStandsTemplate}
+                    >
+                      Descargar plantilla
+                    </Button>
+                    <Upload
+                      accept=".csv"
+                      showUploadList={false}
+                      beforeUpload={handleStandsCsvUpload}
+                    >
+                      <Button icon={<ImportOutlined />}>Importar CSV</Button>
+                    </Upload>
                     <Button
                       icon={<DownloadOutlined />}
                       onClick={() => exportToCsv(`stands-${event.code}`, (event.stands ?? []).map((s: any) => ({
@@ -619,9 +688,40 @@ export default function EventDetailPage() {
                       { title: 'Código', dataIndex: 'code' },
                       { title: 'Cliente', render: (_: any, r: any) => r.client?.companyName || `${r.client?.firstName ?? ''} ${r.client?.lastName ?? ''}` },
                       { title: 'Dimensiones', render: (_: any, r: any) => r.widthM ? `${r.widthM}m × ${r.depthM}m` : '—' },
+                      { title: 'Alto', render: (_: any, r: any) => r.heightM ? `${r.heightM}m` : '—' },
+                      { title: 'Notas ubic.', dataIndex: 'locationNotes', render: (v: string) => v || '—' },
                       { title: 'Órdenes', render: (_: any, r: any) => r._count?.orders ?? 0 },
                     ]}
                   />
+
+                  <Modal
+                    title="Vista previa de importación"
+                    open={standsImportModalOpen}
+                    onCancel={() => { setStandsImportModalOpen(false); setStandsImportPreview(null) }}
+                    onOk={() => standsImportPreview && importStandsMutation.mutate(standsImportPreview)}
+                    confirmLoading={importStandsMutation.isPending}
+                    okText={`Importar ${standsImportPreview?.length ?? 0} stand(s)`}
+                    cancelText="Cancelar"
+                    width={640}
+                  >
+                    <p style={{ marginBottom: 12, color: '#64748b', fontSize: 13 }}>
+                      Los stands existentes con el mismo código serán actualizados. Los nuevos serán creados.
+                    </p>
+                    <Table
+                      dataSource={standsImportPreview ?? []}
+                      rowKey="codigo"
+                      size="small"
+                      pagination={false}
+                      scroll={{ y: 320 }}
+                      columns={[
+                        { title: 'Código', dataIndex: 'codigo' },
+                        { title: 'Ancho (m)', dataIndex: 'ancho_m', render: (v: any) => v ?? '—' },
+                        { title: 'Largo (m)', dataIndex: 'largo_m', render: (v: any) => v ?? '—' },
+                        { title: 'Alto (m)', dataIndex: 'alto_m', render: (v: any) => v ?? '—' },
+                        { title: 'Notas ubicación', dataIndex: 'notas_ubicacion', render: (v: any) => v ?? '—' },
+                      ]}
+                    />
+                  </Modal>
                 </>
               ),
             },

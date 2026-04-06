@@ -5,6 +5,7 @@ import { listEvents, getEvent, createEvent, updateEvent, updateEventStatus } fro
 import { listOrdersForEvent, createOrder } from '../controllers/orders.controller'
 import { listEventSpaces, createEventSpace, updateEventSpace, deleteEventSpace, getEventSpaceAudit } from '../controllers/eventSpaces.controller'
 import { uploadEventDocument, deleteEventDocument } from '../controllers/documents.controller'
+import { importStands } from '../controllers/stands.controller'
 
 const docUpload = multer({
   storage: multer.memoryStorage(),
@@ -31,6 +32,9 @@ router.post('/:eventId/spaces', createEventSpace)
 router.put('/:eventId/spaces/:spaceId', updateEventSpace)
 router.delete('/:eventId/spaces/:spaceId', deleteEventSpace)
 router.get('/:eventId/spaces/:spaceId/audit', getEventSpaceAudit)
+
+// Stands import
+router.post('/:eventId/stands/import', importStands)
 
 // Documents
 router.post('/:id/documents', docUpload.single('file'), uploadEventDocument)
