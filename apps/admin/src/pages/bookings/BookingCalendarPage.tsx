@@ -1127,7 +1127,7 @@ export default function BookingCalendarPage() {
                               transition: 'filter 0.15s',
                               pointerEvents: selectionMode ? 'none' : 'auto',
                               opacity: selectionMode ? 0.5 : 1,
-                              boxShadow: isFirstPosition ? '0 0 10px rgba(0, 0, 0, 0.5)' : 'none',
+                              boxShadow: 'none',
                             }}
                             onMouseEnter={e => { if (!selectionMode) (e.currentTarget.style.filter = 'brightness(0.93)') }}
                             onMouseLeave={e => { if (!selectionMode) (e.currentTarget.style.filter = '') }}
@@ -1145,16 +1145,17 @@ export default function BookingCalendarPage() {
                               <span style={{
                                 flexShrink: 0, marginLeft: 4,
                                 background: b.overlapRank === 1 ? '#000000' : borderColor,
-                                color: b.overlapRank === 1 ? '#ffffff' : '#fff',
+                                color: '#fff',
                                 borderRadius: 10,
                                 fontSize: b.overlapRank === 1 ? 15 : 13,
-                                fontWeight: b.overlapRank === 1 ? 900 : 600,
+                                fontWeight: 300,
                                 padding: b.overlapRank === 1 ? '2px 8px' : '1px 7px',
                                 lineHeight: '18px',
                                 opacity: 1,
-                                border: b.overlapRank === 1 ? '2px solid #000000' : 'none',
+                                fontFamily: 'Inter, system-ui, sans-serif',
+                                letterSpacing: '0.2px',
                               }}>
-                                {b.overlapRank === 1 ? '⭐ #1' : `#${b.overlapRank}`}/{b.overlapCount}
+                                {b.overlapRank === 1 ? '#1' : `#${b.overlapRank}`}/{b.overlapCount}
                               </span>
                             )}
                           </div>
