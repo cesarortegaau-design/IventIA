@@ -740,28 +740,25 @@ export default function CatalogPage() {
       {/* Floating cart bar (mobile) */}
       {cartTotal > 0 && (
         <div style={{
-          position: 'fixed', bottom: 72, left: 12, right: 12, zIndex: 100,
+          position: 'fixed', bottom: 72, left: '50%', transform: 'translateX(-50%)', zIndex: 100,
         }}>
           <button
             onClick={() => setCartOpen(true)}
             style={{
-              width: '100%', background: COLORS.primary, color: '#fff', border: 'none',
-              borderRadius: 10, padding: '9px 16px', fontWeight: 300, fontSize: 13,
-              cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              boxShadow: '0 2px 8px rgba(26,26,26,0.10)',
-              fontFamily: 'Inter, sans-serif', letterSpacing: '0.2px',
+              background: COLORS.primary, color: '#fff', border: 'none',
+              borderRadius: 20, padding: '9px 20px', fontWeight: 300, fontSize: 13,
+              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10,
+              boxShadow: '0 2px 8px rgba(26,26,26,0.12)',
+              fontFamily: 'Inter, sans-serif', letterSpacing: '0.2px', whiteSpace: 'nowrap',
             }}
           >
-            <span style={{
-              background: 'rgba(255,255,255,0.18)', borderRadius: 5,
-              padding: '1px 8px', fontSize: 12, fontWeight: 400,
-            }}>
-              {cartTotal} ítem{cartTotal !== 1 ? 's' : ''}
-            </span>
+            <ShoppingCartOutlined style={{ fontSize: 14 }} />
             <span style={{ fontWeight: 400 }}>Ver carrito</span>
-            <span style={{ fontWeight: 300, letterSpacing: '-0.2px' }}>
-              ${cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
-                .toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+            <span style={{
+              background: 'rgba(255,255,255,0.18)', borderRadius: 10,
+              padding: '1px 7px', fontSize: 12, fontWeight: 400,
+            }}>
+              {cartTotal}
             </span>
           </button>
         </div>
