@@ -149,7 +149,7 @@ export default function EventDetailPage() {
 
   // Map spaceId → conflicting events (from OTHER events on the same resource)
   const overlapMap = useMemo(() => {
-    const map: Record<string, { count: number; events: string[] }> = {}
+    const map: Record<string, { count: number; items: { label: string; createdAt: string }[] }> = {}
     if (!calendarData?.data) return map
     const allBookings: any[] = calendarData.data.bookings ?? []
     for (const space of spaces) {
@@ -164,9 +164,10 @@ export default function EventDetailPage() {
       if (conflicting.length > 0) {
         map[space.id] = {
           count: conflicting.length,
-          events: conflicting.map((b: any) =>
-            b.event ? `${b.event.code} – ${b.event.name}` : `OS ${b.order?.orderNumber ?? ''}`
-          ),
+          items: conflicting.map((b: any) => ({
+            label: b.event ? `${b.event.code} – ${b.event.name}` : `OS ${b.order?.orderNumber ?? ''}`,
+            createdAt: b.createdAt ?? '',
+          })),
         }
       }
     }
@@ -353,6 +354,13 @@ export default function EventDetailPage() {
                         },
                       },
                       {
+                        title: 'Creación',
+                        dataIndex: 'createdAt',
+                        render: (v: string) => v ? (
+                          <span style={{ fontSize: 12, color: '#64748b' }}>{dayjs(v).format('DD/MM/YY HH:mm')}</span>
+                        ) : '—',
+                      },
+                      {
                         title: 'Notas',
                         dataIndex: 'notes',
                         render: (v: string) => v
@@ -367,10 +375,19 @@ export default function EventDetailPage() {
                           if (!overlap) return <Tag color="green">Sin conflictos</Tag>
                           return (
                             <Tooltip
+                              overlayStyle={{ maxWidth: 360 }}
+                              overlayInnerStyle={{ fontFamily: 'Inter, sans-serif', fontWeight: 300, fontSize: 12, padding: '10px 14px' }}
                               title={
                                 <div>
-                                  <div style={{ marginBottom: 4 }}>Solapamiento con:</div>
-                                  {overlap.events.map((e, i) => <div key={i}>• {e}</div>)}
+                                  <div style={{ fontWeight: 500, marginBottom: 8 }}>Solapamiento con:</div>
+                                  {overlap.items.map((item, i) => (
+                                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 4 }}>
+                                      <span>• {item.label}</span>
+                                      <span style={{ opacity: 0.65, whiteSpace: 'nowrap' }}>
+                                        {item.createdAt ? dayjs(item.createdAt).format('DD/MM/YY HH:mm') : '—'}
+                                      </span>
+                                    </div>
+                                  ))}
                                 </div>
                               }
                             >
