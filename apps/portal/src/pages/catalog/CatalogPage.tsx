@@ -18,6 +18,18 @@ const apiUrl = import.meta.env.VITE_API_URL || ''
 const imgSrc = (path: string | null | undefined) =>
   path ? (path.startsWith('/uploads') ? `${apiUrl}${path}` : path) : undefined
 
+// Luxury minimalist color palette (24s.com aesthetic)
+const COLORS = {
+  primary: '#1a1a1a',      // Charcoal — headings, buttons, key text
+  secondary: '#a8a39d',    // Taupe — badges, secondary elements
+  white: '#ffffff',        // Pure white — cards, main surface
+  offWhite: '#f9f7f5',     // Off-white — image placeholders, light sections
+  border: '#e8e6e3',       // Light gray — dividers
+  textPrimary: '#1a1a1a',  // Charcoal
+  textSecondary: '#6b6b6b', // Medium gray
+  textTertiary: '#999999',  // Light gray
+}
+
 const TYPE_LABELS: Record<string, string> = {
   SPACE: 'Espacio', EQUIPMENT: 'Equipo', FURNITURE: 'Mobiliario',
   SERVICE: 'Servicio', CONSUMABLE: 'Consumible',
@@ -66,16 +78,16 @@ function ProductCard({ item, cartQty, onAdd, onRemove, onClick }: {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        background: '#fff',
+        background: COLORS.white,
         borderRadius: 12,
         overflow: 'hidden',
         cursor: 'pointer',
         display: 'flex',
         flexDirection: 'column',
-        boxShadow: hovered ? '0 8px 32px rgba(0,0,0,0.12)' : '0 2px 8px rgba(0,0,0,0.06)',
-        transform: hovered ? 'translateY(-2px)' : 'none',
+        boxShadow: hovered ? '0 4px 16px rgba(0,0,0,0.08)' : '0 1px 4px rgba(0,0,0,0.04)',
+        transform: hovered ? 'translateY(-1px)' : 'none',
         transition: 'all 0.2s ease',
-        border: cartQty > 0 ? '2px solid #531dab' : '2px solid transparent',
+        border: cartQty > 0 ? `2px solid ${COLORS.primary}` : `2px solid transparent`,
       }}
     >
       {/* Image area — fixed height, strictly clipped */}
@@ -83,7 +95,7 @@ function ProductCard({ item, cartQty, onAdd, onRemove, onClick }: {
         position: 'relative',
         height: 160,
         flexShrink: 0,
-        background: '#f8f6ff',
+        background: COLORS.offWhite,
         overflow: 'hidden',
       }}>
         {showImg && (
@@ -114,7 +126,7 @@ function ProductCard({ item, cartQty, onAdd, onRemove, onClick }: {
         {/* Type badge */}
         <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 1 }}>
           <span style={{
-            background: '#531dab', color: '#fff', borderRadius: 20,
+            background: COLORS.secondary, color: '#fff', borderRadius: 20,
             padding: '2px 10px', fontSize: 11, fontWeight: 600,
           }}>
             {TYPE_LABELS[item.resource.type] ?? item.resource.type}
@@ -125,7 +137,7 @@ function ProductCard({ item, cartQty, onAdd, onRemove, onClick }: {
         {cartQty > 0 && (
           <div style={{
             position: 'absolute', top: 8, right: 8, zIndex: 1,
-            background: '#531dab', color: '#fff', borderRadius: '50%',
+            background: COLORS.secondary, color: COLORS.primary, borderRadius: '50%',
             width: 28, height: 28, display: 'flex', alignItems: 'center',
             justifyContent: 'center', fontWeight: 700, fontSize: 13,
           }}>
@@ -143,7 +155,7 @@ function ProductCard({ item, cartQty, onAdd, onRemove, onClick }: {
       }}>
         {/* Name */}
         <div style={{
-          fontWeight: 700, fontSize: 14, color: '#1a1a2e',
+          fontWeight: 600, fontSize: 14, color: COLORS.textPrimary,
           lineHeight: 1.3, marginBottom: 4,
         }}>
           {item.resource.name}
@@ -153,7 +165,7 @@ function ProductCard({ item, cartQty, onAdd, onRemove, onClick }: {
         <div style={{ flex: 1, minHeight: 32 }}>
           {item.resource.portalDesc && (
             <div style={{
-              fontSize: 12, color: '#64748b', lineHeight: 1.4,
+              fontSize: 12, color: COLORS.textSecondary, lineHeight: 1.4,
               display: '-webkit-box', WebkitLineClamp: 2,
               WebkitBoxOrient: 'vertical', overflow: 'hidden',
             }}>
@@ -165,10 +177,10 @@ function ProductCard({ item, cartQty, onAdd, onRemove, onClick }: {
         {/* Price + controls — always at bottom */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
           <div>
-            <div style={{ fontWeight: 800, fontSize: 16, color: '#531dab' }}>
+            <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.primary }}>
               ${price.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
             </div>
-            <div style={{ fontSize: 11, color: TIER_COLORS[item.tier], fontWeight: 600, marginTop: 1 }}>
+            <div style={{ fontSize: 11, color: COLORS.secondary, fontWeight: 600, marginTop: 1 }}>
               {TIER_LABELS[item.tier]}
             </div>
           </div>
@@ -178,7 +190,7 @@ function ProductCard({ item, cartQty, onAdd, onRemove, onClick }: {
               <button
                 onClick={onAdd}
                 style={{
-                  background: '#531dab', color: '#fff', border: 'none',
+                  background: COLORS.primary, color: '#fff', border: 'none',
                   borderRadius: 8, padding: '6px 14px', fontWeight: 700,
                   fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
                 }}
@@ -188,13 +200,13 @@ function ProductCard({ item, cartQty, onAdd, onRemove, onClick }: {
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <button onClick={onRemove} style={{
-                  background: '#f3f0ff', color: '#531dab', border: 'none', borderRadius: 6,
+                  background: COLORS.offWhite, color: COLORS.primary, border: 'none', borderRadius: 6,
                   width: 28, height: 28, cursor: 'pointer', fontWeight: 700, fontSize: 16,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>−</button>
-                <span style={{ fontWeight: 700, minWidth: 18, textAlign: 'center', color: '#531dab' }}>{cartQty}</span>
+                <span style={{ fontWeight: 700, minWidth: 18, textAlign: 'center', color: COLORS.primary }}>{cartQty}</span>
                 <button onClick={onAdd} style={{
-                  background: '#531dab', color: '#fff', border: 'none', borderRadius: 6,
+                  background: COLORS.primary, color: '#fff', border: 'none', borderRadius: 6,
                   width: 28, height: 28, cursor: 'pointer', fontWeight: 700, fontSize: 16,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>+</button>
@@ -226,19 +238,19 @@ function ProductDetailDrawer({ item, cartQty, onAdd, onRemove, onClose, open }: 
       open={open}
       onClose={onClose}
       width={Math.min(560, window.innerWidth)}
-      styles={{ body: { padding: 0 }, header: { background: '#f8f6ff' } }}
+      styles={{ body: { padding: 0 }, header: { background: COLORS.offWhite, borderBottom: `1px solid ${COLORS.border}` } }}
       title={
         <Space>
           <Tag color={TYPE_COLORS[item.resource.type] ?? 'default'}>
             {TYPE_LABELS[item.resource.type] ?? item.resource.type}
           </Tag>
-          <span style={{ fontWeight: 700 }}>{item.resource.name}</span>
+          <span style={{ fontWeight: 600, color: COLORS.textPrimary }}>{item.resource.name}</span>
         </Space>
       }
     >
       {/* Image gallery */}
       {images.length > 0 ? (
-        <div style={{ background: '#f8f6ff' }}>
+        <div style={{ background: COLORS.offWhite }}>
           <Image.PreviewGroup>
             <div style={{ display: 'flex', gap: 6, padding: 12, overflowX: 'auto' }}>
               {images.map((src, i) => (
@@ -256,7 +268,7 @@ function ProductDetailDrawer({ item, cartQty, onAdd, onRemove, onClose, open }: 
         </div>
       ) : (
         <div style={{
-          height: 200, background: '#f8f6ff', display: 'flex',
+          height: 200, background: COLORS.offWhite, display: 'flex',
           alignItems: 'center', justifyContent: 'center', fontSize: 64,
         }}>
           {item.resource.type === 'SPACE' ? '🏛️' : item.resource.type === 'EQUIPMENT' ? '🔧'
@@ -265,15 +277,15 @@ function ProductDetailDrawer({ item, cartQty, onAdd, onRemove, onClose, open }: 
       )}
 
       <div style={{ padding: 24 }}>
-        <Title level={4} style={{ margin: '0 0 8px' }}>{item.resource.name}</Title>
+        <Title level={4} style={{ margin: '0 0 8px', color: COLORS.textPrimary }}>{item.resource.name}</Title>
 
         {/* Price & tier */}
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 16 }}>
-          <span style={{ fontSize: 28, fontWeight: 800, color: '#531dab' }}>
+          <span style={{ fontSize: 28, fontWeight: 800, color: COLORS.primary }}>
             ${price.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
           </span>
           {item.resource.unit && (
-            <Text type="secondary" style={{ fontSize: 13 }}>por {item.resource.unit}</Text>
+            <Text type="secondary" style={{ fontSize: 13, color: COLORS.textSecondary }}>por {item.resource.unit}</Text>
           )}
           <Tag color={item.tier === 'EARLY' ? 'green' : item.tier === 'LATE' ? 'orange' : 'blue'}>
             Precio {TIER_LABELS[item.tier]}
@@ -283,7 +295,7 @@ function ProductDetailDrawer({ item, cartQty, onAdd, onRemove, onClose, open }: 
         {/* Description */}
         {(item.resource.portalDesc || item.resource.description) && (
           <div style={{ marginBottom: 20 }}>
-            <Text style={{ lineHeight: 1.7, color: '#374151' }}>
+            <Text style={{ lineHeight: 1.7, color: COLORS.textSecondary }}>
               {item.resource.portalDesc || item.resource.description}
             </Text>
           </div>
@@ -292,24 +304,24 @@ function ProductDetailDrawer({ item, cartQty, onAdd, onRemove, onClose, open }: 
         {/* Specs */}
         {(item.resource.brand || item.resource.model || item.resource.code) && (
           <div style={{
-            background: '#f8f6ff', borderRadius: 10, padding: '12px 16px', marginBottom: 20,
+            background: COLORS.offWhite, borderRadius: 10, padding: '12px 16px', marginBottom: 20,
           }}>
             {item.resource.brand && (
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <Text type="secondary" style={{ fontSize: 12 }}>Marca</Text>
-                <Text strong style={{ fontSize: 12 }}>{item.resource.brand}</Text>
+                <Text type="secondary" style={{ fontSize: 12, color: COLORS.textSecondary }}>Marca</Text>
+                <Text strong style={{ fontSize: 12, color: COLORS.textPrimary }}>{item.resource.brand}</Text>
               </div>
             )}
             {item.resource.model && (
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <Text type="secondary" style={{ fontSize: 12 }}>Modelo</Text>
-                <Text strong style={{ fontSize: 12 }}>{item.resource.model}</Text>
+                <Text type="secondary" style={{ fontSize: 12, color: COLORS.textSecondary }}>Modelo</Text>
+                <Text strong style={{ fontSize: 12, color: COLORS.textPrimary }}>{item.resource.model}</Text>
               </div>
             )}
             {item.resource.code && (
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Text type="secondary" style={{ fontSize: 12 }}>Código</Text>
-                <Text strong style={{ fontSize: 12 }}>{item.resource.code}</Text>
+                <Text type="secondary" style={{ fontSize: 12, color: COLORS.textSecondary }}>Código</Text>
+                <Text strong style={{ fontSize: 12, color: COLORS.textPrimary }}>{item.resource.code}</Text>
               </div>
             )}
           </div>
@@ -322,7 +334,7 @@ function ProductDetailDrawer({ item, cartQty, onAdd, onRemove, onClose, open }: 
           <button
             onClick={onAdd}
             style={{
-              width: '100%', background: '#531dab', color: '#fff',
+              width: '100%', background: COLORS.primary, color: '#fff',
               border: 'none', borderRadius: 10, padding: '14px 0',
               fontWeight: 700, fontSize: 16, cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
@@ -334,21 +346,21 @@ function ProductDetailDrawer({ item, cartQty, onAdd, onRemove, onClose, open }: 
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 12 }}>
               <button onClick={onRemove} style={{
-                background: '#f3f0ff', color: '#531dab', border: 'none', borderRadius: 8,
+                background: COLORS.offWhite, color: COLORS.primary, border: 'none', borderRadius: 8,
                 width: 40, height: 40, cursor: 'pointer', fontWeight: 700, fontSize: 20,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>−</button>
-              <span style={{ fontWeight: 800, fontSize: 24, color: '#531dab', minWidth: 36, textAlign: 'center' }}>
+              <span style={{ fontWeight: 800, fontSize: 24, color: COLORS.primary, minWidth: 36, textAlign: 'center' }}>
                 {cartQty}
               </span>
               <button onClick={onAdd} style={{
-                background: '#531dab', color: '#fff', border: 'none', borderRadius: 8,
+                background: COLORS.primary, color: '#fff', border: 'none', borderRadius: 8,
                 width: 40, height: 40, cursor: 'pointer', fontWeight: 700, fontSize: 20,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>+</button>
             </div>
-            <Text type="secondary" style={{ display: 'block', textAlign: 'center', fontSize: 13 }}>
-              Subtotal: <strong style={{ color: '#531dab' }}>
+            <Text type="secondary" style={{ display: 'block', textAlign: 'center', fontSize: 13, color: COLORS.textSecondary }}>
+              Subtotal: <strong style={{ color: COLORS.primary }}>
                 ${(price * cartQty).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
               </strong>
             </Text>
@@ -381,24 +393,24 @@ function CartDrawer({ open, cart, onClose, onQtyChange, onRemove, onSubmit, subm
       width={Math.min(420, window.innerWidth)}
       title={
         <Space>
-          <ShoppingCartOutlined style={{ color: '#531dab' }} />
-          <span>Carrito ({cart.reduce((s, i) => s + i.quantity, 0)} ítems)</span>
+          <ShoppingCartOutlined style={{ color: COLORS.primary }} />
+          <span style={{ color: COLORS.textPrimary }}>Carrito ({cart.reduce((s, i) => s + i.quantity, 0)} ítems)</span>
         </Space>
       }
-      styles={{ body: { display: 'flex', flexDirection: 'column', padding: 0 } }}
+      styles={{ body: { display: 'flex', flexDirection: 'column', padding: 0 }, header: { borderBottom: `1px solid ${COLORS.border}` } }}
       footer={
         <div style={{ padding: '0 0 4px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-            <Text type="secondary">Subtotal</Text>
-            <Text>${subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</Text>
+            <Text type="secondary" style={{ color: COLORS.textSecondary }}>Subtotal</Text>
+            <Text style={{ color: COLORS.textPrimary }}>${subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</Text>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-            <Text type="secondary">IVA (16%)</Text>
-            <Text>${tax.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</Text>
+            <Text type="secondary" style={{ color: COLORS.textSecondary }}>IVA (16%)</Text>
+            <Text style={{ color: COLORS.textPrimary }}>${tax.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</Text>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-            <Text strong style={{ fontSize: 16 }}>Total estimado</Text>
-            <Text strong style={{ fontSize: 18, color: '#531dab' }}>
+            <Text strong style={{ fontSize: 16, color: COLORS.textPrimary }}>Total estimado</Text>
+            <Text strong style={{ fontSize: 18, color: COLORS.primary }}>
               ${(subtotal + tax).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
             </Text>
           </div>
@@ -406,8 +418,8 @@ function CartDrawer({ open, cart, onClose, onQtyChange, onRemove, onSubmit, subm
             disabled={cart.length === 0 || submitting}
             onClick={() => onSubmit(notes)}
             style={{
-              width: '100%', background: cart.length === 0 ? '#e5e7eb' : '#531dab',
-              color: cart.length === 0 ? '#9ca3af' : '#fff',
+              width: '100%', background: cart.length === 0 ? COLORS.offWhite : COLORS.primary,
+              color: cart.length === 0 ? COLORS.textTertiary : '#fff',
               border: 'none', borderRadius: 10, padding: '14px 0',
               fontWeight: 700, fontSize: 15, cursor: cart.length === 0 ? 'default' : 'pointer',
             }}
@@ -419,21 +431,21 @@ function CartDrawer({ open, cart, onClose, onQtyChange, onRemove, onSubmit, subm
     >
       {cart.length === 0 ? (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
-          justifyContent: 'center', color: '#94a3b8', padding: 40 }}>
+          justifyContent: 'center', color: COLORS.textTertiary, padding: 40 }}>
           <ShoppingCartOutlined style={{ fontSize: 48, marginBottom: 16, opacity: 0.3 }} />
-          <Text type="secondary">Tu carrito está vacío</Text>
+          <Text type="secondary" style={{ color: COLORS.textTertiary }}>Tu carrito está vacío</Text>
         </div>
       ) : (
         <div style={{ flex: 1, overflowY: 'auto', padding: '8px 20px' }}>
           {cart.map(item => (
             <div key={item.priceListItemId} style={{
               display: 'flex', gap: 12, padding: '14px 0',
-              borderBottom: '1px solid #f3f4f6', alignItems: 'flex-start',
+              borderBottom: `1px solid ${COLORS.border}`, alignItems: 'flex-start',
             }}>
               {/* Image */}
               <div style={{
                 width: 56, height: 56, borderRadius: 8, flexShrink: 0,
-                background: '#f8f6ff', overflow: 'hidden',
+                background: COLORS.offWhite, overflow: 'hidden',
               }}>
                 {item.image ? (
                   <img src={item.image} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -447,23 +459,23 @@ function CartDrawer({ open, cart, onClose, onQtyChange, onRemove, onSubmit, subm
               </div>
               {/* Info */}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600, fontSize: 13, color: '#1a1a2e', marginBottom: 2 }}>
+                <div style={{ fontWeight: 600, fontSize: 13, color: COLORS.textPrimary, marginBottom: 2 }}>
                   {item.name}
                 </div>
-                <div style={{ fontSize: 13, color: '#531dab', fontWeight: 700 }}>
+                <div style={{ fontSize: 13, color: COLORS.primary, fontWeight: 700 }}>
                   ${item.unitPrice.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
                   <button onClick={() => onQtyChange(item.priceListItemId, item.quantity - 1)} style={{
-                    background: '#f3f0ff', color: '#531dab', border: 'none', borderRadius: 5,
+                    background: COLORS.offWhite, color: COLORS.primary, border: 'none', borderRadius: 5,
                     width: 24, height: 24, cursor: 'pointer', fontWeight: 700, fontSize: 14,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>−</button>
-                  <span style={{ fontWeight: 700, minWidth: 16, textAlign: 'center', fontSize: 14 }}>
+                  <span style={{ fontWeight: 700, minWidth: 16, textAlign: 'center', fontSize: 14, color: COLORS.primary }}>
                     {item.quantity}
                   </span>
                   <button onClick={() => onQtyChange(item.priceListItemId, item.quantity + 1)} style={{
-                    background: '#531dab', color: '#fff', border: 'none', borderRadius: 5,
+                    background: COLORS.primary, color: '#fff', border: 'none', borderRadius: 5,
                     width: 24, height: 24, cursor: 'pointer', fontWeight: 700, fontSize: 14,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>+</button>
@@ -471,7 +483,7 @@ function CartDrawer({ open, cart, onClose, onQtyChange, onRemove, onSubmit, subm
               </div>
               {/* Line total + remove */}
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 13, color: '#1a1a2e', marginBottom: 6 }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: COLORS.textPrimary, marginBottom: 6 }}>
                   ${(item.unitPrice * item.quantity).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                 </div>
                 <button onClick={() => onRemove(item.priceListItemId)} style={{
@@ -486,7 +498,7 @@ function CartDrawer({ open, cart, onClose, onQtyChange, onRemove, onSubmit, subm
 
           {/* Notes */}
           <div style={{ paddingTop: 16 }}>
-            <Text style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 6 }}>
+            <Text style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 6, color: COLORS.textPrimary }}>
               Notas adicionales
             </Text>
             <Input.TextArea
@@ -494,7 +506,7 @@ function CartDrawer({ open, cart, onClose, onQtyChange, onRemove, onSubmit, subm
               value={notes}
               onChange={e => setNotes(e.target.value)}
               placeholder="Instrucciones especiales, fechas de entrega, etc."
-              style={{ borderRadius: 8 }}
+              style={{ borderRadius: 8, borderColor: COLORS.border }}
             />
           </div>
         </div>
@@ -612,16 +624,16 @@ export default function CatalogPage() {
       <div style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center', padding: 40 }}>
         <div style={{ fontSize: 72, marginBottom: 16 }}>🎉</div>
-        <Title level={3} style={{ color: '#531dab', margin: '0 0 8px' }}>¡Solicitud enviada!</Title>
-        <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 15 }}>
+        <Title level={3} style={{ color: COLORS.primary, margin: '0 0 8px' }}>¡Solicitud enviada!</Title>
+        <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 15, color: COLORS.textSecondary }}>
           Solicitud <strong>{orderDone.orderNumber}</strong> recibida correctamente.
         </Text>
-        <Text type="secondary" style={{ display: 'block', marginBottom: 28, textAlign: 'center' }}>
+        <Text type="secondary" style={{ display: 'block', marginBottom: 28, textAlign: 'center', color: COLORS.textSecondary }}>
           El equipo del evento revisará tu solicitud y te notificará.
         </Text>
         <Space>
           <Button onClick={() => navigate('/orders')}>Ver mis solicitudes</Button>
-          <Button type="primary" style={{ background: '#531dab', borderColor: '#531dab' }}
+          <Button type="primary" style={{ background: COLORS.primary, borderColor: COLORS.primary }}
             onClick={() => { setOrderDone(null) }}>
             Seguir comprando
           </Button>
@@ -631,25 +643,25 @@ export default function CatalogPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#fafafa' }}>
+    <div style={{ minHeight: '100vh', background: COLORS.white }}>
       {/* Header */}
       <div style={{
-        background: '#fff', borderBottom: '1px solid #f0f0f0',
+        background: COLORS.white, borderBottom: `1px solid ${COLORS.border}`,
         padding: '12px 16px', position: 'sticky', top: 0, zIndex: 50,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <Space>
             <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(`/events/${eventId}`)} size="small" />
             <div>
-              <div style={{ fontWeight: 700, fontSize: 15, color: '#1a1a2e', lineHeight: 1.2 }}>Catálogo</div>
-              {eventName && <div style={{ fontSize: 12, color: '#64748b' }}>{eventName}</div>}
+              <div style={{ fontWeight: 600, fontSize: 15, color: COLORS.textPrimary, lineHeight: 1.2 }}>Catálogo</div>
+              {eventName && <div style={{ fontSize: 12, color: COLORS.textSecondary }}>{eventName}</div>}
             </div>
           </Space>
-          <Badge count={cartTotal} size="small" color="#531dab">
+          <Badge count={cartTotal} size="small" color={COLORS.primary}>
             <Button
               icon={<ShoppingCartOutlined />}
               onClick={() => setCartOpen(true)}
-              style={{ borderColor: cartTotal > 0 ? '#531dab' : undefined, color: cartTotal > 0 ? '#531dab' : undefined }}
+              style={{ borderColor: cartTotal > 0 ? COLORS.primary : undefined, color: cartTotal > 0 ? COLORS.primary : undefined }}
             >
               {cartTotal > 0 ? `Carrito (${cartTotal})` : 'Carrito'}
             </Button>
@@ -663,7 +675,7 @@ export default function CatalogPage() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             allowClear
-            style={{ borderRadius: 8 }}
+            style={{ borderRadius: 8, borderColor: COLORS.border }}
           />
         </div>
 
@@ -677,9 +689,9 @@ export default function CatalogPage() {
                 style={{
                   flexShrink: 0, padding: '4px 14px', borderRadius: 20,
                   border: '1.5px solid',
-                  borderColor: activeType === t ? '#531dab' : '#e5e7eb',
-                  background: activeType === t ? '#531dab' : '#fff',
-                  color: activeType === t ? '#fff' : '#374151',
+                  borderColor: activeType === t ? COLORS.primary : COLORS.border,
+                  background: activeType === t ? COLORS.primary : COLORS.white,
+                  color: activeType === t ? '#fff' : COLORS.textSecondary,
                   fontWeight: activeType === t ? 700 : 400,
                   fontSize: 13, cursor: 'pointer',
                 }}
@@ -726,10 +738,10 @@ export default function CatalogPage() {
           <button
             onClick={() => setCartOpen(true)}
             style={{
-              width: '100%', background: '#531dab', color: '#fff', border: 'none',
+              width: '100%', background: COLORS.primary, color: '#fff', border: 'none',
               borderRadius: 14, padding: '14px 20px', fontWeight: 700, fontSize: 15,
               cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              boxShadow: '0 8px 24px rgba(83,29,171,0.35)',
+              boxShadow: '0 4px 16px rgba(26,26,26,0.15)',
             }}
           >
             <span style={{

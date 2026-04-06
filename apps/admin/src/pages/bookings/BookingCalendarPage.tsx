@@ -1117,7 +1117,7 @@ export default function BookingCalendarPage() {
                               left, top, width, height,
                               borderRadius: 6,
                               background: isFirstPosition ? '#ff6b6b !important' : background,
-                              border: isFirstPosition ? '3px solid #cc0000 !important' : `2px ${borderStyle} ${borderColor}`,
+                              border: isFirstPosition ? '3px solid #000000 !important' : `2px ${borderStyle} ${borderColor}`,
                               display: 'flex',
                               alignItems: 'center',
                               paddingLeft: 8, paddingRight: 6,
@@ -1145,14 +1145,14 @@ export default function BookingCalendarPage() {
                               <span style={{
                                 flexShrink: 0, marginLeft: 4,
                                 background: b.overlapRank === 1 ? '#000000' : borderColor,
-                                color: b.overlapRank === 1 ? '#FFD700' : '#fff',
+                                color: b.overlapRank === 1 ? '#ffffff' : '#fff',
                                 borderRadius: 10,
                                 fontSize: b.overlapRank === 1 ? 15 : 13,
                                 fontWeight: b.overlapRank === 1 ? 900 : 600,
                                 padding: b.overlapRank === 1 ? '2px 8px' : '1px 7px',
                                 lineHeight: '18px',
                                 opacity: 1,
-                                border: b.overlapRank === 1 ? '2px solid #FFD700' : 'none',
+                                border: b.overlapRank === 1 ? '2px solid #000000' : 'none',
                               }}>
                                 {b.overlapRank === 1 ? '⭐ #1' : `#${b.overlapRank}`}/{b.overlapCount}
                               </span>
