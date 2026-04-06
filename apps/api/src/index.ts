@@ -11,6 +11,7 @@ import jwt from 'jsonwebtoken'
 import { env } from './config/env'
 import { errorHandler } from './middleware/errorHandler'
 import apiRoutes from './routes/index'
+import paymentsRouter from './routes/payments.routes'
 import { prisma } from './config/database'
 
 const app    = express()
@@ -30,6 +31,9 @@ app.use(rateLimit({
 
 // Logging
 if (env.NODE_ENV !== 'test') app.use(morgan('dev'))
+
+// Raw body for Stripe webhook — must be registered before express.json()
+app.use('/api/v1/payments', express.raw({ type: 'application/json' }), paymentsRouter)
 
 // Body parsing
 app.use(express.json({ limit: '10mb' }))

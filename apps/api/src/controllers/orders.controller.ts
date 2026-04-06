@@ -210,6 +210,13 @@ export async function getDashboardAccounting(req: Request, res: Response, next: 
         client: { select: { id: true, companyName: true, firstName: true, lastName: true } },
         event: { select: { id: true, name: true, code: true } },
         billingClient: { select: { id: true, companyName: true, rfc: true } },
+        documents: {
+          where: { documentType: 'COMPROBANTE_PAGO' },
+          select: { id: true, fileName: true, blobKey: true, createdAt: true },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+        payments: { orderBy: { paymentDate: 'desc' }, take: 1 },
       },
       orderBy: { updatedAt: 'desc' },
     })

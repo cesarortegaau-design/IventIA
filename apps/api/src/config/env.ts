@@ -19,6 +19,10 @@ const envSchema = z.object({
   TWILIO_ACCOUNT_SID: z.string().optional(),
   TWILIO_AUTH_TOKEN: z.string().optional(),
   TWILIO_WHATSAPP_FROM: z.string().optional(),
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  STRIPE_SUCCESS_URL: z.string().default('http://localhost:5174/orders'),
+  STRIPE_CANCEL_URL: z.string().default('http://localhost:5174/orders'),
 })
 
 const parsed = envSchema.safeParse(process.env)
