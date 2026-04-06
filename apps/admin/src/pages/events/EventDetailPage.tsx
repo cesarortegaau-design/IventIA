@@ -16,6 +16,7 @@ import { bookingsApi } from '../../api/bookings'
 import { auditApi } from '../../api/audit'
 import { exportToCsv } from '../../utils/exportCsv'
 import AuditTimeline from '../../components/AuditTimeline'
+import AuditDrawer from '../../components/AuditDrawer'
 
 const { Title, Text } = Typography
 
@@ -266,6 +267,13 @@ export default function EventDetailPage() {
             loading={updateStatusMutation.isPending}
             style={{ width: 160 }}
             options={Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }))}
+          />
+          <AuditDrawer
+            entityType="Event"
+            entityId={id!}
+            entityName={event.name}
+            data={auditData?.data ?? []}
+            loading={auditLoading}
           />
           <Button icon={<EditOutlined />} onClick={() => navigate(`/eventos/${id}/editar`)}>Editar</Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate(`/eventos/${id}/ordenes/nueva`)}>

@@ -12,6 +12,7 @@ import { auditApi } from '../../api/audit'
 import { exportToCsv } from '../../utils/exportCsv'
 import { OrderPdf } from '../../components/OrderPdf'
 import AuditTimeline from '../../components/AuditTimeline'
+import AuditDrawer from '../../components/AuditDrawer'
 
 const { Title, Text } = Typography
 
@@ -164,6 +165,13 @@ export default function OrderDetailPage() {
             >
               Descargar PDF
             </Button>
+            <AuditDrawer
+              entityType="Order"
+              entityId={id!}
+              entityName={order.orderNumber}
+              data={auditData?.data ?? []}
+              loading={auditLoading}
+            />
             {NEXT_STATUSES[order.status]?.map((s: string) => (
               <Button
                 key={s}

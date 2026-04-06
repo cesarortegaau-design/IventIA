@@ -16,7 +16,9 @@ import {
 import dayjs from 'dayjs'
 import { crmApi } from '../../api/crm'
 import { clientsApi } from '../../api/clients'
+import { auditApi } from '../../api/audit'
 import { exportToCsv } from '../../utils/exportCsv'
+import AuditDrawer from '../../components/AuditDrawer'
 
 const { Title, Text } = Typography
 const { TextArea } = Input
@@ -81,6 +83,12 @@ export default function ClientDetailPage() {
   const { data: usersData } = useQuery({
     queryKey: ['users-list'],
     queryFn: () => import('../../api/client').then(m => m.apiClient.get('/users').then(r => r.data)),
+  })
+
+  const { data: auditData, isLoading: auditLoading } = useQuery({
+    queryKey: ['client-audit', clientId],
+    queryFn: () => auditApi.getLog('Client', clientId!),
+    enabled: !!clientId,
   })
 
   const createInteraction = useMutation({
@@ -252,6 +260,13 @@ export default function ClientDetailPage() {
               >
                 Editar
               </Button>
+              <AuditDrawer
+                entityType="Client"
+                entityId={clientId!}
+                entityName={client.companyName || `${client.firstName} ${client.lastName}`}
+                data={auditData?.data ?? []}
+                loading={auditLoading}
+              />
             </Space>
           </Col>
         </Row>
