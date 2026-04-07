@@ -1,11 +1,8 @@
-# Ignore everything except community app and root config
+# Ignore all apps except community
 apps/api
 apps/admin
 apps/arte-capital
 apps/portal
-
-# Ignore packages - community doesn't need them
-packages
 
 # Ignore documentation
 docs

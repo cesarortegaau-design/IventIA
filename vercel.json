@@ -1,5 +1,5 @@
 {
-  "buildCommand": "pnpm install --ignore-scripts && pnpm --filter=@iventia/community build",
+  "buildCommand": "pnpm install --ignore-scripts && cd apps/community && pnpm build",
   "outputDirectory": "apps/community/dist",
   "nodeVersion": "20.x"
 }
