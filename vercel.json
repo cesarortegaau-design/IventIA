@@ -1,5 +1,6 @@
 {
-  "buildCommand": "pnpm install --ignore-scripts && cd apps/community && pnpm build",
-  "outputDirectory": "apps/community/dist",
+  "root": "apps/community",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
   "nodeVersion": "20.x"
 }
