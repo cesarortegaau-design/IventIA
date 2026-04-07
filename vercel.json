@@ -1,6 +1,5 @@
 {
-  "root": "apps/community",
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
+  "buildCommand": "bash build.sh",
+  "outputDirectory": "public",
   "nodeVersion": "20.x"
 }

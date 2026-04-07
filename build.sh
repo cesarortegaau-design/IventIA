@@ -5,16 +5,15 @@ echo "Installing dependencies..."
 pnpm install --ignore-scripts
 
 echo "Building community app..."
-cd apps/community
-pnpm build
+pnpm --filter=@iventia/community build
 
-echo "Verifying output directory..."
-if [ -d "dist" ]; then
-  echo "✓ dist directory created successfully"
-  ls -la dist/
-else
-  echo "✗ ERROR: dist directory not found!"
-  exit 1
-fi
+echo "Creating public directory..."
+rm -rf public
+mkdir -p public
+cp -r apps/community/dist/* public/
+
+echo "Verifying output..."
+echo "Contents of public/"
+ls -la public/
 
 echo "Build complete!"
