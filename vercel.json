@@ -1,3 +1,14 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "buildCommand": "pnpm --filter @iventia/community build",
+  "outputDirectory": "apps/community/dist",
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://api.exposaantafe.com.mx/api/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
 }
