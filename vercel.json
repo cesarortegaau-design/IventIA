@@ -1,7 +1,6 @@
 {
-  "buildCommand": "pnpm install && pnpm --filter @iventia/community build",
+  "buildCommand": "pnpm install --frozen-lockfile --ignore-scripts && pnpm --filter @iventia/community build",
   "outputDirectory": "apps/community/dist",
-  "installCommand": "pnpm install --frozen-lockfile",
   "rewrites": [
     {
       "source": "/api/(.*)",
