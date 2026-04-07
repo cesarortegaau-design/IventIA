@@ -1,8 +1,6 @@
 {
-  "buildCommand": "pnpm --filter=@iventia/community build",
-  "outputDirectory": "apps/community/dist",
-  "installCommand": "pnpm install --ignore-scripts",
-  "nodeVersion": "20.x",
+  "buildCommand": "pnpm build",
+  "outputDirectory": "dist",
   "rewrites": [
     {
       "source": "/api/(.*)",
