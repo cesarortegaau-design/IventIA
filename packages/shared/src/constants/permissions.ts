@@ -31,6 +31,11 @@ export const PRIVILEGES = {
   // Dashboard
   DASHBOARD_ACCOUNTING: 'dashboard.accounting',
   DASHBOARD_OPERATIONS: 'dashboard.operations',
+
+  // Arte Capital
+  ARTE_CAPITAL_MANAGE: 'arte_capital.manage',
+  ARTE_CAPITAL_PRODUCTS_APPROVE: 'arte_capital.products.approve',
+  ARTE_CAPITAL_COMMISSIONS_MANAGE: 'arte_capital.commissions.manage',
 } as const
 
 export type PrivilegeKey = typeof PRIVILEGES[keyof typeof PRIVILEGES]

@@ -39,3 +39,11 @@ export interface PortalTokenPayload {
   tenantId: string
   email: string
 }
+
+export interface ArteCapitalTokenPayload {
+  artCapitalUserId: string
+  tenantId: string
+  userRole: 'ARTIST' | 'COLLECTOR' | 'ADMIN'
+  email: string
+  type: 'arte-capital'
+}
