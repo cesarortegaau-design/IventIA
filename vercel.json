@@ -1,7 +1,8 @@
 {
-  "buildCommand": "cd apps/community && pnpm install --frozen-lockfile --ignore-scripts && pnpm build",
+  "buildCommand": "pnpm --filter=@iventia/community build",
   "outputDirectory": "apps/community/dist",
-  "installCommand": "pnpm install --frozen-lockfile --ignore-scripts",
+  "installCommand": "pnpm install --ignore-scripts",
+  "nodeVersion": "20.x",
   "rewrites": [
     {
       "source": "/api/(.*)",

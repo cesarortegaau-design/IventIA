@@ -1,15 +1,15 @@
-# Ignore all apps except community
+# Ignore everything except community app and root config
 apps/api
 apps/admin
 apps/arte-capital
 apps/portal
 
-# Ignore packages that aren't needed for community build
-packages/prisma
+# Ignore packages - community doesn't need them
+packages
 
-# Ignore documentation and config
+# Ignore documentation
 docs
 *.md
 .git
-.env*
 .claude
+CLAUDE.md
