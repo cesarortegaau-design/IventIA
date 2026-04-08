@@ -10,8 +10,8 @@ services:
       - key: PORT
         value: 3001
       - key: DATABASE_URL
-        fromDatabase:
-          name: iventia-db
-          property: connectionString
+        sync: false
+      - key: JWT_SECRET
+        sync: false
       - key: CORS_ORIGIN
-        value: https://admin.vercel.app,https://portal.vercel.app,https://arte-capital.vercel.app
+        value: https://ivent-ia-arte-capital.vercel.app,https://iventia-admin.vercel.app,https://iventia-portal.vercel.app
