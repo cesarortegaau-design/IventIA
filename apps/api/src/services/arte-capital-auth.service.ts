@@ -46,6 +46,23 @@ export async function arteCapitalRegister(input: ArteCapitalRegisterInput) {
     throw new AppError(409, 'USER_EXISTS', 'User with this email already exists')
   }
 
+  // Ensure tenant exists (create if not found)
+  let tenant = await prisma.tenant.findUnique({
+    where: { id: input.tenantId },
+  })
+
+  if (!tenant) {
+    tenant = await prisma.tenant.create({
+      data: {
+        id: input.tenantId,
+        name: `Arte Capital - ${input.tenantId}`,
+        slug: `arte-capital-${input.tenantId.toLowerCase()}`,
+        isActive: true,
+        settings: { commissionRate: 15, currency: 'USD' },
+      },
+    })
+  }
+
   const passwordHash = await hashPassword(input.password)
 
   const user = await prisma.artCapitalUser.create({
