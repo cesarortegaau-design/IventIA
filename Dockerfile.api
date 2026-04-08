@@ -2,7 +2,8 @@ FROM node:22-alpine
 
 RUN apk add --no-cache openssl
 
-RUN npm install -g pnpm@9
+# Enable Corepack and prepare pnpm
+RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 
 WORKDIR /app
 
