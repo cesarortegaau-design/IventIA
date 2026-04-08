@@ -1,6 +1,9 @@
 FROM node:20-alpine
 
-RUN npm install -g pnpm@9 serve
+# Enable Corepack and prepare pnpm
+RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
+
+RUN npm install -g serve
 
 WORKDIR /app
 
@@ -12,7 +15,7 @@ COPY packages/ ./packages/
 COPY apps/arte-capital/ ./apps/arte-capital/
 
 # Install all dependencies
-RUN pnpm install --frozen-lockfile --ignore-scripts
+RUN pnpm install --frozen-lockfile
 
 # Build frontend (VITE_API_URL is passed at build time)
 ARG VITE_API_URL
