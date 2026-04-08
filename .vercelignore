@@ -1,12 +1,16 @@
-# Ignore all apps except community
+# Ignore API (deployed on Render)
 apps/api
-apps/admin
-apps/arte-capital
-apps/portal
+Dockerfile.api
 
-# Ignore documentation
+# Ignore documentation and config
 docs
 *.md
 .git
+.github
 .claude
 CLAUDE.md
+render.yaml
+.npmrc
+
+# Ignore non-deployed apps
+apps/community

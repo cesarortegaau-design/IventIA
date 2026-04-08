@@ -1,6 +1,0 @@
-{
-  "buildCommand": "pnpm install --ignore-scripts && pnpm --filter=arte-capital build && rm -rf dist && cp -r apps/arte-capital/dist . && ls -la dist",
-  "outputDirectory": "dist",
-  "installCommand": "echo 'Install handled in buildCommand'",
-  "nodeVersion": "20.x"
-}
