@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node22 --external:@prisma/client --external:bcryptjs --external:bullmq --external:cors --external:decimal.js --external:dotenv --external:express --external:express-rate-limit --external:helmet --external:ioredis --external:jsonwebtoken --external:morgan --external:multer --external:nodemailer --external:stripe --external:uuid --external:zod --external:prisma-generated --external:socket.io --outfile=dist/index.js",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node22 --external:@prisma/client --external:bcryptjs --external:bullmq --external:cors --external:dayjs --external:decimal.js --external:dotenv --external:express --external:express-rate-limit --external:helmet --external:ioredis --external:jsonwebtoken --external:morgan --external:multer --external:nodemailer --external:stripe --external:uuid --external:zod --external:prisma-generated --external:socket.io --outfile=dist/index.js",
     "start": "node dist/index.js",
     "lint": "eslint src/**/*.ts"
   },
@@ -16,6 +16,7 @@
     "bullmq": "^5.7.0",
     "cloudinary": "^2.9.0",
     "cors": "^2.8.5",
+    "dayjs": "^1.11.10",
     "decimal.js": "^10.6.0",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
