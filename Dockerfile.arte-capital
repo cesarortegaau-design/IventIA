@@ -12,7 +12,7 @@ COPY packages/ ./packages/
 COPY apps/arte-capital/ ./apps/arte-capital/
 
 # Install all dependencies
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # Build frontend (VITE_API_URL is passed at build time)
 ARG VITE_API_URL

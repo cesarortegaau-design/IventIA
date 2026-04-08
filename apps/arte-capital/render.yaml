@@ -10,3 +10,5 @@ services:
     envVars:
       - key: PORT
         value: 3003
+      - key: NODE_ENV
+        value: production
