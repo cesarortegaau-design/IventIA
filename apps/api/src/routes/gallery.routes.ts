@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { authenticate } from '../middleware/auth'
+import { authenticate } from '../middleware/authenticate'
 import * as artworksController from '../controllers/gallery-artworks.controller'
 import * as ordersController from '../controllers/gallery-orders.controller'
 import * as cartController from '../controllers/gallery-cart.controller'
