@@ -32,8 +32,9 @@ app.use(rateLimit({
 // Logging
 if (env.NODE_ENV !== 'test') app.use(morgan('dev'))
 
-// Raw body for Stripe webhook — must be registered before express.json()
+// Raw body for Stripe webhooks — must be registered before express.json()
 app.use('/api/v1/payments', express.raw({ type: 'application/json' }), paymentsRouter)
+app.post('/api/v1/gallery/webhooks/stripe', express.raw({ type: 'application/json' }))
 
 // Body parsing
 app.use(express.json({ limit: '10mb' }))

@@ -15,6 +15,7 @@ import chatRoutes from './chat.routes'
 import bookingsRoutes from './bookings.routes'
 import auditRoutes from './audit.routes'
 import arteCapitalRoutes from './arte-capital.routes'
+import galleryRoutes from './gallery.routes'
 
 const router = Router()
 
@@ -34,5 +35,6 @@ router.use('/chat', chatRoutes)
 router.use('/bookings', bookingsRoutes)
 router.use('/audit', auditRoutes)
 router.use('/arte-capital', arteCapitalRoutes)
+router.use('/gallery', galleryRoutes)
 
 export default router

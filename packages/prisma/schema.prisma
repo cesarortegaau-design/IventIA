@@ -118,6 +118,53 @@ enum ArtCapitalProductStatus {
   ARCHIVED
 }
 
+enum ArtworkStatus {
+  AVAILABLE
+  SOLD
+  RESERVED
+  ARCHIVED
+}
+
+enum ArtMedium {
+  OIL
+  ACRYLIC
+  WATERCOLOR
+  SCULPTURE
+  PHOTOGRAPHY
+  PRINT
+  DIGITAL
+  MIXED_MEDIA
+}
+
+enum ArtStyle {
+  IMPRESSIONISM
+  SURREALISM
+  POP_ART
+  CUBISM
+  ABSTRACT
+  REALISM
+  EXPRESSIONISM
+  CONTEMPORARY
+  TRADITIONAL
+  MODERNISM
+}
+
+enum GalleryOrderStatus {
+  PENDING
+  PAID
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum ClassStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
 // ─── Multi-tenancy ────────────────────────────────────────────────────────────
 
 model Tenant {
@@ -144,12 +191,27 @@ model Tenant {
   conversations     Conversation[]
 
   // Arte Capital
-  artCapitalUsers             ArtCapitalUser[]
-  artCapitalMembershipTiers   ArtCapitalMembershipTier[]
-  artCapitalProducts          ArtCapitalProduct[]
-  artCapitalOrders            ArtCapitalOrder[]
-  artCapitalMemberships       ArtCapitalMembership[]
-  artCapitalTransactions      ArtCapitalTransaction[]
+  artCapitalUsers           ArtCapitalUser[]
+  artCapitalMembershipTiers ArtCapitalMembershipTier[]
+  artCapitalProducts        ArtCapitalProduct[]
+  artCapitalOrders          ArtCapitalOrder[]
+  artCapitalMemberships     ArtCapitalMembership[]
+  artCapitalTransactions    ArtCapitalTransaction[]
+
+  // Gallery
+  galleryArtworks         GalleryArtwork[]
+  galleryArtists          GalleryArtist[]
+  galleryCollections      GalleryCollection[]
+  galleryLocations        GalleryLocation[]
+  galleryMemberships      GalleryMembership[]
+  galleryClasses          GalleryClass[]
+  galleryClassEnrollments GalleryClassEnrollment[]
+  galleryExhibitions      GalleryExhibition[]
+  galleryCarts            GalleryCart[]
+  galleryCartItems        GalleryCartItem[]
+  galleryOrders           GalleryOrder[]
+  galleryOrderLineItems   GalleryOrderLineItem[]
+  galleryFavorites        GalleryFavorite[]
 
   @@map("tenants")
 }
@@ -170,20 +232,20 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  tenant               Tenant               @relation(fields: [tenantId], references: [id])
-  userDepartments      UserDepartment[]
-  privileges           UserPrivilege[]
-  createdEvents        Event[]              @relation("EventCreatedBy")
-  createdOrders        Order[]              @relation("OrderCreatedBy")
-  assignedOrders       Order[]              @relation("OrderAssignedTo")
-  recordedPayments     OrderPayment[]
-  uploadedDocuments    OrderDocument[]
-  statusHistory        OrderStatusHistory[]
-  auditLogs            AuditLog[]
-  createdInteractions  ClientInteraction[]  @relation("InteractionCreator")
-  assignedTasks        ClientTask[]         @relation("TaskAssignee")
-  createdTasks         ClientTask[]         @relation("TaskCreator")
-  createdPortalCodes   PortalAccessCode[]   @relation("PortalCodeCreator")
+  tenant              Tenant               @relation(fields: [tenantId], references: [id])
+  userDepartments     UserDepartment[]
+  privileges          UserPrivilege[]
+  createdEvents       Event[]              @relation("EventCreatedBy")
+  createdOrders       Order[]              @relation("OrderCreatedBy")
+  assignedOrders      Order[]              @relation("OrderAssignedTo")
+  recordedPayments    OrderPayment[]
+  uploadedDocuments   OrderDocument[]
+  statusHistory       OrderStatusHistory[]
+  auditLogs           AuditLog[]
+  createdInteractions ClientInteraction[]  @relation("InteractionCreator")
+  assignedTasks       ClientTask[]         @relation("TaskAssignee")
+  createdTasks        ClientTask[]         @relation("TaskCreator")
+  createdPortalCodes  PortalAccessCode[]   @relation("PortalCodeCreator")
 
   @@index([tenantId, isActive])
   @@map("users")
@@ -234,31 +296,31 @@ model Department {
 // ─── Resources (Products & Services) ─────────────────────────────────────────
 
 model Resource {
-  id            String       @id @default(uuid())
-  tenantId      String       @map("tenant_id")
-  code          String       @db.VarChar(50)
-  name          String       @db.VarChar(200)
-  type          ResourceType
-  description   String?      @db.Text
-  unit          String?      @db.VarChar(50)
-  stock         Int          @default(0)
-  stockLocation String?      @map("stock_location") @db.VarChar(200)
-  checkStock    Boolean      @default(false) @map("check_stock")
-  checkDuplicate Boolean     @default(false) @map("check_duplicate")
-  recoveryTime  Int          @default(0) @map("recovery_time")
-  areaSqm       Decimal?     @map("area_sqm") @db.Decimal(10, 2)
-  capacity      Int?
-  departmentId  String?      @map("department_id")
-  portalVisible Boolean      @default(false) @map("portal_visible")
-  portalDesc    String?      @map("portal_desc") @db.Text
-  portalBlobKey String?      @map("portal_blob_key") @db.VarChar(500)
-  imageMain     String?      @map("image_main") @db.VarChar(500)
-  imageDesc     String?      @map("image_desc") @db.VarChar(500)
-  imageExtra    String?      @map("image_extra") @db.VarChar(500)
-  isActive      Boolean      @default(true) @map("is_active")
-  metadata      Json         @default("{}")
-  createdAt     DateTime     @default(now()) @map("created_at")
-  updatedAt     DateTime     @updatedAt @map("updated_at")
+  id             String       @id @default(uuid())
+  tenantId       String       @map("tenant_id")
+  code           String       @db.VarChar(50)
+  name           String       @db.VarChar(200)
+  type           ResourceType
+  description    String?      @db.Text
+  unit           String?      @db.VarChar(50)
+  stock          Int          @default(0)
+  stockLocation  String?      @map("stock_location") @db.VarChar(200)
+  checkStock     Boolean      @default(false) @map("check_stock")
+  checkDuplicate Boolean      @default(false) @map("check_duplicate")
+  recoveryTime   Int          @default(0) @map("recovery_time")
+  areaSqm        Decimal?     @map("area_sqm") @db.Decimal(10, 2)
+  capacity       Int?
+  departmentId   String?      @map("department_id")
+  portalVisible  Boolean      @default(false) @map("portal_visible")
+  portalDesc     String?      @map("portal_desc") @db.Text
+  portalBlobKey  String?      @map("portal_blob_key") @db.VarChar(500)
+  imageMain      String?      @map("image_main") @db.VarChar(500)
+  imageDesc      String?      @map("image_desc") @db.VarChar(500)
+  imageExtra     String?      @map("image_extra") @db.VarChar(500)
+  isActive       Boolean      @default(true) @map("is_active")
+  metadata       Json         @default("{}")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
 
   tenant         Tenant          @relation(fields: [tenantId], references: [id])
   department     Department?     @relation(fields: [departmentId], references: [id])
@@ -274,15 +336,15 @@ model Resource {
 // ─── Price Lists ──────────────────────────────────────────────────────────────
 
 model PriceList {
-  id           String   @id @default(uuid())
-  tenantId     String   @map("tenant_id")
-  name         String   @db.VarChar(200)
+  id           String    @id @default(uuid())
+  tenantId     String    @map("tenant_id")
+  name         String    @db.VarChar(200)
   earlyCutoff  DateTime? @map("early_cutoff")
   normalCutoff DateTime? @map("normal_cutoff")
-  discountPct  Decimal  @default(0) @map("discount_pct") @db.Decimal(5, 2)
-  isActive     Boolean  @default(true) @map("is_active")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  discountPct  Decimal   @default(0) @map("discount_pct") @db.Decimal(5, 2)
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
 
   tenant Tenant          @relation(fields: [tenantId], references: [id])
   items  PriceListItem[]
@@ -337,17 +399,17 @@ model Client {
   createdAt      DateTime   @default(now()) @map("created_at")
   updatedAt      DateTime   @updatedAt @map("updated_at")
 
-  tenant       Tenant               @relation(fields: [tenantId], references: [id])
-  contacts     ClientContact[]
-  documents    ClientDocument[]
-  stands       Stand[]
-  orders       Order[]              @relation("OrderClient")
+  tenant        Tenant              @relation(fields: [tenantId], references: [id])
+  contacts      ClientContact[]
+  documents     ClientDocument[]
+  stands        Stand[]
+  orders        Order[]             @relation("OrderClient")
   billingOrders Order[]             @relation("OrderBillingClient")
-  events       Event[]
-  interactions ClientInteraction[]
-  tasks        ClientTask[]
-  portalUser   PortalUser?          @relation(fields: [portalUserId], references: [id])
-  portalCodes  PortalAccessCode[]
+  events        Event[]
+  interactions  ClientInteraction[]
+  tasks         ClientTask[]
+  portalUser    PortalUser?         @relation(fields: [portalUserId], references: [id])
+  portalCodes   PortalAccessCode[]
 
   @@index([tenantId, isActive])
   @@map("clients")
@@ -397,9 +459,9 @@ model ClientInteraction {
   createdById String          @map("created_by_id")
   createdAt   DateTime        @default(now()) @map("created_at")
 
-  tenant    Tenant @relation(fields: [tenantId], references: [id])
-  client    Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  createdBy User   @relation("InteractionCreator", fields: [createdById], references: [id])
+  tenant    Tenant       @relation(fields: [tenantId], references: [id])
+  client    Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdBy User         @relation("InteractionCreator", fields: [createdById], references: [id])
   tasks     ClientTask[]
 
   @@index([tenantId, clientId])
@@ -422,11 +484,11 @@ model ClientTask {
   createdAt     DateTime   @default(now()) @map("created_at")
   updatedAt     DateTime   @updatedAt @map("updated_at")
 
-  tenant      Tenant              @relation(fields: [tenantId], references: [id])
-  client      Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  interaction ClientInteraction?  @relation(fields: [interactionId], references: [id])
-  assignedTo  User?               @relation("TaskAssignee", fields: [assignedToId], references: [id])
-  createdBy   User                @relation("TaskCreator", fields: [createdById], references: [id])
+  tenant      Tenant             @relation(fields: [tenantId], references: [id])
+  client      Client             @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  interaction ClientInteraction? @relation(fields: [interactionId], references: [id])
+  assignedTo  User?              @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  createdBy   User               @relation("TaskCreator", fields: [createdById], references: [id])
 
   @@index([tenantId, clientId])
   @@index([tenantId, assignedToId, status])
@@ -465,10 +527,10 @@ model Event {
   createdAt       DateTime    @default(now()) @map("created_at")
   updatedAt       DateTime    @updatedAt @map("updated_at")
 
-  tenant        Tenant          @relation(fields: [tenantId], references: [id])
-  primaryClient Client?         @relation(fields: [primaryClientId], references: [id])
-  priceList     PriceList?      @relation(fields: [priceListId], references: [id])
-  createdBy     User            @relation("EventCreatedBy", fields: [createdById], references: [id])
+  tenant            Tenant             @relation(fields: [tenantId], references: [id])
+  primaryClient     Client?            @relation(fields: [primaryClientId], references: [id])
+  priceList         PriceList?         @relation(fields: [priceListId], references: [id])
+  createdBy         User               @relation("EventCreatedBy", fields: [createdById], references: [id])
   spaces            EventSpace[]
   documents         EventDocument[]
   stands            Stand[]
@@ -516,17 +578,17 @@ model EventDocument {
 // ─── Stands ───────────────────────────────────────────────────────────────────
 
 model Stand {
-  id           String   @id @default(uuid())
-  eventId      String   @map("event_id")
-  clientId     String?  @map("client_id")
-  code         String   @db.VarChar(50)
-  widthM       Decimal? @map("width_m") @db.Decimal(8, 2)
-  depthM       Decimal? @map("depth_m") @db.Decimal(8, 2)
-  heightM      Decimal? @map("height_m") @db.Decimal(8, 2)
-  locationNotes String? @map("location_notes") @db.Text
-  isActive     Boolean  @default(true) @map("is_active")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id            String   @id @default(uuid())
+  eventId       String   @map("event_id")
+  clientId      String?  @map("client_id")
+  code          String   @db.VarChar(50)
+  widthM        Decimal? @map("width_m") @db.Decimal(8, 2)
+  depthM        Decimal? @map("depth_m") @db.Decimal(8, 2)
+  heightM       Decimal? @map("height_m") @db.Decimal(8, 2)
+  locationNotes String?  @map("location_notes") @db.Text
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
   event     Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
   client    Client?         @relation(fields: [clientId], references: [id])
@@ -554,48 +616,48 @@ model StandDocument {
 // ─── Orders ───────────────────────────────────────────────────────────────────
 
 model Order {
-  id               String      @id @default(uuid())
-  tenantId         String      @map("tenant_id")
-  orderNumber      String      @unique @map("order_number") @db.VarChar(50)
-  eventId          String      @map("event_id")
-  clientId         String      @map("client_id")
-  billingClientId  String?     @map("billing_client_id")
-  standId          String?     @map("stand_id")
-  priceListId      String      @map("price_list_id")
-  status           OrderStatus @default(QUOTED)
-  pricingTier      PricingTier @map("pricing_tier")
-  subtotal         Decimal     @default(0) @db.Decimal(12, 2)
-  discountPct      Decimal     @default(0) @map("discount_pct") @db.Decimal(5, 2)
-  discountAmount   Decimal     @default(0) @map("discount_amount") @db.Decimal(12, 2)
-  taxPct           Decimal     @default(16) @map("tax_pct") @db.Decimal(5, 2)
-  taxAmount        Decimal     @default(0) @map("tax_amount") @db.Decimal(12, 2)
-  total            Decimal     @default(0) @db.Decimal(12, 2)
-  prospectedTotal  Decimal     @default(0) @map("prospected_total") @db.Decimal(12, 2)
-  paidAmount       Decimal     @default(0) @map("paid_amount") @db.Decimal(12, 2)
-  notes            String?     @db.Text
-  isCreditNote     Boolean     @default(false) @map("is_credit_note")
-  originalOrderId  String?     @map("original_order_id")
-  startDate        DateTime?   @map("start_date")
-  endDate          DateTime?   @map("end_date")
-  createdById      String      @map("created_by_id")
-  assignedToId     String?     @map("assigned_to_id")
-  createdAt        DateTime    @default(now()) @map("created_at")
-  updatedAt        DateTime    @updatedAt @map("updated_at")
+  id              String      @id @default(uuid())
+  tenantId        String      @map("tenant_id")
+  orderNumber     String      @unique @map("order_number") @db.VarChar(50)
+  eventId         String      @map("event_id")
+  clientId        String      @map("client_id")
+  billingClientId String?     @map("billing_client_id")
+  standId         String?     @map("stand_id")
+  priceListId     String      @map("price_list_id")
+  status          OrderStatus @default(QUOTED)
+  pricingTier     PricingTier @map("pricing_tier")
+  subtotal        Decimal     @default(0) @db.Decimal(12, 2)
+  discountPct     Decimal     @default(0) @map("discount_pct") @db.Decimal(5, 2)
+  discountAmount  Decimal     @default(0) @map("discount_amount") @db.Decimal(12, 2)
+  taxPct          Decimal     @default(16) @map("tax_pct") @db.Decimal(5, 2)
+  taxAmount       Decimal     @default(0) @map("tax_amount") @db.Decimal(12, 2)
+  total           Decimal     @default(0) @db.Decimal(12, 2)
+  prospectedTotal Decimal     @default(0) @map("prospected_total") @db.Decimal(12, 2)
+  paidAmount      Decimal     @default(0) @map("paid_amount") @db.Decimal(12, 2)
+  notes           String?     @db.Text
+  isCreditNote    Boolean     @default(false) @map("is_credit_note")
+  originalOrderId String?     @map("original_order_id")
+  startDate       DateTime?   @map("start_date")
+  endDate         DateTime?   @map("end_date")
+  createdById     String      @map("created_by_id")
+  assignedToId    String?     @map("assigned_to_id")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
 
-  tenant         Tenant               @relation(fields: [tenantId], references: [id])
-  event          Event                @relation(fields: [eventId], references: [id])
-  client         Client               @relation("OrderClient", fields: [clientId], references: [id])
-  billingClient  Client?              @relation("OrderBillingClient", fields: [billingClientId], references: [id])
-  stand          Stand?               @relation(fields: [standId], references: [id])
-  priceList      PriceList            @relation(fields: [priceListId], references: [id])
-  createdBy      User                 @relation("OrderCreatedBy", fields: [createdById], references: [id])
-  assignedTo     User?                @relation("OrderAssignedTo", fields: [assignedToId], references: [id])
-  originalOrder  Order?               @relation("CreditNoteRef", fields: [originalOrderId], references: [id])
-  creditNotes    Order[]              @relation("CreditNoteRef")
-  lineItems      OrderLineItem[]
-  payments       OrderPayment[]
-  documents      OrderDocument[]
-  statusHistory  OrderStatusHistory[]
+  tenant        Tenant               @relation(fields: [tenantId], references: [id])
+  event         Event                @relation(fields: [eventId], references: [id])
+  client        Client               @relation("OrderClient", fields: [clientId], references: [id])
+  billingClient Client?              @relation("OrderBillingClient", fields: [billingClientId], references: [id])
+  stand         Stand?               @relation(fields: [standId], references: [id])
+  priceList     PriceList            @relation(fields: [priceListId], references: [id])
+  createdBy     User                 @relation("OrderCreatedBy", fields: [createdById], references: [id])
+  assignedTo    User?                @relation("OrderAssignedTo", fields: [assignedToId], references: [id])
+  originalOrder Order?               @relation("CreditNoteRef", fields: [originalOrderId], references: [id])
+  creditNotes   Order[]              @relation("CreditNoteRef")
+  lineItems     OrderLineItem[]
+  payments      OrderPayment[]
+  documents     OrderDocument[]
+  statusHistory OrderStatusHistory[]
 
   @@index([tenantId, status])
   @@index([eventId, status])
@@ -627,15 +689,15 @@ model OrderLineItem {
 }
 
 model OrderPayment {
-  id          String        @id @default(uuid())
-  orderId     String        @map("order_id")
-  method      PaymentMethod
-  amount      Decimal       @db.Decimal(12, 2)
-  paymentDate DateTime      @map("payment_date")
-  reference   String?       @db.VarChar(200)
-  notes       String?       @db.Text
-  recordedById String       @map("recorded_by_id")
-  createdAt   DateTime      @default(now()) @map("created_at")
+  id           String        @id @default(uuid())
+  orderId      String        @map("order_id")
+  method       PaymentMethod
+  amount       Decimal       @db.Decimal(12, 2)
+  paymentDate  DateTime      @map("payment_date")
+  reference    String?       @db.VarChar(200)
+  notes        String?       @db.Text
+  recordedById String        @map("recorded_by_id")
+  createdAt    DateTime      @default(now()) @map("created_at")
 
   order      Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
   recordedBy User  @relation(fields: [recordedById], references: [id])
@@ -660,13 +722,13 @@ model OrderDocument {
 }
 
 model OrderStatusHistory {
-  id         String      @id @default(uuid())
-  orderId    String      @map("order_id")
-  fromStatus OrderStatus? @map("from_status")
-  toStatus   OrderStatus @map("to_status")
-  changedById String     @map("changed_by_id")
-  notes      String?     @db.Text
-  createdAt  DateTime    @default(now()) @map("created_at")
+  id          String       @id @default(uuid())
+  orderId     String       @map("order_id")
+  fromStatus  OrderStatus? @map("from_status")
+  toStatus    OrderStatus  @map("to_status")
+  changedById String       @map("changed_by_id")
+  notes       String?      @db.Text
+  createdAt   DateTime     @default(now()) @map("created_at")
 
   order     Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
   changedBy User  @relation(fields: [changedById], references: [id])
@@ -678,17 +740,17 @@ model OrderStatusHistory {
 // ─── Notifications & Audit ───────────────────────────────────────────────────
 
 model Notification {
-  id            String   @id @default(uuid())
-  tenantId      String   @map("tenant_id")
-  recipientType String   @map("recipient_type") @db.VarChar(20)
-  recipientId   String   @map("recipient_id")
-  channel       String   @db.VarChar(20)
-  templateKey   String   @map("template_key") @db.VarChar(100)
+  id            String    @id @default(uuid())
+  tenantId      String    @map("tenant_id")
+  recipientType String    @map("recipient_type") @db.VarChar(20)
+  recipientId   String    @map("recipient_id")
+  channel       String    @db.VarChar(20)
+  templateKey   String    @map("template_key") @db.VarChar(100)
   payload       Json
-  status        String   @default("pending") @db.VarChar(20)
+  status        String    @default("pending") @db.VarChar(20)
   sentAt        DateTime? @map("sent_at")
-  errorDetails  String?  @map("error_details") @db.Text
-  createdAt     DateTime @default(now()) @map("created_at")
+  errorDetails  String?   @map("error_details") @db.Text
+  createdAt     DateTime  @default(now()) @map("created_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
@@ -821,29 +883,29 @@ model Message {
 // ─── Arte Capital ─────────────────────────────────────────────────────────────
 
 model ArtCapitalUser {
-  id           String                @id @default(uuid())
-  tenantId     String                @map("tenant_id")
-  email        String                @unique @db.VarChar(200)
-  passwordHash String                @map("password_hash")
-  firstName    String                @map("first_name") @db.VarChar(100)
-  lastName     String                @map("last_name") @db.VarChar(100)
-  phone        String?               @db.VarChar(30)
-  userRole     ArtCapitalUserRole    @map("user_role") @default(COLLECTOR)
-  bio          String?               @db.Text
-  profileImage String?               @map("profile_image") @db.VarChar(500)
-  isActive     Boolean               @default(true) @map("is_active")
-  createdAt    DateTime              @default(now()) @map("created_at")
-  updatedAt    DateTime              @updatedAt @map("updated_at")
+  id           String             @id @default(uuid())
+  tenantId     String             @map("tenant_id")
+  email        String             @unique @db.VarChar(200)
+  passwordHash String             @map("password_hash")
+  firstName    String             @map("first_name") @db.VarChar(100)
+  lastName     String             @map("last_name") @db.VarChar(100)
+  phone        String?            @db.VarChar(30)
+  userRole     ArtCapitalUserRole @default(COLLECTOR) @map("user_role")
+  bio          String?            @db.Text
+  profileImage String?            @map("profile_image") @db.VarChar(500)
+  isActive     Boolean            @default(true) @map("is_active")
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
 
-  tenant                Tenant                     @relation(fields: [tenantId], references: [id])
-  artist                ArtCapitalArtist?
-  memberships           ArtCapitalMembership[]
-  orders                ArtCapitalOrder[]
-  orderPayments         ArtCapitalPayment[]
-  transactions          ArtCapitalTransaction[]
-  productImages         ArtCapitalProductImage[]   @relation("UploadedBy")
-  createdProducts       ArtCapitalProduct[]        @relation("CreatedBy")
-  approvedProducts      ArtCapitalProduct[]        @relation("ApprovedBy")
+  tenant           Tenant                   @relation(fields: [tenantId], references: [id])
+  artist           ArtCapitalArtist?
+  memberships      ArtCapitalMembership[]
+  orders           ArtCapitalOrder[]
+  orderPayments    ArtCapitalPayment[]
+  transactions     ArtCapitalTransaction[]
+  productImages    ArtCapitalProductImage[] @relation("UploadedBy")
+  createdProducts  ArtCapitalProduct[]      @relation("CreatedBy")
+  approvedProducts ArtCapitalProduct[]      @relation("ApprovedBy")
 
   @@index([tenantId, isActive])
   @@index([email])
@@ -851,51 +913,51 @@ model ArtCapitalUser {
 }
 
 model ArtCapitalArtist {
-  id                String                @id @default(uuid())
-  tenantId          String                @map("tenant_id")
-  userId            String                @unique @map("user_id")
-  galleryName       String?               @map("gallery_name") @db.VarChar(200)
-  commissionRate    Decimal               @map("commission_rate") @db.Decimal(5, 2) @default(15)
-  bankAccount       String?               @map("bank_account") @db.VarChar(100)
-  bankName          String?               @map("bank_name") @db.VarChar(100)
-  isActive          Boolean               @default(true) @map("is_active")
-  createdAt         DateTime              @default(now()) @map("created_at")
-  updatedAt         DateTime              @updatedAt @map("updated_at")
+  id             String   @id @default(uuid())
+  tenantId       String   @map("tenant_id")
+  userId         String   @unique @map("user_id")
+  galleryName    String?  @map("gallery_name") @db.VarChar(200)
+  commissionRate Decimal  @default(15) @map("commission_rate") @db.Decimal(5, 2)
+  bankAccount    String?  @map("bank_account") @db.VarChar(100)
+  bankName       String?  @map("bank_name") @db.VarChar(100)
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
-  user              ArtCapitalUser        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  products          ArtCapitalProduct[]   @relation("Artist")
-  transactions      ArtCapitalTransaction[]
+  user         ArtCapitalUser          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  products     ArtCapitalProduct[]     @relation("Artist")
+  transactions ArtCapitalTransaction[]
 
   @@index([tenantId])
   @@map("art_capital_artists")
 }
 
 model ArtCapitalProduct {
-  id                String                    @id @default(uuid())
-  tenantId          String                    @map("tenant_id")
-  artistId          String                    @map("artist_id")
-  createdById       String                    @map("created_by_id")
-  approvedById      String?                   @map("approved_by_id")
-  title             String                    @db.VarChar(300)
-  description       String?                   @db.Text
-  price             Decimal                   @db.Decimal(12, 2)
-  status            ArtCapitalProductStatus   @default(DRAFT)
-  membershipTierId  String?                   @map("membership_tier_id")
-  images            ArtCapitalProductImage[]
-  category          String?                   @db.VarChar(100)
-  metadata          Json                      @default("{}")
-  isActive          Boolean                   @default(true) @map("is_active")
-  createdAt         DateTime                  @default(now()) @map("created_at")
-  updatedAt         DateTime                  @updatedAt @map("updated_at")
-  approvedAt        DateTime?                 @map("approved_at")
-  rejectionReason   String?                   @map("rejection_reason") @db.Text
+  id               String                   @id @default(uuid())
+  tenantId         String                   @map("tenant_id")
+  artistId         String                   @map("artist_id")
+  createdById      String                   @map("created_by_id")
+  approvedById     String?                  @map("approved_by_id")
+  title            String                   @db.VarChar(300)
+  description      String?                  @db.Text
+  price            Decimal                  @db.Decimal(12, 2)
+  status           ArtCapitalProductStatus  @default(DRAFT)
+  membershipTierId String?                  @map("membership_tier_id")
+  images           ArtCapitalProductImage[]
+  category         String?                  @db.VarChar(100)
+  metadata         Json                     @default("{}")
+  isActive         Boolean                  @default(true) @map("is_active")
+  createdAt        DateTime                 @default(now()) @map("created_at")
+  updatedAt        DateTime                 @updatedAt @map("updated_at")
+  approvedAt       DateTime?                @map("approved_at")
+  rejectionReason  String?                  @map("rejection_reason") @db.Text
 
-  tenant            Tenant                           @relation(fields: [tenantId], references: [id])
-  artist            ArtCapitalArtist                 @relation("Artist", fields: [artistId], references: [id])
-  createdBy         ArtCapitalUser                   @relation("CreatedBy", fields: [createdById], references: [id])
-  approvedBy        ArtCapitalUser?                  @relation("ApprovedBy", fields: [approvedById], references: [id])
-  membershipTier    ArtCapitalMembershipTier?        @relation(fields: [membershipTierId], references: [id])
-  lineItems         ArtCapitalOrderLineItem[]
+  tenant         Tenant                    @relation(fields: [tenantId], references: [id])
+  artist         ArtCapitalArtist          @relation("Artist", fields: [artistId], references: [id])
+  createdBy      ArtCapitalUser            @relation("CreatedBy", fields: [createdById], references: [id])
+  approvedBy     ArtCapitalUser?           @relation("ApprovedBy", fields: [approvedById], references: [id])
+  membershipTier ArtCapitalMembershipTier? @relation(fields: [membershipTierId], references: [id])
+  lineItems      ArtCapitalOrderLineItem[]
 
   @@index([tenantId, status])
   @@index([artistId])
@@ -904,36 +966,36 @@ model ArtCapitalProduct {
 }
 
 model ArtCapitalProductImage {
-  id              String   @id @default(uuid())
-  productId       String   @map("product_id")
-  uploadedById    String   @map("uploaded_by_id")
-  imageUrl        String   @map("image_url") @db.VarChar(500)
-  displayOrder    Int      @default(0) @map("display_order")
-  isMainImage     Boolean  @default(false) @map("is_main_image")
-  createdAt       DateTime @default(now()) @map("created_at")
+  id           String   @id @default(uuid())
+  productId    String   @map("product_id")
+  uploadedById String   @map("uploaded_by_id")
+  imageUrl     String   @map("image_url") @db.VarChar(500)
+  displayOrder Int      @default(0) @map("display_order")
+  isMainImage  Boolean  @default(false) @map("is_main_image")
+  createdAt    DateTime @default(now()) @map("created_at")
 
-  product     ArtCapitalProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
-  uploadedBy  ArtCapitalUser    @relation("UploadedBy", fields: [uploadedById], references: [id])
+  product    ArtCapitalProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  uploadedBy ArtCapitalUser    @relation("UploadedBy", fields: [uploadedById], references: [id])
 
   @@index([productId, displayOrder])
   @@map("art_capital_product_images")
 }
 
 model ArtCapitalMembershipTier {
-  id              String   @id @default(uuid())
-  tenantId        String   @map("tenant_id")
-  name            String   @db.VarChar(100)
-  description     String?  @db.Text
-  monthlyPrice    Decimal  @map("monthly_price") @db.Decimal(12, 2)
-  yearlyPrice     Decimal  @map("yearly_price") @db.Decimal(12, 2)
-  benefits        Json     @default("[]")
-  displayOrder    Int      @default(0) @map("display_order")
-  isActive        Boolean  @default(true) @map("is_active")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id           String   @id @default(uuid())
+  tenantId     String   @map("tenant_id")
+  name         String   @db.VarChar(100)
+  description  String?  @db.Text
+  monthlyPrice Decimal  @map("monthly_price") @db.Decimal(12, 2)
+  yearlyPrice  Decimal  @map("yearly_price") @db.Decimal(12, 2)
+  benefits     Json     @default("[]")
+  displayOrder Int      @default(0) @map("display_order")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
-  tenant          Tenant                     @relation(fields: [tenantId], references: [id])
-  memberships     ArtCapitalMembership[]
+  tenant            Tenant                 @relation(fields: [tenantId], references: [id])
+  memberships       ArtCapitalMembership[]
   exclusiveProducts ArtCapitalProduct[]
 
   @@index([tenantId, isActive])
@@ -941,22 +1003,22 @@ model ArtCapitalMembershipTier {
 }
 
 model ArtCapitalMembership {
-  id              String   @id @default(uuid())
-  tenantId        String   @map("tenant_id")
-  userId          String   @map("user_id")
-  tierId          String   @map("tier_id")
-  startDate       DateTime @map("start_date")
-  endDate         DateTime @map("end_date")
-  renewalDate     DateTime @map("renewal_date")
-  billingCycle    String   @default("MONTHLY") @map("billing_cycle") @db.VarChar(20)
-  autoRenew       Boolean  @default(true) @map("auto_renew")
-  status          String   @default("ACTIVE") @db.VarChar(20)
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id           String   @id @default(uuid())
+  tenantId     String   @map("tenant_id")
+  userId       String   @map("user_id")
+  tierId       String   @map("tier_id")
+  startDate    DateTime @map("start_date")
+  endDate      DateTime @map("end_date")
+  renewalDate  DateTime @map("renewal_date")
+  billingCycle String   @default("MONTHLY") @map("billing_cycle") @db.VarChar(20)
+  autoRenew    Boolean  @default(true) @map("auto_renew")
+  status       String   @default("ACTIVE") @db.VarChar(20)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
-  tenant          Tenant                    @relation(fields: [tenantId], references: [id])
-  user            ArtCapitalUser            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tier            ArtCapitalMembershipTier  @relation(fields: [tierId], references: [id])
+  tenant Tenant                   @relation(fields: [tenantId], references: [id])
+  user   ArtCapitalUser           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tier   ArtCapitalMembershipTier @relation(fields: [tierId], references: [id])
 
   @@unique([userId, tierId])
   @@index([tenantId, endDate])
@@ -965,26 +1027,26 @@ model ArtCapitalMembership {
 }
 
 model ArtCapitalOrder {
-  id                String                    @id @default(uuid())
-  tenantId          String                    @map("tenant_id")
-  userId            String                    @map("user_id")
-  orderNumber       String                    @unique @db.VarChar(50)
-  status            ArtCapitalOrderStatus     @default(QUOTED)
-  subtotal          Decimal                   @db.Decimal(12, 2)
-  discountAmount    Decimal                   @default(0) @map("discount_amount") @db.Decimal(12, 2)
-  taxAmount         Decimal                   @default(0) @map("tax_amount") @db.Decimal(12, 2)
-  total             Decimal                   @db.Decimal(12, 2)
-  paidAmount        Decimal                   @default(0) @map("paid_amount") @db.Decimal(12, 2)
-  notes             String?                   @db.Text
-  metadata          Json                      @default("{}")
-  createdAt         DateTime                  @default(now()) @map("created_at")
-  updatedAt         DateTime                  @updatedAt @map("updated_at")
+  id             String                @id @default(uuid())
+  tenantId       String                @map("tenant_id")
+  userId         String                @map("user_id")
+  orderNumber    String                @unique @db.VarChar(50)
+  status         ArtCapitalOrderStatus @default(QUOTED)
+  subtotal       Decimal               @db.Decimal(12, 2)
+  discountAmount Decimal               @default(0) @map("discount_amount") @db.Decimal(12, 2)
+  taxAmount      Decimal               @default(0) @map("tax_amount") @db.Decimal(12, 2)
+  total          Decimal               @db.Decimal(12, 2)
+  paidAmount     Decimal               @default(0) @map("paid_amount") @db.Decimal(12, 2)
+  notes          String?               @db.Text
+  metadata       Json                  @default("{}")
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
 
-  tenant            Tenant                      @relation(fields: [tenantId], references: [id])
-  user              ArtCapitalUser              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  lineItems         ArtCapitalOrderLineItem[]
-  payments          ArtCapitalPayment[]
-  transactions      ArtCapitalTransaction[]
+  tenant       Tenant                    @relation(fields: [tenantId], references: [id])
+  user         ArtCapitalUser            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lineItems    ArtCapitalOrderLineItem[]
+  payments     ArtCapitalPayment[]
+  transactions ArtCapitalTransaction[]
 
   @@index([tenantId, createdAt])
   @@index([userId])
@@ -993,17 +1055,17 @@ model ArtCapitalOrder {
 }
 
 model ArtCapitalOrderLineItem {
-  id              String   @id @default(uuid())
-  orderId         String   @map("order_id")
-  productId       String   @map("product_id")
-  quantity        Int      @default(1)
-  unitPrice       Decimal  @map("unit_price") @db.Decimal(12, 2)
-  discountAmount  Decimal  @default(0) @map("discount_amount") @db.Decimal(12, 2)
-  taxAmount       Decimal  @default(0) @map("tax_amount") @db.Decimal(12, 2)
-  subtotal        Decimal  @db.Decimal(12, 2)
-  createdAt       DateTime @default(now()) @map("created_at")
+  id             String   @id @default(uuid())
+  orderId        String   @map("order_id")
+  productId      String   @map("product_id")
+  quantity       Int      @default(1)
+  unitPrice      Decimal  @map("unit_price") @db.Decimal(12, 2)
+  discountAmount Decimal  @default(0) @map("discount_amount") @db.Decimal(12, 2)
+  taxAmount      Decimal  @default(0) @map("tax_amount") @db.Decimal(12, 2)
+  subtotal       Decimal  @db.Decimal(12, 2)
+  createdAt      DateTime @default(now()) @map("created_at")
 
-  order   ArtCapitalOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order   ArtCapitalOrder   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product ArtCapitalProduct @relation(fields: [productId], references: [id])
 
   @@index([orderId])
@@ -1011,18 +1073,18 @@ model ArtCapitalOrderLineItem {
 }
 
 model ArtCapitalPayment {
-  id              String         @id @default(uuid())
-  orderId         String         @map("order_id")
-  userId          String         @map("user_id")
-  method          PaymentMethod
-  amount          Decimal        @db.Decimal(12, 2)
-  paymentDate     DateTime       @map("payment_date")
-  reference       String?        @db.VarChar(200)
-  notes           String?        @db.Text
-  createdAt       DateTime       @default(now()) @map("created_at")
+  id          String        @id @default(uuid())
+  orderId     String        @map("order_id")
+  userId      String        @map("user_id")
+  method      PaymentMethod
+  amount      Decimal       @db.Decimal(12, 2)
+  paymentDate DateTime      @map("payment_date")
+  reference   String?       @db.VarChar(200)
+  notes       String?       @db.Text
+  createdAt   DateTime      @default(now()) @map("created_at")
 
-  order   ArtCapitalOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  user    ArtCapitalUser  @relation(fields: [userId], references: [id])
+  order ArtCapitalOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user  ArtCapitalUser  @relation(fields: [userId], references: [id])
 
   @@index([orderId])
   @@index([paymentDate])
@@ -1030,24 +1092,324 @@ model ArtCapitalPayment {
 }
 
 model ArtCapitalTransaction {
-  id              String   @id @default(uuid())
-  tenantId        String   @map("tenant_id")
-  artistId        String   @map("artist_id")
-  orderId         String   @map("order_id")
-  userId          String   @map("user_id")
-  amount          Decimal  @db.Decimal(12, 2)
-  commissionRate  Decimal  @map("commission_rate") @db.Decimal(5, 2)
-  commissionAmount Decimal @map("commission_amount") @db.Decimal(12, 2)
-  status          String   @default("PENDING") @db.VarChar(20)
-  paidAt          DateTime? @map("paid_at")
-  createdAt       DateTime @default(now()) @map("created_at")
+  id               String    @id @default(uuid())
+  tenantId         String    @map("tenant_id")
+  artistId         String    @map("artist_id")
+  orderId          String    @map("order_id")
+  userId           String    @map("user_id")
+  amount           Decimal   @db.Decimal(12, 2)
+  commissionRate   Decimal   @map("commission_rate") @db.Decimal(5, 2)
+  commissionAmount Decimal   @map("commission_amount") @db.Decimal(12, 2)
+  status           String    @default("PENDING") @db.VarChar(20)
+  paidAt           DateTime? @map("paid_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
 
-  tenant  Tenant           @relation(fields: [tenantId], references: [id])
-  artist  ArtCapitalArtist @relation(fields: [artistId], references: [id])
-  order   ArtCapitalOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  user    ArtCapitalUser   @relation(fields: [userId], references: [id])
+  tenant Tenant           @relation(fields: [tenantId], references: [id])
+  artist ArtCapitalArtist @relation(fields: [artistId], references: [id])
+  order  ArtCapitalOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user   ArtCapitalUser   @relation(fields: [userId], references: [id])
 
   @@index([tenantId, status])
   @@index([artistId, paidAt])
   @@map("art_capital_transactions")
+}
+
+// ─── Gallery Models ───────────────────────────────────────────────────────────
+
+model GalleryArtist {
+  id             String   @id @default(uuid())
+  tenantId       String   @map("tenant_id")
+  userId         String   @unique @map("user_id")
+  name           String   @db.VarChar(200)
+  bio            String?  @db.Text
+  imageUrl       String?  @map("image_url") @db.VarChar(500)
+  website        String?  @db.VarChar(500)
+  socialMedia    Json     @default("{}")
+  specialization Json     @default("[]")
+  status         String   @default("ACTIVE") @db.VarChar(20)
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  tenant      Tenant              @relation(fields: [tenantId], references: [id])
+  artworks    GalleryArtwork[]
+  memberships GalleryMembership[]
+  classes     GalleryClass[]
+
+  @@index([tenantId, status])
+  @@map("gallery_artists")
+}
+
+model GalleryCollection {
+  id          String   @id @default(uuid())
+  tenantId    String   @map("tenant_id")
+  name        String   @db.VarChar(200)
+  description String?  @db.Text
+  image       String?  @db.VarChar(500)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  tenant   Tenant           @relation(fields: [tenantId], references: [id])
+  artworks GalleryArtwork[]
+
+  @@index([tenantId, isActive])
+  @@map("gallery_collections")
+}
+
+model GalleryLocation {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  name      String   @db.VarChar(200)
+  address   String?  @db.VarChar(300)
+  city      String?  @db.VarChar(100)
+  phone     String?  @db.VarChar(30)
+  whatsapp  String?  @db.VarChar(30)
+  imageUrl  String?  @map("image_url") @db.VarChar(500)
+  hours     Json     @default("{}")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant      Tenant              @relation(fields: [tenantId], references: [id])
+  artworks    GalleryArtwork[]
+  classes     GalleryClass[]
+  exhibitions GalleryExhibition[]
+
+  @@index([tenantId, isActive])
+  @@map("gallery_locations")
+}
+
+model GalleryArtwork {
+  id                         String        @id @default(uuid())
+  tenantId                   String        @map("tenant_id")
+  artistId                   String        @map("artist_id")
+  collectionId               String?       @map("collection_id")
+  locationId                 String?       @map("location_id")
+  title                      String        @db.VarChar(300)
+  description                String?       @db.Text
+  price                      Decimal       @db.Decimal(12, 2)
+  quantity                   Int           @default(1)
+  status                     ArtworkStatus @default(AVAILABLE)
+  mediums                    Json          @default("[]")
+  styles                     Json          @default("[]")
+  widthCm                    Decimal?      @map("width_cm") @db.Decimal(10, 2)
+  heightCm                   Decimal?      @map("height_cm") @db.Decimal(10, 2)
+  depthCm                    Decimal?      @map("depth_cm") @db.Decimal(10, 2)
+  mainImage                  String?       @map("main_image") @db.VarChar(500)
+  galleryImages              Json          @default("[]")
+  artistCommissionPercentage Decimal?      @map("artist_commission_percentage") @db.Decimal(5, 2)
+  metadata                   Json          @default("{}")
+  isActive                   Boolean       @default(true) @map("is_active")
+  createdAt                  DateTime      @default(now()) @map("created_at")
+  updatedAt                  DateTime      @updatedAt @map("updated_at")
+
+  tenant         Tenant                     @relation(fields: [tenantId], references: [id])
+  artist         GalleryArtist              @relation(fields: [artistId], references: [id])
+  collection     GalleryCollection?         @relation(fields: [collectionId], references: [id])
+  location       GalleryLocation?           @relation(fields: [locationId], references: [id])
+  cartItems      GalleryCartItem[]
+  orderLineItems GalleryOrderLineItem[]
+  favorites      GalleryFavorite[]
+  exhibitions    GalleryExhibitionArtwork[]
+
+  @@index([tenantId, status])
+  @@index([artistId])
+  @@index([collectionId])
+  @@map("gallery_artworks")
+}
+
+model GalleryMembership {
+  id                   String   @id @default(uuid())
+  tenantId             String   @map("tenant_id")
+  artistId             String   @map("artist_id")
+  name                 String   @db.VarChar(200)
+  membershipType       String   @db.VarChar(50)
+  price                Decimal  @db.Decimal(12, 2)
+  description          String?  @db.Text
+  commissionPercentage Decimal  @map("commission_percentage") @db.Decimal(5, 2)
+  features             Json     @default("[]")
+  startDate            DateTime @map("start_date")
+  endDate              DateTime @map("end_date")
+  isActive             Boolean  @default(true) @map("is_active")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant        @relation(fields: [tenantId], references: [id])
+  artist GalleryArtist @relation(fields: [artistId], references: [id])
+
+  @@unique([artistId, membershipType])
+  @@index([tenantId, isActive])
+  @@map("gallery_memberships")
+}
+
+model GalleryClass {
+  id           String      @id @default(uuid())
+  tenantId     String      @map("tenant_id")
+  instructorId String      @map("instructor_id")
+  locationId   String      @map("location_id")
+  name         String      @db.VarChar(200)
+  description  String?     @db.Text
+  price        Decimal?    @db.Decimal(12, 2)
+  schedule     Json        @default("{}")
+  capacity     Int         @default(20)
+  status       ClassStatus @default(ACTIVE)
+  isActive     Boolean     @default(true) @map("is_active")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  tenant      Tenant                   @relation(fields: [tenantId], references: [id])
+  instructor  GalleryArtist            @relation(fields: [instructorId], references: [id])
+  location    GalleryLocation          @relation(fields: [locationId], references: [id])
+  enrollments GalleryClassEnrollment[]
+
+  @@index([tenantId, status])
+  @@index([instructorId])
+  @@map("gallery_classes")
+}
+
+model GalleryClassEnrollment {
+  id           String   @id @default(uuid())
+  tenantId     String   @map("tenant_id")
+  userId       String   @map("user_id")
+  classId      String   @map("class_id")
+  enrolledDate DateTime @default(now()) @map("enrolled_date")
+  status       String   @default("ACTIVE") @db.VarChar(20)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  tenant Tenant       @relation(fields: [tenantId], references: [id])
+  class  GalleryClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, classId])
+  @@index([tenantId])
+  @@map("gallery_class_enrollments")
+}
+
+model GalleryExhibition {
+  id          String   @id @default(uuid())
+  tenantId    String   @map("tenant_id")
+  locationId  String   @map("location_id")
+  title       String   @db.VarChar(300)
+  description String?  @db.Text
+  startDate   DateTime @map("start_date")
+  endDate     DateTime @map("end_date")
+  status      String   @default("PLANNING") @db.VarChar(20)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  tenant   Tenant                     @relation(fields: [tenantId], references: [id])
+  location GalleryLocation            @relation(fields: [locationId], references: [id])
+  artworks GalleryExhibitionArtwork[]
+
+  @@index([tenantId, status])
+  @@map("gallery_exhibitions")
+}
+
+model GalleryExhibitionArtwork {
+  exhibitionId String
+  artworkId    String
+  displayOrder Int    @default(0) @map("display_order")
+
+  exhibition GalleryExhibition @relation(fields: [exhibitionId], references: [id], onDelete: Cascade)
+  artwork    GalleryArtwork    @relation(fields: [artworkId], references: [id], onDelete: Cascade)
+
+  @@id([exhibitionId, artworkId])
+  @@map("gallery_exhibition_artworks")
+}
+
+model GalleryCart {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant            @relation(fields: [tenantId], references: [id])
+  items  GalleryCartItem[]
+
+  @@unique([tenantId, userId])
+  @@map("gallery_carts")
+}
+
+model GalleryCartItem {
+  id        String   @id @default(uuid())
+  cartId    String   @map("cart_id")
+  artworkId String   @map("artwork_id")
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  cart     GalleryCart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  artwork  GalleryArtwork @relation(fields: [artworkId], references: [id])
+  Tenant   Tenant?        @relation(fields: [tenantId], references: [id])
+  tenantId String?
+
+  @@unique([cartId, artworkId])
+  @@map("gallery_cart_items")
+}
+
+model GalleryOrder {
+  id                     String             @id @default(uuid())
+  tenantId               String             @map("tenant_id")
+  userId                 String             @map("user_id")
+  orderNumber            String             @unique @db.VarChar(50)
+  status                 GalleryOrderStatus @default(PENDING)
+  subtotal               Decimal            @db.Decimal(12, 2)
+  discountAmount         Decimal            @default(0) @map("discount_amount") @db.Decimal(12, 2)
+  taxAmount              Decimal            @default(0) @map("tax_amount") @db.Decimal(12, 2)
+  totalPrice             Decimal            @map("total_price") @db.Decimal(12, 2)
+  paymentStatus          String             @default("PENDING") @db.VarChar(20)
+  shippingAddress        Json               @default("{}")
+  trackingNumber         String?            @map("tracking_number") @db.VarChar(100)
+  stripePaymentIntentId  String?            @map("stripe_payment_intent_id") @db.VarChar(255)
+  stripeSessionId        String?            @map("stripe_session_id") @db.VarChar(255)
+  artistCommissionAmount Decimal?           @map("artist_commission_amount") @db.Decimal(12, 2)
+  metadata               Json               @default("{}")
+  createdAt              DateTime           @default(now()) @map("created_at")
+  updatedAt              DateTime           @updatedAt @map("updated_at")
+
+  tenant    Tenant                 @relation(fields: [tenantId], references: [id])
+  lineItems GalleryOrderLineItem[]
+
+  @@index([tenantId, createdAt])
+  @@index([userId])
+  @@index([status])
+  @@map("gallery_orders")
+}
+
+model GalleryOrderLineItem {
+  id                         String   @id @default(uuid())
+  orderId                    String   @map("order_id")
+  artworkId                  String   @map("artwork_id")
+  quantity                   Int      @default(1)
+  unitPrice                  Decimal  @map("unit_price") @db.Decimal(12, 2)
+  artistCommissionPercentage Decimal? @map("artist_commission_percentage") @db.Decimal(5, 2)
+  artistCommissionAmount     Decimal? @map("artist_commission_amount") @db.Decimal(12, 2)
+  discountAmount             Decimal  @default(0) @map("discount_amount") @db.Decimal(12, 2)
+  taxAmount                  Decimal  @default(0) @map("tax_amount") @db.Decimal(12, 2)
+  subtotal                   Decimal  @db.Decimal(12, 2)
+  createdAt                  DateTime @default(now()) @map("created_at")
+
+  order    GalleryOrder   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  artwork  GalleryArtwork @relation(fields: [artworkId], references: [id])
+  Tenant   Tenant?        @relation(fields: [tenantId], references: [id])
+  tenantId String?
+
+  @@index([orderId])
+  @@map("gallery_order_line_items")
+}
+
+model GalleryFavorite {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  userId    String   @map("user_id")
+  artworkId String   @map("artwork_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant  Tenant         @relation(fields: [tenantId], references: [id])
+  artwork GalleryArtwork @relation(fields: [artworkId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, artworkId])
+  @@index([tenantId, userId])
+  @@map("gallery_favorites")
 }
