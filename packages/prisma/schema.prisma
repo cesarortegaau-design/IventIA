@@ -1262,6 +1262,7 @@ model GalleryClass {
   instructor  GalleryArtist            @relation(fields: [instructorId], references: [id])
   location    GalleryLocation          @relation(fields: [locationId], references: [id])
   enrollments GalleryClassEnrollment[]
+  cartItems   GalleryCartItem[]
 
   @@index([tenantId, status])
   @@index([instructorId])
@@ -1335,16 +1336,17 @@ model GalleryCart {
 model GalleryCartItem {
   id        String   @id @default(uuid())
   cartId    String   @map("cart_id")
-  artworkId String   @map("artwork_id")
+  artworkId String?  @map("artwork_id")
+  classId   String?  @map("class_id")
   quantity  Int      @default(1)
   createdAt DateTime @default(now()) @map("created_at")
 
   cart     GalleryCart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
-  artwork  GalleryArtwork @relation(fields: [artworkId], references: [id])
+  artwork  GalleryArtwork? @relation(fields: [artworkId], references: [id])
+  galleryClass GalleryClass? @relation(fields: [classId], references: [id])
   Tenant   Tenant?        @relation(fields: [tenantId], references: [id])
   tenantId String?
 
-  @@unique([cartId, artworkId])
   @@map("gallery_cart_items")
 }
 

@@ -4,9 +4,14 @@ import { AppError } from '../middleware/errorHandler'
 import * as cartService from '../services/gallery-cart.service'
 
 const addToCartSchema = z.object({
-  artworkId: z.string().min(1),
+  artworkId: z.string().min(1).optional(),
+  classId: z.string().min(1).optional(),
   quantity: z.number().int().positive(),
-})
+  type: z.enum(['artwork', 'event']).optional(),
+}).refine(
+  (data) => data.artworkId || data.classId,
+  { message: 'Either artworkId or classId is required' }
+)
 
 const updateCartItemSchema = z.object({
   quantity: z.number().int().nonnegative(),
@@ -50,7 +55,13 @@ export async function addToCart(req: Request, res: Response, next: NextFunction)
     const tenantId = req.user!.tenantId
     const data = addToCartSchema.parse(req.body)
 
-    const item = await cartService.addToCart(userId, tenantId, data.artworkId, data.quantity)
+    const item = await cartService.addToCart(
+      userId,
+      tenantId,
+      data.artworkId || '',
+      data.quantity,
+      data.classId ? { type: 'event', classId: data.classId } : undefined
+    )
 
     res.status(201).json({
       success: true,
