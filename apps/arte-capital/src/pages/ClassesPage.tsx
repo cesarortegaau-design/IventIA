@@ -1,7 +1,7 @@
 import React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Row, Col, Card, Button, Spin, Empty, Badge, message } from 'antd'
-import { CalendarOutlined, UserOutlined, MapPinOutlined, DollarOutlined } from '@ant-design/icons'
+import { CalendarOutlined, UserOutlined, EnvironmentOutlined, DollarOutlined } from '@ant-design/icons'
 import { useAuthStore } from '../stores/authStore'
 import { useNavigate } from 'react-router-dom'
 import { galleryApi } from '../api/gallery'
@@ -87,7 +87,7 @@ export function ClassesPage() {
                   )}
                   {galleryClass.location?.name && (
                     <div style={{ marginBottom: 8 }}>
-                      <MapPinOutlined /> {galleryClass.location.name}
+                      <EnvironmentOutlined /> {galleryClass.location.name}
                     </div>
                   )}
                   {galleryClass.capacity && (

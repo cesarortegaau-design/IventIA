@@ -1,7 +1,7 @@
 import axios from 'axios'
 import { useAuthStore } from '../stores/authStore'
 
-const baseURL = import.meta.env.VITE_API_URL || '/api/v1/arte-capital'
+const baseURL = import.meta.env.VITE_API_URL || 'https://iventia-api.onrender.com/api/v1/arte-capital'
 
 export const apiClient = axios.create({
   baseURL,

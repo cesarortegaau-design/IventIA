@@ -1,7 +1,10 @@
 :root {
-  --primary: #1a1a1a;
-  --secondary: #a8a39d;
-  --border: #e8e6e3;
+  --primary-yellow: #FFD700;
+  --dark: #1a1a1a;
+  --accent: #F4E4C1;
+  --text: #333333;
+  --light-text: #666666;
+  --light-gray: #f9f9f9;
 }
 
 * {
@@ -15,8 +18,44 @@ body {
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background: #ffffff;
+  color: var(--text);
 }
 
 html, body, #root {
   height: 100%;
+}
+
+/* Ant Design overrides */
+.ant-btn-primary {
+  background-color: var(--primary-yellow) !important;
+  border-color: var(--primary-yellow) !important;
+  color: var(--dark) !important;
+}
+
+.ant-btn-primary:hover {
+  background-color: #ffc700 !important;
+  border-color: #ffc700 !important;
+}
+
+a {
+  color: var(--primary-yellow);
+}
+
+a:hover {
+  color: #ffc700;
+}
+
+/* Card styles */
+.ant-card {
+  border-color: #e8e6e3;
+}
+
+.ant-card-head {
+  background: var(--light-gray);
+  border-color: #e8e6e3;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--dark);
 }
