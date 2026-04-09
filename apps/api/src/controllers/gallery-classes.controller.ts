@@ -1,6 +1,17 @@
 import { Request, Response, NextFunction } from 'express'
 import { z } from 'zod'
 import * as classService from '../services/gallery-class.service'
+import { prisma } from '../config/database'
+import { AppError } from '../middleware/errorHandler'
+
+// Helper to get tenant ID from auth or query, default to first tenant
+async function getTenantId(req: Request): Promise<string> {
+  if (req.user?.tenantId) return req.user.tenantId
+  if (req.query.tenantId) return req.query.tenantId as string
+  const tenant = await prisma.tenant.findFirst()
+  if (!tenant) throw new AppError(400, 'NO_TENANT', 'No tenant found')
+  return tenant.id
+}
 
 const createClassSchema = z.object({
   instructorId: z.string().min(1),
@@ -34,7 +45,7 @@ export async function createClass(req: Request, res: Response, next: NextFunctio
 
 export async function listClasses(req: Request, res: Response, next: NextFunction) {
   try {
-    const tenantId = req.user!.tenantId
+    const tenantId = await getTenantId(req)
     const { locationId } = req.query
 
     const classes = await classService.listClasses(tenantId, locationId as string | undefined)
@@ -50,7 +61,7 @@ export async function listClasses(req: Request, res: Response, next: NextFunctio
 
 export async function getClassDetails(req: Request, res: Response, next: NextFunction) {
   try {
-    const tenantId = req.user!.tenantId
+    const tenantId = await getTenantId(req)
     const { id } = req.params
 
     const galleryClass = await classService.getClassDetails(id, tenantId)

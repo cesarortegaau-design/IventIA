@@ -8,19 +8,24 @@ import * as notificationsController from '../controllers/gallery-notifications.c
 
 const router = Router()
 
-// Webhook (no authentication required)
+// ─── Public Routes (no authentication required) ────────────────────────────────
+// Webhook
 router.post('/webhooks/stripe', ordersController.handleStripeWebhook)
 
-// All other routes require authentication
+// Public gallery browsing
+router.get('/artworks', artworksController.listArtworks)
+router.get('/artworks/:id', artworksController.getArtwork)
+router.get('/artworks/:id/related', artworksController.getRelatedArtworks)
+router.get('/classes', classesController.listClasses)
+router.get('/classes/:id', classesController.getClassDetails)
+
+// ─── Protected Routes (authentication required) ────────────────────────────────
 router.use(authenticate)
 
-// ─── Artworks ────────────────────────────────────────────────────────────────
-router.get('/artworks', artworksController.listArtworks)
+// ─── Artworks (Admin only) ────────────────────────────────────────────────────
 router.post('/artworks', artworksController.createArtwork)
-router.get('/artworks/:id', artworksController.getArtwork)
 router.put('/artworks/:id', artworksController.updateArtwork)
 router.delete('/artworks/:id', artworksController.deleteArtwork)
-router.get('/artworks/:id/related', artworksController.getRelatedArtworks)
 
 // ─── Shopping Cart ────────────────────────────────────────────────────────────
 router.get('/cart', cartController.getCart)
@@ -41,9 +46,7 @@ router.post('/orders/:orderId/checkout-session', ordersController.createCheckout
 router.get('/checkout/session-status', ordersController.checkoutSessionStatus)
 
 // ─── Classes/Workshops ──────────────────────────────────────────────────────
-router.get('/classes', classesController.listClasses)
 router.post('/classes', classesController.createClass)
-router.get('/classes/:id', classesController.getClassDetails)
 router.post('/classes/enroll', classesController.enrollInClass)
 router.get('/user/classes', classesController.getUserClasses)
 router.delete('/enrollments/:enrollmentId', classesController.cancelEnrollment)

@@ -2,6 +2,16 @@ import { Request, Response, NextFunction } from 'express'
 import { z } from 'zod'
 import { AppError } from '../middleware/errorHandler'
 import * as artworkService from '../services/gallery-artwork.service'
+import { prisma } from '../config/database'
+
+// Helper to get tenant ID from auth or query, default to first tenant
+async function getTenantId(req: Request): Promise<string> {
+  if (req.user?.tenantId) return req.user.tenantId
+  if (req.query.tenantId) return req.query.tenantId as string
+  const tenant = await prisma.tenant.findFirst()
+  if (!tenant) throw new AppError(400, 'NO_TENANT', 'No tenant found')
+  return tenant.id
+}
 
 const createArtworkSchema = z.object({
   artistId: z.string().min(1),
@@ -56,7 +66,7 @@ export async function createArtwork(req: Request, res: Response, next: NextFunct
 
 export async function getArtwork(req: Request, res: Response, next: NextFunction) {
   try {
-    const tenantId = req.user!.tenantId
+    const tenantId = await getTenantId(req)
     const { id } = req.params
 
     const artwork = await artworkService.getArtwork(id, tenantId)
@@ -72,7 +82,7 @@ export async function getArtwork(req: Request, res: Response, next: NextFunction
 
 export async function listArtworks(req: Request, res: Response, next: NextFunction) {
   try {
-    const tenantId = req.user!.tenantId
+    const tenantId = await getTenantId(req)
     const query = listArtworksSchema.parse(req.query)
 
     const result = await artworkService.listArtworks({
@@ -127,7 +137,7 @@ export async function deleteArtwork(req: Request, res: Response, next: NextFunct
 
 export async function getRelatedArtworks(req: Request, res: Response, next: NextFunction) {
   try {
-    const tenantId = req.user!.tenantId
+    const tenantId = await getTenantId(req)
     const { id } = req.params
     const limit = Math.min(parseInt(req.query.limit as string) || 4, 20)
 
