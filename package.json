@@ -13,6 +13,7 @@
     "postinstall": "test -f ./packages/prisma/schema.prisma && prisma generate --schema=./packages/prisma/schema.prisma || echo 'Prisma schema not found, skipping generate'"
   },
   "devDependencies": {
+    "terser": "^5.46.1",
     "turbo": "^2.0.0",
     "typescript": "^5.4.0"
   },
