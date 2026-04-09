@@ -86,18 +86,20 @@ export function GalleryPage() {
                   <Card
                     hoverable
                     cover={
-                      artwork.mainImage ? (
-                        <Image
-                          src={artwork.mainImage}
-                          alt={artwork.title}
-                          style={{ height: 300, objectFit: 'cover' }}
-                          preview={false}
-                        />
-                      ) : (
-                        <div style={{ height: 300, backgroundColor: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <div style={{ height: 300, backgroundColor: '#f0f0f0', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {artwork.mainImage ? (
+                          <img
+                            src={artwork.mainImage}
+                            alt={artwork.title}
+                            style={{ height: '100%', width: '100%', objectFit: 'cover' }}
+                            onError={(e) => {
+                              e.currentTarget.src = `https://dummyimage.com/300x300/cccccc/969696?text=${encodeURIComponent(artwork.title)}`
+                            }}
+                          />
+                        ) : (
                           <span style={{ color: '#999' }}>Sin imagen</span>
-                        </div>
-                      )
+                        )}
+                      </div>
                     }
                     onClick={() => handleViewArtwork(artwork.id)}
                     style={{ cursor: 'pointer' }}
