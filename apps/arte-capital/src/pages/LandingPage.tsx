@@ -78,7 +78,8 @@ export default function LandingPage() {
           ].map((artist, i) => (
             <Col xs={24} sm={12} md={6} key={i}>
               <Card style={{ textAlign: 'center', borderTop: `4px solid ${COLORS.lightBlue}`, cursor: 'pointer' }}
-                hoverable>
+                hoverable
+                onClick={() => navigate('/gallery')}>
                 <div style={{ fontSize: 60, marginBottom: 16 }}>{artist.image}</div>
                 <Title level={4} style={{ color: COLORS.navy }}>{artist.name}</Title>
                 <Text style={{ color: COLORS.lightBlue, fontWeight: 'bold' }}>{artist.role}</Text>
@@ -134,7 +135,8 @@ export default function LandingPage() {
                 hoverable>
                 <Title level={3} style={{ color: COLORS.navy }}>{gallery.title}</Title>
                 <Paragraph style={{ color: '#666', marginBottom: 16 }}>{gallery.desc}</Paragraph>
-                <Button type="primary" style={{ width: '100%', background: COLORS.lightBlue, borderColor: COLORS.lightBlue }}>
+                <Button type="primary" style={{ width: '100%', background: COLORS.lightBlue, borderColor: COLORS.lightBlue }}
+                  onClick={() => navigate('/gallery')}>
                   Ver Galería →
                 </Button>
               </Card>
@@ -176,7 +178,8 @@ export default function LandingPage() {
                     width: '100%',
                     background: i === 1 ? COLORS.navy : COLORS.lightBlue,
                     borderColor: i === 1 ? COLORS.navy : COLORS.lightBlue,
-                  }}>
+                  }}
+                  onClick={() => navigate('/register')}>
                     Suscribirse
                   </Button>
                 </Card>
@@ -212,7 +215,10 @@ export default function LandingPage() {
                 <Divider style={{ margin: '12px 0' }} />
                 <Row justify="space-between">
                   <Text>{workshop.date}</Text>
-                  <Button type="link" style={{ color: COLORS.lightBlue }}>Inscribirse →</Button>
+                  <Button type="link" style={{ color: COLORS.lightBlue }}
+                    onClick={() => navigate('/gallery')}>
+                    Inscribirse →
+                  </Button>
                 </Row>
               </Card>
             </Col>
@@ -244,7 +250,8 @@ export default function LandingPage() {
                       <Title level={4} style={{ color: COLORS.navy, margin: '0 0 8px 0' }}>{event.title}</Title>
                       <Text type="secondary">📍 {event.location}</Text>
                       <br />
-                      <Button type="link" style={{ padding: 0, marginTop: 8, color: COLORS.lightBlue }}>
+                      <Button type="link" style={{ padding: 0, marginTop: 8, color: COLORS.lightBlue }}
+                        onClick={() => navigate('/gallery')}>
                         Más información →
                       </Button>
                     </Col>
