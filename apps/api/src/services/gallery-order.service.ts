@@ -2,6 +2,7 @@ import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import Decimal from 'decimal.js'
 import Stripe from 'stripe'
+import * as whatsappService from './whatsapp.service'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', { apiVersion: '2024-04-10' })
 
@@ -126,6 +127,21 @@ export async function createGalleryOrder(input: CreateGalleryOrderInput) {
     return order
   })
 
+  // Send WhatsApp confirmation
+  try {
+    const phoneNumber = (input.shippingAddress.phone || '').replace(/[^0-9+]/g, '')
+    if (phoneNumber) {
+      await whatsappService.sendOrderConfirmation(phoneNumber, {
+        orderNumber: order.orderNumber,
+        total: Number(order.totalPrice),
+        itemCount: order.lineItems.length,
+      })
+    }
+  } catch (error) {
+    console.error('Failed to send WhatsApp confirmation:', error)
+    // Don't fail the order creation if WhatsApp fails
+  }
+
   return order
 }
 
@@ -192,24 +208,29 @@ export async function handleStripeWebhook(event: Stripe.Event) {
       const { orderId, tenantId } = session.metadata as any
 
       // Mark order as paid
-      await prisma.galleryOrder.update({
+      const order = await prisma.galleryOrder.update({
         where: { id: orderId },
         data: {
           status: 'PAID',
           paymentStatus: 'PAID',
           stripePaymentIntentId: session.payment_intent as string,
         },
+        include: { lineItems: { include: { artwork: { include: { artist: true } } } } },
       })
 
-      // Create artist commissions records (future feature for payouts)
-      const order = await prisma.galleryOrder.findUnique({
-        where: { id: orderId },
-        include: {
-          lineItems: {
-            include: { artwork: { include: { artist: true } } },
-          },
-        },
-      })
+      // Send WhatsApp payment confirmation
+      try {
+        const phoneNumber = (order.shippingAddress.phone || '').replace(/[^0-9+]/g, '')
+        if (phoneNumber) {
+          await whatsappService.sendOrderStatusUpdate(phoneNumber, {
+            orderNumber: order.orderNumber,
+            status: 'PAID',
+            estimatedDelivery: '5-7 business days',
+          })
+        }
+      } catch (error) {
+        console.error('Failed to send WhatsApp payment notification:', error)
+      }
 
       // TODO: Create ArtistPayout records for commission tracking
       break
@@ -220,13 +241,26 @@ export async function handleStripeWebhook(event: Stripe.Event) {
       const { orderId } = charge.metadata as any
 
       if (orderId) {
-        await prisma.galleryOrder.update({
+        const order = await prisma.galleryOrder.update({
           where: { id: orderId },
           data: {
             status: 'REFUNDED',
             paymentStatus: 'REFUNDED',
           },
         })
+
+        // Send WhatsApp refund notification
+        try {
+          const phoneNumber = (order.shippingAddress.phone || '').replace(/[^0-9+]/g, '')
+          if (phoneNumber) {
+            await whatsappService.sendOrderStatusUpdate(phoneNumber, {
+              orderNumber: order.orderNumber,
+              status: 'CANCELLED',
+            })
+          }
+        } catch (error) {
+          console.error('Failed to send WhatsApp refund notification:', error)
+        }
       }
       break
     }
@@ -269,7 +303,7 @@ export async function listUserOrders(userId: string, tenantId: string, page = 1,
 export async function updateOrderStatus(id: string, tenantId: string, status: string, trackingNumber?: string) {
   const order = await getGalleryOrder(id, tenantId)
 
-  return prisma.galleryOrder.update({
+  const updated = await prisma.galleryOrder.update({
     where: { id },
     data: {
       status,
@@ -277,4 +311,21 @@ export async function updateOrderStatus(id: string, tenantId: string, status: st
     },
     include: { lineItems: { include: { artwork: true } } },
   })
+
+  // Send WhatsApp notification for status change
+  try {
+    const phoneNumber = (updated.shippingAddress.phone || '').replace(/[^0-9+]/g, '')
+    if (phoneNumber && (status === 'SHIPPED' || status === 'DELIVERED')) {
+      await whatsappService.sendOrderStatusUpdate(phoneNumber, {
+        orderNumber: updated.orderNumber,
+        status,
+        trackingNumber: trackingNumber,
+        estimatedDelivery: status === 'SHIPPED' ? '3-5 business days' : undefined,
+      })
+    }
+  } catch (error) {
+    console.error('Failed to send WhatsApp status notification:', error)
+  }
+
+  return updated
 }
