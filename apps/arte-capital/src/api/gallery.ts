@@ -3,7 +3,10 @@ import { apiClient } from './client'
 export const galleryApi = {
   artworks: {
     list: (params?: any) =>
-      apiClient.get('/gallery/artworks', { params }).then((r) => r.data.data),
+      apiClient.get('/gallery/artworks', { params }).then((r) => ({
+        data: r.data.data,
+        meta: r.data.meta,
+      })),
     get: (id: string) =>
       apiClient.get(`/gallery/artworks/${id}`).then((r) => r.data.data),
     getRelated: (id: string) =>
