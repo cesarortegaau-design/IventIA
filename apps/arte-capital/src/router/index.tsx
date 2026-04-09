@@ -10,6 +10,7 @@ import LandingPage from '../pages/LandingPage'
 import LoginPage from '../pages/LoginPage'
 import RegisterPage from '../pages/RegisterPage'
 import { GalleryPage } from '../pages/GalleryPage'
+import { ClassesPage } from '../pages/ClassesPage'
 import CatalogPage from '../pages/CatalogPage'
 import CartPage from '../pages/CartPage'
 import CheckoutPage from '../pages/CheckoutPage'
@@ -31,9 +32,10 @@ export default function AppRouter() {
       {/* Public landing */}
       <Route path="/" element={<LandingPage />} />
 
-      {/* Public gallery routes */}
+      {/* Public gallery and classes routes */}
       <Route element={<PublicLayout />}>
         <Route path="/gallery" element={<GalleryPage />} />
+        <Route path="/classes" element={<ClassesPage />} />
       </Route>
 
       {/* Public auth routes */}

@@ -30,9 +30,9 @@ export default function LandingPage() {
           🎨 Arte Capital
         </Title>
         <Space>
-          <Button type="text" style={{ color: COLORS.white }}>Galerías</Button>
+          <Button type="text" style={{ color: COLORS.white }} onClick={() => navigate('/gallery')}>Galerías</Button>
+          <Button type="text" style={{ color: COLORS.white }} onClick={() => navigate('/classes')}>Eventos</Button>
           <Button type="text" style={{ color: COLORS.white }}>Artistas</Button>
-          <Button type="text" style={{ color: COLORS.white }}>Membresías</Button>
           <Button type="primary" onClick={() => navigate('/login')} style={{ background: COLORS.lightBlue, borderColor: COLORS.lightBlue }}>
             Ingresar
           </Button>

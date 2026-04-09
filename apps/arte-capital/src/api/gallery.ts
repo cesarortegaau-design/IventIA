@@ -20,10 +20,19 @@ export const galleryApi = {
       apiClient.get('/gallery/cart/summary').then((r) => r.data.data),
     addItem: (artworkId: string, quantity: number) =>
       apiClient.post('/gallery/cart/items', { artworkId, quantity }).then((r) => r.data.data),
+    addEventItem: (classId: string, quantity: number) =>
+      apiClient.post('/gallery/cart/items', { classId, quantity, type: 'event' }).then((r) => r.data.data),
     updateItem: (cartItemId: string, quantity: number) =>
       apiClient.put(`/gallery/cart/items/${cartItemId}`, { quantity }).then((r) => r.data.data),
     removeItem: (cartItemId: string) =>
       apiClient.delete(`/gallery/cart/items/${cartItemId}`).then((r) => r.data),
+  },
+
+  classes: {
+    list: () =>
+      apiClient.get('/gallery/classes').then((r) => r.data.data),
+    get: (id: string) =>
+      apiClient.get(`/gallery/classes/${id}`).then((r) => r.data.data),
   },
 
   orders: {

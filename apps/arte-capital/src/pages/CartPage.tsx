@@ -56,43 +56,53 @@ export default function CartPage() {
 
   const columns = [
     {
-      title: 'Artwork',
-      dataIndex: ['artwork', 'title'],
-      key: 'title',
-      render: (text: string, record: any) => (
-        <a onClick={() => navigate(`/artwork/${record.artwork.id}`)}>{text}</a>
-      ),
-    },
-    {
-      title: 'Artist',
-      dataIndex: ['artwork', 'artist', 'name'],
-      key: 'artist',
+      title: 'Item',
+      key: 'item',
+      render: (_: any, record: any) => {
+        const isEvent = !!record.galleryClass
+        const item = isEvent ? record.galleryClass : record.artwork
+        return (
+          <div>
+            <div style={{ fontWeight: 'bold' }}>{item.name || item.title}</div>
+            {!isEvent && <div style={{ fontSize: 12, color: '#666' }}>{item.artist.name}</div>}
+            {isEvent && <div style={{ fontSize: 12, color: '#666' }}>📅 {item.schedule?.day_of_week} - {item.schedule?.time}</div>}
+          </div>
+        )
+      },
     },
     {
       title: 'Price',
-      dataIndex: ['artwork', 'price'],
       key: 'price',
-      render: (price: any) => `$${parseFloat(price).toFixed(2)}`,
+      render: (_: any, record: any) => {
+        const item = record.galleryClass || record.artwork
+        return item.price ? `$${parseFloat(item.price).toFixed(2)}` : 'Gratis'
+      },
     },
     {
       title: 'Quantity',
       dataIndex: 'quantity',
       key: 'quantity',
-      render: (quantity: number, record: any) => (
-        <InputNumber
-          min={1}
-          max={record.artwork.quantity}
-          value={quantity}
-          onChange={(val) => updateMutation.mutate({ cartItemId: record.id, quantity: val || 1 })}
-        />
-      ),
+      render: (quantity: number, record: any) => {
+        const item = record.galleryClass || record.artwork
+        const max = item.quantity || 10
+        return (
+          <InputNumber
+            min={1}
+            max={max}
+            value={quantity}
+            onChange={(val) => updateMutation.mutate({ cartItemId: record.id, quantity: val || 1 })}
+          />
+        )
+      },
     },
     {
       title: 'Subtotal',
       key: 'subtotal',
       render: (_: any, record: any) => {
-        const subtotal = parseFloat(record.artwork.price) * record.quantity
-        return `$${subtotal.toFixed(2)}`
+        const item = record.galleryClass || record.artwork
+        const price = parseFloat(item.price || 0)
+        const subtotal = price * record.quantity
+        return subtotal > 0 ? `$${subtotal.toFixed(2)}` : 'Gratis'
       },
     },
     {
