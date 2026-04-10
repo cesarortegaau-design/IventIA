@@ -20,6 +20,19 @@ export const PRIVILEGES = {
   CATALOG_PRICE_LISTS_MANAGE: 'catalog.price_lists.manage',
   CATALOG_CLIENTS_MANAGE: 'catalog.clients.manage',
   CATALOG_DEPARTMENTS_MANAGE: 'catalog.departments.manage',
+  CATALOG_SUPPLIERS_MANAGE: 'catalog.suppliers.manage',
+  CATALOG_SUPPLIER_PRICES_MANAGE: 'catalog.supplier_prices.manage',
+
+  // Purchase Orders
+  PURCHASE_ORDER_CREATE: 'purchase_order.create',
+  PURCHASE_ORDER_VIEW: 'purchase_order.view',
+  PURCHASE_ORDER_EDIT: 'purchase_order.edit',
+  PURCHASE_ORDER_CONFIRM: 'purchase_order.confirm',
+
+  // Warehouse
+  WAREHOUSE_RECEIVE: 'warehouse.receive',
+  WAREHOUSE_VIEW: 'warehouse.view',
+  WAREHOUSE_ADJUST: 'warehouse.adjust',
 
   // Users
   USERS_MANAGE: 'users.manage',

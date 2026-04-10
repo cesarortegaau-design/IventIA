@@ -16,6 +16,9 @@ import bookingsRoutes from './bookings.routes'
 import auditRoutes from './audit.routes'
 import arteCapitalRoutes from './arte-capital.routes'
 import galleryRoutes from './gallery.routes'
+import suppliersRoutes from './suppliers.routes'
+import supplierPriceListsRoutes from './supplierPriceLists.routes'
+import purchaseOrdersRoutes from './purchaseOrders.routes'
 
 const router = Router()
 
@@ -36,5 +39,8 @@ router.use('/bookings', bookingsRoutes)
 router.use('/audit', auditRoutes)
 router.use('/arte-capital', arteCapitalRoutes)
 router.use('/gallery', galleryRoutes)
+router.use('/suppliers', suppliersRoutes)
+router.use('/supplier-price-lists', supplierPriceListsRoutes)
+router.use('/purchase-orders', purchaseOrdersRoutes)
 
 export default router

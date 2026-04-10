@@ -19,6 +19,7 @@ enum ResourceType {
   SERVICE
   DISCOUNT
   TAX
+  PERSONAL
 }
 
 enum DepartmentType {
@@ -92,6 +93,35 @@ enum TaskStatus {
 enum SenderType {
   ADMIN
   PORTAL_USER
+}
+
+enum SupplierType {
+  DISTRIBUTOR
+  MANUFACTURER
+  WHOLESALER
+  SERVICES
+}
+
+enum SupplierStatus {
+  ACTIVE
+  INACTIVE
+  BLOCKED
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  CONFIRMED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  INVOICED
+  CANCELLED
+}
+
+enum AvailabilityStatus {
+  AVAILABLE
+  BY_ORDER
+  DISCONTINUED
+  TEMPORARILY_OUT
 }
 
 enum ArtCapitalUserRole {
@@ -213,6 +243,11 @@ model Tenant {
   galleryOrderLineItems   GalleryOrderLineItem[]
   galleryFavorites        GalleryFavorite[]
 
+  // Purchase Order Module
+  suppliers          Supplier[]
+  supplierPriceLists SupplierPriceList[]
+  purchaseOrders     PurchaseOrder[]
+
   @@map("tenants")
 }
 
@@ -232,20 +267,25 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  tenant              Tenant               @relation(fields: [tenantId], references: [id])
+  tenant              Tenant                       @relation(fields: [tenantId], references: [id])
   userDepartments     UserDepartment[]
   privileges          UserPrivilege[]
-  createdEvents       Event[]              @relation("EventCreatedBy")
-  createdOrders       Order[]              @relation("OrderCreatedBy")
-  assignedOrders      Order[]              @relation("OrderAssignedTo")
+  createdEvents       Event[]                      @relation("EventCreatedBy")
+  createdOrders       Order[]                      @relation("OrderCreatedBy")
+  assignedOrders      Order[]                      @relation("OrderAssignedTo")
   recordedPayments    OrderPayment[]
   uploadedDocuments   OrderDocument[]
   statusHistory       OrderStatusHistory[]
   auditLogs           AuditLog[]
-  createdInteractions ClientInteraction[]  @relation("InteractionCreator")
-  assignedTasks       ClientTask[]         @relation("TaskAssignee")
-  createdTasks        ClientTask[]         @relation("TaskCreator")
-  createdPortalCodes  PortalAccessCode[]   @relation("PortalCodeCreator")
+  createdInteractions ClientInteraction[]          @relation("InteractionCreator")
+  assignedTasks       ClientTask[]                 @relation("TaskAssignee")
+  createdTasks        ClientTask[]                 @relation("TaskCreator")
+  createdPortalCodes  PortalAccessCode[]           @relation("PortalCodeCreator")
+  createdSuppliers    Supplier[]
+  poCreatedBy         PurchaseOrder[]              @relation("POCreatedBy")
+  poConfirmedBy       PurchaseOrder[]              @relation("POConfirmedBy")
+  poStatusHistory     PurchaseOrderStatusHistory[]
+  poDocuments         PurchaseOrderDocument[]
 
   @@index([tenantId, isActive])
   @@map("users")
@@ -317,20 +357,50 @@ model Resource {
   imageMain      String?      @map("image_main") @db.VarChar(500)
   imageDesc      String?      @map("image_desc") @db.VarChar(500)
   imageExtra     String?      @map("image_extra") @db.VarChar(500)
-  isActive       Boolean      @default(true) @map("is_active")
-  metadata       Json         @default("{}")
-  createdAt      DateTime     @default(now()) @map("created_at")
-  updatedAt      DateTime     @updatedAt @map("updated_at")
+  isPackage      Boolean      @default(false) @map("is_package")
+  isSubstitute   Boolean      @default(false) @map("is_substitute")
 
-  tenant         Tenant          @relation(fields: [tenantId], references: [id])
-  department     Department?     @relation(fields: [departmentId], references: [id])
-  priceListItems PriceListItem[]
-  eventSpaces    EventSpace[]
-  orderLineItems OrderLineItem[]
+  isActive  Boolean  @default(true) @map("is_active")
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant             Tenant                  @relation(fields: [tenantId], references: [id])
+  department         Department?             @relation(fields: [departmentId], references: [id])
+  priceListItems     PriceListItem[]
+  eventSpaces        EventSpace[]
+  orderLineItems     OrderLineItem[]
+  packageComponents  PackageComponent[]      @relation("PackageChildren")
+  parentPackages     PackageComponent[]      @relation("PackageParents")
+  supplierPriceItems SupplierPriceListItem[] @relation("SupplierPriceListItems")
+  purchaseOrderItems PurchaseOrderLineItem[] @relation("PurchaseOrderLineItems")
 
   @@unique([tenantId, code])
   @@index([tenantId, type, isActive])
+  @@index([tenantId, isPackage])
   @@map("resources")
+}
+
+// ─── Package Components ───────────────────────────────────────────────────────
+
+model PackageComponent {
+  id                  String @id @default(uuid())
+  packageResourceId   String @map("package_resource_id")
+  componentResourceId String @map("component_resource_id")
+
+  quantity  Decimal @db.Decimal(10, 3)
+  sortOrder Int     @default(0) @map("sort_order")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  packageResource   Resource @relation("PackageChildren", fields: [packageResourceId], references: [id], onDelete: Cascade)
+  componentResource Resource @relation("PackageParents", fields: [componentResourceId], references: [id], onDelete: Cascade)
+
+  @@unique([packageResourceId, componentResourceId])
+  @@index([packageResourceId])
+  @@index([componentResourceId])
+  @@map("package_components")
 }
 
 // ─── Price Lists ──────────────────────────────────────────────────────────────
@@ -644,20 +714,21 @@ model Order {
   createdAt       DateTime    @default(now()) @map("created_at")
   updatedAt       DateTime    @updatedAt @map("updated_at")
 
-  tenant        Tenant               @relation(fields: [tenantId], references: [id])
-  event         Event                @relation(fields: [eventId], references: [id])
-  client        Client               @relation("OrderClient", fields: [clientId], references: [id])
-  billingClient Client?              @relation("OrderBillingClient", fields: [billingClientId], references: [id])
-  stand         Stand?               @relation(fields: [standId], references: [id])
-  priceList     PriceList            @relation(fields: [priceListId], references: [id])
-  createdBy     User                 @relation("OrderCreatedBy", fields: [createdById], references: [id])
-  assignedTo    User?                @relation("OrderAssignedTo", fields: [assignedToId], references: [id])
-  originalOrder Order?               @relation("CreditNoteRef", fields: [originalOrderId], references: [id])
-  creditNotes   Order[]              @relation("CreditNoteRef")
-  lineItems     OrderLineItem[]
-  payments      OrderPayment[]
-  documents     OrderDocument[]
-  statusHistory OrderStatusHistory[]
+  tenant         Tenant               @relation(fields: [tenantId], references: [id])
+  event          Event                @relation(fields: [eventId], references: [id])
+  client         Client               @relation("OrderClient", fields: [clientId], references: [id])
+  billingClient  Client?              @relation("OrderBillingClient", fields: [billingClientId], references: [id])
+  stand          Stand?               @relation(fields: [standId], references: [id])
+  priceList      PriceList            @relation(fields: [priceListId], references: [id])
+  createdBy      User                 @relation("OrderCreatedBy", fields: [createdById], references: [id])
+  assignedTo     User?                @relation("OrderAssignedTo", fields: [assignedToId], references: [id])
+  originalOrder  Order?               @relation("CreditNoteRef", fields: [originalOrderId], references: [id])
+  creditNotes    Order[]              @relation("CreditNoteRef")
+  lineItems      OrderLineItem[]
+  payments       OrderPayment[]
+  documents      OrderDocument[]
+  statusHistory  OrderStatusHistory[]
+  purchaseOrders PurchaseOrder[]
 
   @@index([tenantId, status])
   @@index([eventId, status])
@@ -1341,11 +1412,11 @@ model GalleryCartItem {
   quantity  Int      @default(1)
   createdAt DateTime @default(now()) @map("created_at")
 
-  cart     GalleryCart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
-  artwork  GalleryArtwork? @relation(fields: [artworkId], references: [id])
-  galleryClass GalleryClass? @relation(fields: [classId], references: [id])
-  Tenant   Tenant?        @relation(fields: [tenantId], references: [id])
-  tenantId String?
+  cart         GalleryCart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  artwork      GalleryArtwork? @relation(fields: [artworkId], references: [id])
+  galleryClass GalleryClass?   @relation(fields: [classId], references: [id])
+  Tenant       Tenant?         @relation(fields: [tenantId], references: [id])
+  tenantId     String?
 
   @@map("gallery_cart_items")
 }
@@ -1414,4 +1485,213 @@ model GalleryFavorite {
   @@unique([userId, artworkId])
   @@index([tenantId, userId])
   @@map("gallery_favorites")
+}
+
+// ─── Purchase Order Module ───────────────────────────────────────────────────
+
+model Supplier {
+  id                  String         @id @default(uuid())
+  tenantId            String         @map("tenant_id")
+  code                String         @map("code") @db.VarChar(50)
+  name                String         @db.VarChar(200)
+  description         String?        @db.Text
+  type                SupplierType
+  status              SupplierStatus @default(ACTIVE)
+  rfc                 String?        @db.VarChar(20)
+  taxId               String?        @map("tax_id") @db.VarChar(50)
+  fiscalRegime        String?        @map("fiscal_regime") @db.VarChar(100)
+  legalName           String?        @map("legal_name") @db.VarChar(300)
+  email               String?        @db.VarChar(200)
+  phone               String?        @db.VarChar(30)
+  whatsapp            String?        @db.VarChar(30)
+  website             String?        @db.VarChar(300)
+  addressStreet       String?        @map("address_street") @db.VarChar(300)
+  addressCity         String?        @map("address_city") @db.VarChar(100)
+  addressState        String?        @map("address_state") @db.VarChar(100)
+  addressZip          String?        @map("address_zip") @db.VarChar(20)
+  addressCountry      String         @default("MX") @map("address_country") @db.VarChar(100)
+  defaultPaymentTerms String?        @map("default_payment_terms") @db.VarChar(100)
+  averageDeliveryDays Int            @default(5) @map("average_delivery_days")
+  currencyCode        String         @default("MXN") @map("currency_code") @db.VarChar(10)
+  createdById         String         @map("created_by_id")
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
+
+  tenant         Tenant              @relation(fields: [tenantId], references: [id])
+  createdBy      User                @relation(fields: [createdById], references: [id])
+  contacts       SupplierContact[]
+  priceLists     SupplierPriceList[]
+  purchaseOrders PurchaseOrder[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, status])
+  @@map("suppliers")
+}
+
+model SupplierContact {
+  id         String   @id @default(uuid())
+  supplierId String   @map("supplier_id")
+  name       String   @db.VarChar(150)
+  role       String   @db.VarChar(100)
+  email      String?  @db.VarChar(200)
+  phone      String?  @db.VarChar(30)
+  whatsapp   String?  @db.VarChar(30)
+  isPrimary  Boolean  @default(false) @map("is_primary")
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  supplier       Supplier        @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  purchaseOrders PurchaseOrder[]
+
+  @@index([supplierId])
+  @@map("supplier_contacts")
+}
+
+model SupplierPriceList {
+  id                     String    @id @default(uuid())
+  tenantId               String    @map("tenant_id")
+  supplierId             String    @map("supplier_id")
+  code                   String    @map("code") @db.VarChar(50)
+  name                   String    @db.VarChar(200)
+  description            String?   @db.Text
+  validFrom              DateTime  @map("valid_from")
+  validTo                DateTime? @map("valid_to")
+  minOrderQty            Decimal?  @map("min_order_qty") @db.Decimal(10, 3)
+  maxOrderQty            Decimal?  @map("max_order_qty") @db.Decimal(10, 3)
+  volumeDiscountRules    Json      @default("[]") @map("volume_discount_rules")
+  creditDays             Int       @default(30) @map("credit_days")
+  currency               String    @default("MXN") @db.VarChar(10)
+  profitMarginSuggestion Decimal?  @default(0) @map("profit_margin_suggestion") @db.Decimal(5, 2)
+  isActive               Boolean   @default(true) @map("is_active")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  tenant         Tenant                  @relation(fields: [tenantId], references: [id])
+  supplier       Supplier                @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  items          SupplierPriceListItem[]
+  purchaseOrders PurchaseOrder[]
+
+  @@unique([tenantId, code])
+  @@index([supplierId, isActive])
+  @@index([validFrom, validTo])
+  @@map("supplier_price_lists")
+}
+
+model SupplierPriceListItem {
+  id                 String             @id @default(uuid())
+  priceListId        String             @map("price_list_id")
+  resourceId         String             @map("resource_id")
+  supplierSku        String?            @map("supplier_sku") @db.VarChar(100)
+  unitPrice          Decimal            @map("unit_price") @db.Decimal(12, 2)
+  availabilityStatus AvailabilityStatus @default(AVAILABLE) @map("availability_status")
+  estimatedAvailable Decimal?           @map("estimated_available") @db.Decimal(10, 3)
+  deliveryTimeDays   Int                @default(5) @map("delivery_time_days")
+  isActive           Boolean            @default(true) @map("is_active")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  priceList SupplierPriceList @relation(fields: [priceListId], references: [id], onDelete: Cascade)
+  resource  Resource          @relation("SupplierPriceListItems", fields: [resourceId], references: [id])
+
+  @@unique([priceListId, resourceId])
+  @@index([resourceId])
+  @@map("supplier_price_list_items")
+}
+
+model PurchaseOrder {
+  id                   String              @id @default(uuid())
+  tenantId             String              @map("tenant_id")
+  supplierId           String              @map("supplier_id")
+  priceListId          String?             @map("price_list_id")
+  orderNumber          String              @unique @map("order_number") @db.VarChar(50)
+  status               PurchaseOrderStatus @default(DRAFT)
+  originOrderId        String?             @map("origin_order_id")
+  requiredDeliveryDate DateTime            @map("required_delivery_date")
+  deliveryLocation     String?             @map("delivery_location") @db.VarChar(300)
+  contactId            String?             @map("contact_id")
+  description          String?             @db.Text
+  notes                String?             @db.Text
+  subtotal             Decimal             @default(0) @db.Decimal(12, 2)
+  taxRate              Decimal             @default(16) @map("tax_rate") @db.Decimal(5, 2)
+  taxAmount            Decimal             @default(0) @map("tax_amount") @db.Decimal(12, 2)
+  total                Decimal             @default(0) @db.Decimal(12, 2)
+  currency             String              @default("MXN") @db.VarChar(10)
+  createdById          String              @map("created_by_id")
+  confirmedById        String?             @map("confirmed_by_id")
+  confirmedAt          DateTime?           @map("confirmed_at")
+  cancelledAt          DateTime?           @map("cancelled_at")
+  createdAt            DateTime            @default(now()) @map("created_at")
+  updatedAt            DateTime            @updatedAt @map("updated_at")
+
+  tenant        Tenant                       @relation(fields: [tenantId], references: [id])
+  supplier      Supplier                     @relation(fields: [supplierId], references: [id])
+  priceList     SupplierPriceList?           @relation(fields: [priceListId], references: [id])
+  originOrder   Order?                       @relation(fields: [originOrderId], references: [id])
+  contact       SupplierContact?             @relation(fields: [contactId], references: [id])
+  createdBy     User                         @relation("POCreatedBy", fields: [createdById], references: [id])
+  confirmedBy   User?                        @relation("POConfirmedBy", fields: [confirmedById], references: [id])
+  lineItems     PurchaseOrderLineItem[]
+  documents     PurchaseOrderDocument[]
+  statusHistory PurchaseOrderStatusHistory[]
+
+  @@index([tenantId, status])
+  @@index([supplierId])
+  @@index([orderNumber])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderLineItem {
+  id               String   @id @default(uuid())
+  poId             String   @map("po_id")
+  resourceId       String   @map("resource_id")
+  description      String   @db.VarChar(500)
+  supplierSku      String?  @map("supplier_sku") @db.VarChar(100)
+  quantity         Decimal  @db.Decimal(10, 3)
+  unitPrice        Decimal  @map("unit_price") @db.Decimal(12, 2)
+  lineTotal        Decimal  @map("line_total") @db.Decimal(12, 2)
+  deliveryTimeDays Int      @default(5) @map("delivery_time_days")
+  notes            String?  @db.Text
+  receivedQty      Decimal  @default(0) @map("received_qty") @db.Decimal(10, 3)
+  sortOrder        Int      @default(0) @map("sort_order")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  purchaseOrder PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  resource      Resource      @relation("PurchaseOrderLineItems", fields: [resourceId], references: [id])
+
+  @@index([poId])
+  @@map("purchase_order_line_items")
+}
+
+model PurchaseOrderStatusHistory {
+  id          String               @id @default(uuid())
+  poId        String               @map("po_id")
+  fromStatus  PurchaseOrderStatus? @map("from_status")
+  toStatus    PurchaseOrderStatus  @map("to_status")
+  changedById String               @map("changed_by_id")
+  notes       String?              @db.Text
+  createdAt   DateTime             @default(now()) @map("created_at")
+
+  purchaseOrder PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  changedBy     User          @relation(fields: [changedById], references: [id])
+
+  @@index([poId])
+  @@map("purchase_order_status_history")
+}
+
+model PurchaseOrderDocument {
+  id           String   @id @default(uuid())
+  poId         String   @map("po_id")
+  documentType String   @map("document_type") @db.VarChar(100)
+  fileName     String   @map("file_name") @db.VarChar(300)
+  blobKey      String   @map("blob_key") @db.VarChar(500)
+  uploadedById String   @map("uploaded_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  purchaseOrder PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  uploadedBy    User          @relation(fields: [uploadedById], references: [id])
+
+  @@index([poId])
+  @@map("purchase_order_documents")
 }
