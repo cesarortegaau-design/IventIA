@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, Button, Space, Row, Col, App, Typography, Select, Form, Input, InputNumber, Table, Modal, Steps } from 'antd'
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons'
-import { purchaseOrdersApi } from '../../../api/purchaseOrders'
-import { warehouseApi } from '../../../api/warehouse'
+import { purchaseOrdersApi } from '../../api/purchaseOrders'
+import { warehouseApi } from '../../api/warehouse'
 
 const { Title } = Typography
 

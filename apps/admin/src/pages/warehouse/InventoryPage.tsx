@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Table, Button, Card, Space, Tag, Row, Col, App, Typography, Select, Modal, Form, Input } from 'antd'
 import { PlusOutlined, EditOutlined, ToolOutlined } from '@ant-design/icons'
-import { warehouseApi } from '../../../api/warehouse'
+import { warehouseApi } from '../../api/warehouse'
 
 const { Title } = Typography
 
