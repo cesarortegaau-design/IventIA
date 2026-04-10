@@ -22,6 +22,7 @@ import OrdersReportPage from '../pages/reports/OrdersReportPage'
 import BookingCalendarPage from '../pages/bookings/BookingCalendarPage'
 import SuppliersPage from '../pages/catalogs/suppliers/SuppliersPage'
 import PurchaseOrdersPage from '../pages/catalogs/purchaseOrders/PurchaseOrdersPage'
+import PurchaseOrderWizard from '../pages/catalogs/purchaseOrders/PurchaseOrderWizard'
 import SupplierPriceListsPage from '../pages/catalogs/supplierPriceLists/SupplierPriceListsPage'
 import InventoryPage from '../pages/warehouse/InventoryPage'
 import ReceiptPage from '../pages/warehouse/ReceiptPage'
@@ -65,7 +66,7 @@ export function AppRouter() {
         <Route path="booking-calendar" element={<BookingCalendarPage />} />
         <Route path="catalogs/proveedores" element={<SuppliersPage />} />
         <Route path="catalogs/ordenes-compra" element={<PurchaseOrdersPage />} />
-        <Route path="catalogs/ordenes-compra/nueva" element={<PurchaseOrdersPage />} />
+        <Route path="catalogs/ordenes-compra/nueva" element={<PurchaseOrderWizard />} />
         <Route path="catalogs/ordenes-compra/:id" element={<PurchaseOrdersPage />} />
         <Route path="catalogs/listas-precios-proveedores" element={<SupplierPriceListsPage />} />
         <Route path="warehouse/inventario" element={<InventoryPage />} />
