@@ -63,6 +63,7 @@ const menuItems = [
     icon: <ToolOutlined />,
     label: 'Almacén',
     children: [
+      { key: '/almacen/almacenes', icon: <AppstoreOutlined />, label: 'Almacenes' },
       { key: '/almacen/inventario', icon: <TagsOutlined />, label: 'Inventario' },
       { key: '/almacen/recepcion', icon: <FileTextOutlined />, label: 'Recepción OC' },
     ],

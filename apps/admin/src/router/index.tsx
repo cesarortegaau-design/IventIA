@@ -25,6 +25,7 @@ import PurchaseOrdersPage from '../pages/catalogs/purchaseOrders/PurchaseOrdersP
 import PurchaseOrderWizard from '../pages/catalogs/purchaseOrders/PurchaseOrderWizard'
 import PurchaseOrderDetailPage from '../pages/catalogs/purchaseOrders/PurchaseOrderDetailPage'
 import SupplierPriceListsPage from '../pages/catalogs/supplierPriceLists/SupplierPriceListsPage'
+import WarehousesPage from '../pages/warehouse/WarehousesPage'
 import InventoryPage from '../pages/warehouse/InventoryPage'
 import ReceiptPage from '../pages/warehouse/ReceiptPage'
 
@@ -70,6 +71,7 @@ export function AppRouter() {
         <Route path="catalogos/ordenes-compra/nueva" element={<PurchaseOrderWizard />} />
         <Route path="catalogos/ordenes-compra/:id" element={<PurchaseOrderDetailPage />} />
         <Route path="catalogos/listas-precios-proveedores" element={<SupplierPriceListsPage />} />
+        <Route path="almacen/almacenes" element={<WarehousesPage />} />
         <Route path="almacen/inventario" element={<InventoryPage />} />
         <Route path="almacen/recepcion" element={<ReceiptPage />} />
       </Route>
