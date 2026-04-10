@@ -63,8 +63,8 @@ const menuItems = [
     icon: <ToolOutlined />,
     label: 'Almacén',
     children: [
-      { key: '/warehouse/inventario', icon: <TagsOutlined />, label: 'Inventario' },
-      { key: '/warehouse/recepcion', icon: <FileTextOutlined />, label: 'Recepción OC' },
+      { key: '/almacen/inventario', icon: <TagsOutlined />, label: 'Inventario' },
+      { key: '/almacen/recepcion', icon: <FileTextOutlined />, label: 'Recepción OC' },
     ],
   },
   {

@@ -65,13 +65,13 @@ export function AppRouter() {
         <Route path="chat" element={<ChatPage />} />
         <Route path="reportes/ordenes" element={<OrdersReportPage />} />
         <Route path="booking-calendar" element={<BookingCalendarPage />} />
-        <Route path="catalogs/proveedores" element={<SuppliersPage />} />
-        <Route path="catalogs/ordenes-compra" element={<PurchaseOrdersPage />} />
-        <Route path="catalogs/ordenes-compra/nueva" element={<PurchaseOrderWizard />} />
-        <Route path="catalogs/ordenes-compra/:id" element={<PurchaseOrderDetailPage />} />
-        <Route path="catalogs/listas-precios-proveedores" element={<SupplierPriceListsPage />} />
-        <Route path="warehouse/inventario" element={<InventoryPage />} />
-        <Route path="warehouse/recepcion" element={<ReceiptPage />} />
+        <Route path="catalogos/proveedores" element={<SuppliersPage />} />
+        <Route path="catalogos/ordenes-compra" element={<PurchaseOrdersPage />} />
+        <Route path="catalogos/ordenes-compra/nueva" element={<PurchaseOrderWizard />} />
+        <Route path="catalogos/ordenes-compra/:id" element={<PurchaseOrderDetailPage />} />
+        <Route path="catalogos/listas-precios-proveedores" element={<SupplierPriceListsPage />} />
+        <Route path="almacen/inventario" element={<InventoryPage />} />
+        <Route path="almacen/recepcion" element={<ReceiptPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
