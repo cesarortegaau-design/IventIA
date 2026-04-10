@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { authenticate } from '../middleware/auth'
+import { authenticate } from '../middleware/authenticate'
 import { requirePrivilege } from '../middleware/authorize'
 import * as warehouseController from '../controllers/warehouse.controller'
 
