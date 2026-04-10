@@ -1,3 +1,5 @@
 export * from './types/index'
 export * from './constants/permissions'
 export * from './constants/orderStatuses'
+export * from './constants/resourceTypes'
+export * from './constants/resourceUnits'

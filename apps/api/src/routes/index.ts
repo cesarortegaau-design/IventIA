@@ -19,6 +19,7 @@ import galleryRoutes from './gallery.routes'
 import suppliersRoutes from './suppliers.routes'
 import supplierPriceListsRoutes from './supplierPriceLists.routes'
 import purchaseOrdersRoutes from './purchaseOrders.routes'
+import warehouseRoutes from './warehouse.routes'
 
 const router = Router()
 
@@ -42,5 +43,6 @@ router.use('/gallery', galleryRoutes)
 router.use('/suppliers', suppliersRoutes)
 router.use('/supplier-price-lists', supplierPriceListsRoutes)
 router.use('/purchase-orders', purchaseOrdersRoutes)
+router.use('/warehouse', warehouseRoutes)
 
 export default router
