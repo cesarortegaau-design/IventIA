@@ -51,8 +51,18 @@ const menuItems = [
       { key: '/catalogos/recursos', icon: <TagsOutlined />, label: 'Recursos' },
       { key: '/catalogos/listas-precio', icon: <DollarOutlined />, label: 'Listas de Precio' },
       { key: '/catalogos/clientes', icon: <TeamOutlined />, label: 'Clientes' },
+      { key: '/catalogos/proveedores', icon: <ContactsOutlined />, label: 'Proveedores' },
+      { key: '/catalogos/ordenes-compra', icon: <FileTextOutlined />, label: 'Órdenes de Compra' },
       { key: '/catalogos/departamentos', icon: <ApartmentOutlined />, label: 'Departamentos' },
       { key: '/catalogos/usuarios', icon: <UserOutlined />, label: 'Usuarios' },
+    ],
+  },
+  {
+    key: 'almacen',
+    icon: <ToolOutlined />,
+    label: 'Almacén',
+    children: [
+      { key: '/warehouse/inventario', icon: <TagsOutlined />, label: 'Inventario' },
     ],
   },
   {
@@ -124,7 +134,7 @@ export default function MainLayout() {
       theme="dark"
       mode="inline"
       selectedKeys={[location.pathname]}
-      defaultOpenKeys={['catalogos', 'reportes', 'dashboards']}
+      defaultOpenKeys={['catalogos', 'reportes', 'dashboards', 'almacen']}
       items={enrichedMenuItems}
       onClick={handleMenuClick}
       style={{ background: 'transparent', border: 'none', marginTop: 8 }}
