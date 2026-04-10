@@ -373,11 +373,34 @@ export default function OrderFormWizard() {
                           width: 80,
                           render: (_: any, comp: any) => comp.componentResource.unit || '—',
                         },
+                        {
+                          title: 'Seleccionado',
+                          key: 'selected',
+                          width: 150,
+                          render: (_: any, comp: any) => {
+                            // Only show selection for components that are substitution packages
+                            if (!comp.componentResource.isSubstitute) {
+                              return null
+                            }
+
+                            // Look up by the substitution package's componentResourceId
+                            const selectedValue = r.substitutionSelections?.[comp.componentResourceId]
+                            if (selectedValue) {
+                              const componentOptions = substitutionPackageDetails[comp.componentResourceId] || []
+                              const selectedComp = componentOptions.find((c: any) => c.componentResourceId === selectedValue)
+                              if (selectedComp?.componentResource?.name) {
+                                return <Tag color="green">✓ {selectedComp.componentResource.name}</Tag>
+                              }
+                            }
+                            return <span style={{ color: '#999' }}>—</span>
+                          },
+                        },
                       ]}
                     />
                     <div style={{ marginTop: '8px', fontSize: '11px', color: '#999' }}>
                       * "Qty × Artículo": cantidad de cada componente por artículo<br/>
-                      * "Total Requerido": cantidad total para {Number(r.quantity).toFixed(3)} unidades
+                      * "Total Requerido": cantidad total para {Number(r.quantity).toFixed(3)} unidades<br/>
+                      * "Seleccionado": muestra el recurso específico elegido para paquetes de sustitución
                     </div>
                   </div>
                 )
