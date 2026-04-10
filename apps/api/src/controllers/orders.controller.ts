@@ -65,7 +65,7 @@ export async function listOrdersReport(req: Request, res: Response, next: NextFu
           event:  { select: { id: true, code: true, name: true } },
           client: { select: { id: true, companyName: true, firstName: true, lastName: true, email: true, rfc: true, phone: true } },
           stand:  { select: { id: true, code: true } },
-          lineItems: { select: { id: true, description: true, quantity: true, unitPrice: true, lineTotal: true, discountPct: true } },
+          lineItems: { select: { id: true, description: true, quantity: true, unitPrice: true, lineTotal: true, discountPct: true, observations: true } },
           _count: { select: { lineItems: true, payments: true } },
         },
         orderBy: { createdAt: 'desc' },
@@ -127,7 +127,59 @@ export async function getOrder(req: Request, res: Response, next: NextFunction) 
         billingClient: true,
         stand: true,
         priceList: true,
-        lineItems: { include: { resource: true }, orderBy: { sortOrder: 'asc' } },
+        lineItems: {
+          select: {
+            id: true,
+            description: true,
+            quantity: true,
+            unitPrice: true,
+            lineTotal: true,
+            discountPct: true,
+            observations: true,
+            sortOrder: true,
+            resource: {
+              include: {
+                packageComponents: {
+                  select: {
+                    id: true,
+                    componentResourceId: true,
+                    quantity: true,
+                    sortOrder: true,
+                    componentResource: {
+                      select: {
+                        id: true,
+                        code: true,
+                        name: true,
+                        unit: true,
+                        isPackage: true,
+                        isSubstitute: true,
+                        packageComponents: {
+                          select: {
+                            id: true,
+                            componentResourceId: true,
+                            quantity: true,
+                            sortOrder: true,
+                            componentResource: {
+                              select: {
+                                id: true,
+                                code: true,
+                                name: true,
+                                unit: true,
+                              },
+                            },
+                          },
+                          orderBy: { sortOrder: 'asc' },
+                        },
+                      },
+                    },
+                  },
+                  orderBy: { sortOrder: 'asc' },
+                },
+              },
+            },
+          },
+          orderBy: { sortOrder: 'asc' },
+        },
         payments: { orderBy: { paymentDate: 'asc' } },
         documents: { orderBy: { createdAt: 'desc' } },
         statusHistory: { orderBy: { createdAt: 'asc' }, include: { changedBy: { select: { firstName: true, lastName: true } } } },
