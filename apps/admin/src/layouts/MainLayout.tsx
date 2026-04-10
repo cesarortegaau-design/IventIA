@@ -52,6 +52,7 @@ const menuItems = [
       { key: '/catalogos/listas-precio', icon: <DollarOutlined />, label: 'Listas de Precio' },
       { key: '/catalogos/clientes', icon: <TeamOutlined />, label: 'Clientes' },
       { key: '/catalogos/proveedores', icon: <ContactsOutlined />, label: 'Proveedores' },
+      { key: '/catalogos/listas-precios-proveedores', icon: <DollarOutlined />, label: 'Listas de Precios Prov.' },
       { key: '/catalogos/ordenes-compra', icon: <FileTextOutlined />, label: 'Órdenes de Compra' },
       { key: '/catalogos/departamentos', icon: <ApartmentOutlined />, label: 'Departamentos' },
       { key: '/catalogos/usuarios', icon: <UserOutlined />, label: 'Usuarios' },
@@ -63,6 +64,7 @@ const menuItems = [
     label: 'Almacén',
     children: [
       { key: '/warehouse/inventario', icon: <TagsOutlined />, label: 'Inventario' },
+      { key: '/warehouse/recepcion', icon: <FileTextOutlined />, label: 'Recepción OC' },
     ],
   },
   {

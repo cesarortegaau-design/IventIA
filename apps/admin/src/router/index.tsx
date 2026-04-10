@@ -22,7 +22,9 @@ import OrdersReportPage from '../pages/reports/OrdersReportPage'
 import BookingCalendarPage from '../pages/bookings/BookingCalendarPage'
 import SuppliersPage from '../pages/catalogs/suppliers/SuppliersPage'
 import PurchaseOrdersPage from '../pages/catalogs/purchaseOrders/PurchaseOrdersPage'
+import SupplierPriceListsPage from '../pages/catalogs/supplierPriceLists/SupplierPriceListsPage'
 import InventoryPage from '../pages/warehouse/InventoryPage'
+import ReceiptPage from '../pages/warehouse/ReceiptPage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.accessToken)
@@ -65,7 +67,9 @@ export function AppRouter() {
         <Route path="catalogs/ordenes-compra" element={<PurchaseOrdersPage />} />
         <Route path="catalogs/ordenes-compra/nueva" element={<PurchaseOrdersPage />} />
         <Route path="catalogs/ordenes-compra/:id" element={<PurchaseOrdersPage />} />
+        <Route path="catalogs/listas-precios-proveedores" element={<SupplierPriceListsPage />} />
         <Route path="warehouse/inventario" element={<InventoryPage />} />
+        <Route path="warehouse/recepcion" element={<ReceiptPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
