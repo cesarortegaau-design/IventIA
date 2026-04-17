@@ -72,10 +72,13 @@ export async function upload(
   // Extract placeholders from the docx
   const placeholders = extractPlaceholders(file)
 
-  // Save file to local disk
   const uniqueName = `${Date.now()}_${fileName}`
-  const filePath = path.join(UPLOADS_DIR, uniqueName)
-  fs.writeFileSync(filePath, file)
+
+  // Also save to disk as fallback (ignored in production if ephemeral)
+  try {
+    const filePath = path.join(UPLOADS_DIR, uniqueName)
+    fs.writeFileSync(filePath, file)
+  } catch (_) { /* ignore disk write errors */ }
 
   return prisma.documentTemplate.create({
     data: {
@@ -87,6 +90,7 @@ export async function upload(
       blobKey: uniqueName,
       placeholders: placeholders,
       createdById: userId,
+      fileContent: file,
     },
     include: {
       createdBy: { select: { id: true, firstName: true, lastName: true } },
@@ -191,14 +195,20 @@ export async function generate(
   entityId: string,
   userId: string,
 ): Promise<{ buffer: Buffer; fileName: string }> {
-  const template = await getById(templateId, tenantId)
+  const template = await prisma.documentTemplate.findFirst({ where: { id: templateId, tenantId } })
+  if (!template) throw new AppError(404, 'TEMPLATE_NOT_FOUND', 'Plantilla no encontrada')
 
-  // Read the original docx from local disk
-  const filePath = path.join(UPLOADS_DIR, template.blobKey)
-  if (!fs.existsSync(filePath)) {
-    throw new AppError(404, 'TEMPLATE_FILE_MISSING', 'Archivo de plantilla no encontrado en disco')
+  // Read the original docx — prefer DB content, fall back to disk
+  let originalBuffer: Buffer
+  if (template.fileContent) {
+    originalBuffer = Buffer.from(template.fileContent)
+  } else {
+    const filePath = path.join(UPLOADS_DIR, template.blobKey)
+    if (!fs.existsSync(filePath)) {
+      throw new AppError(404, 'TEMPLATE_FILE_MISSING', 'Archivo de plantilla no encontrado en disco')
+    }
+    originalBuffer = fs.readFileSync(filePath)
   }
-  const originalBuffer = fs.readFileSync(filePath)
 
   // Load entity data
   const entity = await loadEntity(template.context, entityId, tenantId)

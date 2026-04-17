@@ -2039,6 +2039,7 @@ model DocumentTemplate {
   context      TemplateContext
   fileName     String          @map("file_name") @db.VarChar(300)
   blobKey      String          @map("blob_key") @db.VarChar(500)
+  fileContent  Bytes?          @map("file_content")
   placeholders Json            @default("[]")
   createdById  String          @map("created_by_id")
   createdAt    DateTime        @default(now()) @map("created_at")
