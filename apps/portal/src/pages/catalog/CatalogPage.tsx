@@ -3,8 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import {
   Button, Drawer, Tag, Typography, Space, InputNumber, Divider,
-  Empty, Spin, Badge, App, Input, Image, Row, Col,
+  Empty, Spin, Badge, App, Input, Image, Row, Col, DatePicker,
 } from 'antd'
+import dayjs, { Dayjs } from 'dayjs'
 import {
   ArrowLeftOutlined, ShoppingCartOutlined, PlusOutlined, MinusOutlined,
   DeleteOutlined, CheckCircleOutlined, CloseOutlined,
@@ -384,11 +385,13 @@ function CartDrawer({ open, cart, onClose, onQtyChange, onRemove, onSubmit, subm
   onClose: () => void
   onQtyChange: (id: string, qty: number) => void
   onRemove: (id: string) => void
-  onSubmit: (notes: string) => void
+  onSubmit: (notes: string, startDate?: string, endDate?: string) => void
   submitting: boolean
   eventId: string
 }) {
   const [notes, setNotes] = useState('')
+  const [startDate, setStartDate] = useState<Dayjs | null>(null)
+  const [endDate, setEndDate] = useState<Dayjs | null>(null)
   const subtotal = cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
   const tax = subtotal * 0.16
 
@@ -422,7 +425,7 @@ function CartDrawer({ open, cart, onClose, onQtyChange, onRemove, onSubmit, subm
           </div>
           <button
             disabled={cart.length === 0 || submitting}
-            onClick={() => onSubmit(notes)}
+            onClick={() => onSubmit(notes, startDate?.toISOString(), endDate?.toISOString())}
             style={{
               width: '100%', background: cart.length === 0 ? COLORS.offWhite : COLORS.primary,
               color: cart.length === 0 ? COLORS.textTertiary : '#fff',
@@ -503,8 +506,40 @@ function CartDrawer({ open, cart, onClose, onQtyChange, onRemove, onSubmit, subm
             </div>
           ))}
 
+          {/* Dates */}
+          <div style={{ paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div>
+              <Text style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 4, color: COLORS.textPrimary }}>
+                Fecha y hora de inicio
+              </Text>
+              <DatePicker
+                showTime={{ format: 'HH:mm' }}
+                format="DD/MM/YYYY HH:mm"
+                value={startDate}
+                onChange={v => setStartDate(v)}
+                placeholder="Seleccionar fecha y hora"
+                style={{ width: '100%', borderRadius: 8, borderColor: COLORS.border }}
+                disabledDate={d => endDate ? d.isAfter(endDate, 'day') : false}
+              />
+            </div>
+            <div>
+              <Text style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 4, color: COLORS.textPrimary }}>
+                Fecha y hora de fin
+              </Text>
+              <DatePicker
+                showTime={{ format: 'HH:mm' }}
+                format="DD/MM/YYYY HH:mm"
+                value={endDate}
+                onChange={v => setEndDate(v)}
+                placeholder="Seleccionar fecha y hora"
+                style={{ width: '100%', borderRadius: 8, borderColor: COLORS.border }}
+                disabledDate={d => startDate ? d.isBefore(startDate, 'day') : false}
+              />
+            </div>
+          </div>
+
           {/* Notes */}
-          <div style={{ paddingTop: 16 }}>
+          <div style={{ paddingTop: 12 }}>
             <Text style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 6, color: COLORS.textPrimary }}>
               Notas adicionales
             </Text>
@@ -512,7 +547,7 @@ function CartDrawer({ open, cart, onClose, onQtyChange, onRemove, onSubmit, subm
               rows={3}
               value={notes}
               onChange={e => setNotes(e.target.value)}
-              placeholder="Instrucciones especiales, fechas de entrega, etc."
+              placeholder="Instrucciones especiales, observaciones, etc."
               style={{ borderRadius: 8, borderColor: COLORS.border }}
             />
           </div>
@@ -611,10 +646,13 @@ export default function CatalogPage() {
   }
 
   const createMutation = useMutation({
-    mutationFn: (notes: string) => ordersApi.create(eventId!, {
-      items: cart.map(i => ({ priceListItemId: i.priceListItemId, quantity: i.quantity })),
-      notes,
-    }),
+    mutationFn: ({ notes, startDate, endDate }: { notes: string; startDate?: string; endDate?: string }) =>
+      ordersApi.create(eventId!, {
+        items: cart.map(i => ({ priceListItemId: i.priceListItemId, quantity: i.quantity })),
+        notes,
+        startDate,
+        endDate,
+      }),
     onSuccess: res => {
       setOrderDone(res.data.data)
       setCart([])
@@ -781,7 +819,7 @@ export default function CatalogPage() {
         onClose={() => setCartOpen(false)}
         onQtyChange={setQty}
         onRemove={id => setCart(prev => prev.filter(c => c.priceListItemId !== id))}
-        onSubmit={notes => createMutation.mutate(notes)}
+        onSubmit={(notes, startDate, endDate) => createMutation.mutate({ notes, startDate, endDate })}
         submitting={createMutation.isPending}
         eventId={eventId!}
       />

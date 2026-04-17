@@ -3,11 +3,12 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import {
   Button, InputNumber, App,
-  Empty, Spin, Image, Grid, Row, Col, Input,
+  Empty, Spin, Image, Grid, Row, Col, Input, DatePicker,
 } from 'antd'
+import dayjs, { Dayjs } from 'dayjs'
 import {
   ArrowLeftOutlined, ShoppingCartOutlined, CheckCircleOutlined,
-  DeleteOutlined, ArrowRightOutlined, FileTextOutlined,
+  DeleteOutlined, ArrowRightOutlined, FileTextOutlined, CalendarOutlined,
 } from '@ant-design/icons'
 import { eventsApi } from '../../api/events'
 import { ordersApi } from '../../api/orders'
@@ -228,6 +229,8 @@ export default function NewOrderPage() {
   const [step, setStep] = useState(0)
   const [cart, setCart] = useState<CartItem[]>([])
   const [notes, setNotes] = useState('')
+  const [startDate, setStartDate] = useState<Dayjs | null>(null)
+  const [endDate, setEndDate] = useState<Dayjs | null>(null)
   const [orderCreated, setOrderCreated] = useState<any>(null)
 
   const { data: catalogData, isLoading } = useQuery({
@@ -245,6 +248,8 @@ export default function NewOrderPage() {
         observations: item.observations,
       })),
       notes,
+      startDate: startDate?.toISOString(),
+      endDate: endDate?.toISOString(),
     }),
     onSuccess: (res) => {
       setOrderCreated(res.data.data)
@@ -551,6 +556,42 @@ export default function NewOrderPage() {
               ))}
 
               {/* Notes */}
+              {/* Dates */}
+              <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <Row gutter={[16, 0]}>
+                  <Col xs={24} sm={12}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <CalendarOutlined style={{ color: '#6B46C1' }} />
+                      <span style={{ fontWeight: 600, color: '#0f172a', fontSize: 14 }}>Fecha y hora de inicio</span>
+                    </div>
+                    <DatePicker
+                      showTime={{ format: 'HH:mm' }}
+                      format="DD/MM/YYYY HH:mm"
+                      value={startDate}
+                      onChange={v => setStartDate(v)}
+                      placeholder="Seleccionar fecha y hora"
+                      style={{ width: '100%', borderRadius: 10 }}
+                      disabledDate={d => endDate ? d.isAfter(endDate, 'day') : false}
+                    />
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <CalendarOutlined style={{ color: '#6B46C1' }} />
+                      <span style={{ fontWeight: 600, color: '#0f172a', fontSize: 14 }}>Fecha y hora de fin</span>
+                    </div>
+                    <DatePicker
+                      showTime={{ format: 'HH:mm' }}
+                      format="DD/MM/YYYY HH:mm"
+                      value={endDate}
+                      onChange={v => setEndDate(v)}
+                      placeholder="Seleccionar fecha y hora"
+                      style={{ width: '100%', borderRadius: 10 }}
+                      disabledDate={d => startDate ? d.isBefore(startDate, 'day') : false}
+                    />
+                  </Col>
+                </Row>
+              </div>
+
               <div style={{ marginTop: 24 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                   <FileTextOutlined style={{ color: '#6B46C1' }} />
