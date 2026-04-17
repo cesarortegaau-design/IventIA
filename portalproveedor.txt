@@ -3,7 +3,7 @@ El portal de proveedores tendrá la misma estructura similar al portal de exposi
  - Al completar el log on , el usuario quedará ligado al proveedor, podrá también administar los datos fiscales y 
 demográficos del proveedor
 - El portal mostrará las ordenes de compra generadas desde admin al proveedor, podrán ser consultada
-- Desde admin se podrána anexar documentos que pueden ser marcados como visibles por el proveedor en su portal
+- Desde admin se podrán anexar documentos que pueden ser marcados como visibles por el proveedor en su portal
 - el proveedor tendrá también una sección donde pueda anexar documentos
 - también tendrá la misma funcionalidad que tiene el portal de expositores para generar un chat de comunicación
 con admin

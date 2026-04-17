@@ -351,6 +351,85 @@ export async function removePortalUserClient(req: Request, res: Response, next: 
   }
 }
 
+// ── Supplier Portal Users Management (Admin) ─────────────────────────────────
+
+export async function listSupplierPortalUsers(req: Request, res: Response, next: NextFunction) {
+  try {
+    const tenantId = req.user!.tenantId
+    const users = await prisma.supplierPortalUser.findMany({
+      where: { tenantId },
+      select: {
+        id: true, email: true, firstName: true, lastName: true, isActive: true, createdAt: true,
+        suppliers: {
+          select: { supplier: { select: { id: true, name: true, code: true } } },
+          take: 1,
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+    res.json({ success: true, data: users })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function getSupplierPortalUser(req: Request, res: Response, next: NextFunction) {
+  try {
+    const tenantId = req.user!.tenantId
+    const user = await prisma.supplierPortalUser.findFirst({
+      where: { id: req.params.supplierPortalUserId, tenantId },
+      select: {
+        id: true, email: true, firstName: true, lastName: true, phone: true,
+        isActive: true, createdAt: true, updatedAt: true,
+        suppliers: {
+          include: { supplier: { select: { id: true, name: true, code: true, type: true } } },
+        },
+      },
+    })
+    if (!user) throw new AppError(404, 'USER_NOT_FOUND', 'Usuario no encontrado')
+    res.json({ success: true, data: user })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function updateSupplierPortalUser(req: Request, res: Response, next: NextFunction) {
+  try {
+    const tenantId = req.user!.tenantId
+    const data = z.object({
+      firstName: z.string().optional(),
+      lastName: z.string().optional(),
+      phone: z.string().optional(),
+      isActive: z.boolean().optional(),
+    }).parse(req.body)
+
+    const user = await prisma.supplierPortalUser.findFirst({ where: { id: req.params.supplierPortalUserId, tenantId } })
+    if (!user) throw new AppError(404, 'USER_NOT_FOUND', 'Usuario no encontrado')
+
+    const updated = await prisma.supplierPortalUser.update({ where: { id: req.params.supplierPortalUserId }, data })
+    res.json({ success: true, data: updated })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function resetSupplierPortalUserPassword(req: Request, res: Response, next: NextFunction) {
+  try {
+    const tenantId = req.user!.tenantId
+    const { password } = z.object({ password: z.string().min(6) }).parse(req.body)
+    const bcrypt = await import('bcryptjs')
+
+    const user = await prisma.supplierPortalUser.findFirst({ where: { id: req.params.supplierPortalUserId, tenantId } })
+    if (!user) throw new AppError(404, 'USER_NOT_FOUND', 'Usuario no encontrado')
+
+    const passwordHash = await bcrypt.hash(password, 12)
+    await prisma.supplierPortalUser.update({ where: { id: req.params.supplierPortalUserId }, data: { passwordHash } })
+    res.json({ success: true, message: 'Contraseña actualizada' })
+  } catch (err) {
+    next(err)
+  }
+}
+
 export async function toggleClientActive(req: Request, res: Response, next: NextFunction) {
   try {
     const client = await prisma.client.findFirst({

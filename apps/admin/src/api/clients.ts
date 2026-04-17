@@ -35,6 +35,16 @@ export const clientsApi = {
     apiClient.post(`/clients/portal-users/${portalUserId}/clients`, { clientId }).then(r => r.data),
   removePortalUserClient: (portalUserId: string, clientId: string) =>
     apiClient.delete(`/clients/portal-users/${portalUserId}/clients/${clientId}`).then(r => r.data),
+
+  // Supplier Portal Users Management (Admin)
+  listSupplierPortalUsers: () =>
+    apiClient.get('/clients/supplier-portal-users').then(r => r.data.data),
+  getSupplierPortalUser: (id: string) =>
+    apiClient.get(`/clients/supplier-portal-users/${id}`).then(r => r.data),
+  updateSupplierPortalUser: (id: string, data: any) =>
+    apiClient.patch(`/clients/supplier-portal-users/${id}`, data).then(r => r.data),
+  resetSupplierPortalUserPassword: (id: string, password: string) =>
+    apiClient.post(`/clients/supplier-portal-users/${id}/reset-password`, { password }).then(r => r.data),
   uploadDocument: (id: string, file: File, documentType: string) => {
     const form = new FormData()
     form.append('file', file)

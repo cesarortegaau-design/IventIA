@@ -9,6 +9,7 @@ import {
   addClientRelation, updateClientRelation, deleteClientRelation,
   getPortalUser, updatePortalUser, resetPortalUserPassword,
   addPortalUserClient, removePortalUserClient,
+  listSupplierPortalUsers, getSupplierPortalUser, updateSupplierPortalUser, resetSupplierPortalUserPassword,
 } from '../controllers/clients.controller'
 import { uploadClientDocument, deleteClientDocument } from '../controllers/documents.controller'
 
@@ -40,6 +41,12 @@ router.patch('/portal-users/:portalUserId', requirePrivilege(PRIVILEGES.PORTAL_U
 router.post('/portal-users/:portalUserId/reset-password', requirePrivilege(PRIVILEGES.PORTAL_USER_EDIT), resetPortalUserPassword)
 router.post('/portal-users/:portalUserId/clients', requirePrivilege(PRIVILEGES.PORTAL_USER_EDIT), addPortalUserClient)
 router.delete('/portal-users/:portalUserId/clients/:clientId', requirePrivilege(PRIVILEGES.PORTAL_USER_EDIT), removePortalUserClient)
+
+// Supplier Portal Users Management (Admin)
+router.get('/supplier-portal-users', requirePrivilege(PRIVILEGES.SUPPLIER_VIEW), listSupplierPortalUsers)
+router.get('/supplier-portal-users/:supplierPortalUserId', requirePrivilege(PRIVILEGES.SUPPLIER_VIEW), getSupplierPortalUser)
+router.patch('/supplier-portal-users/:supplierPortalUserId', requirePrivilege(PRIVILEGES.SUPPLIER_EDIT), updateSupplierPortalUser)
+router.post('/supplier-portal-users/:supplierPortalUserId/reset-password', requirePrivilege(PRIVILEGES.SUPPLIER_EDIT), resetSupplierPortalUserPassword)
 
 // Documents
 router.post('/:id/documents', requirePrivilege(PRIVILEGES.CLIENT_EDIT), docUpload.single('file'), uploadClientDocument)
