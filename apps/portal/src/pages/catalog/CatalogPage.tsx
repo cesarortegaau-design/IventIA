@@ -775,26 +775,29 @@ export default function CatalogPage() {
         )}
       </div>
 
-      {/* Floating cart bar (mobile) */}
+      {/* Floating cart FAB — bottom-right, clear of content */}
       {cartTotal > 0 && (
         <div style={{
-          position: 'fixed', bottom: 72, left: '50%', transform: 'translateX(-50%)', zIndex: 100,
+          position: 'fixed', bottom: 80, right: 16, zIndex: 100,
         }}>
           <button
             onClick={() => setCartOpen(true)}
             style={{
               background: COLORS.primary, color: '#fff', border: 'none',
-              borderRadius: 20, padding: '9px 20px', fontWeight: 300, fontSize: 13,
-              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10,
-              boxShadow: '0 2px 8px rgba(26,26,26,0.12)',
-              fontFamily: 'Inter, sans-serif', letterSpacing: '0.2px', whiteSpace: 'nowrap',
+              borderRadius: 50, width: 56, height: 56,
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 4px 16px rgba(26,26,26,0.25)',
+              position: 'relative',
             }}
           >
-            <ShoppingCartOutlined style={{ fontSize: 14 }} />
-            <span style={{ fontWeight: 400 }}>Ver carrito</span>
+            <ShoppingCartOutlined style={{ fontSize: 22 }} />
             <span style={{
-              background: 'rgba(255,255,255,0.18)', borderRadius: 10,
-              padding: '1px 7px', fontSize: 12, fontWeight: 400,
+              position: 'absolute', top: -4, right: -4,
+              background: '#ef4444', color: '#fff',
+              borderRadius: 10, minWidth: 18, height: 18,
+              fontSize: 11, fontWeight: 700,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: '0 4px',
             }}>
               {cartTotal}
             </span>
