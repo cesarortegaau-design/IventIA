@@ -2,6 +2,17 @@
    Portal-specific mobile CSS overrides.
 ──────────────────────────────────────────────────────────────────── */
 
+/* ── Image preview: scale to fill viewport ─────────────────────────── */
+.ant-image-preview-img {
+  max-width: 92vw !important;
+  max-height: 88vh !important;
+  min-width: min(92vw, 600px) !important;
+  min-height: min(88vh, 400px) !important;
+  object-fit: contain !important;
+  width: auto !important;
+  height: auto !important;
+}
+
 @media (max-width: 575px) {
 
   /* ── Card ──────────────────────────────────────────────────────── */
