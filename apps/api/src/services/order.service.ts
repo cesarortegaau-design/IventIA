@@ -46,18 +46,19 @@ export interface CreateOrderInput {
 export async function createOrder(input: CreateOrderInput) {
   const pricingTier = await determinePricingTier(input.priceListId)
 
-  // Validate price list items exist
+  // Validate price list items exist (use unique IDs — same resource can appear multiple times when checkDuplicate=false)
   const resourceIds = input.lineItems.map((li) => li.resourceId)
+  const uniqueResourceIds = [...new Set(resourceIds)]
   const priceListItems = await prisma.priceListItem.findMany({
     where: {
       priceListId: input.priceListId,
-      resourceId: { in: resourceIds },
+      resourceId: { in: uniqueResourceIds },
       isActive: true,
     },
     include: { resource: true },
   })
 
-  if (priceListItems.length !== resourceIds.length) {
+  if (priceListItems.length !== uniqueResourceIds.length) {
     throw new AppError(400, 'INVALID_RESOURCES', 'Some resources are not in the price list')
   }
 

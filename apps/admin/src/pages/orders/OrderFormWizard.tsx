@@ -168,6 +168,7 @@ export default function OrderFormWizard() {
     }
 
     const newItem = {
+      instanceId: `${resourceId}-${Date.now()}-${Math.random()}`,
       resourceId,
       description: item.resource.name,
       earlyPrice: Number(item.earlyPrice),
@@ -246,12 +247,12 @@ export default function OrderFormWizard() {
     message.success('Artículo agregado con selecciones de sustitución')
   }
 
-  function updateLineItem(resourceId: string, field: string, value: any) {
-    setLineItems(prev => prev.map(li => li.resourceId === resourceId ? { ...li, [field]: value } : li))
+  function updateLineItem(instanceId: string, field: string, value: any) {
+    setLineItems(prev => prev.map(li => li.instanceId === instanceId ? { ...li, [field]: value } : li))
   }
 
-  function removeLineItem(resourceId: string) {
-    setLineItems(prev => prev.filter(li => li.resourceId !== resourceId))
+  function removeLineItem(instanceId: string) {
+    setLineItems(prev => prev.filter(li => li.instanceId !== instanceId))
   }
 
   const lineColumns = [
@@ -274,19 +275,19 @@ export default function OrderFormWizard() {
     {
       title: 'Cantidad', dataIndex: 'quantity', key: 'qty', width: 90,
       render: (v: number, r: any) => (
-        <InputNumber min={0.001} value={v} onChange={val => updateLineItem(r.resourceId, 'quantity', val)} style={{ width: 80 }} />
+        <InputNumber min={0.001} value={v} onChange={val => updateLineItem(r.instanceId, 'quantity', val)} style={{ width: 80 }} />
       ),
     },
     {
       title: 'Desc. %', dataIndex: 'discountPct', key: 'disc', width: 80,
       render: (v: number, r: any) => (
-        <InputNumber min={0} max={100} value={v} onChange={val => updateLineItem(r.resourceId, 'discountPct', val)} style={{ width: 70 }} />
+        <InputNumber min={0} max={100} value={v} onChange={val => updateLineItem(r.instanceId, 'discountPct', val)} style={{ width: 70 }} />
       ),
     },
     {
       title: 'Observaciones', dataIndex: 'observations', key: 'obs', width: 160,
       render: (v: string, r: any) => (
-        <Input value={v} onChange={e => updateLineItem(r.resourceId, 'observations', e.target.value)} />
+        <Input value={v} onChange={e => updateLineItem(r.instanceId, 'observations', e.target.value)} />
       ),
     },
     {
@@ -296,7 +297,7 @@ export default function OrderFormWizard() {
           showTime
           format="DD/MM/YYYY HH:mm"
           value={v ? dayjs(v) : null}
-          onChange={val => updateLineItem(r.resourceId, 'deliveryDate', val?.toISOString() ?? null)}
+          onChange={val => updateLineItem(r.instanceId, 'deliveryDate', val?.toISOString() ?? null)}
           style={{ width: 160 }}
           placeholder="Fecha entrega"
         />
@@ -305,7 +306,7 @@ export default function OrderFormWizard() {
     {
       title: '', key: 'del', width: 48,
       render: (_: any, r: any) => (
-        <Button danger size="small" icon={<DeleteOutlined />} onClick={() => removeLineItem(r.resourceId)} />
+        <Button danger size="small" icon={<DeleteOutlined />} onClick={() => removeLineItem(r.instanceId)} />
       ),
     },
   ]
@@ -388,7 +389,7 @@ export default function OrderFormWizard() {
           <Table
             dataSource={lineItems}
             columns={lineColumns}
-            rowKey="resourceId"
+            rowKey="instanceId"
             pagination={false}
             size="small"
             scroll={{ x: 'max-content' }}
