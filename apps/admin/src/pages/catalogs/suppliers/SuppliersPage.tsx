@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Table, Button, Card, Space, Tag, Modal, Form, Input, Select, Row, Col, App, Typography, Drawer, InputNumber, DatePicker, Popconfirm, Badge, Divider } from 'antd'
-import { PlusOutlined, EditOutlined, KeyOutlined, StopOutlined, CopyOutlined } from '@ant-design/icons'
+import { Table, Button, Card, Space, Tag, Modal, Form, Input, Select, Row, Col, App, Typography, Tabs, InputNumber, DatePicker, Popconfirm, Badge, Divider } from 'antd'
+import { PlusOutlined, EditOutlined, KeyOutlined, StopOutlined } from '@ant-design/icons'
 import { suppliersApi } from '../../../api/suppliers'
 import dayjs from 'dayjs'
 
@@ -29,22 +29,22 @@ export default function SuppliersPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
-  const [codesDrawer, setCodesDrawer] = useState<{ open: boolean; supplier: any | null }>({ open: false, supplier: null })
+  const [activeModalTab, setActiveModalTab] = useState('info')
 
   const { data: codesData, isLoading: loadingCodes } = useQuery({
-    queryKey: ['supplier-portal-codes', codesDrawer.supplier?.id],
-    queryFn: () => suppliersApi.listPortalCodes(codesDrawer.supplier!.id),
-    enabled: codesDrawer.open && !!codesDrawer.supplier,
+    queryKey: ['supplier-portal-codes', editingId],
+    queryFn: () => suppliersApi.listPortalCodes(editingId!),
+    enabled: modalOpen && !!editingId,
   })
 
   const generateCodesMut = useMutation({
-    mutationFn: (values: any) => suppliersApi.generatePortalCodes(codesDrawer.supplier!.id, {
+    mutationFn: (values: any) => suppliersApi.generatePortalCodes(editingId!, {
       count: values.count,
       maxUses: values.maxUses,
       expiresAt: values.expiresAt ? values.expiresAt.toISOString() : undefined,
     }),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['supplier-portal-codes', codesDrawer.supplier?.id] })
+      queryClient.invalidateQueries({ queryKey: ['supplier-portal-codes', editingId] })
       message.success(`${data.meta?.created} código(s) generado(s)`)
       codesForm.resetFields()
     },
@@ -52,9 +52,9 @@ export default function SuppliersPage() {
   })
 
   const revokeCodeMut = useMutation({
-    mutationFn: (codeId: string) => suppliersApi.revokePortalCode(codesDrawer.supplier!.id, codeId),
+    mutationFn: (codeId: string) => suppliersApi.revokePortalCode(editingId!, codeId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['supplier-portal-codes', codesDrawer.supplier?.id] })
+      queryClient.invalidateQueries({ queryKey: ['supplier-portal-codes', editingId] })
       message.success('Código revocado')
     },
   })
@@ -82,6 +82,7 @@ export default function SuppliersPage() {
 
   function openEdit(record: any) {
     setEditingId(record.id)
+    setActiveModalTab('info')
     form.setFieldsValue({
       name: record.name,
       type: record.type,
@@ -123,11 +124,10 @@ export default function SuppliersPage() {
     {
       title: '',
       key: 'actions',
-      width: 130,
+      width: 80,
       render: (_: any, r: any) => (
         <Space>
           <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)} title="Editar" />
-          <Button size="small" icon={<KeyOutlined />} onClick={() => setCodesDrawer({ open: true, supplier: r })} title="Códigos Portal" />
         </Space>
       ),
     },
@@ -137,7 +137,7 @@ export default function SuppliersPage() {
     <div>
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Title level={4} style={{ margin: 0 }}>Proveedores</Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true) }}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); form.resetFields(); setActiveModalTab('info'); setModalOpen(true) }}>
           Nuevo Proveedor
         </Button>
       </Row>
@@ -156,81 +156,26 @@ export default function SuppliersPage() {
           }}
         />
       </Card>
-      {/* Portal Codes Drawer */}
-      <Drawer
-        title={<Space><KeyOutlined /><span>Códigos Portal — {codesDrawer.supplier?.name}</span></Space>}
-        open={codesDrawer.open}
-        onClose={() => setCodesDrawer({ open: false, supplier: null })}
-        width={540}
-      >
-        <Form form={codesForm} layout="inline" onFinish={generateCodesMut.mutate} style={{ marginBottom: 16 }}>
-          <Form.Item name="count" label="Cantidad" initialValue={5}>
-            <InputNumber min={1} max={100} style={{ width: 80 }} />
-          </Form.Item>
-          <Form.Item name="maxUses" label="Usos máx." initialValue={1}>
-            <InputNumber min={1} style={{ width: 80 }} />
-          </Form.Item>
-          <Form.Item name="expiresAt" label="Expira">
-            <DatePicker showTime disabledDate={d => d && d.isBefore(dayjs())} />
-          </Form.Item>
-          <Form.Item>
-            <Button type="primary" htmlType="submit" loading={generateCodesMut.isPending} icon={<PlusOutlined />}>
-              Generar
-            </Button>
-          </Form.Item>
-        </Form>
-        <Divider style={{ margin: '8px 0 16px' }} />
-        <Table
-          dataSource={codesData ?? []}
-          loading={loadingCodes}
-          rowKey="id"
-          size="small"
-          pagination={false}
-          columns={[
-            {
-              title: 'Código',
-              dataIndex: 'code',
-              render: (code: string, rec: any) => (
-                <Space>
-                  <Badge status={rec.isActive ? 'success' : 'error'} />
-                  <Typography.Text code copyable={{ text: code }}>{code}</Typography.Text>
-                </Space>
-              ),
-            },
-            {
-              title: 'Usos',
-              render: (_: any, rec: any) => `${rec.usedCount} / ${rec.maxUses}`,
-              width: 70,
-            },
-            {
-              title: 'Expira',
-              dataIndex: 'expiresAt',
-              render: (v: string) => v ? dayjs(v).format('DD/MM/YY HH:mm') : '—',
-              width: 120,
-            },
-            {
-              title: '',
-              width: 50,
-              render: (_: any, rec: any) => rec.isActive ? (
-                <Popconfirm title="¿Revocar este código?" onConfirm={() => revokeCodeMut.mutate(rec.id)}>
-                  <Button size="small" danger icon={<StopOutlined />} title="Revocar" />
-                </Popconfirm>
-              ) : <Tag color="red">Inactivo</Tag>,
-            },
-          ]}
-        />
-      </Drawer>
-
       <Modal
         title={editingId ? 'Editar Proveedor' : 'Nuevo Proveedor'}
         open={modalOpen}
-        onCancel={() => setModalOpen(false)}
-        onOk={() => form.submit()}
-        width={800}
+        onCancel={() => { setModalOpen(false); setActiveModalTab('info') }}
+        onOk={activeModalTab === 'info' ? () => form.submit() : undefined}
+        footer={activeModalTab === 'portal' ? null : undefined}
+        width={820}
         confirmLoading={saveMutation.isPending}
+        destroyOnClose
       >
-        <Form form={form} layout="vertical" onFinish={saveMutation.mutate}>
-          <Row gutter={16}>
+        <Tabs
+          activeKey={activeModalTab}
+          onChange={setActiveModalTab}
+          items={[
+            {
+              key: 'info',
+              label: 'Información',
+              children: (
+                <Form form={form} layout="vertical" onFinish={saveMutation.mutate}>
+                  <Row gutter={16}>
             <Col span={12}>
               <Form.Item name="name" label="Nombre" rules={[{ required: true }]}>
                 <Input />
@@ -332,6 +277,75 @@ export default function SuppliersPage() {
             </Col>
           </Row>
         </Form>
+              ),
+            },
+            ...(editingId ? [{
+              key: 'portal',
+              label: <Space><KeyOutlined />Portal de Proveedores</Space>,
+              children: (
+                <div>
+                  <Form form={codesForm} layout="inline" onFinish={generateCodesMut.mutate} style={{ marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+                    <Form.Item name="count" label="Cantidad" initialValue={5} style={{ marginBottom: 0 }}>
+                      <InputNumber min={1} max={100} style={{ width: 80 }} />
+                    </Form.Item>
+                    <Form.Item name="maxUses" label="Usos máx." initialValue={1} style={{ marginBottom: 0 }}>
+                      <InputNumber min={1} style={{ width: 80 }} />
+                    </Form.Item>
+                    <Form.Item name="expiresAt" label="Expira" style={{ marginBottom: 0 }}>
+                      <DatePicker showTime disabledDate={d => d && d.isBefore(dayjs())} />
+                    </Form.Item>
+                    <Form.Item style={{ marginBottom: 0 }}>
+                      <Button type="primary" htmlType="submit" loading={generateCodesMut.isPending} icon={<PlusOutlined />}>
+                        Generar códigos
+                      </Button>
+                    </Form.Item>
+                  </Form>
+                  <Divider style={{ margin: '12px 0' }} />
+                  <Table
+                    dataSource={codesData ?? []}
+                    loading={loadingCodes}
+                    rowKey="id"
+                    size="small"
+                    pagination={false}
+                    locale={{ emptyText: 'No hay códigos generados aún' }}
+                    columns={[
+                      {
+                        title: 'Código',
+                        dataIndex: 'code',
+                        render: (code: string, rec: any) => (
+                          <Space>
+                            <Badge status={rec.isActive ? 'success' : 'error'} />
+                            <Typography.Text code copyable={{ text: code }}>{code}</Typography.Text>
+                          </Space>
+                        ),
+                      },
+                      {
+                        title: 'Usos',
+                        render: (_: any, rec: any) => `${rec.usedCount} / ${rec.maxUses}`,
+                        width: 80,
+                      },
+                      {
+                        title: 'Expira',
+                        dataIndex: 'expiresAt',
+                        render: (v: string) => v ? dayjs(v).format('DD/MM/YY HH:mm') : 'Sin expiración',
+                        width: 150,
+                      },
+                      {
+                        title: '',
+                        width: 60,
+                        render: (_: any, rec: any) => rec.isActive ? (
+                          <Popconfirm title="¿Revocar este código?" onConfirm={() => revokeCodeMut.mutate(rec.id)}>
+                            <Button size="small" danger icon={<StopOutlined />} title="Revocar" />
+                          </Popconfirm>
+                        ) : <Tag color="red">Inactivo</Tag>,
+                      },
+                    ]}
+                  />
+                </div>
+              ),
+            }] : []),
+          ]}
+        />
       </Modal>
     </div>
   )
