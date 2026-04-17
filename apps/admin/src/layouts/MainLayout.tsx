@@ -62,7 +62,6 @@ export default function MainLayout() {
         { key: '/catalogos/clientes', icon: <TeamOutlined />, label: 'Clientes', show: hp(PRIVILEGES.CLIENT_VIEW) },
         { key: '/catalogos/proveedores', icon: <ContactsOutlined />, label: 'Proveedores', show: hp(PRIVILEGES.SUPPLIER_VIEW) },
         { key: '/catalogos/listas-precios-proveedores', icon: <DollarOutlined />, label: 'Listas de Precios Prov.', show: hp(PRIVILEGES.SUPPLIER_PRICE_LIST_VIEW) },
-        { key: '/catalogos/ordenes-compra', icon: <FileTextOutlined />, label: 'Órdenes de Compra', show: hp(PRIVILEGES.PURCHASE_ORDER_VIEW) },
         { key: '/catalogos/organizaciones', icon: <ApartmentOutlined />, label: 'Organizaciones', show: hp(PRIVILEGES.ORGANIZATION_VIEW) },
         { key: '/catalogos/departamentos', icon: <ApartmentOutlined />, label: 'Departamentos', show: hp(PRIVILEGES.DEPARTMENT_VIEW) },
         { key: '/catalogos/perfiles', icon: <SafetyCertificateOutlined />, label: 'Perfiles', show: hp(PRIVILEGES.PROFILE_VIEW) },
@@ -70,6 +69,8 @@ export default function MainLayout() {
         { key: '/catalogos/usuarios-portal', icon: <TeamOutlined />, label: 'Usuarios Portal', show: hp(PRIVILEGES.PORTAL_USER_VIEW) },
       ],
     },
+    { key: '/reportes/ordenes', icon: <DollarOutlined />, label: 'Órdenes de Servicio', show: hp(PRIVILEGES.REPORT_ORDERS) },
+    { key: '/catalogos/ordenes-compra', icon: <FileTextOutlined />, label: 'Órdenes de Compra', show: hp(PRIVILEGES.PURCHASE_ORDER_VIEW) },
     {
       key: 'almacen', icon: <ToolOutlined />, label: 'Almacén',
       children: [
@@ -81,12 +82,6 @@ export default function MainLayout() {
     { key: '/produccion', icon: <BarChartOutlined />, label: 'Producción y Costos', show: hp(PRIVILEGES.PRODUCTION_VIEW) },
     { key: '/crm', icon: <ContactsOutlined />, label: 'CRM', show: hp(PRIVILEGES.CRM_VIEW) },
     { key: '/chat', icon: <MessageOutlined />, label: 'Colabora', show: hp(PRIVILEGES.CHAT_VIEW) },
-    {
-      key: 'reportes', icon: <FileTextOutlined />, label: 'Reportes',
-      children: [
-        { key: '/reportes/ordenes', icon: <DollarOutlined />, label: 'Órdenes de Servicio', show: hp(PRIVILEGES.REPORT_ORDERS) },
-      ],
-    },
     {
       key: 'dashboards', icon: <BarChartOutlined />, label: 'Dashboards',
       children: [
@@ -137,7 +132,7 @@ export default function MainLayout() {
       theme="dark"
       mode="inline"
       selectedKeys={[location.pathname]}
-      defaultOpenKeys={['catalogos', 'reportes', 'dashboards', 'almacen']}
+      defaultOpenKeys={['catalogos', 'dashboards', 'almacen']}
       items={enrichedMenuItems}
       onClick={handleMenuClick}
       style={{ background: 'transparent', border: 'none', marginTop: 8 }}
