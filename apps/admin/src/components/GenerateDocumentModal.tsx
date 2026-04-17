@@ -62,7 +62,18 @@ export default function GenerateDocumentModal({ open, onClose, context, entityId
       message.success('Documento generado y guardado')
       onClose()
     } catch (err: any) {
-      message.error('Error al generar documento')
+      try {
+        // responseType:'blob' means error body is also a Blob — parse it as text
+        if (err?.response?.data instanceof Blob) {
+          const text = await err.response.data.text()
+          const json = JSON.parse(text)
+          message.error(json?.error?.message ?? json?.message ?? text)
+        } else {
+          message.error(err?.response?.data?.error?.message ?? err?.message ?? 'Error al generar documento')
+        }
+      } catch {
+        message.error('Error al generar documento')
+      }
     } finally {
       setGenerating(false)
     }
