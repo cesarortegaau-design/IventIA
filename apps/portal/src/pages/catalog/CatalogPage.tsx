@@ -423,14 +423,19 @@ function CartDrawer({ open, cart, onClose, onQtyChange, onRemove, onSubmit, subm
               ${(subtotal + tax).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
             </Text>
           </div>
+          {(!startDate || !endDate) && cart.length > 0 && (
+            <div style={{ fontSize: 12, color: '#ef4444', marginBottom: 8, textAlign: 'center' }}>
+              Ingresa la fecha y hora de inicio y fin para continuar.
+            </div>
+          )}
           <button
-            disabled={cart.length === 0 || submitting}
-            onClick={() => onSubmit(notes, startDate?.toISOString(), endDate?.toISOString())}
+            disabled={cart.length === 0 || !startDate || !endDate || submitting}
+            onClick={() => onSubmit(notes, startDate!.toISOString(), endDate!.toISOString())}
             style={{
-              width: '100%', background: cart.length === 0 ? COLORS.offWhite : COLORS.primary,
-              color: cart.length === 0 ? COLORS.textTertiary : '#fff',
+              width: '100%', background: (cart.length === 0 || !startDate || !endDate) ? COLORS.offWhite : COLORS.primary,
+              color: (cart.length === 0 || !startDate || !endDate) ? COLORS.textTertiary : '#fff',
               border: 'none', borderRadius: 10, padding: '14px 0',
-              fontWeight: 400, fontSize: 14, cursor: cart.length === 0 ? 'default' : 'pointer',
+              fontWeight: 400, fontSize: 14, cursor: (cart.length === 0 || !startDate || !endDate) ? 'default' : 'pointer',
               letterSpacing: '0.3px', fontFamily: 'Inter, sans-serif',
             }}
           >
@@ -510,7 +515,7 @@ function CartDrawer({ open, cart, onClose, onQtyChange, onRemove, onSubmit, subm
           <div style={{ paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div>
               <Text style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 4, color: COLORS.textPrimary }}>
-                Fecha y hora de inicio
+                Fecha y hora de inicio <span style={{ color: '#ef4444' }}>*</span>
               </Text>
               <DatePicker
                 showTime={{ format: 'HH:mm' }}
@@ -518,13 +523,13 @@ function CartDrawer({ open, cart, onClose, onQtyChange, onRemove, onSubmit, subm
                 value={startDate}
                 onChange={v => setStartDate(v)}
                 placeholder="Seleccionar fecha y hora"
-                style={{ width: '100%', borderRadius: 8, borderColor: COLORS.border }}
+                style={{ width: '100%', borderRadius: 8, borderColor: startDate ? COLORS.border : '#ef4444' }}
                 disabledDate={d => endDate ? d.isAfter(endDate, 'day') : false}
               />
             </div>
             <div>
               <Text style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 4, color: COLORS.textPrimary }}>
-                Fecha y hora de fin
+                Fecha y hora de fin <span style={{ color: '#ef4444' }}>*</span>
               </Text>
               <DatePicker
                 showTime={{ format: 'HH:mm' }}
@@ -532,7 +537,7 @@ function CartDrawer({ open, cart, onClose, onQtyChange, onRemove, onSubmit, subm
                 value={endDate}
                 onChange={v => setEndDate(v)}
                 placeholder="Seleccionar fecha y hora"
-                style={{ width: '100%', borderRadius: 8, borderColor: COLORS.border }}
+                style={{ width: '100%', borderRadius: 8, borderColor: endDate ? COLORS.border : '#ef4444' }}
                 disabledDate={d => startDate ? d.isBefore(startDate, 'day') : false}
               />
             </div>

@@ -562,7 +562,7 @@ export default function NewOrderPage() {
                   <Col xs={24} sm={12}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                       <CalendarOutlined style={{ color: '#6B46C1' }} />
-                      <span style={{ fontWeight: 600, color: '#0f172a', fontSize: 14 }}>Fecha y hora de inicio</span>
+                      <span style={{ fontWeight: 600, color: '#0f172a', fontSize: 14 }}>Fecha y hora de inicio <span style={{ color: '#ef4444' }}>*</span></span>
                     </div>
                     <DatePicker
                       showTime={{ format: 'HH:mm' }}
@@ -570,14 +570,14 @@ export default function NewOrderPage() {
                       value={startDate}
                       onChange={v => setStartDate(v)}
                       placeholder="Seleccionar fecha y hora"
-                      style={{ width: '100%', borderRadius: 10 }}
+                      style={{ width: '100%', borderRadius: 10, borderColor: startDate ? undefined : '#ef4444' }}
                       disabledDate={d => endDate ? d.isAfter(endDate, 'day') : false}
                     />
                   </Col>
                   <Col xs={24} sm={12}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                       <CalendarOutlined style={{ color: '#6B46C1' }} />
-                      <span style={{ fontWeight: 600, color: '#0f172a', fontSize: 14 }}>Fecha y hora de fin</span>
+                      <span style={{ fontWeight: 600, color: '#0f172a', fontSize: 14 }}>Fecha y hora de fin <span style={{ color: '#ef4444' }}>*</span></span>
                     </div>
                     <DatePicker
                       showTime={{ format: 'HH:mm' }}
@@ -585,7 +585,7 @@ export default function NewOrderPage() {
                       value={endDate}
                       onChange={v => setEndDate(v)}
                       placeholder="Seleccionar fecha y hora"
-                      style={{ width: '100%', borderRadius: 10 }}
+                      style={{ width: '100%', borderRadius: 10, borderColor: endDate ? undefined : '#ef4444' }}
                       disabledDate={d => startDate ? d.isBefore(startDate, 'day') : false}
                     />
                   </Col>
@@ -668,14 +668,21 @@ export default function NewOrderPage() {
                   </div>
                 </div>
 
+                {(!startDate || !endDate) && (
+                  <div style={{ fontSize: 12, color: '#fca5a5', textAlign: 'center', marginBottom: 8 }}>
+                    Ingresa la fecha y hora de inicio y fin para continuar.
+                  </div>
+                )}
                 <Button
                   type="primary"
                   size="large"
                   block
+                  disabled={!startDate || !endDate}
                   loading={createOrderMutation.isPending}
                   onClick={() => createOrderMutation.mutate()}
                   style={{
-                    background: '#fff', borderColor: '#fff', color: '#1e1b4b',
+                    background: (!startDate || !endDate) ? 'rgba(255,255,255,0.3)' : '#fff',
+                    borderColor: 'transparent', color: '#1e1b4b',
                     fontWeight: 700, height: 48, borderRadius: 10, fontSize: 15,
                     marginBottom: 10,
                   }}

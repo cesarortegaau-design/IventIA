@@ -158,8 +158,8 @@ export async function portalCreateOrder(req: Request, res: Response, next: NextF
         observations: z.string().optional(),
       })).min(1),
       notes: z.string().optional(),
-      startDate: z.string().datetime().optional(),
-      endDate: z.string().datetime().optional(),
+      startDate: z.string().datetime(),
+      endDate: z.string().datetime(),
     })
     const { items, notes, startDate, endDate } = schema.parse(req.body)
 
