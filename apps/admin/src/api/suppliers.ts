@@ -102,4 +102,12 @@ export const suppliersApi = {
 
   removeContact: (supplierId: string, contactId: string) =>
     apiClient.delete(`/suppliers/${supplierId}/contacts/${contactId}`),
+
+  // Portal codes
+  listPortalCodes: (supplierId: string) =>
+    apiClient.get(`/suppliers/${supplierId}/portal-codes`).then(r => r.data.data),
+  generatePortalCodes: (supplierId: string, data: { count?: number; maxUses?: number; expiresAt?: string }) =>
+    apiClient.post(`/suppliers/${supplierId}/portal-codes`, data).then(r => r.data),
+  revokePortalCode: (supplierId: string, codeId: string) =>
+    apiClient.delete(`/suppliers/${supplierId}/portal-codes/${codeId}`).then(r => r.data),
 }

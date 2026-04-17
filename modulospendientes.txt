@@ -1,0 +1,9 @@
+-Portal de Proveedores (por Organización)
+-Portal del Cliente & Solicitud de Evento (por Organización) 
+-Portal público (por Organización)
+	- Calendario de eventos público
+	- Solicitud de Eventos (reservas y va a CRM)
+	- Información general configurable
+	- Venta de Boletos
+	- Registro
+

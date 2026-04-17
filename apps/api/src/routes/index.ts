@@ -25,6 +25,8 @@ import warehouseRoutes from './warehouse.routes'
 import contractsRoutes from './contracts.routes'
 import templatesRoutes from './templates.routes'
 import productionRoutes from './production.routes'
+import supplierPortalRoutes from './supplier-portal.routes'
+import supplierPortalCodesRoutes from './supplier-portal-codes.routes'
 
 const router = Router()
 
@@ -54,5 +56,7 @@ router.use('/warehouse', warehouseRoutes)
 router.use('/contracts', contractsRoutes)
 router.use('/templates', templatesRoutes)
 router.use('/production', productionRoutes)
+router.use('/supplier-portal', supplierPortalRoutes)
+router.use('/suppliers/:supplierId/portal-codes', supplierPortalCodesRoutes)
 
 export default router

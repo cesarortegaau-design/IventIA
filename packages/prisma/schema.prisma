@@ -268,12 +268,16 @@ model Tenant {
   documentTemplates DocumentTemplate[]
 
   // Purchase Order Module
-  suppliers          Supplier[]
-  supplierPriceLists SupplierPriceList[]
-  purchaseOrders     PurchaseOrder[]
-  warehouses         Warehouse[]
-  resourceInventory  ResourceInventory[]
-  inventoryMovements InventoryMovement[]
+  suppliers             Supplier[]
+  supplierPriceLists    SupplierPriceList[]
+  purchaseOrders        PurchaseOrder[]
+  warehouses            Warehouse[]
+  resourceInventory     ResourceInventory[]
+  inventoryMovements    InventoryMovement[]
+  supplierPortalUsers   SupplierPortalUser[]
+  supplierPortalCodes   SupplierPortalCode[]
+  supplierConversations SupplierConversation[]
+  supplierDocuments     SupplierDocument[]
 
   // Client Relations
   clientRelations ClientRelation[]
@@ -1691,6 +1695,10 @@ model Supplier {
   contacts       SupplierContact[]
   priceLists     SupplierPriceList[]
   purchaseOrders PurchaseOrder[]
+  portalCodes    SupplierPortalCode[]
+  portalUsers    SupplierPortalUserSupplier[]
+  conversations  SupplierConversation[]
+  documents      SupplierDocument[]
 
   @@unique([tenantId, code])
   @@index([tenantId, status])
@@ -1852,13 +1860,14 @@ model PurchaseOrderStatusHistory {
 }
 
 model PurchaseOrderDocument {
-  id           String   @id @default(uuid())
-  poId         String   @map("po_id")
-  documentType String   @map("document_type") @db.VarChar(100)
-  fileName     String   @map("file_name") @db.VarChar(300)
-  blobKey      String   @map("blob_key") @db.VarChar(500)
-  uploadedById String   @map("uploaded_by_id")
-  createdAt    DateTime @default(now()) @map("created_at")
+  id                  String   @id @default(uuid())
+  poId                String   @map("po_id")
+  documentType        String   @map("document_type") @db.VarChar(100)
+  fileName            String   @map("file_name") @db.VarChar(300)
+  blobKey             String   @map("blob_key") @db.VarChar(500)
+  uploadedById        String   @map("uploaded_by_id")
+  isVisibleToSupplier Boolean  @default(false) @map("is_visible_to_supplier")
+  createdAt           DateTime @default(now()) @map("created_at")
 
   purchaseOrder PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
   uploadedBy    User          @relation(fields: [uploadedById], references: [id])
@@ -2053,4 +2062,128 @@ model DocumentTemplate {
 
   @@index([tenantId, context])
   @@map("document_templates")
+}
+
+// ─── Supplier Portal ─────────────────────────────────────────────────────────
+
+model SupplierPortalUser {
+  id           String   @id @default(uuid())
+  tenantId     String   @map("tenant_id")
+  email        String
+  passwordHash String   @map("password_hash")
+  firstName    String   @map("first_name")
+  lastName     String   @map("last_name")
+  phone        String?
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  tenant         Tenant                       @relation(fields: [tenantId], references: [id])
+  suppliers      SupplierPortalUserSupplier[]
+  conversations  SupplierConversation[]
+  passwordResets SupplierPortalPasswordReset[]
+
+  @@unique([tenantId, email])
+  @@map("supplier_portal_users")
+}
+
+model SupplierPortalCode {
+  id         String    @id @default(uuid())
+  tenantId   String    @map("tenant_id")
+  supplierId String    @map("supplier_id")
+  code       String    @unique
+  maxUses    Int       @default(1) @map("max_uses")
+  usedCount  Int       @default(0) @map("used_count")
+  expiresAt  DateTime? @map("expires_at")
+  isActive   Boolean   @default(true) @map("is_active")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  tenant   Tenant                       @relation(fields: [tenantId], references: [id])
+  supplier Supplier                     @relation(fields: [supplierId], references: [id])
+  usages   SupplierPortalUserSupplier[]
+
+  @@map("supplier_portal_codes")
+}
+
+model SupplierPortalUserSupplier {
+  id           String   @id @default(uuid())
+  portalUserId String   @map("portal_user_id")
+  supplierId   String   @map("supplier_id")
+  accessCodeId String?  @map("access_code_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  portalUser SupplierPortalUser  @relation(fields: [portalUserId], references: [id])
+  supplier   Supplier            @relation(fields: [supplierId], references: [id])
+  accessCode SupplierPortalCode? @relation(fields: [accessCodeId], references: [id])
+
+  @@unique([portalUserId, supplierId])
+  @@map("supplier_portal_user_suppliers")
+}
+
+model SupplierPortalPasswordReset {
+  id           String    @id @default(uuid())
+  portalUserId String    @map("portal_user_id")
+  token        String    @unique
+  expiresAt    DateTime  @map("expires_at")
+  usedAt       DateTime? @map("used_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  portalUser SupplierPortalUser @relation(fields: [portalUserId], references: [id])
+
+  @@map("supplier_portal_password_resets")
+}
+
+model SupplierConversation {
+  id           String   @id @default(uuid())
+  tenantId     String   @map("tenant_id")
+  portalUserId String   @map("portal_user_id")
+  supplierId   String   @map("supplier_id")
+  subject      String?
+  unreadAdmin  Int      @default(0) @map("unread_admin")
+  unreadPortal Int      @default(0) @map("unread_portal")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  tenant     Tenant             @relation(fields: [tenantId], references: [id])
+  portalUser SupplierPortalUser @relation(fields: [portalUserId], references: [id])
+  supplier   Supplier           @relation(fields: [supplierId], references: [id])
+  messages   SupplierMessage[]
+
+  @@map("supplier_conversations")
+}
+
+model SupplierMessage {
+  id             String   @id @default(uuid())
+  conversationId String   @map("conversation_id")
+  senderType     String   @map("sender_type")
+  senderId       String   @map("sender_id")
+  senderName     String   @map("sender_name")
+  content        String?  @db.Text
+  fileUrl        String?  @map("file_url") @db.VarChar(500)
+  fileName       String?  @map("file_name") @db.VarChar(300)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  conversation SupplierConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@map("supplier_messages")
+}
+
+model SupplierDocument {
+  id            String   @id @default(uuid())
+  tenantId      String   @map("tenant_id")
+  supplierId    String   @map("supplier_id")
+  uploaderType  String   @map("uploader_type")
+  uploadedById  String   @map("uploaded_by_id")
+  name          String   @db.VarChar(300)
+  fileUrl       String   @map("file_url") @db.VarChar(500)
+  fileName      String   @map("file_name") @db.VarChar(300)
+  mimeType      String?  @map("mime_type") @db.VarChar(100)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+
+  @@index([tenantId, supplierId])
+  @@map("supplier_documents")
 }
