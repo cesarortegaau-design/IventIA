@@ -20,5 +20,6 @@ Stage all modified tracked files, create a commit with the provided message, and
 - Remote: `https://github.com/cesarortegaau-design/iventia.git` (may show redirect to `IventIA.git` — that is normal)
 - Admin deploys to Vercel: `https://ivent-ia-admin.vercel.app`
 - Portal deploys to Vercel: `https://ivent-ia-portal.vercel.app`
-- API deploys to Railway (auto-deploys on push to master)
+- API deploys to Render (auto-deploys on push to master): `https://iventia-api.onrender.com`
+- Supplier Portal deploys to Vercel: `https://ivent-ia-supplier-portal.vercel.app`
 - If `$ARGUMENTS` is empty, ask the user for a commit message before proceeding.
