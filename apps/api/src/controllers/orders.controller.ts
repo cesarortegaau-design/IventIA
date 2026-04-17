@@ -23,7 +23,7 @@ const createOrderSchema = z.object({
     discountPct: z.number().min(0).max(100).default(0),
     observations: z.string().optional(),
     sortOrder: z.number().int().optional(),
-    deliveryDate: z.string().datetime().optional(),
+    deliveryDate: z.string().datetime().optional().nullable(),
   })).min(1),
 })
 
