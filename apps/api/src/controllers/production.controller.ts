@@ -44,7 +44,7 @@ export async function getResourcePlanning(req: Request, res: Response, next: Nex
       include: {
         resource: {
           select: {
-            id: true, code: true, name: true, unit: true, type: true,
+            id: true, code: true, name: true, unit: true, type: true, stock: true,
             department: { select: { id: true, name: true } },
           },
         },
@@ -150,7 +150,8 @@ export async function getResourcePlanning(req: Request, res: Response, next: Nex
     // Combine into response
     const planning = Array.from(resourceMap.entries()).map(([resourceId, data]) => {
       const po = poByResource.get(resourceId) ?? { ordered: 0, received: 0, items: [] }
-      const inv = inventoryByResource.get(resourceId) ?? { total: 0, warehouses: [] }
+      const warehouseInv = inventoryByResource.get(resourceId)
+      const inv = warehouseInv ?? { total: data.resource.stock ?? 0, warehouses: [] }
       const available = inv.total + po.received
       const gap = data.totalReal - available - (po.ordered - po.received)
 
