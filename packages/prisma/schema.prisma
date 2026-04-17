@@ -775,6 +775,7 @@ model EventDocument {
   documentType String   @map("document_type") @db.VarChar(100)
   fileName     String   @map("file_name") @db.VarChar(300)
   blobKey      String   @map("blob_key") @db.VarChar(500)
+  fileContent  Bytes?   @map("file_content")
   uploadedById String   @map("uploaded_by_id")
   createdAt    DateTime @default(now()) @map("created_at")
 
@@ -934,6 +935,7 @@ model OrderDocument {
   documentType String   @map("document_type") @db.VarChar(100)
   fileName     String   @map("file_name") @db.VarChar(300)
   blobKey      String   @map("blob_key") @db.VarChar(500)
+  fileContent  Bytes?   @map("file_content")
   uploadedById String   @map("uploaded_by_id")
   createdAt    DateTime @default(now()) @map("created_at")
 
@@ -1983,6 +1985,7 @@ model ContractDocument {
   documentType String   @map("document_type") @db.VarChar(100)
   fileName     String   @map("file_name") @db.VarChar(300)
   blobKey      String   @map("blob_key") @db.VarChar(500)
+  fileContent  Bytes?   @map("file_content")
   uploadedById String   @map("uploaded_by_id")
   createdAt    DateTime @default(now()) @map("created_at")
 

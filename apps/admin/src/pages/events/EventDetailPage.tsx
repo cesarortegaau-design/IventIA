@@ -18,6 +18,7 @@ import { exportToCsv } from '../../utils/exportCsv'
 import AuditTimeline from '../../components/AuditTimeline'
 import AuditDrawer from '../../components/AuditDrawer'
 import GenerateDocumentModal from '../../components/GenerateDocumentModal'
+import { templatesApi } from '../../api/templates'
 
 const { Title, Text } = Typography
 
@@ -821,9 +822,10 @@ export default function EventDetailPage() {
                                   <Button
                                     size="small"
                                     icon={<DownloadOutlined />}
-                                    href={doc.blobKey?.startsWith('http') ? doc.blobKey : `${import.meta.env.VITE_API_URL || ''}/api/v1/templates/download/${doc.blobKey}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                                    onClick={() => doc.blobKey.startsWith('http')
+                                      ? window.open(doc.blobKey, '_blank')
+                                      : templatesApi.download(doc.blobKey, doc.fileName)
+                                    }
                                   />
                                 )}
                                 <Popconfirm title="¿Eliminar documento?" onConfirm={() => deleteDocMutation.mutate(doc.id)}>

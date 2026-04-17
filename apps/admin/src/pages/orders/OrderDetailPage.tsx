@@ -19,6 +19,7 @@ import AuditTimeline from '../../components/AuditTimeline'
 import AuditDrawer from '../../components/AuditDrawer'
 import CreatePurchaseOrderModal from '../../components/CreatePurchaseOrderModal'
 import GenerateDocumentModal from '../../components/GenerateDocumentModal'
+import { templatesApi } from '../../api/templates'
 
 const { Title, Text } = Typography
 
@@ -729,7 +730,7 @@ export default function OrderDetailPage() {
               <List.Item
                 actions={[
                   doc.blobKey && (
-                    <Button key="dl" size="small" icon={<DownloadOutlined />} href={doc.blobKey.startsWith('http') ? doc.blobKey : `${import.meta.env.VITE_API_URL || ''}/api/v1/templates/download/${doc.blobKey}`} target="_blank" rel="noopener noreferrer" />
+                    <Button key="dl" size="small" icon={<DownloadOutlined />} onClick={() => doc.blobKey.startsWith('http') ? window.open(doc.blobKey, '_blank') : templatesApi.download(doc.blobKey, doc.fileName)} />
                   ),
                   <Popconfirm key="del" title="¿Eliminar documento?" onConfirm={() => deleteDocMutation.mutate(doc.id)}>
                     <Button size="small" danger icon={<DeleteOutlined />} loading={deleteDocMutation.isPending} />

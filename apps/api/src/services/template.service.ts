@@ -255,29 +255,29 @@ export async function generate(
   fs.writeFileSync(generatedPath, outputBuffer)
 
   // Create a document record linked to the entity
-  await saveDocumentRecord(template.context, entityId, userId, outputName, generatedKey)
+  await saveDocumentRecord(template.context, entityId, userId, outputName, generatedKey, outputBuffer)
 
   return { buffer: outputBuffer, fileName: outputName }
 }
 
 async function saveDocumentRecord(
-  context: string, entityId: string, userId: string, fileName: string, blobKey: string
+  context: string, entityId: string, userId: string, fileName: string, blobKey: string, buffer: Buffer
 ) {
   const docType = 'PLANTILLA_GENERADA'
   switch (context) {
     case 'EVENT':
       await prisma.eventDocument.create({
-        data: { eventId: entityId, documentType: docType, fileName, blobKey, uploadedById: userId },
+        data: { eventId: entityId, documentType: docType, fileName, blobKey, fileContent: buffer, uploadedById: userId },
       })
       break
     case 'ORDER':
       await prisma.orderDocument.create({
-        data: { orderId: entityId, documentType: docType, fileName, blobKey, uploadedById: userId },
+        data: { orderId: entityId, documentType: docType, fileName, blobKey, fileContent: buffer, uploadedById: userId },
       })
       break
     case 'CONTRACT':
       await prisma.contractDocument.create({
-        data: { contractId: entityId, documentType: docType, fileName, blobKey, uploadedById: userId },
+        data: { contractId: entityId, documentType: docType, fileName, blobKey, fileContent: buffer, uploadedById: userId },
       })
       break
   }

@@ -13,6 +13,7 @@ import {
 import dayjs from 'dayjs'
 import { contractsApi } from '../../api/contracts'
 import GenerateDocumentModal from '../../components/GenerateDocumentModal'
+import { templatesApi } from '../../api/templates'
 
 const { Title, Text } = Typography
 const { TextArea } = Input
@@ -505,9 +506,10 @@ export default function ContractDetailPage() {
                   <Button
                     size="small"
                     icon={<DownloadOutlined />}
-                    href={doc.blobKey.startsWith('http') ? doc.blobKey : `${import.meta.env.VITE_API_URL || ''}/api/v1/templates/download/${doc.blobKey}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    onClick={() => doc.blobKey.startsWith('http')
+                      ? window.open(doc.blobKey, '_blank')
+                      : templatesApi.download(doc.blobKey, doc.fileName)
+                    }
                   />
                 ),
               },

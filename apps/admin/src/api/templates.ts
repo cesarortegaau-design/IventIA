@@ -15,6 +15,15 @@ export const templatesApi = {
     apiClient.delete(`/templates/${id}`).then(r => r.data),
   generate: (id: string, entityId: string) =>
     apiClient.post(`/templates/${id}/generate`, { entityId }, { responseType: 'blob' }).then(r => r),
+  download: (blobKey: string, fileName: string) =>
+    apiClient.get(`/templates/download/${blobKey}`, { responseType: 'blob' }).then(r => {
+      const url = URL.createObjectURL(new Blob([r.data]))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = fileName
+      a.click()
+      URL.revokeObjectURL(url)
+    }),
   getLabels: (context: string) =>
     apiClient.get(`/templates/labels/${context}`).then(r => r.data),
 }
