@@ -22,18 +22,18 @@ export function requirePrivilege(privilegeKey: PrivilegeKey) {
     // Admins have all privileges
     if (req.user.role === 'ADMIN') return next()
 
-    const privilege = await prisma.userPrivilege.findUnique({
-      where: {
-        userId_privilegeKey: {
-          userId: req.user.userId,
-          privilegeKey,
+    // Load user's profile and check privilege
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.userId },
+      select: {
+        profile: {
+          select: { privileges: { where: { privilegeKey }, select: { id: true } } },
         },
       },
     })
 
-    if (!privilege?.granted) {
-      return next(new AppError(403, 'FORBIDDEN', `Missing privilege: ${privilegeKey}`))
-    }
-    next()
+    if (user?.profile?.privileges.length) return next()
+
+    return next(new AppError(403, 'FORBIDDEN', `No tienes permiso para esta acción`))
   }
 }

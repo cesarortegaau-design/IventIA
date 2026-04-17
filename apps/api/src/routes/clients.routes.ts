@@ -1,7 +1,15 @@
 import { Router } from 'express'
 import multer from 'multer'
 import { authenticate } from '../middleware/authenticate'
-import { listClients, getClient, createClient, updateClient, toggleClientActive, listPortalUsers, linkPortalUser } from '../controllers/clients.controller'
+import { requirePrivilege } from '../middleware/authorize'
+import { PRIVILEGES } from '@iventia/shared'
+import {
+  listClients, getClient, createClient, updateClient, toggleClientActive,
+  listPortalUsers, linkPortalUser,
+  addClientRelation, updateClientRelation, deleteClientRelation,
+  getPortalUser, updatePortalUser, resetPortalUserPassword,
+  addPortalUserClient, removePortalUserClient,
+} from '../controllers/clients.controller'
 import { uploadClientDocument, deleteClientDocument } from '../controllers/documents.controller'
 
 const docUpload = multer({
@@ -13,16 +21,28 @@ const router = Router()
 
 router.use(authenticate)
 
-router.get('/', listClients)
-router.post('/', createClient)
-router.get('/portal-users', listPortalUsers)
-router.get('/:id', getClient)
-router.put('/:id', updateClient)
-router.patch('/:id/toggle', toggleClientActive)
-router.patch('/:id/link-portal-user', linkPortalUser)
+router.get('/', requirePrivilege(PRIVILEGES.CLIENT_VIEW), listClients)
+router.post('/', requirePrivilege(PRIVILEGES.CLIENT_CREATE), createClient)
+router.get('/portal-users', requirePrivilege(PRIVILEGES.PORTAL_USER_VIEW), listPortalUsers)
+router.get('/:id', requirePrivilege(PRIVILEGES.CLIENT_VIEW), getClient)
+router.put('/:id', requirePrivilege(PRIVILEGES.CLIENT_EDIT), updateClient)
+router.patch('/:id/toggle', requirePrivilege(PRIVILEGES.CLIENT_EDIT), toggleClientActive)
+router.patch('/:id/link-portal-user', requirePrivilege(PRIVILEGES.CLIENT_EDIT), linkPortalUser)
+
+// Client Relations
+router.post('/:id/relations', requirePrivilege(PRIVILEGES.CLIENT_EDIT), addClientRelation)
+router.patch('/:id/relations/:relationId', requirePrivilege(PRIVILEGES.CLIENT_EDIT), updateClientRelation)
+router.delete('/:id/relations/:relationId', requirePrivilege(PRIVILEGES.CLIENT_EDIT), deleteClientRelation)
+
+// Portal Users Management
+router.get('/portal-users/:portalUserId', requirePrivilege(PRIVILEGES.PORTAL_USER_VIEW), getPortalUser)
+router.patch('/portal-users/:portalUserId', requirePrivilege(PRIVILEGES.PORTAL_USER_EDIT), updatePortalUser)
+router.post('/portal-users/:portalUserId/reset-password', requirePrivilege(PRIVILEGES.PORTAL_USER_EDIT), resetPortalUserPassword)
+router.post('/portal-users/:portalUserId/clients', requirePrivilege(PRIVILEGES.PORTAL_USER_EDIT), addPortalUserClient)
+router.delete('/portal-users/:portalUserId/clients/:clientId', requirePrivilege(PRIVILEGES.PORTAL_USER_EDIT), removePortalUserClient)
 
 // Documents
-router.post('/:id/documents', docUpload.single('file'), uploadClientDocument)
-router.delete('/:id/documents/:docId', deleteClientDocument)
+router.post('/:id/documents', requirePrivilege(PRIVILEGES.CLIENT_EDIT), docUpload.single('file'), uploadClientDocument)
+router.delete('/:id/documents/:docId', requirePrivilege(PRIVILEGES.CLIENT_EDIT), deleteClientDocument)
 
 export default router

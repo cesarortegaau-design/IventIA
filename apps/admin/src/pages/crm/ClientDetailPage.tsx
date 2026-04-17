@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -32,12 +32,12 @@ const INTERACTION_TYPE_CONFIG: Record<string, { label: string; color: string; ic
 }
 
 const ORDER_STATUS_LABELS: Record<string, string> = {
-  QUOTED: 'Cotizado', CONFIRMED: 'Confirmado', IN_PAYMENT: 'En pago',
-  PAID: 'Pagado', INVOICED: 'Facturado', CANCELLED: 'Cancelado',
+  QUOTED: 'Cotizada', CONFIRMED: 'Confirmada', EXECUTED: 'Ejecutada',
+  INVOICED: 'Facturada', CANCELLED: 'Cancelada', CREDIT_NOTE: 'Nota de Crédito',
 }
 const ORDER_STATUS_COLORS: Record<string, string> = {
-  QUOTED: 'default', CONFIRMED: 'processing', IN_PAYMENT: 'warning',
-  PAID: 'success', INVOICED: 'success', CANCELLED: 'error',
+  QUOTED: 'default', CONFIRMED: 'processing', EXECUTED: 'processing',
+  INVOICED: 'success', CANCELLED: 'error', CREDIT_NOTE: 'warning',
 }
 const EVENT_STATUS_LABELS: Record<string, string> = {
   QUOTED: 'Cotizado', CONFIRMED: 'Confirmado', IN_EXECUTION: 'En ejecución',
@@ -57,6 +57,8 @@ export default function ClientDetailPage() {
 
   const [editClientOpen, setEditClientOpen] = useState(false)
   const [editClientForm] = Form.useForm()
+  const [relationModalOpen, setRelationModalOpen] = useState(false)
+  const [relationForm] = Form.useForm()
 
   const [interactionModalOpen, setInteractionModalOpen] = useState(false)
   const [editingInteraction, setEditingInteraction] = useState<any>(null)
@@ -171,6 +173,32 @@ export default function ClientDetailPage() {
   const linkPortalUserMutation = useMutation({
     mutationFn: (portalUserId: string | null) => clientsApi.linkPortalUser(clientId!, portalUserId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['client-summary', clientId] }),
+  })
+
+  // Client Relations
+  const { data: allClientsData } = useQuery({
+    queryKey: ['clients-for-relations'],
+    queryFn: () => clientsApi.list({ pageSize: 500 }),
+  })
+  const availableClients = useMemo(() =>
+    (allClientsData?.data ?? []).filter((c: any) => c.id !== clientId),
+    [allClientsData, clientId],
+  )
+
+  const addRelationMutation = useMutation({
+    mutationFn: (data: any) => clientsApi.addRelation(clientId!, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['client-summary', clientId] }); setRelationModalOpen(false); relationForm.resetFields(); message.success('Relación creada') },
+    onError: (err: any) => message.error(err?.response?.data?.error?.message ?? 'Error al crear relación'),
+  })
+
+  const updateRelationMutation = useMutation({
+    mutationFn: ({ relationId, data }: { relationId: string; data: any }) => clientsApi.updateRelation(clientId!, relationId, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['client-summary', clientId] }); message.success('Relación actualizada') },
+  })
+
+  const deleteRelationMutation = useMutation({
+    mutationFn: (relationId: string) => clientsApi.deleteRelation(clientId!, relationId),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['client-summary', clientId] }); message.success('Relación eliminada') },
   })
 
   if (isLoading) return <div style={{ padding: 40, textAlign: 'center' }}><Spin size="large" /></div>
@@ -621,8 +649,143 @@ export default function ClientDetailPage() {
               />
             ),
           },
+          {
+            key: 'relations',
+            label: `Relaciones (${(client.relationsFrom?.length ?? 0) + (client.relationsTo?.length ?? 0)})`,
+            children: (() => {
+              const RELATION_TYPES: Record<string, { label: string; color: string }> = {
+                BILLING: { label: 'Facturación', color: 'blue' },
+                SUBSIDIARY: { label: 'Filial', color: 'purple' },
+                PARTNER: { label: 'Socio', color: 'green' },
+                PARENT: { label: 'Empresa Matriz', color: 'orange' },
+                OTHER: { label: 'Otro', color: 'default' },
+              }
+              const relationsFrom = (client.relationsFrom ?? []).map((r: any) => ({
+                ...r,
+                direction: 'from',
+                otherClient: r.relatedClient,
+              }))
+              const relationsTo = (client.relationsTo ?? []).map((r: any) => ({
+                ...r,
+                direction: 'to',
+                otherClient: r.client,
+              }))
+              const allRelations = [...relationsFrom, ...relationsTo]
+
+              return (
+                <>
+                  <div style={{ marginBottom: 16, textAlign: 'right' }}>
+                    <Button type="primary" icon={<PlusOutlined />} onClick={() => { relationForm.resetFields(); setRelationModalOpen(true) }}>
+                      Nueva relación
+                    </Button>
+                  </div>
+                  {allRelations.length === 0 ? (
+                    <Empty description="Sin relaciones con otros clientes" />
+                  ) : (
+                    <Table
+                      dataSource={allRelations}
+                      rowKey="id"
+                      size="small"
+                      pagination={false}
+                      columns={[
+                        {
+                          title: 'Cliente Relacionado',
+                          key: 'otherClient',
+                          render: (_: any, r: any) => {
+                            const c = r.otherClient
+                            const name = c?.companyName || `${c?.firstName ?? ''} ${c?.lastName ?? ''}`.trim()
+                            return (
+                              <Button type="link" size="small" onClick={() => navigate(`/catalogos/clientes/${c?.id}`)}>
+                                {name}
+                              </Button>
+                            )
+                          },
+                        },
+                        {
+                          title: 'Tipo de Relación',
+                          dataIndex: 'relationType',
+                          width: 160,
+                          render: (v: string, r: any) => {
+                            const cfg = RELATION_TYPES[v] ?? RELATION_TYPES.OTHER
+                            const suffix = r.direction === 'to' ? ' (inversa)' : ''
+                            return <Tag color={cfg.color}>{cfg.label}{suffix}</Tag>
+                          },
+                        },
+                        {
+                          title: 'Estado',
+                          dataIndex: 'isActive',
+                          width: 100,
+                          render: (v: boolean, r: any) => (
+                            <Button
+                              size="small"
+                              type="text"
+                              onClick={() => updateRelationMutation.mutate({ relationId: r.id, data: { isActive: !v } })}
+                            >
+                              <Tag color={v ? 'green' : 'red'}>{v ? 'Activa' : 'Inactiva'}</Tag>
+                            </Button>
+                          ),
+                        },
+                        {
+                          title: 'Notas',
+                          dataIndex: 'notes',
+                          ellipsis: true,
+                          render: (v: string) => v || '—',
+                        },
+                        {
+                          title: '',
+                          width: 50,
+                          render: (_: any, r: any) => (
+                            <Popconfirm title="¿Eliminar relación?" onConfirm={() => deleteRelationMutation.mutate(r.id)}>
+                              <Button size="small" danger icon={<DeleteOutlined />} />
+                            </Popconfirm>
+                          ),
+                        },
+                      ]}
+                    />
+                  )}
+                </>
+              )
+            })(),
+          },
         ]}
       />
+
+      {/* Relation Modal */}
+      <Modal
+        open={relationModalOpen}
+        title="Nueva Relación entre Clientes"
+        onCancel={() => { setRelationModalOpen(false); relationForm.resetFields() }}
+        onOk={() => relationForm.submit()}
+        confirmLoading={addRelationMutation.isPending}
+        width="min(520px, 95vw)"
+        destroyOnClose
+      >
+        <Form form={relationForm} layout="vertical" onFinish={(v: any) => addRelationMutation.mutate(v)}>
+          <Form.Item name="relatedClientId" label="Cliente Relacionado" rules={[{ required: true, message: 'Selecciona un cliente' }]}>
+            <Select
+              showSearch
+              optionFilterProp="label"
+              placeholder="Buscar cliente..."
+              options={availableClients.map((c: any) => ({
+                value: c.id,
+                label: c.companyName || `${c.firstName ?? ''} ${c.lastName ?? ''}`.trim(),
+              }))}
+            />
+          </Form.Item>
+          <Form.Item name="relationType" label="Tipo de Relación" rules={[{ required: true, message: 'Selecciona el tipo' }]}>
+            <Select options={[
+              { value: 'BILLING', label: 'Facturación (este cliente factura al otro)' },
+              { value: 'SUBSIDIARY', label: 'Filial' },
+              { value: 'PARTNER', label: 'Socio' },
+              { value: 'PARENT', label: 'Empresa Matriz' },
+              { value: 'OTHER', label: 'Otro' },
+            ]} />
+          </Form.Item>
+          <Form.Item name="notes" label="Notas">
+            <Input.TextArea rows={2} placeholder="Detalles opcionales sobre la relación..." />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       {/* Interaction Modal */}
       <Modal

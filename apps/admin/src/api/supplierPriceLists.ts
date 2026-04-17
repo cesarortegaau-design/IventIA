@@ -76,8 +76,8 @@ export const supplierPriceListsApi = {
   list: (params?: { supplierId?: string; isActive?: boolean; page?: number; pageSize?: number }) =>
     apiClient.get('/supplier-price-lists', { params }),
 
-  get: (id: string) =>
-    apiClient.get(`/supplier-price-lists/${id}`),
+  get: (id: string, params?: { departmentIds?: string }) =>
+    apiClient.get(`/supplier-price-lists/${id}`, { params }),
 
   create: (data: CreateSupplierPriceListInput) =>
     apiClient.post('/supplier-price-lists', data),

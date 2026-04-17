@@ -1,7 +1,7 @@
 import { Decimal } from 'decimal.js'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
-import * as auditService from './audit.service'
+import { auditService } from './audit.service'
 
 export interface CreatePurchaseOrderInput {
   tenantId: string
@@ -17,10 +17,12 @@ export interface CreatePurchaseOrderInput {
     resourceId: string
     quantity: Decimal
     unitPrice?: Decimal
+    description?: string
     supplierSku?: string
     deliveryTimeDays?: number
     notes?: string
   }>
+  organizacionId?: string
   createdById: string
   taxRate?: Decimal
   currency?: string
@@ -123,7 +125,7 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput) {
 
     return {
       resourceId: li.resourceId,
-      description: resource.name,
+      description: li.description || resource.name,
       supplierSku: li.supplierSku,
       quantity,
       unitPrice,
@@ -164,6 +166,7 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput) {
         taxAmount: totals.taxAmount,
         total: totals.total,
         currency: input.currency || supplier.currencyCode || 'MXN',
+        organizacionId: input.organizacionId,
         status: 'DRAFT',
         createdById: input.createdById,
         lineItems: {
@@ -245,6 +248,7 @@ export async function getPurchaseOrder(id: string, tenantId: string) {
       supplier: { select: { id: true, name: true, code: true, email: true, phone: true } },
       priceList: { select: { id: true, code: true, name: true } },
       originOrder: { select: { id: true, orderNumber: true } },
+      organizacion: { select: { id: true, clave: true, descripcion: true } },
       contact: { select: { id: true, name: true, role: true, email: true, phone: true } },
       createdBy: { select: { firstName: true, lastName: true } },
       confirmedBy: { select: { firstName: true, lastName: true } },
@@ -268,7 +272,7 @@ export async function getPurchaseOrder(id: string, tenantId: string) {
 
 export async function listPurchaseOrders(
   tenantId: string,
-  filters: { supplierId?: string; status?: string; pageSize?: number; page?: number } = {}
+  filters: { supplierId?: string; status?: string; pageSize?: number; page?: number; organizationIds?: string[] | null } = {}
 ) {
   const pageSize = filters.pageSize || 20
   const page = filters.page || 1
@@ -284,6 +288,11 @@ export async function listPurchaseOrders(
     where.status = filters.status
   }
 
+  // Org-based scope
+  if (filters.organizationIds !== null && filters.organizationIds !== undefined) {
+    where.organizacionId = { in: filters.organizationIds }
+  }
+
   const [pos, total] = await Promise.all([
     prisma.purchaseOrder.findMany({
       where,
@@ -291,6 +300,7 @@ export async function listPurchaseOrders(
       take: pageSize,
       include: {
         supplier: { select: { name: true, code: true } },
+        originOrder: { select: { id: true, orderNumber: true } },
         _count: { select: { lineItems: true } },
       },
       orderBy: { createdAt: 'desc' },

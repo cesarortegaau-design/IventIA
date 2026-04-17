@@ -129,16 +129,16 @@ function fmtDate(iso: string | null | undefined, withTime = false) {
 }
 
 const STATUS_COLOR_BG: Record<string, string> = {
-  QUOTED: '#dbeafe', CONFIRMED: '#dcfce7', IN_PAYMENT: '#ffedd5',
-  PAID: '#f3e8ff', INVOICED: '#cffafe', CANCELLED: '#fee2e2',
+  QUOTED: '#dbeafe', CONFIRMED: '#dcfce7', EXECUTED: '#e0e7ff',
+  INVOICED: '#cffafe', CANCELLED: '#fee2e2', CREDIT_NOTE: '#fef9c3',
 }
 const STATUS_COLOR_TXT: Record<string, string> = {
-  QUOTED: '#1d4ed8', CONFIRMED: '#15803d', IN_PAYMENT: '#c2410c',
-  PAID: '#7e22ce', INVOICED: '#0e7490', CANCELLED: '#b91c1c',
+  QUOTED: '#1d4ed8', CONFIRMED: '#15803d', EXECUTED: '#3730a3',
+  INVOICED: '#0e7490', CANCELLED: '#b91c1c', CREDIT_NOTE: '#a16207',
 }
 const STATUS_LABELS: Record<string, string> = {
-  QUOTED: 'Cotizada', CONFIRMED: 'Confirmada', IN_PAYMENT: 'En Pago',
-  PAID: 'Pagada', INVOICED: 'Facturada', CANCELLED: 'Cancelada',
+  QUOTED: 'Cotizada', CONFIRMED: 'Confirmada', EXECUTED: 'Ejecutada',
+  INVOICED: 'Facturada', CANCELLED: 'Cancelada', CREDIT_NOTE: 'Nota de Crédito',
 }
 const TIER_LABELS: Record<string, string> = {
   EARLY: 'Anticipado', NORMAL: 'Normal', LATE: 'Tardío',
@@ -300,6 +300,12 @@ export function OrderPdf({ order }: { order: any }) {
                   </View>
                 )}
               </>
+            )}
+            {order.organizacion && (
+              <View style={s.infoLine}>
+                <Text style={s.infoLabel}>Organización</Text>
+                <Text style={s.infoValueNorm}>{order.organizacion.clave} — {order.organizacion.descripcion}</Text>
+              </View>
             )}
             <View style={{ marginTop: 8, marginBottom: 4, borderTopWidth: 1, borderTopColor: LINE }} />
             <Text style={[s.infoTitle, { marginTop: 4 }]}>Lista de Precios</Text>

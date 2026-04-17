@@ -20,4 +20,17 @@ export const resourcesApi = {
   },
   deleteImage: (id: string, slot: 'main' | 'desc' | 'extra') =>
     apiClient.delete(`/resources/${id}/images/${slot}`).then(r => r.data),
+
+  listDepartments: () =>
+    apiClient.get('/departments').then(r => r.data?.data ?? r.data ?? []),
+
+  // Package Components
+  getPackageComponents: (id: string) =>
+    apiClient.get(`/resources/${id}/package-components`).then(r => r.data),
+  addPackageComponent: (id: string, data: { componentResourceId: string; quantity: number; sortOrder?: number }) =>
+    apiClient.post(`/resources/${id}/package-components`, data).then(r => r.data),
+  updatePackageComponent: (id: string, componentId: string, data: { quantity?: number; sortOrder?: number }) =>
+    apiClient.put(`/resources/${id}/package-components/${componentId}`, data).then(r => r.data),
+  removePackageComponent: (id: string, componentId: string) =>
+    apiClient.delete(`/resources/${id}/package-components/${componentId}`).then(r => r.data),
 }

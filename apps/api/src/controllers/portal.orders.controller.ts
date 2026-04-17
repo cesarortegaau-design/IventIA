@@ -35,7 +35,33 @@ export async function portalListOrders(req: Request, res: Response, next: NextFu
       include: {
         event: { select: { id: true, code: true, name: true } },
         lineItems: {
-          include: { resource: { select: { id: true, name: true, type: true } } },
+          include: {
+            resource: {
+              select: {
+                id: true,
+                name: true,
+                type: true,
+                isPackage: true,
+                packageComponents: {
+                  select: {
+                    id: true,
+                    componentResourceId: true,
+                    quantity: true,
+                    sortOrder: true,
+                    componentResource: {
+                      select: {
+                        id: true,
+                        code: true,
+                        name: true,
+                        unit: true,
+                      },
+                    },
+                  },
+                  orderBy: { sortOrder: 'asc' },
+                },
+              },
+            },
+          },
           orderBy: { sortOrder: 'asc' },
         },
         payments: true,
@@ -67,7 +93,34 @@ export async function portalGetOrder(req: Request, res: Response, next: NextFunc
       include: {
         event: { select: { id: true, code: true, name: true } },
         lineItems: {
-          include: { resource: { select: { id: true, name: true, type: true, unit: true } } },
+          include: {
+            resource: {
+              select: {
+                id: true,
+                name: true,
+                type: true,
+                unit: true,
+                isPackage: true,
+                packageComponents: {
+                  select: {
+                    id: true,
+                    componentResourceId: true,
+                    quantity: true,
+                    sortOrder: true,
+                    componentResource: {
+                      select: {
+                        id: true,
+                        code: true,
+                        name: true,
+                        unit: true,
+                      },
+                    },
+                  },
+                  orderBy: { sortOrder: 'asc' },
+                },
+              },
+            },
+          },
           orderBy: { sortOrder: 'asc' },
         },
         payments: true,
@@ -91,8 +144,12 @@ export async function portalCreateOrder(req: Request, res: Response, next: NextF
     // Verify event access
     const access = await prisma.portalUserEvent.findUnique({
       where: { portalUserId_eventId: { portalUserId, eventId } },
+      include: { event: { select: { status: true } } },
     })
     if (!access) throw new AppError(403, 'FORBIDDEN', 'No tienes acceso a este evento')
+    if (!['CONFIRMED', 'IN_EXECUTION'].includes(access.event.status)) {
+      throw new AppError(400, 'EVENT_CLOSED', 'Este evento no acepta nuevas solicitudes')
+    }
 
     const schema = z.object({
       items: z.array(z.object({
@@ -183,7 +240,8 @@ export async function portalCreateOrder(req: Request, res: Response, next: NextF
         eventId,
         clientId: portalUser.client.id,
         priceListId: event.priceListId,
-        status: 'QUOTED',
+        status: 'CONFIRMED',
+        paymentStatus: 'PENDING',
         pricingTier: tier,
         subtotal,
         taxPct,
@@ -206,11 +264,39 @@ export async function portalCreateOrder(req: Request, res: Response, next: NextF
           })),
         },
         statusHistory: {
-          create: { toStatus: 'QUOTED', changedById: systemUser.id, notes: 'Creada desde Portal de Expositores' },
+          create: { toStatus: 'CONFIRMED', changedById: systemUser.id, notes: 'Creada desde Portal de Expositores' },
         },
       },
       include: {
-        lineItems: { include: { resource: { select: { id: true, name: true, type: true } } } },
+        lineItems: {
+          include: {
+            resource: {
+              select: {
+                id: true,
+                name: true,
+                type: true,
+                isPackage: true,
+                packageComponents: {
+                  select: {
+                    id: true,
+                    componentResourceId: true,
+                    quantity: true,
+                    sortOrder: true,
+                    componentResource: {
+                      select: {
+                        id: true,
+                        code: true,
+                        name: true,
+                        unit: true,
+                      },
+                    },
+                  },
+                  orderBy: { sortOrder: 'asc' },
+                },
+              },
+            },
+          },
+        },
       },
     })
 

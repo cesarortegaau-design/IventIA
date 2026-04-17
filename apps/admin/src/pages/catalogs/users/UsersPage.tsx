@@ -1,29 +1,11 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Table, Button, Card, Space, Tag, Modal, Form, Input, Select, Row, Col, App, Typography, Checkbox } from 'antd'
+import { Table, Button, Card, Space, Tag, Modal, Form, Input, Select, Row, Col, App, Typography } from 'antd'
 import { PlusOutlined, EditOutlined, DownloadOutlined } from '@ant-design/icons'
 import { apiClient } from '../../../api/client'
-import { PRIVILEGES } from '@iventia/shared'
 import { exportToCsv } from '../../../utils/exportCsv'
 
 const { Title } = Typography
-
-const PRIVILEGE_LABELS: Record<string, string> = {
-  [PRIVILEGES.EVENT_CREATE_QUOTED]: 'Crear eventos (Cotizado)',
-  [PRIVILEGES.EVENT_CREATE_CONFIRMED]: 'Crear eventos (Confirmado)',
-  [PRIVILEGES.ORDER_CREATE]: 'Crear órdenes',
-  [PRIVILEGES.ORDER_CONFIRM]: 'Confirmar órdenes',
-  [PRIVILEGES.ORDER_CANCEL]: 'Cancelar órdenes',
-  [PRIVILEGES.ORDER_RECORD_PAYMENT]: 'Registrar pagos',
-  [PRIVILEGES.ORDER_ATTACH_INVOICE]: 'Adjuntar facturas',
-  [PRIVILEGES.ORDER_DISCOUNT_ASSIGN]: 'Asignar descuentos',
-  [PRIVILEGES.ORDER_CREATE_CREDIT_NOTE]: 'Crear notas de crédito',
-  [PRIVILEGES.CATALOG_RESOURCES_MANAGE]: 'Administrar recursos',
-  [PRIVILEGES.CATALOG_PRICE_LISTS_MANAGE]: 'Administrar listas de precio',
-  [PRIVILEGES.CATALOG_CLIENTS_MANAGE]: 'Administrar clientes',
-  [PRIVILEGES.DASHBOARD_ACCOUNTING]: 'Dashboard Contabilidad',
-  [PRIVILEGES.DASHBOARD_OPERATIONS]: 'Dashboard Operaciones',
-}
 
 export default function UsersPage() {
   const [form] = Form.useForm()
@@ -42,17 +24,16 @@ export default function UsersPage() {
     queryFn: () => apiClient.get('/departments').then(r => r.data),
   })
 
+  const { data: profilesData } = useQuery({
+    queryKey: ['profiles'],
+    queryFn: () => apiClient.get('/profiles').then(r => r.data),
+  })
+
   const saveMutation = useMutation({
     mutationFn: (values: any) => {
-      const privileges = Object.entries(PRIVILEGES).map(([, key]) => ({
-        privilegeKey: key,
-        granted: (values.privileges ?? []).includes(key),
-      }))
-      const payload = { ...values, privileges, privileges: privileges }
-      delete payload.privilegeKeys
       return editingId
-        ? apiClient.put(`/users/${editingId}`, { ...values, privileges }).then(r => r.data)
-        : apiClient.post('/users', { ...values, privileges }).then(r => r.data)
+        ? apiClient.put(`/users/${editingId}`, values).then(r => r.data)
+        : apiClient.post('/users', values).then(r => r.data)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
@@ -60,6 +41,7 @@ export default function UsersPage() {
       form.resetFields()
       message.success('Usuario guardado')
     },
+    onError: (err: any) => message.error(err?.response?.data?.error?.message ?? 'Error'),
   })
 
   function openEdit(record: any) {
@@ -67,7 +49,7 @@ export default function UsersPage() {
     form.setFieldsValue({
       ...record,
       departmentIds: record.userDepartments?.map((ud: any) => ud.department.id),
-      privileges: record.privileges?.filter((p: any) => p.granted).map((p: any) => p.privilegeKey),
+      profileId: record.profile?.id ?? null,
       password: undefined,
     })
     setModalOpen(true)
@@ -77,17 +59,19 @@ export default function UsersPage() {
     { title: 'Nombre', render: (_: any, r: any) => `${r.firstName} ${r.lastName}` },
     { title: 'Email', dataIndex: 'email' },
     { title: 'Rol', dataIndex: 'role', render: (v: string) => <Tag color={v === 'ADMIN' ? 'red' : v === 'NORMAL' ? 'blue' : 'default'}>{v}</Tag> },
+    { title: 'Perfil', render: (_: any, r: any) => r.profile?.name ?? <Tag>Sin perfil</Tag> },
     { title: 'Departamentos', render: (_: any, r: any) => r.userDepartments?.map((ud: any) => ud.department.name).join(', ') },
     { title: 'Activo', dataIndex: 'isActive', render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? 'Activo' : 'Inactivo'}</Tag> },
     { title: '', key: 'actions', render: (_: any, r: any) => <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)} /> },
   ]
 
   const deptOptions = (deptsData?.data ?? []).map((d: any) => ({ value: d.id, label: d.name }))
+  const profileOptions = (profilesData?.data ?? []).map((p: any) => ({ value: p.id, label: p.name }))
 
   return (
     <div>
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>Usuarios y Privilegios</Title>
+        <Title level={4} style={{ margin: 0 }}>Usuarios</Title>
         <Space>
           <Button
             icon={<DownloadOutlined />}
@@ -95,11 +79,13 @@ export default function UsersPage() {
               nombre: `${r.firstName} ${r.lastName}`,
               email: r.email,
               rol: r.role,
+              perfil: r.profile?.name ?? '',
               activo: r.isActive ? 'Activo' : 'Inactivo',
             })), [
               { header: 'Nombre', key: 'nombre' },
               { header: 'Email', key: 'email' },
               { header: 'Rol', key: 'rol' },
+              { header: 'Perfil', key: 'perfil' },
               { header: 'Activo', key: 'activo' },
             ])}
           >
@@ -133,17 +119,14 @@ export default function UsersPage() {
                 <Select options={[{ value: 'ADMIN', label: 'Administrador' }, { value: 'NORMAL', label: 'Normal' }, { value: 'READ_ONLY', label: 'Consulta' }]} />
               </Form.Item>
             </Col>
-            <Col span={24}>
-              <Form.Item name="departmentIds" label="Departamentos">
-                <Select mode="multiple" options={deptOptions} />
+            <Col span={12}>
+              <Form.Item name="profileId" label="Perfil" rules={[{ required: true, message: 'Cada usuario debe tener un perfil asignado' }]}>
+                <Select options={profileOptions} placeholder="Selecciona un perfil" allowClear />
               </Form.Item>
             </Col>
-            <Col span={24}>
-              <Form.Item name="privileges" label="Privilegios">
-                <Checkbox.Group
-                  options={Object.entries(PRIVILEGE_LABELS).map(([value, label]) => ({ value, label }))}
-                  style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}
-                />
+            <Col span={12}>
+              <Form.Item name="departmentIds" label="Departamentos">
+                <Select mode="multiple" options={deptOptions} />
               </Form.Item>
             </Col>
           </Row>

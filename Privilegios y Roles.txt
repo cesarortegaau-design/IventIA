@@ -1,0 +1,24 @@
+en Admin debe existir:
+
+- Un catálogo de privilegios con los siguientes datos:
+	- Para todos los objetos principales (eventos,clientes, usuarios,proveedores, recursos,
+		listas de precios, plantillas, eventos, ordenes de servicio, ordenes de compra,
+		almacenes, departamentos, contratos, pagos, notas de crédito) debe haber un privilegio que permita
+		controlar si el usuario pueda tener o no acceso a las siguientes acciones:
+		- Consultar
+		- Crear
+		- Modificar
+		- Cancelar
+		- Eliminar
+	- En los casos que el objeto tenga un manejo de estados se debe incluir a cada acción los 
+		estados en los que aplica la acción 
+	- 
+- Se debe crear un catálogo de perfiles que permita asignarle privilegios y configurarlos
+- Cada usuario debe tener asignado forzosamente un perfil
+- Se debe agregar a cada la lectura de los privilegios del usuario asignados a través de su perfil en cada
+	acción correspondiente de la solución
+		
+	
+		
+
+		

@@ -1,0 +1,39 @@
+
+En el catálogo de recursos:
+- agregar un tipo nuevo de recurso con las siguientes características:
+	- Con la misma lógica que recurso tipo equipo pero debe llamarse personal
+- al agregar unidad sugerir y limitar a los valores: pieza, litro, kilogramo, metro, metro cuadrado, turno
+- agregar un tipo nuevo de recurso con las siguientes características:
+	- el recurso puede ser de tipo consumible o equipo o mobiliario
+	- agregar una opción para decir si es paquete o no, el default es no es paquete
+	- si la opción de paquete está activa mostrar una opción llamada sustituto que implica que los recursos
+	que forman parte del paquete serán manejados para que solo uno de ellos sea seleccionado al momento de 
+	ser agregado a una orden de servicio
+	- un paquete como ejemplo puede ser una receta de comida, un servicio con varios elementos, etc.
+	- si es paquete se debe agregar la funcionalidad
+		- agregar otros recursos que forman parte del paquete
+		- cada recurso agregado al paquete debe decir cuantas unidades necesita en este paquete
+	- al ser agregado a una lista de precios todo recurso que sea paquete debe permitir agregar los
+		precios de individuales de todo los recursos que lo componen y obviamente del precio 
+		del paquete
+	- cada recurso componente del paquete debe tener a su vez la capacidad de ser otro paquete 
+		diferente
+
+Al agregar un recurso tipo paquete  debe mostrar los recursos que componen el 
+recurso paquete (como referencia, no editables)
+mostrando las unidades que se requieren al muutiplicar el número de unidades del paquete con las unidades
+de cada recurso que lo compone
+
+Al agregar un recurso tipo paquete que tenga a su vez un recurso que lo compone que es un paquete con sustitución 
+debe permitir
+escoger solo un recurso entre los recursos que forman el paquete de sustitución
+
+Al agregar un recurso tipo paquete en una orden de servicio debe mostrar los recursos que componen el 
+recurso paquete (como referencia, no editables)
+mostrando las unidades que se requieren al muutiplicar el número de unidades del paquete con las unidades
+de cada recurso que lo compone, también se debe mostrar esto cuando se consulta una orden de servicio
+
+
+
+- 
+

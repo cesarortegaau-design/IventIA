@@ -7,6 +7,9 @@ export const ordersApi = {
     apiClient.post(`/events/${eventId}/orders`, payload),
   me: () => apiClient.get('/me'),
   updateMe: (data: any) => apiClient.patch('/me', data),
+  createClient: (data: any) => apiClient.post('/me/clients', data),
+  updateClient: (clientId: string, data: any) => apiClient.patch(`/me/clients/${clientId}`, data),
+  selectClient: (clientId: string) => apiClient.post('/me/select-client', { clientId }),
   calendar: (params: { eventId?: string; year: number; month: number }) =>
     apiClient.get('/calendar', { params }).then(r => r.data.data),
   createStripeCheckout: (orderId: string) =>

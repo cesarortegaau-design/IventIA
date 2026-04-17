@@ -6,7 +6,9 @@ import resourceRoutes from './resources.routes'
 import clientRoutes from './clients.routes'
 import priceListRoutes from './priceLists.routes'
 import departmentRoutes from './departments.routes'
+import organizationRoutes from './organizations.routes'
 import userRoutes from './users.routes'
+import profileRoutes from './profiles.routes'
 import dashboardRoutes from './dashboard.routes'
 import crmRoutes from './crm.routes'
 import portalRoutes from './portal.routes'
@@ -20,6 +22,9 @@ import suppliersRoutes from './suppliers.routes'
 import supplierPriceListsRoutes from './supplierPriceLists.routes'
 import purchaseOrdersRoutes from './purchaseOrders.routes'
 import warehouseRoutes from './warehouse.routes'
+import contractsRoutes from './contracts.routes'
+import templatesRoutes from './templates.routes'
+import productionRoutes from './production.routes'
 
 const router = Router()
 
@@ -30,7 +35,9 @@ router.use('/resources', resourceRoutes)
 router.use('/clients', clientRoutes)
 router.use('/price-lists', priceListRoutes)
 router.use('/departments', departmentRoutes)
+router.use('/organizations', organizationRoutes)
 router.use('/users', userRoutes)
+router.use('/profiles', profileRoutes)
 router.use('/dashboards', dashboardRoutes)
 router.use('/crm', crmRoutes)
 router.use('/portal', portalRoutes)
@@ -44,5 +51,8 @@ router.use('/suppliers', suppliersRoutes)
 router.use('/supplier-price-lists', supplierPriceListsRoutes)
 router.use('/purchase-orders', purchaseOrdersRoutes)
 router.use('/warehouse', warehouseRoutes)
+router.use('/contracts', contractsRoutes)
+router.use('/templates', templatesRoutes)
+router.use('/production', productionRoutes)
 
 export default router

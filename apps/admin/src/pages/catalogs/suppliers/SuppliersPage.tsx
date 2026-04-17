@@ -51,7 +51,27 @@ export default function SuppliersPage() {
 
   function openEdit(record: any) {
     setEditingId(record.id)
-    form.setFieldsValue(record)
+    form.setFieldsValue({
+      name: record.name,
+      type: record.type,
+      status: record.status,
+      description: record.description,
+      email: record.email,
+      phone: record.phone,
+      whatsapp: record.whatsapp,
+      website: record.website,
+      legalName: record.legalName,
+      rfc: record.rfc,
+      taxId: record.taxId,
+      fiscalRegime: record.fiscalRegime,
+      currencyCode: record.currencyCode,
+      street: record.addressStreet,
+      city: record.addressCity,
+      state: record.addressState,
+      zip: record.addressZip,
+      paymentTerms: record.defaultPaymentTerms,
+      averageDeliveryDays: record.averageDeliveryDays,
+    })
     setModalOpen(true)
   }
 

@@ -7,17 +7,20 @@ import {
 import { PlusOutlined, EditOutlined, PoweroffOutlined, UploadOutlined, DeleteOutlined, DownloadOutlined } from '@ant-design/icons'
 import { resourcesApi } from '../../../api/resources'
 import { exportToCsv } from '../../../utils/exportCsv'
+import { PackageComponentsManager } from './PackageComponentsManager'
 
 const { Title, Text } = Typography
 
 const TYPE_LABELS: Record<string, string> = {
   CONSUMABLE: 'Consumible', EQUIPMENT: 'Equipo', SPACE: 'Espacio',
-  FURNITURE: 'Mobiliario', SERVICE: 'Servicio', DISCOUNT: 'Descuento', TAX: 'Impuesto',
+  FURNITURE: 'Mobiliario', SERVICE: 'Servicio', DISCOUNT: 'Descuento', TAX: 'Impuesto', PERSONAL: 'Personal',
 }
 const TYPE_COLORS: Record<string, string> = {
   CONSUMABLE: 'orange', EQUIPMENT: 'blue', SPACE: 'green',
-  FURNITURE: 'purple', SERVICE: 'cyan', DISCOUNT: 'red', TAX: 'gold',
+  FURNITURE: 'purple', SERVICE: 'cyan', DISCOUNT: 'red', TAX: 'gold', PERSONAL: 'magenta',
 }
+
+const VALID_UNITS = ['pieza', 'litro', 'kilogramo', 'metro', 'metro cuadrado', 'turno']
 
 const apiUrl = import.meta.env.VITE_API_URL || ''
 const imgSrc = (path: string | null | undefined) =>
@@ -99,10 +102,18 @@ export default function ResourcesPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingRecord, setEditingRecord] = useState<any>(null)
   const [filters, setFilters] = useState({ type: '', search: '', active: 'true' })
+  const [selectedType, setSelectedType] = useState<string>('')
+  const [isPackage, setIsPackage] = useState(false)
+  const [packageComponents, setPackageComponents] = useState<any[]>([])
 
   const { data, isLoading } = useQuery({
     queryKey: ['resources', filters],
     queryFn: () => resourcesApi.list({ ...filters, pageSize: 100 }),
+  })
+
+  const { data: departments } = useQuery({
+    queryKey: ['departments'],
+    queryFn: () => resourcesApi.listDepartments(),
   })
 
   const saveMutation = useMutation({
@@ -115,12 +126,30 @@ export default function ResourcesPage() {
         // After create, switch to edit mode so images can be uploaded
         setEditingId(res.data.id)
         setEditingRecord(res.data)
+        setSelectedType(res.data.type)
+        setIsPackage(res.data.isPackage)
         message.success('Recurso creado. Ahora puedes agregar imágenes.')
       } else {
-        setModalOpen(false)
-        form.resetFields()
+        // After update, refresh the record to get latest state
+        setSelectedType(res.data.type)
+        setIsPackage(res.data.isPackage)
+        setEditingRecord(res.data)
+        // Recargar componentes si es paquete
+        if (res.data.isPackage) {
+          resourcesApi.getPackageComponents(editingId).then((compRes) => {
+            setPackageComponents(compRes.data.components ?? [])
+          }).catch(() => {
+            setPackageComponents([])
+          })
+        } else {
+          setPackageComponents([])
+        }
         message.success('Recurso actualizado')
       }
+    },
+    onError: (err: any) => {
+      const detail = err?.response?.data?.message || err?.message || 'Error desconocido'
+      message.error(`Error al guardar recurso: ${detail}`)
     },
   })
 
@@ -132,6 +161,9 @@ export default function ResourcesPage() {
   function openCreate() {
     setEditingId(null)
     setEditingRecord(null)
+    setSelectedType('')
+    setIsPackage(false)
+    setPackageComponents([])
     form.resetFields()
     setModalOpen(true)
   }
@@ -139,7 +171,19 @@ export default function ResourcesPage() {
   function openEdit(record: any) {
     setEditingId(record.id)
     setEditingRecord(record)
+    setSelectedType(record.type)
+    setIsPackage(record.isPackage)
     form.setFieldsValue(record)
+    // Cargar componentes si es paquete
+    if (record.isPackage) {
+      resourcesApi.getPackageComponents(record.id).then((res) => {
+        setPackageComponents(res.data.components ?? [])
+      }).catch(() => {
+        setPackageComponents([])
+      })
+    } else {
+      setPackageComponents([])
+    }
     setModalOpen(true)
   }
 
@@ -147,7 +191,20 @@ export default function ResourcesPage() {
     if (!editingId) return
     resourcesApi.get(editingId).then((res) => {
       setEditingRecord(res.data)
+      setSelectedType(res.data.type)
+      setIsPackage(res.data.isPackage)
       queryClient.invalidateQueries({ queryKey: ['resources'] })
+
+      // Cargar componentes si es paquete
+      if (res.data.isPackage) {
+        resourcesApi.getPackageComponents(editingId).then((compRes) => {
+          setPackageComponents(compRes.data.components ?? [])
+        }).catch(() => {
+          setPackageComponents([])
+        })
+      } else {
+        setPackageComponents([])
+      }
     })
   }
 
@@ -165,6 +222,10 @@ export default function ResourcesPage() {
       render: (v: string) => <Tag color={TYPE_COLORS[v]}>{TYPE_LABELS[v]}</Tag>,
     },
     { title: 'Departamento', render: (_: any, r: any) => r.department?.name },
+    {
+      title: '¿Paquete?', dataIndex: 'isPackage', key: 'isPackage', width: 80,
+      render: (v: boolean) => v ? <Tag color="blue">Paquete</Tag> : '-',
+    },
     { title: 'Unidad', dataIndex: 'unit', key: 'unit' },
     {
       title: 'Portal', dataIndex: 'portalVisible', key: 'portal',
@@ -197,7 +258,10 @@ export default function ResourcesPage() {
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item name="type" label="Tipo de Recurso" rules={[{ required: true }]}>
-              <Select options={Object.entries(TYPE_LABELS).map(([value, label]) => ({ value, label }))} />
+              <Select
+                options={Object.entries(TYPE_LABELS).map(([value, label]) => ({ value, label }))}
+                onChange={setSelectedType}
+              />
             </Form.Item>
           </Col>
           <Col span={12}>
@@ -205,21 +269,52 @@ export default function ResourcesPage() {
               <Input />
             </Form.Item>
           </Col>
-          <Col span={16}>
+          <Col span={12}>
             <Form.Item name="name" label="Nombre" rules={[{ required: true }]}>
               <Input />
             </Form.Item>
           </Col>
-          <Col span={8}>
-            <Form.Item name="unit" label="Unidad">
-              <Input placeholder="pza, hr, m2..." />
+          <Col span={12}>
+            <Form.Item name="departmentId" label="Departamento">
+              <Select
+                allowClear
+                placeholder="Seleccionar departamento"
+                showSearch
+                optionFilterProp="label"
+                options={(departments || [])
+                  .filter((d: any) => d.isActive)
+                  .map((d: any) => ({ value: d.id, label: d.name }))}
+              />
             </Form.Item>
+          </Col>
+          <Col span={8}>
+            {selectedType === 'PERSONAL' ? (
+              <Form.Item name="unit" label="Unidad" rules={[{ required: true, message: 'Selecciona una unidad' }]}>
+                <Select placeholder="Selecciona unidad" options={VALID_UNITS.map(u => ({ value: u, label: u }))} />
+              </Form.Item>
+            ) : (
+              <Form.Item name="unit" label="Unidad">
+                <Input placeholder="pza, hr, m2..." />
+              </Form.Item>
+            )}
           </Col>
           <Col span={12}>
             <Form.Item name="portalVisible" label="Visible en Portal" valuePropName="checked">
               <Switch />
             </Form.Item>
           </Col>
+          <Col span={12}>
+            <Form.Item name="isPackage" label="¿Es Paquete?" valuePropName="checked">
+              <Switch onChange={setIsPackage} />
+            </Form.Item>
+          </Col>
+          {isPackage && (
+            <Col span={12}>
+              <Form.Item name="isSubstitute" label="¿Componentes Sustitutos?" valuePropName="checked">
+                <Switch />
+              </Form.Item>
+            </Col>
+          )}
           <Col span={24}>
             <Form.Item name="description" label="Notas">
               <Input.TextArea rows={2} />
@@ -251,7 +346,7 @@ export default function ResourcesPage() {
             <Form.Item name="checkStock" label="Checar Stock" valuePropName="checked"><Switch /></Form.Item>
           </Col>
           <Col span={12}>
-            <Form.Item name="checkDuplicate" label="Checar Duplicado" valuePropName="checked"><Switch /></Form.Item>
+            <Form.Item name="checkDuplicate" label="Verificar duplicado en Orden" valuePropName="checked" tooltip="Si está activo, no se podrá agregar este recurso más de una vez en una Orden de Servicio"><Switch /></Form.Item>
           </Col>
         </Row>
       ),
@@ -285,6 +380,20 @@ export default function ResourcesPage() {
         </div>
       ),
     },
+    ...(isPackage && editingId && editingRecord
+      ? [{
+          key: '5', label: 'Componentes del Paquete',
+          children: (
+            <PackageComponentsManager
+              packageResourceId={editingId}
+              isSubstitute={editingRecord.isSubstitute}
+              components={packageComponents}
+              onComponentsChange={setPackageComponents}
+              allResources={data?.data ?? []}
+            />
+          ),
+        }]
+      : []),
   ]
 
   return (
@@ -298,6 +407,7 @@ export default function ResourcesPage() {
               codigo: r.code,
               nombre: r.name,
               tipo: TYPE_LABELS[r.type] ?? r.type,
+              departamento: r.department?.name ?? '',
               unidad: r.unit ?? '',
               portal: r.portalVisible ? 'Visible' : 'Oculto',
               activo: r.isActive ? 'Activo' : 'Inactivo',
@@ -305,6 +415,7 @@ export default function ResourcesPage() {
               { header: 'Código', key: 'codigo' },
               { header: 'Nombre', key: 'nombre' },
               { header: 'Tipo', key: 'tipo' },
+              { header: 'Departamento', key: 'departamento' },
               { header: 'Unidad', key: 'unidad' },
               { header: 'Portal', key: 'portal' },
               { header: 'Activo', key: 'activo' },
@@ -347,13 +458,29 @@ export default function ResourcesPage() {
       <Modal
         title={editingId ? 'Editar Recurso' : 'Agregar Recurso'}
         open={modalOpen}
-        onCancel={() => { setModalOpen(false); form.resetFields(); setEditingId(null); setEditingRecord(null) }}
+        onCancel={() => {
+          setModalOpen(false)
+          form.resetFields()
+          setEditingId(null)
+          setEditingRecord(null)
+          setSelectedType('')
+          setIsPackage(false)
+          setPackageComponents([])
+        }}
         onOk={() => form.submit()}
         width={700}
         confirmLoading={saveMutation.isPending}
         okText={editingId ? 'Guardar' : 'Crear'}
       >
-        <Form form={form} layout="vertical" onFinish={saveMutation.mutate}>
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={saveMutation.mutate}
+          onFinishFailed={({ errorFields }) => {
+            const campos = errorFields.map(f => f.errors[0]).join(', ')
+            message.warning(`Campos con error: ${campos}`)
+          }}
+        >
           <Tabs items={modalTabs} />
         </Form>
       </Modal>

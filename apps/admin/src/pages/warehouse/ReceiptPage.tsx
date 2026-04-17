@@ -32,10 +32,11 @@ export default function ReceiptPage() {
     queryFn: () => purchaseOrdersApi.list({ pageSize: 1000 }).then(r => r.data),
   })
 
-  const { data: poDetail } = useQuery({
+  const { data: poDetailResponse } = useQuery({
     queryKey: ['purchaseOrder', selectedPoId],
     queryFn: () => (selectedPoId ? purchaseOrdersApi.get(selectedPoId).then(r => r.data) : Promise.resolve(null)),
   })
+  const poDetail = poDetailResponse?.data ?? poDetailResponse
 
   const { data: warehousesData } = useQuery({
     queryKey: ['warehouses'],
@@ -167,13 +168,20 @@ export default function ReceiptPage() {
             }}>
               <Row gutter={16}>
                 <Col span={12}>
-                  <Form.Item name="lineItemId" label="Item" rules={[{ required: true }]}>
+                  <Form.Item name="lineItemId" label="Recurso" rules={[{ required: true }]}>
                     <Select
-                      placeholder="Selecciona item a recibir"
+                      placeholder="Selecciona recurso a recibir"
                       options={(poDetail?.lineItems ?? []).map((li: any) => ({
                         value: li.id,
                         label: `${li.resource?.code} - ${li.resource?.name} (${li.quantity})`,
                       }))}
+                      onChange={(lineItemId) => {
+                        const li = (poDetail?.lineItems ?? []).find((l: any) => l.id === lineItemId)
+                        if (li) {
+                          const remaining = parseFloat(li.quantity) - parseFloat(li.receivedQty || '0')
+                          form.setFieldValue('receivedQty', remaining > 0 ? remaining : parseFloat(li.quantity))
+                        }
+                      }}
                     />
                   </Form.Item>
                 </Col>

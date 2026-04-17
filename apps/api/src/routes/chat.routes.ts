@@ -21,19 +21,20 @@ const upload = multer({
 
 const router = Router()
 
-// Admin routes
+// Admin routes - specific routes BEFORE parameterized routes
 router.get('/admin/conversations',               authenticate, listConversations)
 router.post('/admin/conversations',              authenticate, adminStartConversation)
 router.get('/admin/conversations/unread',        authenticate, adminUnreadCount)
+router.post('/admin/upload',                     authenticate, upload.single('file'), uploadChatFile)
 router.get('/admin/conversations/:id',           authenticate, getConversation)
 router.post('/admin/conversations/:id/messages', authenticate, sendAdminMessage)
-router.post('/admin/upload',                     authenticate, upload.single('file'), uploadChatFile)
 
-// Portal routes
+// Portal routes - specific routes BEFORE parameterized routes
 router.get('/portal/conversations',               authenticatePortal, portalListConversations)
-router.get('/portal/conversations/unread',        authenticatePortal, portalUnreadCount)
-router.get('/portal/conversations/:id',           authenticatePortal, portalGetConversation)
 router.post('/portal/conversations',              authenticatePortal, portalStartConversation)
+router.get('/portal/conversations/unread',        authenticatePortal, portalUnreadCount)
+router.post('/portal/upload',                     authenticatePortal, upload.single('file'), uploadChatFile)
+router.get('/portal/conversations/:id',           authenticatePortal, portalGetConversation)
 router.post('/portal/conversations/:id/messages', authenticatePortal, portalSendMessage)
 router.post('/portal/upload',                     authenticatePortal, upload.single('file'), uploadChatFile)
 

@@ -22,20 +22,20 @@ const NAVY  = '#1a3a5c'
 const BLUE  = '#2e7fc1'
 
 const STATUS_COLOR: Record<string, string> = {
-  QUOTED:     'blue',
-  CONFIRMED:  'green',
-  IN_PAYMENT: 'orange',
-  PAID:       'purple',
-  INVOICED:   'cyan',
-  CANCELLED:  'red',
+  QUOTED:      'blue',
+  CONFIRMED:   'green',
+  EXECUTED:    'geekblue',
+  INVOICED:    'cyan',
+  CANCELLED:   'red',
+  CREDIT_NOTE: 'gold',
 }
 const STATUS_LABEL: Record<string, string> = {
-  QUOTED:     'Cotizada',
-  CONFIRMED:  'Confirmada',
-  IN_PAYMENT: 'En Pago',
-  PAID:       'Pagada',
-  INVOICED:   'Facturada',
-  CANCELLED:  'Cancelada',
+  QUOTED:      'Cotizada',
+  CONFIRMED:   'Confirmada',
+  EXECUTED:    'Ejecutada',
+  INVOICED:    'Facturada',
+  CANCELLED:   'Cancelada',
+  CREDIT_NOTE: 'Nota de Crédito',
 }
 
 function fmt(n: number) {
@@ -99,15 +99,18 @@ export default function OrdersReportPage() {
         cliente:   o.client?.companyName ?? `${o.client?.firstName ?? ''} ${o.client?.lastName ?? ''}`.trim(),
         rfc:       o.client?.rfc ?? '',
         email:     o.client?.email ?? '',
-        stand:     o.stand?.code ?? '',
-        estatus:   STATUS_LABEL[o.status] ?? o.status,
+        stand:        o.stand?.code ?? '',
+        organizacion: o.organizacion ? `${o.organizacion.clave} — ${o.organizacion.descripcion}` : '',
+        estatus:      STATUS_LABEL[o.status] ?? o.status,
         subtotal:  Number(o.subtotal).toFixed(2),
         descuento: Number(o.discountAmount).toFixed(2),
         iva:       Number(o.taxAmount).toFixed(2),
         total:     Number(o.total).toFixed(2),
         pagado:    Number(o.paidAmount).toFixed(2),
         saldo:     (Number(o.total) - Number(o.paidAmount)).toFixed(2),
-        fecha:     dayjs(o.createdAt).format('DD/MM/YYYY'),
+        fechaInicio: o.startDate ? dayjs(o.startDate).format('DD/MM/YYYY HH:mm') : '',
+        fechaFin:    o.endDate   ? dayjs(o.endDate).format('DD/MM/YYYY HH:mm')   : '',
+        fecha:       dayjs(o.createdAt).format('DD/MM/YYYY'),
       })),
       [
         { header: 'Número',    key: 'numero'    },
@@ -115,15 +118,18 @@ export default function OrdersReportPage() {
         { header: 'Cliente',   key: 'cliente'   },
         { header: 'RFC',       key: 'rfc'       },
         { header: 'Email',     key: 'email'     },
-        { header: 'Stand',     key: 'stand'     },
-        { header: 'Estatus',   key: 'estatus'   },
+        { header: 'Stand',        key: 'stand'        },
+        { header: 'Organización', key: 'organizacion' },
+        { header: 'Estatus',      key: 'estatus'      },
         { header: 'Subtotal',  key: 'subtotal'  },
         { header: 'Descuento', key: 'descuento' },
         { header: 'IVA',       key: 'iva'       },
         { header: 'Total',     key: 'total'     },
         { header: 'Pagado',    key: 'pagado'    },
         { header: 'Saldo',     key: 'saldo'     },
-        { header: 'Fecha',     key: 'fecha'     },
+        { header: 'F. Inicio', key: 'fechaInicio' },
+        { header: 'F. Fin',   key: 'fechaFin'   },
+        { header: 'Fecha',    key: 'fecha'       },
       ]
     )
   }
@@ -153,6 +159,14 @@ export default function OrdersReportPage() {
           </div>
         )
       },
+    },
+    {
+      title: 'Organización',
+      key: 'organizacion',
+      width: 130,
+      render: (_: any, r: any) => r.organizacion
+        ? <Text style={{ fontSize: 12 }}>{r.organizacion.descripcion}</Text>
+        : <Text type="secondary" style={{ fontSize: 12 }}>—</Text>,
     },
     {
       title: 'Evento',
@@ -233,6 +247,18 @@ export default function OrdersReportPage() {
       },
     },
     {
+      title: 'F. Inicio',
+      dataIndex: 'startDate',
+      width: 120,
+      render: (v: string) => v ? <Text style={{ fontSize: 12 }}>{dayjs(v).format('DD/MM/YY HH:mm')}</Text> : <Text type="secondary" style={{ fontSize: 12 }}>—</Text>,
+    },
+    {
+      title: 'F. Fin',
+      dataIndex: 'endDate',
+      width: 120,
+      render: (v: string) => v ? <Text style={{ fontSize: 12 }}>{dayjs(v).format('DD/MM/YY HH:mm')}</Text> : <Text type="secondary" style={{ fontSize: 12 }}>—</Text>,
+    },
+    {
       title: 'Fecha',
       dataIndex: 'createdAt',
       width: 95,
@@ -258,7 +284,7 @@ export default function OrdersReportPage() {
           icon={<DownloadOutlined />}
           onClick={handleExport}
           disabled={orders.length === 0}
-          style={{ background: NAVY, borderColor: NAVY }}
+          style={{ background: '#8c8c8c', borderColor: '#8c8c8c' }}
         >
           Exportar CSV
         </Button>

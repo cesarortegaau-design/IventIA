@@ -28,6 +28,13 @@ import SupplierPriceListsPage from '../pages/catalogs/supplierPriceLists/Supplie
 import WarehousesPage from '../pages/warehouse/WarehousesPage'
 import InventoryPage from '../pages/warehouse/InventoryPage'
 import ReceiptPage from '../pages/warehouse/ReceiptPage'
+import ContractsPage from '../pages/contracts/ContractsPage'
+import ContractDetailPage from '../pages/contracts/ContractDetailPage'
+import TemplatesPage from '../pages/templates/TemplatesPage'
+import ProductionPage from '../pages/production/ProductionPage'
+import PortalUsersPage from '../pages/catalogs/portalUsers/PortalUsersPage'
+import ProfilesPage from '../pages/catalogs/profiles/ProfilesPage'
+import OrganizationsPage from '../pages/catalogs/organizations/OrganizationsPage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.accessToken)
@@ -71,9 +78,16 @@ export function AppRouter() {
         <Route path="catalogos/ordenes-compra/nueva" element={<PurchaseOrderWizard />} />
         <Route path="catalogos/ordenes-compra/:id" element={<PurchaseOrderDetailPage />} />
         <Route path="catalogos/listas-precios-proveedores" element={<SupplierPriceListsPage />} />
+        <Route path="contratos" element={<ContractsPage />} />
+        <Route path="contratos/:id" element={<ContractDetailPage />} />
+        <Route path="plantillas" element={<TemplatesPage />} />
         <Route path="almacen/almacenes" element={<WarehousesPage />} />
         <Route path="almacen/inventario" element={<InventoryPage />} />
         <Route path="almacen/recepcion" element={<ReceiptPage />} />
+        <Route path="produccion" element={<ProductionPage />} />
+        <Route path="catalogos/perfiles" element={<ProfilesPage />} />
+        <Route path="catalogos/usuarios-portal" element={<PortalUsersPage />} />
+        <Route path="catalogos/organizaciones" element={<OrganizationsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

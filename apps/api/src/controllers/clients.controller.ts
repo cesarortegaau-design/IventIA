@@ -57,7 +57,16 @@ export async function getClient(req: Request, res: Response, next: NextFunction)
   try {
     const client = await prisma.client.findFirst({
       where: { id: req.params.id, tenantId: req.user!.tenantId },
-      include: { contacts: true, documents: true },
+      include: {
+        contacts: true,
+        documents: true,
+        relationsFrom: {
+          include: { relatedClient: { select: { id: true, companyName: true, firstName: true, lastName: true, personType: true } } },
+        },
+        relationsTo: {
+          include: { client: { select: { id: true, companyName: true, firstName: true, lastName: true, personType: true } } },
+        },
+      },
     })
     if (!client) throw new AppError(404, 'CLIENT_NOT_FOUND', 'Client not found')
     res.json({ success: true, data: client })
@@ -169,6 +178,174 @@ export async function linkPortalUser(req: Request, res: Response, next: NextFunc
       include: { portalUser: { select: { id: true, email: true, firstName: true, lastName: true } } },
     })
     res.json({ success: true, data: updated })
+  } catch (err) {
+    next(err)
+  }
+}
+
+// ── Client Relations ──────────────────────────────────────────────────────────
+
+const relationSchema = z.object({
+  relatedClientId: z.string().uuid(),
+  relationType: z.enum(['BILLING', 'SUBSIDIARY', 'PARTNER', 'PARENT', 'OTHER']),
+  notes: z.string().max(500).optional(),
+  isActive: z.boolean().default(true),
+}).strip()
+
+export async function addClientRelation(req: Request, res: Response, next: NextFunction) {
+  try {
+    const tenantId = req.user!.tenantId
+    const clientId = req.params.id
+    const data = relationSchema.parse(req.body)
+
+    const [client, relatedClient] = await Promise.all([
+      prisma.client.findFirst({ where: { id: clientId, tenantId } }),
+      prisma.client.findFirst({ where: { id: data.relatedClientId, tenantId } }),
+    ])
+    if (!client) throw new AppError(404, 'CLIENT_NOT_FOUND', 'Cliente no encontrado')
+    if (!relatedClient) throw new AppError(404, 'RELATED_CLIENT_NOT_FOUND', 'Cliente relacionado no encontrado')
+    if (clientId === data.relatedClientId) throw new AppError(400, 'SELF_RELATION', 'No se puede relacionar un cliente consigo mismo')
+
+    const relation = await prisma.clientRelation.create({
+      data: { tenantId, clientId, ...data },
+      include: { relatedClient: { select: { id: true, companyName: true, firstName: true, lastName: true, personType: true } } },
+    })
+    res.status(201).json({ success: true, data: relation })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function updateClientRelation(req: Request, res: Response, next: NextFunction) {
+  try {
+    const tenantId = req.user!.tenantId
+    const { relationId } = req.params
+    const data = z.object({ relationType: z.string().optional(), notes: z.string().optional(), isActive: z.boolean().optional() }).parse(req.body)
+
+    const relation = await prisma.clientRelation.findFirst({ where: { id: relationId, tenantId } })
+    if (!relation) throw new AppError(404, 'RELATION_NOT_FOUND', 'Relación no encontrada')
+
+    const updated = await prisma.clientRelation.update({
+      where: { id: relationId },
+      data,
+      include: { relatedClient: { select: { id: true, companyName: true, firstName: true, lastName: true, personType: true } } },
+    })
+    res.json({ success: true, data: updated })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function deleteClientRelation(req: Request, res: Response, next: NextFunction) {
+  try {
+    const tenantId = req.user!.tenantId
+    const { relationId } = req.params
+
+    const relation = await prisma.clientRelation.findFirst({ where: { id: relationId, tenantId } })
+    if (!relation) throw new AppError(404, 'RELATION_NOT_FOUND', 'Relación no encontrada')
+
+    await prisma.clientRelation.delete({ where: { id: relationId } })
+    res.json({ success: true })
+  } catch (err) {
+    next(err)
+  }
+}
+
+// ── Portal Users Management ──────────────────────────────────────────────────
+
+export async function getPortalUser(req: Request, res: Response, next: NextFunction) {
+  try {
+    const tenantId = req.user!.tenantId
+    const portalUser = await prisma.portalUser.findFirst({
+      where: { id: req.params.portalUserId, tenantId },
+      select: {
+        id: true, email: true, firstName: true, lastName: true, phone: true,
+        isActive: true, createdAt: true, updatedAt: true,
+        client: { select: { id: true, companyName: true, firstName: true, lastName: true } },
+        clients: {
+          include: { client: { select: { id: true, companyName: true, firstName: true, lastName: true, personType: true } } },
+        },
+        events: {
+          include: { event: { select: { id: true, code: true, name: true, status: true } } },
+        },
+      },
+    })
+    if (!portalUser) throw new AppError(404, 'PORTAL_USER_NOT_FOUND', 'Usuario de portal no encontrado')
+    res.json({ success: true, data: portalUser })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function updatePortalUser(req: Request, res: Response, next: NextFunction) {
+  try {
+    const tenantId = req.user!.tenantId
+    const data = z.object({
+      firstName: z.string().optional(),
+      lastName: z.string().optional(),
+      phone: z.string().optional(),
+      isActive: z.boolean().optional(),
+    }).parse(req.body)
+
+    const portalUser = await prisma.portalUser.findFirst({ where: { id: req.params.portalUserId, tenantId } })
+    if (!portalUser) throw new AppError(404, 'PORTAL_USER_NOT_FOUND', 'Usuario de portal no encontrado')
+
+    const updated = await prisma.portalUser.update({ where: { id: req.params.portalUserId }, data })
+    res.json({ success: true, data: updated })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function resetPortalUserPassword(req: Request, res: Response, next: NextFunction) {
+  try {
+    const tenantId = req.user!.tenantId
+    const { password } = z.object({ password: z.string().min(6) }).parse(req.body)
+    const bcrypt = await import('bcryptjs')
+
+    const portalUser = await prisma.portalUser.findFirst({ where: { id: req.params.portalUserId, tenantId } })
+    if (!portalUser) throw new AppError(404, 'PORTAL_USER_NOT_FOUND', 'Usuario de portal no encontrado')
+
+    const passwordHash = await bcrypt.hash(password, 12)
+    await prisma.portalUser.update({ where: { id: req.params.portalUserId }, data: { passwordHash } })
+    res.json({ success: true, message: 'Contraseña actualizada' })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function addPortalUserClient(req: Request, res: Response, next: NextFunction) {
+  try {
+    const tenantId = req.user!.tenantId
+    const { clientId } = z.object({ clientId: z.string().uuid() }).parse(req.body)
+
+    const [portalUser, client] = await Promise.all([
+      prisma.portalUser.findFirst({ where: { id: req.params.portalUserId, tenantId } }),
+      prisma.client.findFirst({ where: { id: clientId, tenantId } }),
+    ])
+    if (!portalUser) throw new AppError(404, 'PORTAL_USER_NOT_FOUND', 'Usuario de portal no encontrado')
+    if (!client) throw new AppError(404, 'CLIENT_NOT_FOUND', 'Cliente no encontrado')
+
+    const link = await prisma.portalUserClient.create({
+      data: { portalUserId: req.params.portalUserId, clientId },
+      include: { client: { select: { id: true, companyName: true, firstName: true, lastName: true, personType: true } } },
+    })
+    res.status(201).json({ success: true, data: link })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function removePortalUserClient(req: Request, res: Response, next: NextFunction) {
+  try {
+    const tenantId = req.user!.tenantId
+    const { portalUserId, clientId } = req.params
+
+    const portalUser = await prisma.portalUser.findFirst({ where: { id: portalUserId, tenantId } })
+    if (!portalUser) throw new AppError(404, 'PORTAL_USER_NOT_FOUND', 'Usuario de portal no encontrado')
+
+    await prisma.portalUserClient.deleteMany({ where: { portalUserId, clientId } })
+    res.json({ success: true })
   } catch (err) {
     next(err)
   }

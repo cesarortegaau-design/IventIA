@@ -55,6 +55,11 @@ export default function PurchaseOrdersPage() {
       return <Tag color={getStatusColor(r.status)}>{status?.label}</Tag>
     } },
     { title: 'Total', render: (_: any, r: any) => `$${parseFloat(r.total).toFixed(2)}` },
+    { title: 'Origen OS', render: (_: any, r: any) => r.originOrder ? (
+      <Button type="link" size="small" style={{ padding: 0 }} onClick={() => navigate(`/ordenes/${r.originOrder.id}`)}>
+        {r.originOrder.orderNumber}
+      </Button>
+    ) : '—' },
     {
       title: '',
       key: 'actions',
@@ -64,7 +69,7 @@ export default function PurchaseOrdersPage() {
           <Button
             size="small"
             icon={<EyeOutlined />}
-            onClick={() => navigate(`/catalogs/ordenes-compra/${r.id}`)}
+            onClick={() => navigate(`/catalogos/ordenes-compra/${r.id}`)}
             title="Ver detalle"
           />
         </Space>
@@ -81,7 +86,7 @@ export default function PurchaseOrdersPage() {
     <div>
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Title level={4} style={{ margin: 0 }}>Órdenes de Compra</Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/catalogs/ordenes-compra/nueva')}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/catalogos/ordenes-compra/nueva')}>
           Nueva OC
         </Button>
       </Row>

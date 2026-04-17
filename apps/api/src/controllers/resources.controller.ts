@@ -1,9 +1,12 @@
 import { Request, Response, NextFunction } from 'express'
-import { z } from 'zod'
+import { z, ZodError } from 'zod'
+import { Decimal } from '@prisma/client/runtime/library'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { uploadToCloudinary, deleteFromCloudinary } from '../lib/cloudinary'
 import { auditService } from '../services/audit.service'
+import { VALID_UNITS_ARRAY, UNIT_RESTRICTIONS } from '@iventia/shared'
+import { deptFilterForResource } from '../middleware/departmentScope'
 
 const SLOT_FIELDS: Record<string, 'imageMain' | 'imageDesc' | 'imageExtra'> = {
   main: 'imageMain',
@@ -11,30 +14,64 @@ const SLOT_FIELDS: Record<string, 'imageMain' | 'imageDesc' | 'imageExtra'> = {
   extra: 'imageExtra',
 }
 
-const resourceSchema = z.object({
+const packageComponentSchema = z.object({
+  componentResourceId: z.string().uuid('componentResourceId debe ser un UUID válido'),
+  quantity: z.number().positive('quantity debe ser mayor a 0'),
+  sortOrder: z.number().int().nonnegative().default(0),
+})
+
+const resourceBaseSchema = z.object({
   code: z.string().min(1).max(50),
   name: z.string().min(1).max(200),
-  type: z.enum(['CONSUMABLE', 'EQUIPMENT', 'SPACE', 'FURNITURE', 'SERVICE', 'DISCOUNT', 'TAX']),
-  description: z.string().optional(),
-  unit: z.string().optional(),
-  stock: z.number().int().min(0).default(0),
-  stockLocation: z.string().optional(),
+  type: z.enum(['CONSUMABLE', 'EQUIPMENT', 'SPACE', 'FURNITURE', 'SERVICE', 'DISCOUNT', 'TAX', 'PERSONAL']),
+  description: z.string().optional().nullable(),
+  unit: z.string().optional().nullable(),
+  stock: z.number().int().min(0).default(0).nullable().transform(v => v ?? 0),
+  stockLocation: z.string().optional().nullable(),
   checkStock: z.boolean().default(false),
-  checkDuplicate: z.boolean().default(false),
-  recoveryTime: z.number().int().min(0).default(0),
-  areaSqm: z.number().optional(),
-  capacity: z.number().int().optional(),
-  departmentId: z.string().uuid().optional(),
+  checkDuplicate: z.boolean().default(true),
+  recoveryTime: z.number().int().min(0).default(0).nullable().transform(v => v ?? 0),
+  areaSqm: z.number().optional().nullable(),
+  capacity: z.number().int().optional().nullable(),
+  departmentId: z.string().uuid().optional().nullable(),
   portalVisible: z.boolean().default(false),
-  portalDesc: z.string().optional(),
+  portalDesc: z.string().optional().nullable(),
+  isPackage: z.boolean().default(false),
+  isSubstitute: z.boolean().default(false),
+  packageComponents: z.array(packageComponentSchema).optional(),
 })
+
+const resourceSchema = resourceBaseSchema.refine(
+  (data) => {
+    if (data.type === 'PERSONAL' && data.unit) {
+      return VALID_UNITS_ARRAY.includes(data.unit)
+    }
+    return true
+  },
+  {
+    message: `Para tipo PERSONAL, la unidad debe ser una de: ${VALID_UNITS_ARRAY.join(', ')}`,
+    path: ['unit'],
+  }
+).refine(
+  (data) => {
+    if (data.isSubstitute && !data.isPackage) {
+      return false
+    }
+    return true
+  },
+  {
+    message: 'isSubstitute solo se puede usar si isPackage es true',
+    path: ['isSubstitute'],
+  }
+)
 
 export async function listResources(req: Request, res: Response, next: NextFunction) {
   try {
     const { type, active, search, page = '1', pageSize = '20' } = req.query as Record<string, string>
     const tenantId = req.user!.tenantId
 
-    const where: any = { tenantId }
+    const deptFilter = await deptFilterForResource(req)
+    const where: any = { tenantId, ...deptFilter }
     if (type) where.type = type
     if (active !== undefined) where.isActive = active === 'true'
     if (search) where.name = { contains: search, mode: 'insensitive' }
@@ -59,8 +96,9 @@ export async function listResources(req: Request, res: Response, next: NextFunct
 
 export async function getResource(req: Request, res: Response, next: NextFunction) {
   try {
+    const deptFilter = await deptFilterForResource(req)
     const resource = await prisma.resource.findFirst({
-      where: { id: req.params.id, tenantId: req.user!.tenantId },
+      where: { id: req.params.id, tenantId: req.user!.tenantId, ...deptFilter },
       include: { department: true },
     })
     if (!resource) throw new AppError(404, 'RESOURCE_NOT_FOUND', 'Resource not found')
@@ -72,13 +110,19 @@ export async function getResource(req: Request, res: Response, next: NextFunctio
 
 export async function createResource(req: Request, res: Response, next: NextFunction) {
   try {
-    const data = resourceSchema.parse(req.body)
+    const { packageComponents, departmentId, ...data } = resourceSchema.parse(req.body)
     const tenantId = req.user!.tenantId
 
     const exists = await prisma.resource.findFirst({ where: { tenantId, code: data.code } })
     if (exists) throw new AppError(409, 'DUPLICATE_CODE', 'Resource code already exists')
 
-    const resource = await prisma.resource.create({ data: { ...data, tenantId } })
+    const resource = await prisma.resource.create({
+      data: {
+        ...data,
+        tenantId,
+        departmentId: departmentId || undefined,
+      } as any,
+    })
 
     await auditService.log(tenantId, req.user!.userId, 'Resource', resource.id, 'CREATE', null, {
       code: resource.code,
@@ -97,13 +141,17 @@ export async function createResource(req: Request, res: Response, next: NextFunc
 
 export async function updateResource(req: Request, res: Response, next: NextFunction) {
   try {
-    const data = resourceSchema.partial().parse(req.body)
+    const { packageComponents, ...data } = resourceBaseSchema.partial().parse(req.body)
     const resource = await prisma.resource.findFirst({
       where: { id: req.params.id, tenantId: req.user!.tenantId },
     })
     if (!resource) throw new AppError(404, 'RESOURCE_NOT_FOUND', 'Resource not found')
 
-    const updated = await prisma.resource.update({ where: { id: req.params.id }, data })
+    const updated = await prisma.resource.update({
+      where: { id: req.params.id },
+      data,
+      include: { department: { select: { id: true, name: true } } },
+    })
 
     const oldValues: any = {
       code: resource.code,
@@ -203,6 +251,289 @@ export async function deleteResourceImage(req: Request, res: Response, next: Nex
       where: { id },
       data: { [field]: null },
     })
+    res.json({ success: true, data: updated })
+  } catch (err) {
+    next(err)
+  }
+}
+
+// ─── Package Components ────────────────────────────────────────────────────────
+
+export async function getPackageComponents(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params
+    const tenantId = req.user!.tenantId
+
+    const packageResource = await prisma.resource.findFirst({
+      where: { id, tenantId },
+    })
+
+    if (!packageResource) {
+      return next(new AppError(404, 'RESOURCE_NOT_FOUND', 'Recurso no encontrado'))
+    }
+
+    if (!packageResource.isPackage) {
+      return next(new AppError(400, 'NOT_A_PACKAGE', 'El recurso no es un paquete'))
+    }
+
+    const components = await prisma.packageComponent.findMany({
+      where: { packageResourceId: id },
+      include: {
+        componentResource: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            type: true,
+            unit: true,
+            isPackage: true,
+          },
+        },
+      },
+      orderBy: { sortOrder: 'asc' },
+    })
+
+    res.json({
+      success: true,
+      data: {
+        packageResourceId: id,
+        isPackage: packageResource.isPackage,
+        isSubstitute: packageResource.isSubstitute,
+        components,
+      },
+    })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function addPackageComponent(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params
+    const tenantId = req.user!.tenantId
+
+    const parsedData = packageComponentSchema.parse(req.body)
+
+    const packageResource = await prisma.resource.findFirst({
+      where: { id, tenantId },
+    })
+
+    if (!packageResource) {
+      return next(new AppError(404, 'RESOURCE_NOT_FOUND', 'Recurso padre no encontrado'))
+    }
+
+    if (!packageResource.isPackage) {
+      return next(new AppError(400, 'NOT_A_PACKAGE', 'El recurso no es un paquete'))
+    }
+
+    const componentResource = await prisma.resource.findFirst({
+      where: { id: parsedData.componentResourceId, tenantId },
+    })
+
+    if (!componentResource) {
+      return next(new AppError(404, 'COMPONENT_NOT_FOUND', 'Recurso componente no encontrado'))
+    }
+
+    // Evitar referencias cíclicas: un paquete no puede contenerse a sí mismo
+    if (parsedData.componentResourceId === id) {
+      return next(new AppError(400, 'CIRCULAR_REFERENCE', 'Un paquete no puede contenerse a sí mismo'))
+    }
+
+    // Evitar duplicados
+    const existing = await prisma.packageComponent.findUnique({
+      where: {
+        packageResourceId_componentResourceId: {
+          packageResourceId: id,
+          componentResourceId: parsedData.componentResourceId,
+        },
+      },
+    })
+
+    if (existing) {
+      return next(new AppError(409, 'DUPLICATE_COMPONENT', 'Este componente ya está en el paquete'))
+    }
+
+    const component = await prisma.packageComponent.create({
+      data: {
+        packageResourceId: id,
+        componentResourceId: parsedData.componentResourceId,
+        quantity: new Decimal(parsedData.quantity),
+        sortOrder: parsedData.sortOrder ?? 0,
+      },
+      include: {
+        componentResource: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            type: true,
+            unit: true,
+            isPackage: true,
+          },
+        },
+      },
+    })
+
+    await auditService.log(
+      tenantId,
+      req.user!.userId,
+      'PackageComponent',
+      component.id,
+      'CREATE',
+      null,
+      {
+        packageResourceId: component.packageResourceId,
+        componentResourceId: component.componentResourceId,
+        quantity: component.quantity.toString(),
+      },
+      req?.ip
+    )
+
+    res.status(201).json({ success: true, data: component })
+  } catch (err) {
+    if (err instanceof ZodError) {
+      return next(new AppError(400, 'VALIDATION_ERROR', err.errors[0].message))
+    }
+    next(err)
+  }
+}
+
+export async function removePackageComponent(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id, componentId } = req.params
+    const tenantId = req.user!.tenantId
+
+    const packageResource = await prisma.resource.findFirst({
+      where: { id, tenantId },
+    })
+
+    if (!packageResource) {
+      return next(new AppError(404, 'RESOURCE_NOT_FOUND', 'Recurso padre no encontrado'))
+    }
+
+    const component = await prisma.packageComponent.findUnique({
+      where: {
+        packageResourceId_componentResourceId: {
+          packageResourceId: id,
+          componentResourceId: componentId,
+        },
+      },
+    })
+
+    if (!component) {
+      return next(new AppError(404, 'COMPONENT_NOT_FOUND', 'Componente no encontrado en este paquete'))
+    }
+
+    await prisma.packageComponent.delete({
+      where: {
+        packageResourceId_componentResourceId: {
+          packageResourceId: id,
+          componentResourceId: componentId,
+        },
+      },
+    })
+
+    await auditService.log(
+      tenantId,
+      req.user!.userId,
+      'PackageComponent',
+      component.id,
+      'DELETE',
+      {
+        packageResourceId: component.packageResourceId,
+        componentResourceId: component.componentResourceId,
+        quantity: component.quantity.toString(),
+      },
+      null,
+      req?.ip
+    )
+
+    res.json({ success: true, message: 'Componente removido del paquete' })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function updatePackageComponent(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id, componentId } = req.params
+    const tenantId = req.user!.tenantId
+    const { quantity, sortOrder } = req.body
+
+    const packageResource = await prisma.resource.findFirst({
+      where: { id, tenantId },
+    })
+
+    if (!packageResource) {
+      return next(new AppError(404, 'RESOURCE_NOT_FOUND', 'Recurso padre no encontrado'))
+    }
+
+    const component = await prisma.packageComponent.findUnique({
+      where: {
+        packageResourceId_componentResourceId: {
+          packageResourceId: id,
+          componentResourceId: componentId,
+        },
+      },
+    })
+
+    if (!component) {
+      return next(new AppError(404, 'COMPONENT_NOT_FOUND', 'Componente no encontrado en este paquete'))
+    }
+
+    const updateData: any = {}
+    if (quantity !== undefined) {
+      if (quantity <= 0) {
+        return next(new AppError(400, 'INVALID_QUANTITY', 'La cantidad debe ser mayor a 0'))
+      }
+      updateData.quantity = new Decimal(quantity)
+    }
+    if (sortOrder !== undefined) {
+      if (sortOrder < 0) {
+        return next(new AppError(400, 'INVALID_SORT_ORDER', 'El orden debe ser no negativo'))
+      }
+      updateData.sortOrder = sortOrder
+    }
+
+    const updated = await prisma.packageComponent.update({
+      where: {
+        packageResourceId_componentResourceId: {
+          packageResourceId: id,
+          componentResourceId: componentId,
+        },
+      },
+      data: updateData,
+      include: {
+        componentResource: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            type: true,
+            unit: true,
+            isPackage: true,
+          },
+        },
+      },
+    })
+
+    await auditService.log(
+      tenantId,
+      req.user!.userId,
+      'PackageComponent',
+      component.id,
+      'UPDATE',
+      {
+        quantity: component.quantity.toString(),
+        sortOrder: component.sortOrder,
+      },
+      {
+        quantity: updated.quantity.toString(),
+        sortOrder: updated.sortOrder,
+      },
+      req?.ip
+    )
+
     res.json({ success: true, data: updated })
   } catch (err) {
     next(err)

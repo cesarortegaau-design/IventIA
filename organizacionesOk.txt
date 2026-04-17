@@ -1,0 +1,35 @@
+- Se debe agregar un catálogo de Organizaciones:
+	- Clave 
+	- Descripción
+	- Datos Fiscales
+	- Datos demográficos
+- A catálogo de departamentos debe agregar un control para agregar una o varias organizaciones, debe ser
+  obligatorio que un departamento tenga ligada al menos una Organización
+- En la forma de orden de servicio ocultar el campo Departamento
+- En la orden de servicio agregar el campo Organización
+	- debe ser obligatorio
+	- al crear una nueva orden de servicio en el campo de decisión de Organización sus valores debe ser sugerido 
+con base a el(los) 
+        departamento(s) asignados al usuario
+- En el evento solo se deben mostrar las ordenes de servicio de organizaciones ligadas al usuario a través 
+  de los departamentos asignados al usuario
+- En contratos solo se deben mostrar aquellos ligados a las ordenes de servicio de organizaciones ligadas 
+  al usuario a través 
+  de los departamentos asignados al usuario 
+
+- En la orden de compra que agregar el campo Organización
+	- debe ser obligatorio
+	- al crear una nueva orden de compra no ligada a una orden de servicio 
+	el campo de decisión de Organización debe ser sugerido con base a el(los) 
+        departamento(s) asignados al usuario
+	- al crear una orden de compra a través de una orden de servicio, la organización de la orden de compra
+	será la misma que la de la orden de servicio
+
+- En el evento solo se deben mostrar las ordenes de compra de organizaciones ligadas al usuario a través 
+  de los departamentos asignados al usuario
+
+- los recursos en inventario solo se muestran aquellos relacionados a las ordenes de servicio de organizaciones ligadas 
+  al usuario a través 
+  de los departamentos asignados a recursos
+- En la recepción de ordenes de compra solo se deben mostrar las ordenes de compra de organizaciones ligadas al 
+usuario a través  de los departamentos asignados al usuario

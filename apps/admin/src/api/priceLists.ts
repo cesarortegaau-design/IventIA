@@ -3,8 +3,8 @@ import { apiClient } from './client'
 export const priceListsApi = {
   list: () =>
     apiClient.get('/price-lists').then(r => r.data),
-  get: (id: string) =>
-    apiClient.get(`/price-lists/${id}`).then(r => r.data),
+  get: (id: string, params?: { departmentIds?: string }) =>
+    apiClient.get(`/price-lists/${id}`, { params }).then(r => r.data),
   create: (data: any) =>
     apiClient.post('/price-lists', data).then(r => r.data),
   update: (id: string, data: any) =>

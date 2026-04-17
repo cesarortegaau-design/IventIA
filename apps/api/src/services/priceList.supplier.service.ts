@@ -1,7 +1,7 @@
 import { Decimal } from 'decimal.js'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
-import * as auditService from './audit.service'
+import { auditService } from './audit.service'
 
 export interface CreateSupplierPriceListInput {
   tenantId: string
@@ -127,15 +127,20 @@ export async function updateSupplierPriceList(
   return updated
 }
 
-export async function getSupplierPriceList(id: string, tenantId: string) {
+export async function getSupplierPriceList(id: string, tenantId: string, departmentIds?: string[]) {
+  const itemWhere: any = { isActive: true }
+  if (departmentIds?.length) {
+    itemWhere.resource = { departmentId: { in: departmentIds } }
+  }
+
   const priceList = await prisma.supplierPriceList.findFirst({
     where: { id, tenantId },
     include: {
       supplier: { select: { id: true, code: true, name: true } },
       items: {
-        where: { isActive: true },
+        where: itemWhere,
         include: {
-          resource: { select: { id: true, code: true, name: true, unit: true } },
+          resource: { select: { id: true, code: true, name: true, unit: true, department: { select: { id: true, name: true } } } },
         },
         orderBy: { createdAt: 'asc' },
       },

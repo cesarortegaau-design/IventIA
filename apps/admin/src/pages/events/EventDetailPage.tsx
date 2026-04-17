@@ -6,7 +6,7 @@ import {
   Tabs, App, Select, Typography, Divider, InputNumber, Form, DatePicker, Modal, Switch, Badge,
   Tooltip, Popconfirm, Input, Upload, Timeline, Spin, Alert,
 } from 'antd'
-import { EditOutlined, PlusOutlined, ArrowLeftOutlined, CopyOutlined, StopOutlined, GlobalOutlined, DownloadOutlined, DeleteOutlined, CalendarOutlined, FileOutlined, UploadOutlined, AuditOutlined, WarningOutlined, ImportOutlined } from '@ant-design/icons'
+import { EditOutlined, PlusOutlined, ArrowLeftOutlined, CopyOutlined, StopOutlined, GlobalOutlined, DownloadOutlined, DeleteOutlined, CalendarOutlined, FileOutlined, UploadOutlined, AuditOutlined, WarningOutlined, ImportOutlined, FileProtectOutlined, EyeOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { eventsApi } from '../../api/events'
 import { portalCodesApi } from '../../api/portalCodes'
@@ -17,6 +17,7 @@ import { auditApi } from '../../api/audit'
 import { exportToCsv } from '../../utils/exportCsv'
 import AuditTimeline from '../../components/AuditTimeline'
 import AuditDrawer from '../../components/AuditDrawer'
+import GenerateDocumentModal from '../../components/GenerateDocumentModal'
 
 const { Title, Text } = Typography
 
@@ -27,10 +28,10 @@ const STATUS_LABELS: Record<string, string> = {
   QUOTED: 'Cotizado', CONFIRMED: 'Confirmado', IN_EXECUTION: 'En Ejecución', CLOSED: 'Cerrado', CANCELLED: 'Cancelado',
 }
 const ORDER_STATUS_COLORS: Record<string, string> = {
-  QUOTED: 'blue', CONFIRMED: 'green', IN_PAYMENT: 'orange', PAID: 'purple', INVOICED: 'cyan', CANCELLED: 'red',
+  QUOTED: 'blue', CONFIRMED: 'green', EXECUTED: 'geekblue', INVOICED: 'cyan', CANCELLED: 'red', CREDIT_NOTE: 'gold',
 }
 const ORDER_STATUS_LABELS: Record<string, string> = {
-  QUOTED: 'Cotizada', CONFIRMED: 'Confirmada', IN_PAYMENT: 'En Pago', PAID: 'Pagada', INVOICED: 'Facturada', CANCELLED: 'Cancelada',
+  QUOTED: 'Cotizada', CONFIRMED: 'Confirmada', EXECUTED: 'Ejecutada', INVOICED: 'Facturada', CANCELLED: 'Cancelada', CREDIT_NOTE: 'Nota de Crédito',
 }
 
 export default function EventDetailPage() {
@@ -47,6 +48,7 @@ export default function EventDetailPage() {
   const [auditSpace, setAuditSpace] = useState<any>(null)
   const [standsImportPreview, setStandsImportPreview] = useState<any[] | null>(null)
   const [standsImportModalOpen, setStandsImportModalOpen] = useState(false)
+  const [generateDocOpen, setGenerateDocOpen] = useState(false)
 
   const deleteDocMutation = useMutation({
     mutationFn: (docId: string) => eventsApi.deleteDocument(id!, docId),
@@ -292,7 +294,19 @@ export default function EventDetailPage() {
 
   const totalOrders = event.orders?.reduce((sum: number, o: any) => sum + Number(o.total), 0) ?? 0
   const confirmedOrders = event.orders?.filter((o: any) => o.status === 'CONFIRMED').length ?? 0
-  const paidOrders = event.orders?.filter((o: any) => o.status === 'PAID' || o.status === 'INVOICED').length ?? 0
+  const paidOrders = event.orders?.filter((o: any) => o.paymentStatus === 'PAID' || o.status === 'INVOICED').length ?? 0
+
+  // Derive unique contracts from event orders
+  const contractsMap = new Map<string, any>()
+  for (const o of (event.orders ?? [])) {
+    if (o.contract && !contractsMap.has(o.contract.id)) {
+      contractsMap.set(o.contract.id, {
+        ...o.contract,
+        _orderCount: (event.orders ?? []).filter((x: any) => x.contract?.id === o.contract.id).length,
+      })
+    }
+  }
+  const eventContracts = Array.from(contractsMap.values())
 
   const orderColumns = [
     { title: 'Número', dataIndex: 'orderNumber', key: 'orderNumber', render: (v: string, r: any) => (
@@ -302,10 +316,13 @@ export default function EventDetailPage() {
       r.client?.companyName || `${r.client?.firstName} ${r.client?.lastName}`
     },
     { title: 'Stand', dataIndex: ['stand', 'code'], key: 'stand' },
+    { title: 'Organización', key: 'organizacion', render: (_: any, r: any) => r.organizacion ? r.organizacion.descripcion : '—' },
     { title: 'Estado', dataIndex: 'status', key: 'status', render: (v: string) => (
       <Tag color={ORDER_STATUS_COLORS[v]}>{ORDER_STATUS_LABELS[v]}</Tag>
     )},
     { title: 'Total', dataIndex: 'total', key: 'total', render: (v: number) => `$${Number(v).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` },
+    { title: 'F. Inicio', dataIndex: 'startDate', key: 'startDate', render: (v: string) => v ? dayjs(v).format('DD/MM/YY HH:mm') : '—' },
+    { title: 'F. Fin', dataIndex: 'endDate', key: 'endDate', render: (v: string) => v ? dayjs(v).format('DD/MM/YY HH:mm') : '—' },
     { title: 'Fecha', dataIndex: 'createdAt', key: 'createdAt', render: (v: string) => dayjs(v).format('DD/MM/YY') },
   ]
 
@@ -337,6 +354,7 @@ export default function EventDetailPage() {
             loading={auditLoading}
           />
           <Button icon={<EditOutlined />} onClick={() => navigate(`/eventos/${id}/editar`)}>Editar</Button>
+          <Button icon={<FileOutlined />} onClick={() => setGenerateDocOpen(true)}>Generar Word</Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate(`/eventos/${id}/ordenes/nueva`)}>
             Nueva OS
           </Button>
@@ -646,6 +664,54 @@ export default function EventDetailPage() {
                 </>
               ),
             },
+            ...(eventContracts.length > 0 ? [{
+              key: 'contracts',
+              label: (
+                <Space>
+                  <FileProtectOutlined />
+                  {`Contratos (${eventContracts.length})`}
+                </Space>
+              ),
+              children: (
+                <Table
+                  dataSource={eventContracts}
+                  rowKey="id"
+                  size="small"
+                  pagination={false}
+                  columns={[
+                    { title: 'Número', dataIndex: 'contractNumber', width: 150,
+                      render: (v: string, r: any) => (
+                        <Button type="link" onClick={() => navigate(`/contratos/${r.id}`)}>{v}</Button>
+                      ),
+                    },
+                    { title: 'Descripción', dataIndex: 'description', ellipsis: true },
+                    { title: 'Cliente', dataIndex: 'client',
+                      render: (c: any) => c?.companyName || `${c?.firstName || ''} ${c?.lastName || ''}`.trim(),
+                    },
+                    { title: 'Estado', dataIndex: 'status', width: 110,
+                      render: (v: string) => {
+                        const map: Record<string, { label: string; color: string }> = {
+                          EN_FIRMA: { label: 'En Firma', color: 'processing' },
+                          FIRMADO: { label: 'Firmado', color: 'success' },
+                          CANCELADO: { label: 'Cancelado', color: 'error' },
+                        }
+                        const s = map[v] || { label: v, color: 'default' }
+                        return <Tag color={s.color}>{s.label}</Tag>
+                      },
+                    },
+                    { title: 'Monto Total', dataIndex: 'totalAmount', width: 140, align: 'right' as const,
+                      render: (v: any) => `$${Number(v || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
+                    },
+                    { title: 'Órdenes', dataIndex: '_orderCount', width: 80, align: 'center' as const },
+                    { title: '', key: 'actions', width: 60,
+                      render: (_: any, r: any) => (
+                        <Button size="small" icon={<EyeOutlined />} onClick={() => navigate(`/contratos/${r.id}`)} />
+                      ),
+                    },
+                  ]}
+                />
+              ),
+            }] : []),
             {
               key: 'stands',
               label: `Stands (${event.stands?.length ?? 0})`,
@@ -755,7 +821,7 @@ export default function EventDetailPage() {
                                   <Button
                                     size="small"
                                     icon={<DownloadOutlined />}
-                                    href={doc.blobKey}
+                                    href={doc.blobKey?.startsWith('http') ? doc.blobKey : `${import.meta.env.VITE_API_URL || ''}/api/v1/templates/download/${doc.blobKey}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                   />
@@ -790,7 +856,13 @@ export default function EventDetailPage() {
                       <Switch checked={!!event.portalEnabled} disabled checkedChildren="Sí" unCheckedChildren="No" />
                       {event.portalEnabled && <Tag color="purple">Visible para expositores</Tag>}
                     </Space>
-                    <Button type="primary" icon={<PlusOutlined />} onClick={() => setGenModalOpen(true)}>
+                    <Button
+                      type="primary"
+                      icon={<PlusOutlined />}
+                      onClick={() => setGenModalOpen(true)}
+                      disabled={!['CONFIRMED', 'IN_EXECUTION'].includes(event.status)}
+                      title={!['CONFIRMED', 'IN_EXECUTION'].includes(event.status) ? 'Solo para eventos Confirmados o En ejecución' : undefined}
+                    >
                       Generar códigos
                     </Button>
                   </div>
@@ -884,6 +956,13 @@ export default function EventDetailPage() {
           ]}
         />
       </Card>
+
+      <GenerateDocumentModal
+        open={generateDocOpen}
+        onClose={() => setGenerateDocOpen(false)}
+        context="EVENT"
+        entityId={id!}
+      />
     </div>
   )
 }

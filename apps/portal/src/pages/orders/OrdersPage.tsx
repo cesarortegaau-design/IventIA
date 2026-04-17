@@ -9,10 +9,10 @@ import { exportToCsv } from '../../utils/exportCsv'
 const { Title } = Typography
 
 const STATUS_COLORS: Record<string, string> = {
-  QUOTED: 'blue', CONFIRMED: 'green', IN_PAYMENT: 'orange', PAID: 'purple', INVOICED: 'cyan', CANCELLED: 'red',
+  QUOTED: 'blue', CONFIRMED: 'green', EXECUTED: 'geekblue', INVOICED: 'cyan', CANCELLED: 'red', CREDIT_NOTE: 'gold',
 }
 const STATUS_LABELS: Record<string, string> = {
-  QUOTED: 'Cotizada', CONFIRMED: 'Confirmada', IN_PAYMENT: 'En Pago', PAID: 'Pagada', INVOICED: 'Facturada', CANCELLED: 'Cancelada',
+  QUOTED: 'Cotizada', CONFIRMED: 'Confirmada', EXECUTED: 'Ejecutada', INVOICED: 'Facturada', CANCELLED: 'Cancelada', CREDIT_NOTE: 'Nota de Crédito',
 }
 
 export default function OrdersPage() {

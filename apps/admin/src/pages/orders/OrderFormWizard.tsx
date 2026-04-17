@@ -3,13 +3,16 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Steps, Form, Select, Button, Table, InputNumber, Input, Space,
-  Typography, Row, Col, Statistic, App, Divider, Tag, Modal
+  Typography, Row, Col, Statistic, App, Divider, Tag, Modal, DatePicker
 } from 'antd'
+import dayjs from 'dayjs'
 import { ArrowLeftOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons'
 import { eventsApi } from '../../api/events'
 import { clientsApi } from '../../api/clients'
 import { priceListsApi } from '../../api/priceLists'
 import { resourcesApi } from '../../api/resources'
+import { organizationsApi } from '../../api/organizations'
+import { useAuthStore } from '../../stores/authStore'
 
 const { Title, Text } = Typography
 
@@ -28,7 +31,6 @@ export default function OrderFormWizard() {
   const [substitutionPackageDetails, setSubstitutionPackageDetails] = useState<Record<string, any>>({})
   const [loadingSubstitutions, setLoadingSubstitutions] = useState(false)
   const savedHeaderValues = useRef<any>({})
-
   const { data: eventData } = useQuery({
     queryKey: ['event', eventId],
     queryFn: () => eventsApi.get(eventId!),
@@ -50,6 +52,29 @@ export default function OrderFormWizard() {
     enabled: !!selectedPriceListId,
   })
 
+  const userDepartments = useAuthStore(s => s.user?.departments ?? [])
+  const { data: orgsData } = useQuery({
+    queryKey: ['organizations'],
+    queryFn: organizationsApi.list,
+  })
+  const { data: deptsData } = useQuery({
+    queryKey: ['departments'],
+    queryFn: () => import('../../api/client').then(m => m.apiClient.get('/departments').then(r => r.data)),
+  })
+
+  const userDeptIds = new Set(userDepartments.map((d: any) => d.id))
+  const userOrgIds = new Set<string>()
+  for (const dept of deptsData?.data ?? []) {
+    if (userDeptIds.has(dept.id)) {
+      for (const do_ of dept.departmentOrgs ?? []) userOrgIds.add(do_.organization.id)
+    }
+  }
+
+  const allOrgs: any[] = orgsData?.data ?? []
+  const orgOptions = allOrgs
+    .filter((o: any) => o.isActive && (userOrgIds.size === 0 || userOrgIds.has(o.id)))
+    .map((o: any) => ({ value: o.id, label: `${o.clave} — ${o.descripcion}` }))
+
   const event = eventData?.data
   const priceListItems = priceListData?.data?.items ?? []
 
@@ -58,6 +83,9 @@ export default function OrderFormWizard() {
       form.setFieldValue('priceListId', event.priceListId)
       setSelectedPriceListId(event.priceListId)
     }
+    const now = dayjs()
+    form.setFieldValue('startDate', now)
+    form.setFieldValue('endDate', now)
   }, [event?.priceListId])
 
   const createMutation = useMutation({
@@ -91,6 +119,7 @@ export default function OrderFormWizard() {
             quantity: li.quantity,
             discountPct: li.discountPct ?? 0,
             observations,
+            deliveryDate: li.deliveryDate || undefined,
           }
         }),
       }),
@@ -128,9 +157,14 @@ export default function OrderFormWizard() {
   async function addLineItem(resourceId: string) {
     const item = priceListItems.find((i: any) => i.resourceId === resourceId)
     if (!item) return
-    if (lineItems.find(li => li.resourceId === resourceId)) {
-      message.warning('Este recurso ya fue agregado')
-      return
+
+    // Validate duplicate based on resource's checkDuplicate setting
+    const alreadyAdded = lineItems.find(li => li.resourceId === resourceId)
+    if (alreadyAdded) {
+      if (item.resource.checkDuplicate !== false) {
+        message.warning('Este recurso no permite repetición en la Orden de Servicio')
+        return
+      }
     }
 
     const newItem = {
@@ -256,6 +290,19 @@ export default function OrderFormWizard() {
       ),
     },
     {
+      title: 'F. Entrega', dataIndex: 'deliveryDate', key: 'delivery', width: 170,
+      render: (v: any, r: any) => (
+        <DatePicker
+          showTime
+          format="DD/MM/YYYY HH:mm"
+          value={v ? dayjs(v) : null}
+          onChange={val => updateLineItem(r.resourceId, 'deliveryDate', val?.toISOString() ?? null)}
+          style={{ width: 160 }}
+          placeholder="Fecha entrega"
+        />
+      ),
+    },
+    {
       title: '', key: 'del', width: 48,
       render: (_: any, r: any) => (
         <Button danger size="small" icon={<DeleteOutlined />} onClick={() => removeLineItem(r.resourceId)} />
@@ -291,6 +338,21 @@ export default function OrderFormWizard() {
             <Col xs={12}>
               <Form.Item name="standId" label="Stand">
                 <Select options={standOptions} allowClear />
+              </Form.Item>
+            </Col>
+            <Col xs={12}>
+              <Form.Item name="startDate" label="Fecha Hora Inicio" rules={[{ required: true }]}>
+                <DatePicker showTime format="DD/MM/YYYY HH:mm" style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col xs={12}>
+              <Form.Item name="endDate" label="Fecha Hora Fin" rules={[{ required: true }]}>
+                <DatePicker showTime format="DD/MM/YYYY HH:mm" style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="organizacionId" label="Organización" rules={[{ required: true, message: 'La organización es requerida' }]}>
+                <Select options={orgOptions} placeholder="Seleccionar organización..." showSearch filterOption={(i, o) => String(o?.label ?? '').toLowerCase().includes(i.toLowerCase())} />
               </Form.Item>
             </Col>
             <Col span={24}>
@@ -443,6 +505,9 @@ export default function OrderFormWizard() {
         billingClientId: h.billingClientId || undefined,
         standId: h.standId || undefined,
         priceListId: h.priceListId,
+        organizacionId: h.organizacionId || undefined,
+        startDate: h.startDate?.toISOString?.() || h.startDate,
+        endDate: h.endDate?.toISOString?.() || h.endDate,
         notes: h.notes || undefined,
       }
       createMutation.mutate({ formValues, items: lineItems })

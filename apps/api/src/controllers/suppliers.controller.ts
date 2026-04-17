@@ -5,34 +5,36 @@ import { AppError } from '../middleware/errorHandler'
 
 const createSupplierSchema = z.object({
   name: z.string().min(1),
-  description: z.string().optional(),
+  description: z.string().optional().nullable(),
   type: z.enum(['DISTRIBUTOR', 'MANUFACTURER', 'WHOLESALER', 'SERVICES']),
-  rfc: z.string().optional(),
-  taxId: z.string().optional(),
-  fiscalRegime: z.string().optional(),
-  legalName: z.string().optional(),
-  email: z.string().email().optional(),
-  phone: z.string().optional(),
-  whatsapp: z.string().optional(),
-  website: z.string().optional(),
-  addressStreet: z.string().optional(),
-  addressCity: z.string().optional(),
-  addressState: z.string().optional(),
-  addressZip: z.string().optional(),
-  addressCountry: z.string().optional(),
-  defaultPaymentTerms: z.string().optional(),
-  averageDeliveryDays: z.number().int().positive().optional(),
-  currencyCode: z.string().optional(),
+  rfc: z.string().optional().nullable(),
+  taxId: z.string().optional().nullable(),
+  fiscalRegime: z.string().optional().nullable(),
+  legalName: z.string().optional().nullable(),
+  email: z.union([z.string().email(), z.literal('')]).optional().nullable(),
+  phone: z.string().optional().nullable(),
+  whatsapp: z.string().optional().nullable(),
+  website: z.string().optional().nullable(),
+  addressStreet: z.string().optional().nullable(),
+  addressCity: z.string().optional().nullable(),
+  addressState: z.string().optional().nullable(),
+  addressZip: z.string().optional().nullable(),
+  addressCountry: z.string().optional().nullable(),
+  defaultPaymentTerms: z.string().optional().nullable(),
+  averageDeliveryDays: z.number().int().min(0).optional().nullable(),
+  currencyCode: z.string().optional().nullable(),
 })
 
-const updateSupplierSchema = createSupplierSchema.partial()
+const updateSupplierSchema = createSupplierSchema.partial().extend({
+  status: z.enum(['ACTIVE', 'INACTIVE', 'BLOCKED']).optional(),
+})
 
 const contactSchema = z.object({
   name: z.string().min(1),
   role: z.string().min(1),
-  email: z.string().email().optional(),
-  phone: z.string().optional(),
-  whatsapp: z.string().optional(),
+  email: z.union([z.string().email(), z.literal('')]).optional().nullable(),
+  phone: z.string().optional().nullable(),
+  whatsapp: z.string().optional().nullable(),
   isPrimary: z.boolean().optional(),
 })
 

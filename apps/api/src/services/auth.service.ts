@@ -9,7 +9,7 @@ export async function login(email: string, password: string) {
     where: { email: email.toLowerCase() },
     include: {
       userDepartments: { include: { department: true } },
-      privileges: true,
+      profile: { include: { privileges: true } },
     },
   })
 
@@ -41,6 +41,9 @@ export async function login(email: string, password: string) {
     expiresIn: env.JWT_REFRESH_EXPIRES_IN as jwt.SignOptions['expiresIn'],
   })
 
+  // Resolve privileges from profile
+  const privileges = user.profile?.privileges.map(p => p.privilegeKey) ?? []
+
   return {
     accessToken,
     refreshToken,
@@ -50,8 +53,10 @@ export async function login(email: string, password: string) {
       firstName: user.firstName,
       lastName: user.lastName,
       role: user.role,
+      profileId: user.profileId,
+      profileName: user.profile?.name ?? null,
       departments: user.userDepartments.map((ud) => ud.department),
-      privileges: user.privileges.filter((p) => p.granted).map((p) => p.privilegeKey),
+      privileges,
     },
   }
 }

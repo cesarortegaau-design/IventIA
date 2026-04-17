@@ -4,18 +4,21 @@ import { Decimal } from 'decimal.js'
 import * as priceListService from '../services/priceList.supplier.service'
 import { AppError } from '../middleware/errorHandler'
 
+const toDate = z.union([z.string().datetime(), z.string().min(10)]).transform((v) => new Date(v))
+const toDecimal = z.union([z.string(), z.number()]).transform((v) => new Decimal(String(v)))
+
 const createPriceListSchema = z.object({
   supplierId: z.string().min(1),
   name: z.string().min(1),
-  description: z.string().optional(),
-  validFrom: z.string().datetime().transform((v) => new Date(v)),
-  validTo: z.string().datetime().transform((v) => new Date(v)).optional(),
-  minOrderQty: z.string().transform((v) => new Decimal(v)).optional(),
-  maxOrderQty: z.string().transform((v) => new Decimal(v)).optional(),
+  description: z.string().optional().nullable(),
+  validFrom: toDate,
+  validTo: toDate.optional().nullable(),
+  minOrderQty: toDecimal.optional().nullable(),
+  maxOrderQty: toDecimal.optional().nullable(),
   volumeDiscountRules: z.array(z.object({ minQty: z.number(), discountPct: z.number() })).optional(),
-  creditDays: z.number().int().positive().optional(),
+  creditDays: z.number().int().min(0).optional().nullable(),
   currency: z.string().optional(),
-  profitMarginSuggestion: z.string().transform((v) => new Decimal(v)).optional(),
+  profitMarginSuggestion: toDecimal.optional().nullable(),
 })
 
 const updatePriceListSchema = createPriceListSchema.omit({ supplierId: true }).partial()
@@ -48,7 +51,10 @@ export async function listSupplierPriceLists(req: Request, res: Response, next: 
 
 export async function getSupplierPriceList(req: Request, res: Response, next: NextFunction) {
   try {
-    const priceList = await priceListService.getSupplierPriceList(req.params.id, req.user!.tenantId)
+    const departmentIds = req.query.departmentIds
+      ? (req.query.departmentIds as string).split(',').filter(Boolean)
+      : undefined
+    const priceList = await priceListService.getSupplierPriceList(req.params.id, req.user!.tenantId, departmentIds)
     res.json({ success: true, data: priceList })
   } catch (err) {
     next(err)

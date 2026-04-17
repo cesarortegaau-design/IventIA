@@ -32,7 +32,7 @@ export default function WarehousesPage() {
       message.success('Almacén creado')
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.message || 'Error')
+      message.error(error.response?.data?.error?.message || 'Error')
     },
   })
 

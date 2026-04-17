@@ -1,0 +1,34 @@
+- cambios generales al proceso de Órdenes de Servicio:
+	- agregar un campo en recurso que sea "Permitir repetición en Orden de Servicio",con opciones 
+          de "Si" y "No, el default debe ser "No"
+	- en el momento de agregar recursos a la Orden de Servicio se valida si el valor del campo "Permitir repetición
+	en Orden de Servicio" y verificar si el recurso ya ha sido agregado en la orden, si ya ha sido agregado y el valor 
+	de "permitir repetición..." es "No" mandar un mensaje advirtiendo y no dejar agregarlo, en caso contrario 
+	permitir agregar el recurso
+	- agregar al detalle de la orden de servicio campo "Fecha/hora de entrega"
+	- solo se pueden agregar ordenes de servicio sin pagos a contratos
+	- agregar a la orden de servicio el campo "Estado de Pago" que puede ser "Pendiente", "En Pago", "Pagada"
+
+- revisar el proceso de cambios de estado en la SO y sus consecuencias
+	-Estados: Cotizada, Confirmada, Ejecutada, Cancelada 
+		- el estado de la orden nace en estado Cotizada (y en estado de pago "Pendiente")
+			 y después puede pasar a Confirmada, en este estado no se pueden 
+			recibir pagos, no se puede generar Orden de Compra, se pueden hacer cambios y se puede cambiar a 
+			Confirmada
+		- una vez en estado Confirmada la orden puede recibir pagos solo si no está ligada a un contrato,
+		 	se puede generar Orden de Compra y
+			se puede cambiar a Ejecutada
+		- en estado Ejecutada no se puede cambiar ningún valor, la orden de servicio solo es de consulta, solo 
+			se pueden serguir creando pagos mientras exista saldo por pagar
+		- si se hace un pago y aún existe un saldo para pagar el total de la orden el estado de pago será
+			"En Pago", si el saldo está cubierto el estado de pago es "Pagado" 
+				
+- En Portal al crear una orden nace en estado "Confirmada" y si se hacen pagos por Stripe y se paga completo el estado
+                de pago es "Pagada" y si hay un saldo el estado de pago es "En Pago". Si se hace un pago de otro
+		tipo el estado de pago es "En Revisión"
+- en la Pantalla de Contabilidad agregar "Estado de Pago", la acción de aprobación pago afectará ahora el campo
+		estado de pago, si se autoriza un pago y no queda saldo por pagar, el estado de pago cambia
+		a "Pagada", si no cubre el total de la orden de servicio cambiar estado de pago a "En Pago"
+
+
+

@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { auditService } from '../services/audit.service'
+import { getUserOrgIds } from '../middleware/departmentScope'
 
 const createEventSchema = z.object({
   name: z.string().min(1).max(300),
@@ -73,6 +74,9 @@ export async function listEvents(req: Request, res: Response, next: NextFunction
 
 export async function getEvent(req: Request, res: Response, next: NextFunction) {
   try {
+    const orgIds = await getUserOrgIds(req)
+    const ordersWhere = orgIds !== null ? { organizacionId: { in: orgIds } } : {}
+
     const event = await prisma.event.findFirst({
       where: { id: req.params.id, tenantId: req.user!.tenantId },
       include: {
@@ -82,9 +86,12 @@ export async function getEvent(req: Request, res: Response, next: NextFunction) 
         stands: { include: { client: true, _count: { select: { orders: true } } } },
         documents: true,
         orders: {
+          where: ordersWhere,
           include: {
             client: { select: { id: true, companyName: true, firstName: true, lastName: true } },
             stand: { select: { id: true, code: true } },
+            organizacion: { select: { id: true, clave: true, descripcion: true } },
+            contract: { select: { id: true, contractNumber: true, description: true, status: true, totalAmount: true, paidAmount: true, client: { select: { id: true, companyName: true, firstName: true, lastName: true } } } },
           },
           orderBy: { createdAt: 'desc' },
         },

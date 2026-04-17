@@ -1,0 +1,30 @@
+Documentos template para genarar nuevos archivos:
+
+- Funcionalidad que pida leer un archivo de Word, y que pida el contexto de información origen de la solución: Eventos,
+Órdenes de Servicio, Contratos
+- Al proporcionar el contexto y el archivo se puede generar el archivo que consistirá en usar el archivo origen de Word,
+buscar en él textos que inicien con * y después estén encerrados por [],  si el valor encerrado por [] corresponde
+a un texto de una etiqueta de un campo o lista dentro de las pantallas de la solución dentro del contexto 
+proporcionado debe sustituirlos por los valores en la base de datos y generar un nuevo documento Word que
+sea descargable
+
+Leí el archivo. La funcionalidad es un motor de plantillas Word: subir un .docx con marcadores *[Etiqueta], seleccionar un contexto       
+  (Evento, Orden, Contrato), y generar un documento nuevo con los valores reales de la BD.
+
+en el proceso de generación de plantillas, en el caso de Ordenes de servicio se debe agregar el detalle de la orden de     
+  servicio, mostrando los campos que deben mostrar todos lo registros de la orden  
+
+el contexto contrato se debe agregar el detalle de las ordenes de     
+  servicio incluidas en el contrato, mostrando los campos que deben mostrar todos lo registros de la orden  
+
+el contexto contrato se debe agregar el detalle del calendario de     
+  pagos del contrato, mostrando los campos que deben mostrar todos lo registros del calendario
+
+el contexto evento se debe agregar el detalle de las ordenes de     
+  servicio del evento mostrando los campos que deben mostrar todos lo registros de la orden  
+
+el contexto evento se debe agregar el detalle de las espacios reservados de     
+  del evento mostrando los campos que deben mostrar todos lo registros de espacios reservados  
+
+el contexto evento se debe agregar el detalle del calendario de     
+  pagos del contrato, mostrando los campos que deben mostrar todos lo registros del calendario

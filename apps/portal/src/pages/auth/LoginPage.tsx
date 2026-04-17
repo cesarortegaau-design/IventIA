@@ -36,6 +36,9 @@ export default function LoginPage() {
         <Form.Item name="password" label="Contraseña" rules={[{ required: true }]}>
           <Input.Password prefix={<LockOutlined />} size="large" placeholder="Contraseña" />
         </Form.Item>
+        <div style={{ textAlign: 'right', marginTop: -16, marginBottom: 16 }}>
+          <Link to="/forgot-password">¿Olvidaste tu contraseña?</Link>
+        </div>
         <Button type="primary" htmlType="submit" block size="large" loading={loading}>
           Iniciar Sesión
         </Button>

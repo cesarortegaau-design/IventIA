@@ -55,6 +55,7 @@ export default function AuditDrawer({ entityType, entityId, entityName, data, lo
                   { label: 'Creado', value: 'CREATE' },
                   { label: 'Modificado', value: 'UPDATE' },
                   { label: 'Eliminado', value: 'DELETE' },
+                  { label: 'Transferencia', value: 'TRANSFER' },
                 ]}
               />
             </div>

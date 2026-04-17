@@ -15,13 +15,11 @@ const userSchema = z.object({
   password: z.string().min(8).optional(),
   firstName: z.string().min(1).max(100),
   lastName: z.string().min(1).max(100),
-  phone: z.string().optional(),
+  phone: z.string().nullish(),
   role: z.enum(['ADMIN', 'NORMAL', 'READ_ONLY']).default('NORMAL'),
-  departmentIds: z.array(z.string().uuid()).default([]),
-  privileges: z.array(z.object({
-    privilegeKey: z.string(),
-    granted: z.boolean(),
-  })).default([]),
+  profileId: z.string().uuid().nullish(),
+  departmentIds: z.array(z.string()).default([]),
+  isActive: z.boolean().optional(),
 })
 
 router.get('/', requireRole(['ADMIN']), async (req: Request, res: Response, next: NextFunction) => {
@@ -30,7 +28,7 @@ router.get('/', requireRole(['ADMIN']), async (req: Request, res: Response, next
       where: { tenantId: req.user!.tenantId },
       include: {
         userDepartments: { include: { department: { select: { id: true, name: true } } } },
-        privileges: true,
+        profile: { select: { id: true, name: true } },
       },
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
     })
@@ -40,7 +38,7 @@ router.get('/', requireRole(['ADMIN']), async (req: Request, res: Response, next
 
 router.post('/', requireRole(['ADMIN']), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { departmentIds, privileges, password, ...data } = userSchema.parse(req.body)
+    const { departmentIds, password, ...data } = userSchema.parse(req.body)
     if (!password) throw new AppError(400, 'PASSWORD_REQUIRED', 'Password is required')
 
     const passwordHash = await hashPassword(password)
@@ -53,11 +51,6 @@ router.post('/', requireRole(['ADMIN']), async (req: Request, res: Response, nex
           data: departmentIds.map(dId => ({ userId: u.id, departmentId: dId })),
         })
       }
-      if (privileges.length) {
-        await tx.userPrivilege.createMany({
-          data: privileges.map(p => ({ userId: u.id, ...p })),
-        })
-      }
       return u
     })
     res.status(201).json({ success: true, data: { ...user, passwordHash: undefined } })
@@ -66,7 +59,8 @@ router.post('/', requireRole(['ADMIN']), async (req: Request, res: Response, nex
 
 router.put('/:id', requireRole(['ADMIN']), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { departmentIds, privileges, password, ...data } = userSchema.partial().parse(req.body)
+    const parsed = userSchema.partial().parse(req.body)
+    const { departmentIds = [], password, ...data } = parsed
     const user = await prisma.user.findFirst({ where: { id: req.params.id, tenantId: req.user!.tenantId } })
     if (!user) throw new AppError(404, 'NOT_FOUND', 'User not found')
 
@@ -80,14 +74,6 @@ router.put('/:id', requireRole(['ADMIN']), async (req: Request, res: Response, n
         if (departmentIds.length) {
           await tx.userDepartment.createMany({
             data: departmentIds.map(dId => ({ userId: req.params.id, departmentId: dId })),
-          })
-        }
-      }
-      if (privileges) {
-        await tx.userPrivilege.deleteMany({ where: { userId: req.params.id } })
-        if (privileges.length) {
-          await tx.userPrivilege.createMany({
-            data: privileges.map(p => ({ userId: req.params.id, ...p })),
           })
         }
       }

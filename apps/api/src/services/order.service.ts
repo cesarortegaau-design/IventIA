@@ -27,15 +27,19 @@ export interface CreateOrderInput {
   startDate?: Date
   endDate?: Date
   notes?: string
+  departamento?: string
+  organizacionId?: string
   isCreditNote?: boolean
   originalOrderId?: string
   createdById: string
+  initialStatus?: 'QUOTED' | 'CONFIRMED' | 'CREDIT_NOTE'
   lineItems: Array<{
     resourceId: string
     quantity: number
     discountPct?: number
     observations?: string
     sortOrder?: number
+    deliveryDate?: Date
   }>
 }
 
@@ -66,19 +70,17 @@ export async function createOrder(input: CreateOrderInput) {
     const discountPct = new Decimal(li.discountPct ?? 0)
     const lineTotal = calculateLineTotal(unitPrice, quantity, discountPct)
 
-    // Credit notes: invert amounts
-    const multiplier = input.isCreditNote ? new Decimal(-1) : new Decimal(1)
-
     return {
       resourceId: li.resourceId,
       description: plItem.resource.name,
       pricingTier,
-      unitPrice: unitPrice.mul(multiplier),
+      unitPrice,
       quantity,
       discountPct,
-      lineTotal: lineTotal.mul(multiplier),
+      lineTotal,
       observations: li.observations,
       sortOrder: li.sortOrder ?? idx,
+      deliveryDate: li.deliveryDate,
     }
   })
 
@@ -90,6 +92,8 @@ export async function createOrder(input: CreateOrderInput) {
 
   const orderNumber = await generateOrderNumber(input.tenantId)
 
+  const status = input.initialStatus ?? 'QUOTED'
+
   const order = await prisma.$transaction(async (tx) => {
     const order = await tx.order.create({
       data: {
@@ -100,6 +104,8 @@ export async function createOrder(input: CreateOrderInput) {
         billingClientId: input.billingClientId,
         standId: input.standId,
         priceListId: input.priceListId,
+        status,
+        paymentStatus: 'PENDING',
         pricingTier,
         subtotal: totals.subtotal,
         discountAmount: totals.discountAmount,
@@ -109,6 +115,8 @@ export async function createOrder(input: CreateOrderInput) {
         startDate: input.startDate,
         endDate: input.endDate,
         notes: input.notes,
+        departamento: input.departamento,
+        organizacionId: input.organizacionId,
         isCreditNote: input.isCreditNote ?? false,
         originalOrderId: input.originalOrderId,
         createdById: input.createdById,
@@ -121,7 +129,7 @@ export async function createOrder(input: CreateOrderInput) {
       data: {
         orderId: order.id,
         fromStatus: null,
-        toStatus: 'QUOTED',
+        toStatus: status,
         changedById: input.createdById,
         notes: 'Order created',
       },
@@ -157,18 +165,6 @@ export async function transitionOrderStatus(
       'INVALID_STATUS_TRANSITION',
       `Cannot transition from ${order.status} to ${toStatus}`
     )
-  }
-
-  // Extra validation: can't mark PAID if paidAmount < total
-  if (toStatus === 'PAID') {
-    const payments = await prisma.orderPayment.aggregate({
-      where: { orderId },
-      _sum: { amount: true },
-    })
-    const paidAmount = payments._sum.amount ?? new Decimal(0)
-    if (paidAmount.lt(order.total)) {
-      throw new AppError(400, 'INSUFFICIENT_PAYMENT', 'Order total not fully paid')
-    }
   }
 
   const result = await prisma.$transaction(async (tx) => {
@@ -213,8 +209,17 @@ export async function addPayment(
   const order = await prisma.order.findUnique({ where: { id: orderId } })
   if (!order) throw new AppError(404, 'ORDER_NOT_FOUND', 'Order not found')
 
-  if (!['CONFIRMED', 'IN_PAYMENT'].includes(order.status)) {
-    throw new AppError(400, 'INVALID_ORDER_STATUS', 'Payments can only be added to confirmed orders')
+  // Payments allowed on CONFIRMED (if not linked to contract) and EXECUTED (if balance > 0)
+  if (order.status === 'CONFIRMED') {
+    if (order.contractId) {
+      throw new AppError(400, 'ORDER_HAS_CONTRACT', 'No se pueden registrar pagos directos en órdenes vinculadas a un contrato')
+    }
+  } else if (order.status === 'EXECUTED') {
+    if (new Decimal(order.paidAmount).gte(order.total)) {
+      throw new AppError(400, 'ORDER_FULLY_PAID', 'La orden ya está completamente pagada')
+    }
+  } else {
+    throw new AppError(400, 'INVALID_ORDER_STATUS', 'Solo se pueden agregar pagos a órdenes confirmadas o ejecutadas')
   }
 
   return prisma.$transaction(async (tx) => {
@@ -234,28 +239,38 @@ export async function addPayment(
       where: { orderId },
       _sum: { amount: true },
     })
-    const paidAmount = payments._sum.amount ?? new Decimal(0)
-    const newPaidAmount = paidAmount
+    const newPaidAmount = payments._sum.amount ?? new Decimal(0)
 
-    const newStatus = newPaidAmount.gte(order.total) ? 'PAID' : 'IN_PAYMENT'
+    const newPaymentStatus = newPaidAmount.gte(order.total) ? 'PAID' : 'IN_PAYMENT'
 
     const updated = await tx.order.update({
       where: { id: orderId },
-      data: { paidAmount: newPaidAmount, status: newStatus },
+      data: { paidAmount: newPaidAmount, paymentStatus: newPaymentStatus },
     })
-
-    if (newStatus !== order.status) {
-      await tx.orderStatusHistory.create({
-        data: {
-          orderId,
-          fromStatus: order.status,
-          toStatus: newStatus,
-          changedById: userId,
-          notes: 'Status updated after payment',
-        },
-      })
-    }
 
     return updated
   })
+}
+
+// Update payment status (used by accounting approval)
+export async function updatePaymentStatus(
+  orderId: string,
+  userId: string,
+) {
+  const order = await prisma.order.findUnique({ where: { id: orderId } })
+  if (!order) throw new AppError(404, 'ORDER_NOT_FOUND', 'Order not found')
+
+  const newPaymentStatus = new Decimal(order.paidAmount).gte(order.total) ? 'PAID' : 'IN_PAYMENT'
+
+  const updated = await prisma.order.update({
+    where: { id: orderId },
+    data: { paymentStatus: newPaymentStatus },
+  })
+
+  await auditService.log(order.tenantId, userId, 'Order', orderId, 'UPDATE',
+    { paymentStatus: order.paymentStatus },
+    { paymentStatus: newPaymentStatus },
+  )
+
+  return updated
 }

@@ -58,14 +58,16 @@ export default function EventPortalPage() {
           >
             Ver Catálogo
           </Button>
-          <Button
-            type="primary"
-            icon={<ShoppingCartOutlined />}
-            onClick={() => navigate(`/events/${eventId}/new-order`)}
-            style={{ background: '#531dab', borderColor: '#531dab' }}
-          >
-            Nueva Solicitud
-          </Button>
+          {['CONFIRMED', 'IN_EXECUTION'].includes(event.status) && (
+            <Button
+              type="primary"
+              icon={<ShoppingCartOutlined />}
+              onClick={() => navigate(`/events/${eventId}/new-order`)}
+              style={{ background: '#531dab', borderColor: '#531dab' }}
+            >
+              Nueva Solicitud
+            </Button>
+          )}
         </Space>
       </div>
 

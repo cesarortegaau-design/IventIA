@@ -1,0 +1,16 @@
+Contratos
+
+- La sección de Contratos tienen las siguienes funcionalidades:
+	- Una sección principal que incluya los datos:
+		- Descripción, Fecha de firma, Estado (en orden cronológico): En Firma, Firmado y Cancelado,
+		Cliente
+		- Control para agregar o desagregar órdenes de servicio existentes y que no pertenezcan a otro
+		contrato en Estado En Firma o Firmado
+		- Calendario de Pagos, que debe permitir crear, modificar o eliminar
+		 los pagos programados necesarios que el cliente debe hacer
+		para pagar el monto de las órdenes de servicio seleccionadas para el contrato. El funcionamiento
+		debe ser intuitivo sugiriendo los montos con base a porcentaje que el monto del pago represente
+		sobre el monto total del contrato
+		- Cada pago programado debe permitir agregar pagos manualmente con opciones como las que tiene
+		portal 
+		

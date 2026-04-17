@@ -9,7 +9,12 @@ import { exportToCsv } from '../../utils/exportCsv'
 
 const { Title } = Typography
 
-const STATUS_LABELS: Record<string, string> = { PAID: 'Pagada', IN_PAYMENT: 'En Pago' }
+const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  PENDING: 'Pendiente', IN_PAYMENT: 'En Pago', PAID: 'Pagada', IN_REVIEW: 'En Revisión',
+}
+const PAYMENT_STATUS_COLORS: Record<string, string> = {
+  PENDING: 'default', IN_PAYMENT: 'orange', PAID: 'purple', IN_REVIEW: 'gold',
+}
 
 export default function AccountingDashboard() {
   const navigate = useNavigate()
@@ -24,17 +29,18 @@ export default function AccountingDashboard() {
 
   const approveMutation = useMutation({
     mutationFn: (orderId: string) =>
-      ordersApi.updateStatus(orderId, 'PAID', 'Comprobante de pago aprobado por contabilidad'),
+      ordersApi.approvePayment(orderId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dashboard-accounting'] })
-      message.success('Orden marcada como Pagada')
+      message.success('Pago aprobado')
     },
     onError: () => message.error('Error al aprobar el pago'),
   })
 
   const orders = data?.data ?? []
-  const paid = orders.filter((o: any) => o.status === 'PAID')
-  const inPayment = orders.filter((o: any) => o.status === 'IN_PAYMENT')
+  const paid = orders.filter((o: any) => o.paymentStatus === 'PAID')
+  const inPayment = orders.filter((o: any) => o.paymentStatus === 'IN_PAYMENT')
+  const inReview = orders.filter((o: any) => o.paymentStatus === 'IN_REVIEW')
   const totalPaid = paid.reduce((s: number, o: any) => s + Number(o.total), 0)
 
   const columns = [
@@ -52,8 +58,8 @@ export default function AccountingDashboard() {
     { title: 'Total', dataIndex: 'total', render: (v: number) => `$${Number(v).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` },
     { title: 'Pagado', dataIndex: 'paidAmount', render: (v: number) => `$${Number(v).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` },
     {
-      title: 'Estado', dataIndex: 'status', render: (v: string) => (
-        <Tag color={v === 'PAID' ? 'purple' : 'orange'}>{STATUS_LABELS[v] ?? v}</Tag>
+      title: 'Estado de Pago', dataIndex: 'paymentStatus', render: (v: string) => (
+        <Tag color={PAYMENT_STATUS_COLORS[v] ?? 'default'}>{PAYMENT_STATUS_LABELS[v] ?? v}</Tag>
       ),
     },
     {
@@ -79,7 +85,7 @@ export default function AccountingDashboard() {
     {
       title: 'Acción',
       render: (_: any, r: any) => {
-        if (r.status !== 'IN_PAYMENT') return null
+        if (r.paymentStatus !== 'IN_REVIEW' && r.paymentStatus !== 'IN_PAYMENT') return null
         return (
           <Button
             type="primary"
@@ -103,13 +109,13 @@ export default function AccountingDashboard() {
     <div>
       <Title level={4} style={{ marginBottom: 16 }}>Dashboard — Contabilidad</Title>
       <Row gutter={16} style={{ marginBottom: 24 }}>
-        <Col span={6}><Card><Statistic title="Órdenes Pagadas" value={paid.length} valueStyle={{ color: '#6B46C1' }} /></Card></Col>
-        <Col span={6}><Card><Statistic title="En Pago (pendiente)" value={inPayment.length} valueStyle={{ color: '#fa8c16' }} /></Card></Col>
+        <Col span={6}><Card><Statistic title="Pagadas" value={paid.length} valueStyle={{ color: '#6B46C1' }} /></Card></Col>
+        <Col span={6}><Card><Statistic title="En Pago" value={inPayment.length} valueStyle={{ color: '#fa8c16' }} /></Card></Col>
+        <Col span={6}><Card><Statistic title="En Revisión" value={inReview.length} valueStyle={{ color: '#d4b106' }} /></Card></Col>
         <Col span={6}><Card><Statistic title="Total Pagado" prefix="$" value={totalPaid.toLocaleString('es-MX', { minimumFractionDigits: 2 })} /></Card></Col>
-        <Col span={6}><Card><Statistic title="Pendiente de Facturar" value={paid.length} /></Card></Col>
       </Row>
       <Card
-        title="Órdenes Pagadas y En Pago"
+        title="Órdenes por Estado de Pago"
         extra={
           <Button
             icon={<DownloadOutlined />}
@@ -119,7 +125,7 @@ export default function AccountingDashboard() {
               cliente: o.billingClient?.companyName || o.client?.companyName || `${o.client?.firstName} ${o.client?.lastName}`,
               rfc: o.billingClient?.rfc || o.client?.rfc || '',
               total: Number(o.total).toFixed(2),
-              estado: STATUS_LABELS[o.status] ?? o.status,
+              estado: PAYMENT_STATUS_LABELS[o.paymentStatus] ?? o.paymentStatus,
             })), [
               { header: 'Orden', key: 'orden' },
               { header: 'Evento', key: 'evento' },

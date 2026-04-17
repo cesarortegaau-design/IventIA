@@ -10,16 +10,18 @@ const createWarehouseSchema = z.object({
   description: z.string().optional(),
   address: z.string().optional(),
   managerId: z.string().optional(),
-  capacity: z.number().int().positive().optional(),
+  capacity: z.number().int().min(0).optional().nullable(),
   specialConditions: z.record(z.any()).optional(),
 })
+
+const toDecimal = z.union([z.string(), z.number()]).transform((v) => new Decimal(String(v)))
 
 const initializeInventorySchema = z.object({
   resourceId: z.string().min(1),
   warehouseId: z.string().min(1),
-  quantityTotal: z.string().transform((v) => new Decimal(v)).optional(),
-  minLevel: z.string().transform((v) => new Decimal(v)).optional(),
-  maxLevel: z.string().transform((v) => new Decimal(v)).optional(),
+  quantityTotal: toDecimal.optional(),
+  minLevel: toDecimal.optional(),
+  maxLevel: toDecimal.optional(),
   location: z.string().optional(),
 })
 
@@ -28,7 +30,7 @@ const receptionSchema = z.object({
   items: z.array(
     z.object({
       lineItemId: z.string().min(1),
-      receivedQty: z.string().transform((v) => new Decimal(v)),
+      receivedQty: toDecimal,
       warehouseId: z.string().min(1),
       condition: z.string().optional(),
       location: z.string().optional(),
@@ -38,9 +40,17 @@ const receptionSchema = z.object({
 })
 
 const adjustmentSchema = z.object({
-  quantity: z.string().transform((v) => new Decimal(v)),
+  quantity: toDecimal,
   type: z.enum(['ADJUSTMENT', 'LOSS', 'RETURN']),
   reason: z.string().optional(),
+  notes: z.string().optional(),
+})
+
+const transferSchema = z.object({
+  sourceWarehouseId: z.string().min(1),
+  destinationWarehouseId: z.string().min(1),
+  resourceId: z.string().min(1),
+  quantity: toDecimal,
   notes: z.string().optional(),
 })
 
@@ -84,8 +94,10 @@ export async function createWarehouse(req: Request, res: Response, next: NextFun
 export async function getWarehouseInventory(req: Request, res: Response, next: NextFunction) {
   try {
     const { pageSize = 50, page = 1 } = req.query
+    const { getUserOrgIds } = await import('../middleware/departmentScope')
+    const orgIds = await getUserOrgIds(req)
 
-    const inventory = await warehouseService.getWarehouseInventory(req.params.id, req.user!.tenantId, Number(pageSize), Number(page))
+    const inventory = await warehouseService.getWarehouseInventory(req.params.id, req.user!.tenantId, Number(pageSize), Number(page), orgIds)
 
     res.json({ success: true, data: inventory.data, meta: inventory.meta })
   } catch (err) {
@@ -160,6 +172,22 @@ export async function adjustInventory(req: Request, res: Response, next: NextFun
     )
 
     res.json({ success: true, data: inventory })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function transferInventory(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = transferSchema.parse(req.body)
+
+    const result = await warehouseService.transferInventory(
+      req.user!.tenantId,
+      data,
+      req.user!.userId
+    )
+
+    res.json({ success: true, data: result })
   } catch (err) {
     next(err)
   }

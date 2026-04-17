@@ -1,7 +1,7 @@
 import { Decimal } from 'decimal.js'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
-import * as auditService from './audit.service'
+import { auditService } from './audit.service'
 
 export interface CreateWarehouseInput {
   tenantId: string
@@ -188,7 +188,7 @@ export async function getResourceInventory(id: string, tenantId: string) {
   return inventory
 }
 
-export async function getWarehouseInventory(warehouseId: string, tenantId: string, pageSize = 50, page = 1) {
+export async function getWarehouseInventory(warehouseId: string, tenantId: string, pageSize = 50, page = 1, organizationIds?: string[] | null) {
   const skip = (page - 1) * pageSize
 
   // Verify warehouse exists
@@ -200,9 +200,20 @@ export async function getWarehouseInventory(warehouseId: string, tenantId: strin
     throw new AppError(404, 'WAREHOUSE_NOT_FOUND', 'Warehouse not found')
   }
 
+  // Build resource filter by organization (via department → departmentOrgs)
+  const resourceWhere: any = {}
+  if (organizationIds !== null && organizationIds !== undefined) {
+    resourceWhere.department = { departmentOrgs: { some: { organizationId: { in: organizationIds } } } }
+  }
+
+  const inventoryWhere: any = { warehouseId, tenantId }
+  if (Object.keys(resourceWhere).length > 0) {
+    inventoryWhere.resource = resourceWhere
+  }
+
   const [inventory, total] = await Promise.all([
     prisma.resourceInventory.findMany({
-      where: { warehouseId, tenantId },
+      where: inventoryWhere,
       skip,
       take: pageSize,
       include: {
@@ -210,7 +221,7 @@ export async function getWarehouseInventory(warehouseId: string, tenantId: strin
       },
       orderBy: { resource: { name: 'asc' } },
     }),
-    prisma.resourceInventory.count({ where: { warehouseId, tenantId } }),
+    prisma.resourceInventory.count({ where: inventoryWhere }),
   ])
 
   return {
@@ -403,6 +414,126 @@ export async function getInventoryMovements(
       totalPages: Math.ceil(total / pageSize),
     },
   }
+}
+
+export async function transferInventory(
+  tenantId: string,
+  input: {
+    sourceWarehouseId: string
+    destinationWarehouseId: string
+    resourceId: string
+    quantity: Decimal
+    notes?: string
+  },
+  userId: string
+) {
+  if (input.sourceWarehouseId === input.destinationWarehouseId) {
+    throw new AppError(400, 'SAME_WAREHOUSE', 'El almacén origen y destino no pueden ser el mismo')
+  }
+
+  if (input.quantity.isNegative() || input.quantity.isZero()) {
+    throw new AppError(400, 'INVALID_QUANTITY', 'La cantidad debe ser mayor a cero')
+  }
+
+  // Find source inventory
+  const sourceInventory = await prisma.resourceInventory.findFirst({
+    where: { tenantId, resourceId: input.resourceId, warehouseId: input.sourceWarehouseId },
+    include: { resource: { select: { code: true, name: true, unit: true } } },
+  })
+
+  if (!sourceInventory) {
+    throw new AppError(404, 'SOURCE_INVENTORY_NOT_FOUND', 'El recurso no existe en el almacén origen')
+  }
+
+  const available = sourceInventory.quantityTotal.minus(sourceInventory.quantityReserved)
+  if (available.lessThan(input.quantity)) {
+    throw new AppError(400, 'INSUFFICIENT_STOCK', `Stock disponible insuficiente (disponible: ${available})`)
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    // Decrement source
+    const updatedSource = await tx.resourceInventory.update({
+      where: { id: sourceInventory.id },
+      data: {
+        quantityTotal: sourceInventory.quantityTotal.minus(input.quantity),
+        lastMovement: new Date(),
+      },
+    })
+
+    // EXIT movement on source
+    await tx.inventoryMovement.create({
+      data: {
+        tenantId,
+        inventoryId: sourceInventory.id,
+        warehouseId: input.sourceWarehouseId,
+        resourceId: input.resourceId,
+        type: 'TRANSFER_OUT',
+        quantity: input.quantity.negated(),
+        source: 'TRANSFER',
+        sourceId: input.destinationWarehouseId,
+        balanceBefore: sourceInventory.quantityTotal,
+        balanceAfter: updatedSource.quantityTotal,
+        notes: input.notes,
+        recordedById: userId,
+      },
+    })
+
+    // Find or create destination inventory
+    let destInventory = await tx.resourceInventory.findFirst({
+      where: { tenantId, resourceId: input.resourceId, warehouseId: input.destinationWarehouseId },
+    })
+
+    if (!destInventory) {
+      destInventory = await tx.resourceInventory.create({
+        data: {
+          tenantId,
+          resourceId: input.resourceId,
+          warehouseId: input.destinationWarehouseId,
+          quantityTotal: new Decimal(0),
+          quantityReserved: new Decimal(0),
+        },
+      })
+    }
+
+    const destBefore = destInventory.quantityTotal
+    const updatedDest = await tx.resourceInventory.update({
+      where: { id: destInventory.id },
+      data: {
+        quantityTotal: destInventory.quantityTotal.plus(input.quantity),
+        lastMovement: new Date(),
+      },
+    })
+
+    // ENTRY movement on destination
+    await tx.inventoryMovement.create({
+      data: {
+        tenantId,
+        inventoryId: destInventory.id,
+        warehouseId: input.destinationWarehouseId,
+        resourceId: input.resourceId,
+        type: 'TRANSFER_IN',
+        quantity: input.quantity,
+        source: 'TRANSFER',
+        sourceId: input.sourceWarehouseId,
+        balanceBefore: destBefore,
+        balanceAfter: updatedDest.quantityTotal,
+        notes: input.notes,
+        recordedById: userId,
+      },
+    })
+
+    return { source: updatedSource, destination: updatedDest }
+  })
+
+  await auditService.log(tenantId, userId, 'ResourceInventory', sourceInventory.id, 'TRANSFER', {
+    sourceWarehouseId: input.sourceWarehouseId,
+    quantity: input.quantity.toString(),
+  }, {
+    destinationWarehouseId: input.destinationWarehouseId,
+    quantity: input.quantity.toString(),
+  })
+
+  return result
 }
 
 export async function adjustInventory(

@@ -15,6 +15,26 @@ export const clientsApi = {
     apiClient.get('/clients/portal-users').then(r => r.data.data),
   linkPortalUser: (id: string, portalUserId: string | null) =>
     apiClient.patch(`/clients/${id}/link-portal-user`, { portalUserId }).then(r => r.data),
+
+  // Client Relations
+  addRelation: (id: string, data: any) =>
+    apiClient.post(`/clients/${id}/relations`, data).then(r => r.data),
+  updateRelation: (id: string, relationId: string, data: any) =>
+    apiClient.patch(`/clients/${id}/relations/${relationId}`, data).then(r => r.data),
+  deleteRelation: (id: string, relationId: string) =>
+    apiClient.delete(`/clients/${id}/relations/${relationId}`).then(r => r.data),
+
+  // Portal Users Management
+  getPortalUser: (portalUserId: string) =>
+    apiClient.get(`/clients/portal-users/${portalUserId}`).then(r => r.data),
+  updatePortalUser: (portalUserId: string, data: any) =>
+    apiClient.patch(`/clients/portal-users/${portalUserId}`, data).then(r => r.data),
+  resetPortalUserPassword: (portalUserId: string, password: string) =>
+    apiClient.post(`/clients/portal-users/${portalUserId}/reset-password`, { password }).then(r => r.data),
+  addPortalUserClient: (portalUserId: string, clientId: string) =>
+    apiClient.post(`/clients/portal-users/${portalUserId}/clients`, { clientId }).then(r => r.data),
+  removePortalUserClient: (portalUserId: string, clientId: string) =>
+    apiClient.delete(`/clients/portal-users/${portalUserId}/clients/${clientId}`).then(r => r.data),
   uploadDocument: (id: string, file: File, documentType: string) => {
     const form = new FormData()
     form.append('file', file)

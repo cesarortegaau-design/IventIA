@@ -1,0 +1,25 @@
+en Admin
+
+- Los clientes pueden relacionarse entre si y deben tener un control dentro de la forma de cliente
+que los permita gestionar esa relacion (que tipo de relacion tienen uno con otro, si esta activa, etc.
+	por ejemplo, un cliente puede ser facturado a otro cliente)
+
+- debe existir un catálogo que permita gestionar los usuarios de Portal
+	- datos generales y de seguridad, activación
+	- a que clientes está representando
+- solo se podrán generar códigos para eventos en estado Confirmado o En ejecución
+
+en Portal
+- la primera vez que accede el usuario deberá crear su información básica (agrega lo necesario para que tenga todo lo necesario
+en términos de datos y seguridad
+- depués de acceder por primera vez y que su usuario sea creado podrá administrar estos datos
+ - una vez que el usuario accedió por una clave al portal deberá poder crear o escoger el cliente al que representa 
+	proporcionando sus datos completos (generales, demográficos y fiscales) y no tiene porque volver a propocionar
+	datos de usuario si es que ya ha accedido a eventos en el pasado
+- Si el evento está en estado COnfirmado o En ejecución se puede serguir operando solicitudes, si el EVento está
+ Cerrado o Cancelado solo se podrán consultar datos
+
+
+
+	
+

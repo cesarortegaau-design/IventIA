@@ -1,7 +1,7 @@
 import { Decimal } from 'decimal.js'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
-import * as auditService from './audit.service'
+import { auditService } from './audit.service'
 
 export interface CreateSupplierInput {
   tenantId: string

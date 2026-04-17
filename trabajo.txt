@@ -1,0 +1,50 @@
+En Órdenes de Servicio:
+
+- agregar el campo Total a la pantalla de edición del detalle de la orden de servicio
+Cuando la orden de servicio cambie a estado Confirmada
+- los valores cantidad y descuento y observaciones se inhabilitan 
+- necesitamos que la pantalla de edición del detalle tengo dos tabs, en el primero llamado
+  Valores Solicitados y el segundo Valores Reales
+- en Valores Solicitados queda exactamente los mismos campos y valores de la orden que se muestran actualmente
+- en Valores Reales se necesita crear 3 campos (Cantidad Real, Descuento Real, Total Real, Observaciones Real que funcionen
+exactamente como funciona Cantidad, Descuento, Total, Observaciones)
+- inicialmente los valores de Cantidad Real, Descuento Real, Total Real deben tener sugeridos los valores
+de Cantidad, Descuento, Total correspondientemente
+- la orden de servicio puede cambiar de Confirmada a Ejecutada, una vez en estado Ejecutada la orden queda bloqueada 
+para edición
+
+
+
+
+- en ordenes de servicio y ordenes de compra solo se deben mostrar los recursos que pertenezcan a los departamentos
+asignados al usuario que está usando la solución Admin
+
+- se debe agregar una opción dentro del despliegue de órdenes de servicio que sea crear nota de crédito que es igual a una orden 
+de servicio en términos de estructura y vista. En el despliegue cada orden con estado ejecutada
+ podrá ser seleccionada para crear una nota
+de crédito que deberá sugerir con los valores de la orden de servicio marcando las unidades con la misma cantidad
+pero en negativo. El usuario podrá modificar las unidades reales con valores 0 o negativos, la nota de crédito es una orden se servicio
+tipo nota de crédito y debe ser almacenada en la misma tabla en estado Ejecutada
+
+- el usuario solo podrá crear, consultar y editar recursos en ordenes de servicio y ordenes de compra
+ que pertenezcan a el(los) departamento(s) al que el usuario fue asignado
+
+Órdenes de Compra:
+- la orden de compra debe mostrar claramente si fue creada a partir de una orden de servicio o no
+
+Producción y COstos
+- Se debe crear una sección en Admin que permita:
+	- Generar consultas sobre los recursos programados en órdenes de servicio Confirmadas y Ejecutadas 
+	(obviamnte valores reales) considerando
+		fechas, departamentos y todo  lo que se útil
+	- debe también tener consultas que analicen y contrasten los recursos de estas ordenes de servicio con las ordenes
+		de compra existentes y los stocks de los recursos en los almacenes que permitan sugerir
+		análisis de:	
+			- programar y generar compras que se consideren adicionales para lograr la ejecución de las
+				ordenes de servicio
+			- análisis de costos y de mercado, establecer cual es rendimiento (porcentaje de ganancia 
+				tomando en cuenta los ingresos (ordenes de servicio) versus los egresos (ordenes de 
+				compra) por orden de servicio y por evento
+			- agrega funcionalidades y consultas que sean pertinentes
+
+

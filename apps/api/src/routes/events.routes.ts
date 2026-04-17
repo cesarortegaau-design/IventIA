@@ -1,6 +1,8 @@
 import { Router } from 'express'
 import multer from 'multer'
 import { authenticate } from '../middleware/authenticate'
+import { requirePrivilege } from '../middleware/authorize'
+import { PRIVILEGES } from '@iventia/shared'
 import { listEvents, getEvent, createEvent, updateEvent, updateEventStatus } from '../controllers/events.controller'
 import { listOrdersForEvent, createOrder } from '../controllers/orders.controller'
 import { listEventSpaces, createEventSpace, updateEventSpace, deleteEventSpace, getEventSpaceAudit } from '../controllers/eventSpaces.controller'
@@ -16,28 +18,28 @@ const router = Router()
 
 router.use(authenticate)
 
-router.get('/', listEvents)
-router.post('/', createEvent)
-router.get('/:id', getEvent)
-router.put('/:id', updateEvent)
-router.patch('/:id/status', updateEventStatus)
+router.get('/', requirePrivilege(PRIVILEGES.EVENT_VIEW), listEvents)
+router.post('/', requirePrivilege(PRIVILEGES.EVENT_CREATE), createEvent)
+router.get('/:id', requirePrivilege(PRIVILEGES.EVENT_VIEW), getEvent)
+router.put('/:id', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), updateEvent)
+router.patch('/:id/status', requirePrivilege(PRIVILEGES.EVENT_CONFIRM), updateEventStatus)
 
 // Nested orders
-router.get('/:eventId/orders', listOrdersForEvent)
-router.post('/:eventId/orders', createOrder)
+router.get('/:eventId/orders', requirePrivilege(PRIVILEGES.ORDER_VIEW), listOrdersForEvent)
+router.post('/:eventId/orders', requirePrivilege(PRIVILEGES.ORDER_CREATE), createOrder)
 
 // Nested event spaces (bookings)
-router.get('/:eventId/spaces', listEventSpaces)
-router.post('/:eventId/spaces', createEventSpace)
-router.put('/:eventId/spaces/:spaceId', updateEventSpace)
-router.delete('/:eventId/spaces/:spaceId', deleteEventSpace)
-router.get('/:eventId/spaces/:spaceId/audit', getEventSpaceAudit)
+router.get('/:eventId/spaces', requirePrivilege(PRIVILEGES.EVENT_VIEW), listEventSpaces)
+router.post('/:eventId/spaces', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), createEventSpace)
+router.put('/:eventId/spaces/:spaceId', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), updateEventSpace)
+router.delete('/:eventId/spaces/:spaceId', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), deleteEventSpace)
+router.get('/:eventId/spaces/:spaceId/audit', requirePrivilege(PRIVILEGES.EVENT_VIEW), getEventSpaceAudit)
 
 // Stands import
-router.post('/:eventId/stands/import', importStands)
+router.post('/:eventId/stands/import', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), importStands)
 
 // Documents
-router.post('/:id/documents', docUpload.single('file'), uploadEventDocument)
-router.delete('/:id/documents/:docId', deleteEventDocument)
+router.post('/:id/documents', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), docUpload.single('file'), uploadEventDocument)
+router.delete('/:id/documents/:docId', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), deleteEventDocument)
 
 export default router

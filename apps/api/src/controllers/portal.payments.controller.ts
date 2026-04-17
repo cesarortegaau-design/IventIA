@@ -37,7 +37,7 @@ export async function createStripeCheckout(req: Request, res: Response, next: Ne
     const { portalUserId, tenantId } = req.portalUser!
     const order = await resolvePortalOrder(portalUserId, tenantId, req.params.orderId)
 
-    if (!['QUOTED', 'CONFIRMED'].includes(order.status)) {
+    if (order.status !== 'CONFIRMED') {
       throw new AppError(400, 'INVALID_STATUS', 'La orden no está disponible para pago')
     }
 
@@ -76,12 +76,12 @@ export async function verifyStripePayment(req: Request, res: Response, next: Nex
     const order = await resolvePortalOrder(portalUserId, tenantId, req.params.orderId)
 
     // Already paid — idempotent
-    if (order.status === 'PAID') return res.json({ success: true, data: { status: 'PAID' } })
+    if (order.paymentStatus === 'PAID') return res.json({ success: true, data: { paymentStatus: 'PAID' } })
 
     const session = await stripe.checkout.sessions.retrieve(sessionId)
 
     if (session.payment_status !== 'paid') {
-      return res.json({ success: true, data: { status: order.status } })
+      return res.json({ success: true, data: { paymentStatus: order.paymentStatus } })
     }
 
     // Verify this session belongs to this order
@@ -90,6 +90,9 @@ export async function verifyStripePayment(req: Request, res: Response, next: Nex
     }
 
     const systemUser = await getSystemUser(tenantId)
+    const Decimal = (await import('decimal.js')).default
+    const newPaidAmount = new Decimal(Number(order.paidAmount)).add(new Decimal(Number(order.total)))
+    const newPaymentStatus = newPaidAmount.gte(order.total) ? 'PAID' : 'IN_PAYMENT'
 
     await prisma.$transaction([
       prisma.orderPayment.create({
@@ -105,20 +108,11 @@ export async function verifyStripePayment(req: Request, res: Response, next: Nex
       }),
       prisma.order.update({
         where: { id: order.id },
-        data: { status: 'PAID', paidAmount: order.total, updatedAt: new Date() },
-      }),
-      prisma.orderStatusHistory.create({
-        data: {
-          orderId: order.id,
-          fromStatus: order.status as any,
-          toStatus: 'PAID',
-          changedById: systemUser.id,
-          notes: `Pago en línea confirmado (Stripe session: ${session.id})`,
-        },
+        data: { paymentStatus: newPaymentStatus, paidAmount: newPaidAmount, updatedAt: new Date() },
       }),
     ])
 
-    res.json({ success: true, data: { status: 'PAID' } })
+    res.json({ success: true, data: { paymentStatus: newPaymentStatus } })
   } catch (err) {
     next(err)
   }
@@ -130,7 +124,7 @@ export async function uploadPaymentVoucher(req: Request, res: Response, next: Ne
     const { portalUserId, tenantId } = req.portalUser!
     const order = await resolvePortalOrder(portalUserId, tenantId, req.params.orderId)
 
-    if (!['QUOTED', 'CONFIRMED'].includes(order.status)) {
+    if (order.status !== 'CONFIRMED') {
       throw new AppError(400, 'INVALID_STATUS', 'La orden no está disponible para pago')
     }
     if (!req.file) throw new AppError(400, 'NO_FILE', 'No se recibió ningún archivo')
@@ -167,16 +161,7 @@ export async function uploadPaymentVoucher(req: Request, res: Response, next: Ne
       }),
       prisma.order.update({
         where: { id: order.id },
-        data: { status: 'IN_PAYMENT', updatedAt: new Date() },
-      }),
-      prisma.orderStatusHistory.create({
-        data: {
-          orderId: order.id,
-          fromStatus: order.status as any,
-          toStatus: 'IN_PAYMENT',
-          changedById: systemUser.id,
-          notes: `Comprobante de pago recibido por portal (${method}${reference ? ` ref: ${reference}` : ''})`,
-        },
+        data: { paymentStatus: 'IN_REVIEW', paidAmount: order.total, updatedAt: new Date() },
       }),
     ])
 
@@ -221,12 +206,15 @@ export async function stripeWebhook(req: Request, res: Response, next: NextFunct
         console.log('[Stripe Webhook] Order not found', { orderId, tenantId })
         return res.json({ received: true })
       }
-      if (order.status === 'PAID') {
+      if (order.paymentStatus === 'PAID') {
         console.log('[Stripe Webhook] Order already paid', { orderId })
         return res.json({ received: true })
       }
 
       const systemUser = await getSystemUser(tenantId)
+      const Decimal = (await import('decimal.js')).default
+      const newPaidAmount = new Decimal(Number(order.paidAmount)).add(new Decimal(Number(order.total)))
+      const newPaymentStatus = newPaidAmount.gte(order.total) ? 'PAID' : 'IN_PAYMENT'
 
       console.log('[Stripe Webhook] Processing payment for order', { orderId, total: order.total })
 
@@ -245,16 +233,7 @@ export async function stripeWebhook(req: Request, res: Response, next: NextFunct
           }),
           prisma.order.update({
             where: { id: orderId },
-            data: { status: 'PAID', paidAmount: order.total, updatedAt: new Date() },
-          }),
-          prisma.orderStatusHistory.create({
-            data: {
-              orderId,
-              fromStatus: order.status as any,
-              toStatus: 'PAID',
-              changedById: systemUser.id,
-              notes: `Pago en línea confirmado por Stripe (session: ${session.id})`,
-            },
+            data: { paymentStatus: newPaymentStatus, paidAmount: newPaidAmount, updatedAt: new Date() },
           }),
         ])
         console.log('[Stripe Webhook] Payment processed successfully for order', { orderId })

@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { auditService } from '../services/audit.service'
+import { getUserDepartmentIds } from '../middleware/departmentScope'
 
 const priceListSchema = z.object({
   name: z.string().min(1).max(200),
@@ -35,12 +36,51 @@ export async function listPriceLists(req: Request, res: Response, next: NextFunc
 
 export async function getPriceList(req: Request, res: Response, next: NextFunction) {
   try {
+    // Server-side department scoping: non-admin users see their departments + unassigned resources
+    const deptIds = await getUserDepartmentIds(req)
+
+    const itemWhere: any = { isActive: true }
+    if (deptIds !== null) {
+      itemWhere.resource = { OR: [{ departmentId: { in: deptIds } }, { departmentId: null }] }
+    }
+
     const priceList = await prisma.priceList.findFirst({
       where: { id: req.params.id, tenantId: req.user!.tenantId },
       include: {
         items: {
-          include: { resource: { select: { id: true, name: true, code: true, type: true } } },
-          where: { isActive: true },
+          include: {
+            resource: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+                type: true,
+                isPackage: true,
+                checkDuplicate: true,
+                department: { select: { id: true, name: true } },
+                packageComponents: {
+                  select: {
+                    id: true,
+                    componentResourceId: true,
+                    quantity: true,
+                    sortOrder: true,
+                    componentResource: {
+                      select: {
+                        id: true,
+                        code: true,
+                        name: true,
+                        unit: true,
+                        isPackage: true,
+                        isSubstitute: true,
+                      },
+                    },
+                  },
+                  orderBy: { sortOrder: 'asc' },
+                },
+              },
+            },
+          },
+          where: itemWhere,
           orderBy: { resource: { name: 'asc' } },
         },
       },

@@ -3,6 +3,7 @@ import multer from 'multer'
 import { authenticatePortal } from '../middleware/portalAuth.middleware'
 import {
   portalVerifyCode, portalRegister, portalLogin, portalRefresh, portalMe, portalUpdateMe,
+  portalSelectClient, portalCreateClient, portalUpdateClient, portalForgotPassword, portalResetPassword,
 } from '../controllers/portal.auth.controller'
 import { portalListEvents, portalGetEvent, portalGetCatalog } from '../controllers/portal.events.controller'
 import { portalListOrders, portalGetOrder, portalCreateOrder, portalCalendar } from '../controllers/portal.orders.controller'
@@ -34,6 +35,8 @@ const router = Router()
 router.post('/auth/verify-code', portalVerifyCode)
 router.post('/auth/register', portalRegister)
 router.post('/auth/login', portalLogin)
+router.post('/auth/forgot-password', portalForgotPassword)
+router.post('/auth/reset-password', portalResetPassword)
 router.post('/auth/refresh', portalRefresh)
 
 // Protected portal routes
@@ -41,6 +44,9 @@ router.use(authenticatePortal)
 
 router.get('/me', portalMe)
 router.patch('/me', portalUpdateMe)
+router.post('/me/clients', portalCreateClient)
+router.patch('/me/clients/:clientId', portalUpdateClient)
+router.post('/me/select-client', portalSelectClient)
 
 router.get('/events', portalListEvents)
 router.get('/events/:eventId', portalGetEvent)

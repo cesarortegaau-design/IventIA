@@ -1,12 +1,15 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Card, Button, Space, Row, Col, Form, Input, Select, InputNumber, Table, Steps, App, Typography, Divider } from 'antd'
+import { Card, Button, Space, Row, Col, Form, Input, Select, InputNumber, Table, Steps, App, Typography, Divider, DatePicker } from 'antd'
 import { MinusOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
+import dayjs from 'dayjs'
 import { purchaseOrdersApi } from '../../../api/purchaseOrders'
 import { suppliersApi } from '../../../api/suppliers'
 import { supplierPriceListsApi } from '../../../api/supplierPriceLists'
+import { organizationsApi } from '../../../api/organizations'
 import { Decimal } from 'decimal.js'
+import { useAuthStore } from '../../../stores/authStore'
 
 const { Title } = Typography
 
@@ -32,6 +35,28 @@ export default function PurchaseOrderWizard() {
   const [lineItems, setLineItems] = useState<LineItem[]>([])
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [taxRate, setTaxRate] = useState(0.16)
+  const [deliveryDate, setDeliveryDate] = useState<dayjs.Dayjs | null>(null)
+  const [deliveryLocation, setDeliveryLocation] = useState('')
+  const [poNotes, setPoNotes] = useState('')
+  const [selectedOrgId, setSelectedOrgId] = useState<string | undefined>()
+  const userDepartments = useAuthStore(s => s.user?.departments ?? [])
+  const departmentIds = userDepartments.map(d => d.id).join(',')
+
+  const { data: orgsData } = useQuery({
+    queryKey: ['organizations'],
+    queryFn: organizationsApi.list,
+  })
+
+  const orgOptions = (orgsData?.data ?? [])
+    .filter((o: any) => o.isActive)
+    .map((o: any) => ({ value: o.id, label: `${o.clave} — ${o.descripcion}` }))
+
+  // Suggest orgs from user's departments
+  const userOrgIds = new Set(
+    userDepartments.flatMap((d: any) => (d.departmentOrgs ?? []).map((do_: any) => do_.organizationId ?? do_.organization?.id))
+  )
+  const suggestedOrgOptions = orgOptions.filter((o: any) => userOrgIds.has(o.value))
+  const displayOrgOptions = suggestedOrgOptions.length ? suggestedOrgOptions : orgOptions
 
   const { data: suppliersData } = useQuery({
     queryKey: ['suppliers'],
@@ -47,10 +72,10 @@ export default function PurchaseOrderWizard() {
   })
 
   const { data: priceListDetail } = useQuery({
-    queryKey: ['supplierPriceList', selectedPriceListId],
+    queryKey: ['supplierPriceList', selectedPriceListId, departmentIds],
     queryFn: () =>
       selectedPriceListId
-        ? supplierPriceListsApi.get(selectedPriceListId).then(r => r.data)
+        ? supplierPriceListsApi.get(selectedPriceListId, departmentIds ? { departmentIds } : undefined).then(r => r.data)
         : Promise.resolve(null),
   })
 
@@ -59,10 +84,19 @@ export default function PurchaseOrderWizard() {
       const supplier = (suppliersData?.data ?? []).find((s: any) => s.id === selectedSupplierId)
       const priceList = (priceListsData?.data ?? []).find((pl: any) => pl.id === selectedPriceListId)
 
+      if (!deliveryDate) {
+        message.error('Selecciona una fecha de entrega')
+        return Promise.reject()
+      }
+
       const payload = {
-        supplierId: selectedSupplierId,
+        supplierId: selectedSupplierId!,
         priceListId: selectedPriceListId,
-        taxRate,
+        requiredDeliveryDate: deliveryDate.toISOString(),
+        deliveryLocation: deliveryLocation || undefined,
+        notes: poNotes || undefined,
+        organizacionId: selectedOrgId,
+        taxRate: taxRate * 100,
         currency: supplier?.currencyCode || 'MXN',
         lineItems: lineItems.map(item => ({
           resourceId: item.resourceId,
@@ -78,7 +112,7 @@ export default function PurchaseOrderWizard() {
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['purchaseOrders'] })
       message.success('Orden de Compra creada')
-      navigate(`/catalogs/ordenes-compra/${data.id}`)
+      navigate(`/catalogos/ordenes-compra/${data.id}`)
     },
     onError: (error: any) => {
       message.error(error.response?.data?.message || 'Error al crear OC')
@@ -119,7 +153,7 @@ export default function PurchaseOrderWizard() {
     label: `${pl.code} - ${pl.name}`,
   }))
 
-  const resourceOptions = (priceListDetail?.items ?? []).map((item: any) => ({
+  const resourceOptions = (priceListDetail?.data?.items ?? priceListDetail?.items ?? []).map((item: any) => ({
     value: item.resourceId,
     label: `${item.resource?.code} - ${item.resource?.name}`,
     price: item.unitPrice,
@@ -152,6 +186,7 @@ export default function PurchaseOrderWizard() {
     { title: 'Proveedor', description: 'Selecciona proveedor' },
     { title: 'Lista de Precios', description: 'Elige lista' },
     { title: 'Items', description: 'Agrega líneas' },
+    { title: 'Entrega', description: 'Detalles de entrega' },
     { title: 'Confirmación', description: 'Revisa y confirma' },
   ]
 
@@ -265,12 +300,66 @@ export default function PurchaseOrderWizard() {
             />
             <div>
               <Button onClick={() => setCurrentStep(3)} disabled={lineItems.length === 0}>
-                Ir a Confirmación
+                Siguiente
               </Button>
             </div>
           </Card>
         )
       case 3:
+        return (
+          <Card>
+            <Title level={5}>Detalles de Entrega</Title>
+            <Form layout="vertical">
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item label="Organización" required>
+                    <Select
+                      placeholder="Selecciona organización"
+                      options={displayOrgOptions}
+                      value={selectedOrgId}
+                      onChange={setSelectedOrgId}
+                      allowClear
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="Fecha de Entrega Requerida" required>
+                    <DatePicker
+                      value={deliveryDate}
+                      onChange={(date) => setDeliveryDate(date)}
+                      style={{ width: '100%' }}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="Ubicación de Entrega">
+                    <Input
+                      value={deliveryLocation}
+                      onChange={(e) => setDeliveryLocation(e.target.value)}
+                      placeholder="Ej: Bodega principal"
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={24}>
+                  <Form.Item label="Notas">
+                    <Input.TextArea
+                      value={poNotes}
+                      onChange={(e) => setPoNotes(e.target.value)}
+                      rows={3}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </Form>
+            <Space>
+              <Button onClick={() => setCurrentStep(4)} disabled={!deliveryDate}>
+                Siguiente
+              </Button>
+              <Button onClick={() => setCurrentStep(2)}>Atrás</Button>
+            </Space>
+          </Card>
+        )
+      case 4:
         return (
           <Card>
             <Title level={5}>Resumen de Orden</Title>
@@ -319,7 +408,7 @@ export default function PurchaseOrderWizard() {
               <Button type="primary" onClick={() => createMutation.mutate()} loading={createMutation.isPending}>
                 Crear Orden
               </Button>
-              <Button onClick={() => setCurrentStep(2)}>Atrás</Button>
+              <Button onClick={() => setCurrentStep(3)}>Atrás</Button>
             </Space>
           </Card>
         )

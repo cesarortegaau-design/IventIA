@@ -9,7 +9,9 @@
       "Bash(pkill -f \"src/index.ts\")",
       "Bash(DATABASE_URL=\"postgresql://iventia:iventia_dev_pass@localhost:5432/iventia_db\" npx prisma generate)",
       "Bash(taskkill //F //IM node.exe)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Skill(update-config)",
+      "Skill(update-config:*)"
     ]
   }
 }

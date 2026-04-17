@@ -62,14 +62,20 @@ export default function DashboardPage() {
                     </Space>
                   )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
-                    <Button
-                      type="primary"
-                      size="small"
-                      icon={<ShoppingCartOutlined />}
-                      onClick={(e) => { e.stopPropagation(); navigate(`/events/${event.id}/new-order`) }}
-                    >
-                      Nueva Solicitud
-                    </Button>
+                    {['CONFIRMED', 'IN_EXECUTION'].includes(event.status) ? (
+                      <Button
+                        type="primary"
+                        size="small"
+                        icon={<ShoppingCartOutlined />}
+                        onClick={(e) => { e.stopPropagation(); navigate(`/events/${event.id}/new-order`) }}
+                      >
+                        Nueva Solicitud
+                      </Button>
+                    ) : (
+                      <Tag color={event.status === 'CLOSED' ? 'default' : 'red'}>
+                        {event.status === 'CLOSED' ? 'Cerrado' : event.status === 'CANCELLED' ? 'Cancelado' : event.status}
+                      </Tag>
+                    )}
                     <Button type="link" size="small" icon={<RightOutlined />}>Ver evento</Button>
                   </div>
                 </Space>

@@ -42,11 +42,9 @@ export interface SupplierContact {
 }
 
 export interface CreateSupplierInput {
-  code?: string
   name: string
   description?: string
   type: 'DISTRIBUTOR' | 'MANUFACTURER' | 'WHOLESALER' | 'SERVICES'
-  status?: 'ACTIVE' | 'INACTIVE' | 'BLOCKED'
   rfc?: string
   taxId?: string
   fiscalRegime?: string
@@ -61,8 +59,23 @@ export interface CreateSupplierInput {
   zip?: string
   country?: string
   paymentTerms?: string
-  averageDeliveryDays?: number
+  averageDeliveryDays?: number | string
   currencyCode?: string
+}
+
+function mapToApi(data: Record<string, any>, stripStatus = false) {
+  const { street, city, state, zip, country, paymentTerms, averageDeliveryDays, status, ...rest } = data
+  return {
+    ...rest,
+    ...(!stripStatus && status !== undefined && { status }),
+    ...(street !== undefined && { addressStreet: street }),
+    ...(city !== undefined && { addressCity: city }),
+    ...(state !== undefined && { addressState: state }),
+    ...(zip !== undefined && { addressZip: zip }),
+    ...(country !== undefined && { addressCountry: country }),
+    ...(paymentTerms !== undefined && { defaultPaymentTerms: paymentTerms }),
+    ...(averageDeliveryDays !== undefined && { averageDeliveryDays: Number(averageDeliveryDays) || undefined }),
+  }
 }
 
 export const suppliersApi = {
@@ -73,10 +86,10 @@ export const suppliersApi = {
     apiClient.get(`/suppliers/${id}`),
 
   create: (data: CreateSupplierInput) =>
-    apiClient.post('/suppliers', data),
+    apiClient.post('/suppliers', mapToApi(data, true)),
 
   update: (id: string, data: Partial<CreateSupplierInput>) =>
-    apiClient.patch(`/suppliers/${id}`, data),
+    apiClient.patch(`/suppliers/${id}`, mapToApi(data)),
 
   toggleStatus: (id: string, status: 'ACTIVE' | 'INACTIVE' | 'BLOCKED') =>
     apiClient.patch(`/suppliers/${id}/status`, { status }),

@@ -16,13 +16,19 @@ import { exportToCsv } from '../../utils/exportCsv'
 const { Title, Text } = Typography
 
 const STATUS_COLORS: Record<string, string> = {
-  QUOTED: 'blue', CONFIRMED: 'green', IN_PAYMENT: 'orange', PAID: 'purple', INVOICED: 'cyan', CANCELLED: 'red',
+  QUOTED: 'blue', CONFIRMED: 'green', EXECUTED: 'geekblue', INVOICED: 'cyan', CANCELLED: 'red', CREDIT_NOTE: 'gold',
 }
 const STATUS_LABELS: Record<string, string> = {
-  QUOTED: 'Cotizada', CONFIRMED: 'Confirmada', IN_PAYMENT: 'En Pago', PAID: 'Pagada', INVOICED: 'Facturada', CANCELLED: 'Cancelada',
+  QUOTED: 'Cotizada', CONFIRMED: 'Confirmada', EXECUTED: 'Ejecutada', INVOICED: 'Facturada', CANCELLED: 'Cancelada', CREDIT_NOTE: 'Nota de Crédito',
+}
+const PAYMENT_STATUS_COLORS: Record<string, string> = {
+  PENDING: 'default', IN_PAYMENT: 'orange', PAID: 'purple', IN_REVIEW: 'gold',
+}
+const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  PENDING: 'Pendiente', IN_PAYMENT: 'En Pago', PAID: 'Pagada', IN_REVIEW: 'En Revisión',
 }
 
-const PAYABLE_STATUSES = ['QUOTED', 'CONFIRMED']
+const PAYABLE_STATUSES = ['CONFIRMED']
 
 export default function OrderDetailPage() {
   const { orderId } = useParams<{ orderId: string }>()
@@ -44,7 +50,7 @@ export default function OrderDetailPage() {
   const verifyMutation = useMutation({
     mutationFn: (sessionId: string) => ordersApi.verifyStripePayment(orderId!, sessionId),
     onSuccess: (res) => {
-      if (res.data?.status === 'PAID') {
+      if (res.data?.paymentStatus === 'PAID') {
         message.success('¡Pago confirmado! Tu orden ha sido pagada.')
         queryClient.invalidateQueries({ queryKey: ['portal-order', orderId] })
         queryClient.invalidateQueries({ queryKey: ['portal-orders'] })
@@ -95,8 +101,30 @@ export default function OrderDetailPage() {
 
   const isPayable = PAYABLE_STATUSES.includes(order.status)
 
+  // Parse substitution selections from observations
+  function getSubstitutionSelections(observations: string) {
+    const selections: Record<string, string> = {}
+    if (!observations) return selections
+
+    const regex = /\[SUSTITUCIÓN\]\s+([^:]+):\s+([^|]+)/g
+    let match
+    while ((match = regex.exec(observations)) !== null) {
+      selections[match[1].trim()] = match[2].trim()
+    }
+    return selections
+  }
+
   const lineColumns = [
-    { title: 'Recurso', dataIndex: 'description' },
+    {
+      title: 'Recurso',
+      dataIndex: 'description',
+      render: (text: string, record: any) => (
+        <>
+          {record.resource?.isPackage && '📦 '}
+          {text}
+        </>
+      ),
+    },
     { title: 'Tipo', render: (_: any, r: any) => r.resource?.type ?? '—' },
     { title: 'Precio unit.', dataIndex: 'unitPrice', render: (v: number) => `$${Number(v).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` },
     { title: 'Cant.', dataIndex: 'quantity', render: (v: number) => Number(v) },
@@ -124,6 +152,7 @@ export default function OrderDetailPage() {
         <Space>
           <Title level={4} style={{ margin: 0 }}>{order.orderNumber}</Title>
           <Tag color={STATUS_COLORS[order.status]}>{STATUS_LABELS[order.status]}</Tag>
+          {order.paymentStatus && <Tag color={PAYMENT_STATUS_COLORS[order.paymentStatus]}>{PAYMENT_STATUS_LABELS[order.paymentStatus]}</Tag>}
         </Space>
       </div>
 
@@ -135,6 +164,12 @@ export default function OrderDetailPage() {
           <Descriptions.Item label="IVA (16%)">${Number(order.taxAmount).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</Descriptions.Item>
           <Descriptions.Item label="Total" span={2}>
             <Text strong style={{ fontSize: 16 }}>${Number(order.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</Text>
+          </Descriptions.Item>
+          <Descriptions.Item label="Fecha Hora Inicio">
+            {order.startDate ? dayjs(order.startDate).format('DD/MM/YYYY HH:mm') : '—'}
+          </Descriptions.Item>
+          <Descriptions.Item label="Fecha Hora Fin">
+            {order.endDate ? dayjs(order.endDate).format('DD/MM/YYYY HH:mm') : '—'}
           </Descriptions.Item>
           {order.notes && <Descriptions.Item label="Notas" span={2}>{order.notes}</Descriptions.Item>}
         </Descriptions>
@@ -166,7 +201,7 @@ export default function OrderDetailPage() {
         </Card>
       )}
 
-      {order.status === 'IN_PAYMENT' && (
+      {(order.paymentStatus === 'IN_PAYMENT' || order.paymentStatus === 'IN_REVIEW') && (
         <Alert
           type="info"
           showIcon
@@ -234,6 +269,90 @@ export default function OrderDetailPage() {
           size="small"
           pagination={false}
           scroll={{ x: 'max-content' }}
+          expandable={{
+            expandedRowRender: (r: any) => {
+              if (!r.resource?.isPackage || !r.resource?.packageComponents?.length) return null
+
+              const substitutionSelections = getSubstitutionSelections(r.observations)
+
+              return (
+                <div style={{ padding: '12px 0' }}>
+                  <strong style={{ fontSize: '12px', marginBottom: '8px', display: 'block' }}>📦 Componentes requeridos × {Number(r.quantity).toFixed(3)}</strong>
+                  <Table
+                    dataSource={r.resource.packageComponents}
+                    rowKey="componentResourceId"
+                    size="small"
+                    pagination={false}
+                    columns={[
+                      {
+                        title: 'Código',
+                        key: 'code',
+                        width: 70,
+                        render: (_: any, comp: any) => comp.componentResource.code,
+                      },
+                      {
+                        title: 'Nombre',
+                        key: 'name',
+                        render: (_: any, comp: any) => (
+                          <span>
+                            {comp.componentResource.name}
+                            {comp.componentResource.isSubstitute && (
+                              <span style={{ marginLeft: '8px', color: '#1890ff', fontSize: '12px', fontWeight: 'bold' }}>
+                                (Sustitución)
+                              </span>
+                            )}
+                          </span>
+                        ),
+                      },
+                      {
+                        title: 'Qty × Artículo',
+                        key: 'qtyPer',
+                        width: 110,
+                        align: 'right' as const,
+                        render: (_: any, comp: any) => Number(comp.quantity).toFixed(3),
+                      },
+                      {
+                        title: 'Total Requerido',
+                        key: 'qtyTotal',
+                        width: 120,
+                        align: 'right' as const,
+                        render: (_: any, comp: any) => (Number(comp.quantity) * r.quantity).toFixed(3),
+                      },
+                      {
+                        title: 'Unidad',
+                        key: 'unit',
+                        width: 80,
+                        render: (_: any, comp: any) => comp.componentResource.unit || '—',
+                      },
+                      {
+                        title: 'Seleccionado',
+                        key: 'selected',
+                        width: 150,
+                        render: (_: any, comp: any) => {
+                          // Only show selection for components that are substitution packages
+                          if (!comp.componentResource.isSubstitute) {
+                            return null
+                          }
+
+                          // Look up by the substitution package's name (the key in selections dict)
+                          const selectedValue = substitutionSelections[comp.componentResource.name]
+                          if (selectedValue) {
+                            return <Tag color="green">✓ {selectedValue}</Tag>
+                          }
+                          return <span style={{ color: '#999' }}>—</span>
+                        },
+                      },
+                    ]}
+                  />
+                  <div style={{ marginTop: '8px', fontSize: '11px', color: '#999' }}>
+                    * "Qty × Artículo": cantidad de cada componente por artículo<br/>
+                    * "Total Requerido": cantidad total para {Number(r.quantity).toFixed(3)} unidades<br/>
+                    * "Seleccionado": muestra el recurso específico elegido para paquetes de sustitución
+                  </div>
+                </div>
+              )
+            },
+          }}
         />
       </Card>
 

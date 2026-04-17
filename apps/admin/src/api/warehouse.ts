@@ -142,6 +142,10 @@ export const warehouseApi = {
   adjustInventory: (inventoryId: string, data: AdjustInventoryInput) =>
     apiClient.patch(`/warehouse/inventory/${inventoryId}/adjust`, data),
 
+  // Transfer
+  transferInventory: (data: { sourceWarehouseId: string; destinationWarehouseId: string; resourceId: string; quantity: string; notes?: string }) =>
+    apiClient.post('/warehouse/transfer', data),
+
   // Reception & movements
   registerReception: (purchaseOrderId: string, items: RegisterReceptionItem[]) =>
     apiClient.post('/warehouse/reception', { purchaseOrderId, items }),

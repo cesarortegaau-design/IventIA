@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express'
+import crypto from 'crypto'
 import { z } from 'zod'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
@@ -7,6 +8,7 @@ import { env } from '../config/env'
 import { AppError } from '../middleware/errorHandler'
 import { PortalTokenPayload } from '../middleware/portalAuth.middleware'
 import { auditService } from '../services/audit.service'
+import { emailService } from '../services/email.service'
 
 function signPortalTokens(portalUserId: string, tenantId: string, email: string) {
   const payload: PortalTokenPayload = { portalUserId, tenantId, email, type: 'portal' }
@@ -178,10 +180,122 @@ export async function portalMe(req: Request, res: Response, next: NextFunction) 
   try {
     const user = await prisma.portalUser.findUnique({
       where: { id: req.portalUser!.portalUserId },
-      include: { client: { select: { id: true, personType: true, companyName: true, firstName: true, lastName: true, rfc: true, taxRegime: true, addressStreet: true, addressCity: true, addressState: true, addressZip: true, addressCountry: true } } },
+      include: {
+        client: { select: { id: true, personType: true, companyName: true, firstName: true, lastName: true, rfc: true, taxRegime: true, email: true, phone: true, addressStreet: true, addressCity: true, addressState: true, addressZip: true, addressCountry: true } },
+        clients: {
+          where: { isActive: true },
+          include: { client: { select: { id: true, personType: true, companyName: true, firstName: true, lastName: true, rfc: true, taxRegime: true, email: true, phone: true, addressStreet: true, addressCity: true, addressState: true, addressZip: true, addressCountry: true } } },
+        },
+      },
     })
     if (!user) throw new AppError(404, 'NOT_FOUND', 'Usuario no encontrado')
     res.json({ success: true, data: user })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function portalSelectClient(req: Request, res: Response, next: NextFunction) {
+  try {
+    const portalUserId = req.portalUser!.portalUserId
+    const tenantId = req.portalUser!.tenantId
+    const { clientId } = z.object({ clientId: z.string().uuid() }).parse(req.body)
+
+    const client = await prisma.client.findFirst({ where: { id: clientId, tenantId } })
+    if (!client) throw new AppError(404, 'CLIENT_NOT_FOUND', 'Cliente no encontrado')
+
+    await prisma.$transaction(async (tx) => {
+      // Create link in PortalUserClient if not exists
+      await tx.portalUserClient.upsert({
+        where: { portalUserId_clientId: { portalUserId, clientId } },
+        create: { portalUserId, clientId },
+        update: { isActive: true },
+      })
+      // Clear legacy portalUserId from whichever client this user previously had
+      await tx.client.updateMany({ where: { portalUserId, tenantId, id: { not: clientId } }, data: { portalUserId: null } })
+      // Set legacy portalUserId on the selected client (only if unowned or already owned by this user)
+      await tx.client.updateMany({ where: { id: clientId, tenantId, OR: [{ portalUserId: null }, { portalUserId }] }, data: { portalUserId } })
+    })
+
+    res.json({ success: true, data: { clientId } })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function portalCreateClient(req: Request, res: Response, next: NextFunction) {
+  try {
+    const portalUserId = req.portalUser!.portalUserId
+    const tenantId = req.portalUser!.tenantId
+
+    const schema = z.object({
+      personType: z.enum(['PHYSICAL', 'MORAL']),
+      companyName: z.string().optional(),
+      firstName: z.string().optional(),
+      lastName: z.string().optional(),
+      rfc: z.string().optional(),
+      taxRegime: z.string().optional(),
+      email: z.string().email().optional(),
+      phone: z.string().optional(),
+      whatsapp: z.string().optional(),
+      addressStreet: z.string().optional(),
+      addressCity: z.string().optional(),
+      addressState: z.string().optional(),
+      addressZip: z.string().optional(),
+      addressCountry: z.string().default('MX'),
+    }).strip()
+    const data = schema.parse(req.body)
+
+    const client = await prisma.$transaction(async (tx) => {
+      // Clear legacy portalUserId from any existing client owned by this user
+      await tx.client.updateMany({ where: { portalUserId, tenantId }, data: { portalUserId: null } })
+      const created = await tx.client.create({ data: { ...data, tenantId, portalUserId } })
+      await tx.portalUserClient.create({ data: { portalUserId, clientId: created.id } })
+      return created
+    })
+
+    res.status(201).json({ success: true, data: client })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function portalUpdateClient(req: Request, res: Response, next: NextFunction) {
+  try {
+    const portalUserId = req.portalUser!.portalUserId
+    const tenantId = req.portalUser!.tenantId
+    const { clientId } = z.object({ clientId: z.string().uuid() }).parse(req.params)
+
+    // Verify the portal user owns this client
+    const client = await prisma.client.findFirst({ where: { id: clientId, tenantId } })
+    if (!client) throw new AppError(404, 'NOT_FOUND', 'Cliente no encontrado')
+
+    const isOwner = client.portalUserId === portalUserId
+    const hasLink = await prisma.portalUserClient.findUnique({
+      where: { portalUserId_clientId: { portalUserId, clientId } },
+    })
+    if (!isOwner && !hasLink) throw new AppError(403, 'FORBIDDEN', 'No tienes acceso a este cliente')
+
+    const schema = z.object({
+      personType: z.enum(['PHYSICAL', 'MORAL']).optional(),
+      companyName: z.string().optional(),
+      firstName: z.string().optional(),
+      lastName: z.string().optional(),
+      rfc: z.string().optional(),
+      taxRegime: z.string().optional(),
+      email: z.string().email().optional(),
+      phone: z.string().optional(),
+      whatsapp: z.string().optional(),
+      addressStreet: z.string().optional(),
+      addressCity: z.string().optional(),
+      addressState: z.string().optional(),
+      addressZip: z.string().optional(),
+      addressCountry: z.string().optional(),
+    }).strip()
+    const data = schema.parse(req.body)
+
+    const updated = await prisma.client.update({ where: { id: clientId }, data })
+    res.json({ success: true, data: updated })
   } catch (err) {
     next(err)
   }
@@ -212,6 +326,63 @@ export async function portalUpdateMe(req: Request, res: Response, next: NextFunc
     }
 
     res.json({ success: true, data: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, phone: user.phone } })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function portalForgotPassword(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { email } = z.object({ email: z.string().email() }).parse(req.body)
+
+    // Always return success to prevent email enumeration
+    const user = await prisma.portalUser.findUnique({ where: { email: email.toLowerCase() } })
+    if (user && user.isActive) {
+      const token = crypto.randomBytes(32).toString('hex')
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000) // 1 hour
+
+      await prisma.portalPasswordReset.create({
+        data: { portalUserId: user.id, token, expiresAt },
+      })
+
+      const portalOrigin = env.CORS_ORIGIN.includes(',')
+        ? env.CORS_ORIGIN.split(',').find(o => o.includes('5174')) || env.CORS_ORIGIN.split(',')[0]
+        : env.CORS_ORIGIN
+      const resetUrl = `${portalOrigin.trim()}/reset-password?token=${token}`
+
+      await emailService.sendPasswordReset(user.email, resetUrl, user.firstName)
+    }
+
+    res.json({ success: true, data: { message: 'Si el correo existe, recibirás un enlace para restablecer tu contraseña.' } })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function portalResetPassword(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { token, password } = z.object({
+      token: z.string().length(64),
+      password: z.string().min(6),
+    }).parse(req.body)
+
+    const reset = await prisma.portalPasswordReset.findUnique({
+      where: { token },
+      include: { portalUser: { select: { id: true, isActive: true } } },
+    })
+
+    if (!reset || reset.usedAt || reset.expiresAt < new Date() || !reset.portalUser.isActive) {
+      throw new AppError(400, 'INVALID_TOKEN', 'El enlace es inválido o ha expirado')
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12)
+
+    await prisma.$transaction([
+      prisma.portalUser.update({ where: { id: reset.portalUserId }, data: { passwordHash } }),
+      prisma.portalPasswordReset.update({ where: { id: reset.id }, data: { usedAt: new Date() } }),
+    ])
+
+    res.json({ success: true, data: { message: 'Contraseña actualizada correctamente' } })
   } catch (err) {
     next(err)
   }

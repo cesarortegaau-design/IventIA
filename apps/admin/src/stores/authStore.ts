@@ -7,6 +7,8 @@ interface User {
   firstName: string
   lastName: string
   role: 'ADMIN' | 'NORMAL' | 'READ_ONLY'
+  profileId: string | null
+  profileName: string | null
   departments: Array<{ id: string; name: string }>
   privileges: string[]
 }

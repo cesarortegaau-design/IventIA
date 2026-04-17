@@ -53,12 +53,12 @@ const EVENT_STATUS_LABEL: Record<string, string> = {
   QUOTED: 'Cotizado', CONFIRMED: 'Confirmado', IN_EXECUTION: 'En Ejecución', CLOSED: 'Cerrado', CANCELLED: 'Cancelado',
 }
 const ORDER_STATUS_COLOR: Record<string, string> = {
-  QUOTED: '#1677ff', CONFIRMED: '#52c41a', IN_PAYMENT: '#fa8c16',
-  PAID: '#722ed1', INVOICED: '#13c2c2', CANCELLED: '#ff4d4f',
+  QUOTED: '#1677ff', CONFIRMED: '#52c41a', EXECUTED: '#2f54eb',
+  INVOICED: '#13c2c2', CANCELLED: '#ff4d4f', CREDIT_NOTE: '#d4b106',
 }
 const ORDER_STATUS_LABEL: Record<string, string> = {
-  QUOTED: 'Cotizada', CONFIRMED: 'Confirmada', IN_PAYMENT: 'En Pago',
-  PAID: 'Pagada', INVOICED: 'Facturada', CANCELLED: 'Cancelada',
+  QUOTED: 'Cotizada', CONFIRMED: 'Confirmada', EXECUTED: 'Ejecutada',
+  INVOICED: 'Facturada', CANCELLED: 'Cancelada', CREDIT_NOTE: 'Nota de Crédito',
 }
 const RESOURCE_TYPE_LABEL: Record<string, string> = {
   CONSUMABLE: 'Consumible', EQUIPMENT: 'Equipo', SPACE: 'Espacio',

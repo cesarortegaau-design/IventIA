@@ -48,3 +48,39 @@ export async function getAuditLog(req: Request, res: Response, next: NextFunctio
     next(err)
   }
 }
+
+export async function getAuditLogByType(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { entityType } = req.params
+    const tenantId = req.user!.tenantId
+    const { action, limit, offset } = auditQuerySchema.parse(req.query)
+
+    if (!entityType) {
+      throw new AppError(400, 'MISSING_PARAMS', 'entityType is required')
+    }
+
+    const where: any = { tenantId, entityType }
+    if (action) where.action = action
+
+    const [total, logs] = await Promise.all([
+      prisma.auditLog.count({ where }),
+      prisma.auditLog.findMany({
+        where,
+        include: {
+          user: { select: { id: true, firstName: true, lastName: true, email: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+    ])
+
+    res.json({
+      success: true,
+      data: logs,
+      meta: { total, limit, offset, hasMore: offset + limit < total },
+    })
+  } catch (err) {
+    next(err)
+  }
+}

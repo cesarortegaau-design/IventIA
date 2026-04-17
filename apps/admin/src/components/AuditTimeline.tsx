@@ -14,11 +14,11 @@ export default function AuditTimeline({ data, loading }: { data: any[]; loading:
     <Timeline
       style={{ marginTop: 16 }}
       items={data.map((log: any) => ({
-        color: log.action === 'CREATE' ? 'green' : log.action === 'DELETE' ? 'red' : 'blue',
+        color: log.action === 'CREATE' ? 'green' : log.action === 'DELETE' ? 'red' : log.action === 'TRANSFER' ? 'purple' : 'blue',
         children: (
           <div>
             <div style={{ fontWeight: 600 }}>
-              {log.action === 'CREATE' ? 'Creado' : log.action === 'DELETE' ? 'Eliminado' : 'Modificado'}
+              {log.action === 'CREATE' ? 'Creado' : log.action === 'DELETE' ? 'Eliminado' : log.action === 'TRANSFER' ? 'Transferencia' : 'Modificado'}
               {' · '}
               <span style={{ fontWeight: 400, color: '#64748b', fontSize: 12 }}>
                 {dayjs(log.createdAt).format('DD/MM/YYYY HH:mm:ss')}
@@ -26,7 +26,7 @@ export default function AuditTimeline({ data, loading }: { data: any[]; loading:
                 {log.user ? `${log.user.firstName} ${log.user.lastName}` : 'Sistema'}
               </span>
             </div>
-            {log.action === 'UPDATE' && log.oldValues && log.newValues && (
+            {(log.action === 'UPDATE' || log.action === 'TRANSFER') && log.oldValues && log.newValues && (
               <div style={{ fontSize: 12, color: '#475569', marginTop: 4 }}>
                 {Object.keys(log.newValues as Record<string, any>)
                   .filter(k => (log.oldValues as any)[k] !== (log.newValues as any)[k])

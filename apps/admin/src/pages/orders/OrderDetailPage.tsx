@@ -12,6 +12,7 @@ import { clientsApi } from '../../api/clients'
 import { priceListsApi } from '../../api/priceLists'
 import { resourcesApi } from '../../api/resources'
 import { auditApi } from '../../api/audit'
+import { organizationsApi } from '../../api/organizations'
 import { exportToCsv } from '../../utils/exportCsv'
 import { OrderPdf } from '../../components/OrderPdf'
 import AuditTimeline from '../../components/AuditTimeline'
@@ -22,24 +23,29 @@ import GenerateDocumentModal from '../../components/GenerateDocumentModal'
 const { Title, Text } = Typography
 
 const STATUS_COLORS: Record<string, string> = {
-  QUOTED: 'blue', CONFIRMED: 'green', IN_EXECUTION: 'geekblue', IN_PAYMENT: 'orange',
-  PAID: 'purple', INVOICED: 'cyan', CANCELLED: 'red',
+  QUOTED: 'blue', CONFIRMED: 'green', EXECUTED: 'geekblue',
+  INVOICED: 'cyan', CANCELLED: 'red', CREDIT_NOTE: 'gold',
 }
 const STATUS_LABELS: Record<string, string> = {
-  QUOTED: 'Cotizada', CONFIRMED: 'Confirmada', IN_EXECUTION: 'Ejecutada', IN_PAYMENT: 'En Pago',
-  PAID: 'Pagada', INVOICED: 'Facturada', CANCELLED: 'Cancelada',
+  QUOTED: 'Cotizada', CONFIRMED: 'Confirmada', EXECUTED: 'Ejecutada',
+  INVOICED: 'Facturada', CANCELLED: 'Cancelada', CREDIT_NOTE: 'Nota de Crédito',
+}
+const PAYMENT_STATUS_COLORS: Record<string, string> = {
+  PENDING: 'default', IN_PAYMENT: 'orange', PAID: 'purple', IN_REVIEW: 'gold',
+}
+const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  PENDING: 'Pendiente', IN_PAYMENT: 'En Pago', PAID: 'Pagada', IN_REVIEW: 'En Revisión',
 }
 const TIER_LABELS: Record<string, string> = {
   EARLY: 'Anticipado', NORMAL: 'Normal', LATE: 'Tardío',
 }
 const NEXT_STATUSES: Record<string, string[]> = {
   QUOTED: ['CONFIRMED', 'CANCELLED'],
-  CONFIRMED: ['IN_EXECUTION', 'CANCELLED'],
-  IN_EXECUTION: [],
-  IN_PAYMENT: [],
-  PAID: [],
+  CONFIRMED: ['EXECUTED', 'CANCELLED'],
+  EXECUTED: ['INVOICED'],
   INVOICED: [],
   CANCELLED: [],
+  CREDIT_NOTE: ['CONFIRMED', 'CANCELLED'],
 }
 
 export default function OrderDetailPage() {
@@ -61,7 +67,9 @@ export default function OrderDetailPage() {
   const [docUploading, setDocUploading] = useState(false)
   const [createPOModalOpen, setCreatePOModalOpen] = useState(false)
   const [generateDocOpen, setGenerateDocOpen] = useState(false)
-
+  const [creditNoteModalOpen, setCreditNoteModalOpen] = useState(false)
+  const [creditNoteItems, setCreditNoteItems] = useState<any[]>([])
+  const [creditNoteNotes, setCreditNoteNotes] = useState('')
   const deleteDocMutation = useMutation({
     mutationFn: (docId: string) => ordersApi.deleteDocument(id!, docId),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['order', id] }); message.success('Documento eliminado') },
@@ -141,6 +149,7 @@ export default function OrderDetailPage() {
       startDate: values.startDate?.toISOString() || null,
       endDate: values.endDate?.toISOString() || null,
       notes: values.notes || null,
+      organizacionId: values.organizacionId || null,
       lineItems: editLineItems.map((li, idx) => {
         let observations = li.observations || ''
         if (li.substitutionSelections && Object.keys(li.substitutionSelections).length > 0) {
@@ -197,6 +206,55 @@ export default function OrderDetailPage() {
     },
   })
 
+  const creditNoteMutation = useMutation({
+    mutationFn: () => ordersApi.create(order!.eventId, {
+      clientId: order!.clientId,
+      billingClientId: order!.billingClientId || undefined,
+      standId: order!.standId || undefined,
+      priceListId: order!.priceListId,
+      startDate: order!.startDate || undefined,
+      endDate: order!.endDate || undefined,
+      notes: creditNoteNotes || `Nota de crédito de ${order!.orderNumber}`,
+      isCreditNote: true,
+      originalOrderId: order!.id,
+      lineItems: creditNoteItems.map((li: any, idx: number) => ({
+        resourceId: li.resourceId,
+        quantity: li.quantity,
+        discountPct: li.discountPct ?? 0,
+        observations: li.observations || '',
+        sortOrder: idx,
+      })),
+    }),
+    onSuccess: (res: any) => {
+      queryClient.invalidateQueries({ queryKey: ['order', id] })
+      setCreditNoteModalOpen(false)
+      message.success('Nota de crédito creada')
+      navigate(`/ordenes/${res.data.id}`)
+    },
+    onError: (error: any) => {
+      message.error(error.response?.data?.message || 'Error al crear nota de crédito')
+    },
+  })
+
+  function openCreditNoteModal() {
+    setCreditNoteItems(
+      (order!.lineItems ?? []).map((li: any) => ({
+        resourceId: li.resourceId,
+        description: li.resource?.name || li.description,
+        unitPrice: Number(li.unitPrice),
+        quantity: -Math.abs(Number(li.actualQuantity ?? li.quantity)),
+        discountPct: Number(li.actualDiscountPct ?? li.discountPct),
+        observations: '',
+      }))
+    )
+    setCreditNoteNotes('')
+    setCreditNoteModalOpen(true)
+  }
+
+  function updateCreditNoteItem(index: number, field: string, value: any) {
+    setCreditNoteItems(prev => prev.map((li, i) => i === index ? { ...li, [field]: value } : li))
+  }
+
   const order = data?.data
 
   const { data: clientsData } = useQuery({
@@ -211,12 +269,19 @@ export default function OrderDetailPage() {
     enabled: editModalOpen && !!order?.priceListId,
   })
 
+  const { data: orgData } = useQuery({
+    queryKey: ['organizations'],
+    queryFn: organizationsApi.list,
+    enabled: editModalOpen,
+  })
+
   if (isLoading) return <Card loading />
   if (!order) return null
 
   const canEdit = order.status === 'QUOTED' && Number(order.paidAmount) === 0
   const canEditActual = order.status === 'CONFIRMED'
-  const isConfirmedOrLater = ['CONFIRMED', 'IN_EXECUTION'].includes(order.status)
+  const isConfirmedOrLater = ['CONFIRMED', 'EXECUTED', 'INVOICED'].includes(order.status)
+  const canPay = (order.status === 'CONFIRMED' && !order.contractId) || (order.status === 'EXECUTED' && Number(order.paidAmount) < Number(order.total))
 
   const editPriceListItems = priceListData?.data?.items ?? priceListData?.items ?? []
 
@@ -228,6 +293,7 @@ export default function OrderDetailPage() {
       startDate: order.startDate ? dayjs(order.startDate) : null,
       endDate: order.endDate ? dayjs(order.endDate) : null,
       notes: order.notes || '',
+      organizacionId: order.organizacionId || undefined,
     })
     setEditLineItems(
       (order.lineItems ?? []).map((li: any) => ({
@@ -379,6 +445,7 @@ export default function OrderDetailPage() {
     { title: 'Descuento', dataIndex: 'discountPct', key: 'discountPct', render: (v: number) => `${v}%` },
     { title: 'Total', dataIndex: 'lineTotal', key: 'lineTotal', render: (v: number) => `$${Number(v).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` },
     { title: 'Observaciones', dataIndex: 'observations', key: 'observations' },
+    { title: 'F. Entrega', dataIndex: 'deliveryDate', key: 'deliveryDate', render: (v: any) => v ? dayjs(v).format('DD/MM/YYYY HH:mm') : '—' },
     ...(isConfirmedOrLater ? [
       { title: '✓ Cant. Real', dataIndex: 'actualQuantity', key: 'actualQuantity', render: (v: any) => <span style={{ backgroundColor: '#e6f4ff', padding: '2px 6px', borderRadius: '3px', fontWeight: 500, color: '#0050b3' }}>{v != null ? Number(v) : '—'}</span>, onCell: () => ({ style: { backgroundColor: '#f0f5ff' } }) },
       { title: '✓ Desc. Real', dataIndex: 'actualDiscountPct', key: 'actualDiscountPct', render: (v: any) => <span style={{ backgroundColor: '#e6f4ff', padding: '2px 6px', borderRadius: '3px', fontWeight: 500, color: '#0050b3' }}>{v != null ? `${v}%` : '—'}</span>, onCell: () => ({ style: { backgroundColor: '#f0f5ff' } }) },
@@ -407,6 +474,7 @@ export default function OrderDetailPage() {
           <Space>
             <Title level={4} style={{ margin: 0 }}>{order.orderNumber}</Title>
             <Tag color={STATUS_COLORS[order.status]}>{STATUS_LABELS[order.status]}</Tag>
+            <Tag color={PAYMENT_STATUS_COLORS[order.paymentStatus]}>{PAYMENT_STATUS_LABELS[order.paymentStatus] || 'Pendiente'}</Tag>
             <Tag>{TIER_LABELS[order.pricingTier]}</Tag>
             {order.isCreditNote && <Tag color="red">Nota de Crédito</Tag>}
           </Space>
@@ -450,14 +518,19 @@ export default function OrderDetailPage() {
                 {STATUS_LABELS[s]}
               </Button>
             ))}
-            {order.status === 'CONFIRMED' && (
+            {canPay && (
               <Button icon={<DollarOutlined />} onClick={() => setPaymentModalOpen(true)}>
                 Registrar Pago
               </Button>
             )}
-            {(order.status === 'QUOTED' || order.status === 'CONFIRMED') && (
+            {order.status === 'CONFIRMED' && (
               <Button type="primary" onClick={() => setCreatePOModalOpen(true)}>
                 Crear Orden de Compra
+              </Button>
+            )}
+            {order.status === 'EXECUTED' && !order.isCreditNote && (
+              <Button danger onClick={openCreditNoteModal}>
+                Crear Nota de Crédito
               </Button>
             )}
           </Space>
@@ -478,6 +551,9 @@ export default function OrderDetailPage() {
             {order.billingClient?.companyName || order.billingClient?.rfc || '—'}
           </Descriptions.Item>
           <Descriptions.Item label="Stand">{order.stand?.code || '—'}</Descriptions.Item>
+          <Descriptions.Item label="Organización">
+            {order.organizacion ? order.organizacion.descripcion : '—'}
+          </Descriptions.Item>
           <Descriptions.Item label="Lista de Precios">{order.priceList?.name}</Descriptions.Item>
           <Descriptions.Item label="Fecha Hora Inicio">
             {order.startDate ? new Date(order.startDate).toLocaleString('es-MX') : '—'}
@@ -491,6 +567,24 @@ export default function OrderDetailPage() {
           <Descriptions.Item label="Saldo">
             ${(Number(order.total) - Number(order.paidAmount)).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
           </Descriptions.Item>
+          {order.originalOrder && (
+            <Descriptions.Item label="Orden Original">
+              <Button type="link" size="small" style={{ padding: 0 }} onClick={() => navigate(`/ordenes/${order.originalOrder.id}`)}>
+                {order.originalOrder.orderNumber}
+              </Button>
+            </Descriptions.Item>
+          )}
+          {order.creditNotes?.length > 0 && (
+            <Descriptions.Item label="Notas de Crédito">
+              <Space>
+                {order.creditNotes.map((cn: any) => (
+                  <Button key={cn.id} type="link" size="small" style={{ padding: 0 }} onClick={() => navigate(`/ordenes/${cn.id}`)}>
+                    {cn.orderNumber} (${Number(cn.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })})
+                  </Button>
+                ))}
+              </Space>
+            </Descriptions.Item>
+          )}
         </Descriptions>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -763,6 +857,17 @@ export default function OrderDetailPage() {
               <Col span={12}>
                 <Form.Item name="endDate" label="Fecha Hora Fin">
                   <DatePicker showTime format="DD/MM/YYYY HH:mm" style={{ width: '100%' }} />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item name="organizacionId" label="Organización">
+                  <Select
+                    allowClear
+                    showSearch
+                    placeholder="Seleccionar organización..."
+                    filterOption={(i, o) => String(o?.label ?? '').toLowerCase().includes(i.toLowerCase())}
+                    options={(orgData?.data ?? []).filter((o: any) => o.isActive).map((o: any) => ({ value: o.id, label: `${o.clave} — ${o.descripcion}` }))}
+                  />
                 </Form.Item>
               </Col>
               <Col span={24}>
@@ -1044,6 +1149,69 @@ export default function OrderDetailPage() {
         context="ORDER"
         entityId={id!}
       />
+
+      <Modal
+        title={`Crear Nota de Crédito — ${order?.orderNumber}`}
+        open={creditNoteModalOpen}
+        onCancel={() => setCreditNoteModalOpen(false)}
+        onOk={() => creditNoteMutation.mutate()}
+        confirmLoading={creditNoteMutation.isPending}
+        okText="Crear Nota de Crédito"
+        width={900}
+      >
+        <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+          Las cantidades se sugieren en negativo a partir de los valores reales de la orden. Puedes modificar las cantidades (0 o negativos).
+        </Text>
+        <Input.TextArea
+          rows={2}
+          placeholder="Notas de la nota de crédito..."
+          value={creditNoteNotes}
+          onChange={e => setCreditNoteNotes(e.target.value)}
+          style={{ marginBottom: 12 }}
+        />
+        <Table
+          dataSource={creditNoteItems}
+          rowKey={(_, idx) => String(idx)}
+          size="small"
+          pagination={false}
+          scroll={{ x: 'max-content' }}
+          columns={[
+            { title: 'Descripción', dataIndex: 'description', width: 200 },
+            { title: 'P. Unitario', dataIndex: 'unitPrice', width: 110, render: (v: number) => `$${Number(v).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` },
+            {
+              title: 'Cantidad', dataIndex: 'quantity', width: 110,
+              render: (v: number, _: any, idx: number) => (
+                <InputNumber value={v} max={0} onChange={val => updateCreditNoteItem(idx, 'quantity', val)} style={{ width: 90 }} size="small" />
+              ),
+            },
+            { title: 'Desc. %', dataIndex: 'discountPct', width: 80, render: (v: number) => `${v}%` },
+            {
+              title: 'Total', width: 120,
+              render: (_: any, r: any) => {
+                const total = (r.quantity || 0) * (r.unitPrice || 0) * (1 - (r.discountPct || 0) / 100)
+                return <span style={{ color: total < 0 ? '#ff4d4f' : undefined, fontWeight: 500 }}>${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+              },
+            },
+            {
+              title: 'Observaciones', dataIndex: 'observations', width: 160,
+              render: (v: string, _: any, idx: number) => (
+                <Input value={v} onChange={e => updateCreditNoteItem(idx, 'observations', e.target.value)} size="small" />
+              ),
+            },
+          ]}
+          footer={() => {
+            const subtotal = creditNoteItems.reduce((sum, li) => sum + (li.quantity || 0) * (li.unitPrice || 0) * (1 - (li.discountPct || 0) / 100), 0)
+            const tax = subtotal * 0.16
+            return (
+              <Row justify="end" gutter={16}>
+                <Col><Statistic title="Subtotal" value={`$${subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`} valueStyle={{ color: '#ff4d4f' }} /></Col>
+                <Col><Statistic title="IVA 16%" value={`$${tax.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`} valueStyle={{ color: '#ff4d4f' }} /></Col>
+                <Col><Statistic title="Total" value={`$${(subtotal + tax).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`} valueStyle={{ color: '#ff4d4f', fontWeight: 'bold' }} /></Col>
+              </Row>
+            )
+          }}
+        />
+      </Modal>
     </div>
   )
 }

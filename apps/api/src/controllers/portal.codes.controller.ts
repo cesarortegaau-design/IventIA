@@ -28,6 +28,9 @@ export async function generatePortalCodes(req: Request, res: Response, next: Nex
 
     const event = await prisma.event.findFirst({ where: { id: eventId, tenantId } })
     if (!event) throw new AppError(404, 'EVENT_NOT_FOUND', 'Evento no encontrado')
+    if (!['CONFIRMED', 'IN_EXECUTION'].includes(event.status)) {
+      throw new AppError(400, 'INVALID_EVENT_STATUS', 'Solo se pueden generar códigos para eventos en estado Confirmado o En ejecución')
+    }
 
     const codes = []
     for (let i = 0; i < count; i++) {
