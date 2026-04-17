@@ -298,6 +298,7 @@ export default function OrderDetailPage() {
     })
     setEditLineItems(
       (order.lineItems ?? []).map((li: any) => ({
+        instanceId: li.id,
         id: li.id,
         resourceId: li.resourceId,
         description: li.resource?.name || li.description,
@@ -343,12 +344,13 @@ export default function OrderDetailPage() {
   async function addEditLineItem(resourceId: string) {
     const item = editPriceListItems.find((i: any) => i.resourceId === resourceId)
     if (!item) return
-    if (editLineItems.find(li => li.resourceId === resourceId)) {
-      message.warning('Este recurso ya fue agregado')
+    if (item.resource?.checkDuplicate !== false && editLineItems.find(li => li.resourceId === resourceId)) {
+      message.warning('Este recurso no permite repetición en la Orden de Servicio')
       return
     }
 
     const newItem = {
+      instanceId: `${resourceId}-${Date.now()}-${Math.random()}`,
       resourceId,
       description: item.resource.name,
       resourceCode: item.resource.code || '',
@@ -400,15 +402,15 @@ export default function OrderDetailPage() {
       message.error(`Debes seleccionar un componente para: ${missingSelections.map((p: any) => p.componentResource.name).join(', ')}`)
       return
     }
-    setEditLineItems(prev => [...prev, { ...pendingItem, substitutionSelections }])
+    setEditLineItems(prev => [...prev, { ...pendingItem, instanceId: `${pendingItem.resourceId}-${Date.now()}-${Math.random()}`, substitutionSelections }])
     setSubstitutionModalOpen(false)
     setPendingItem(null)
     message.success('Artículo agregado con selecciones de sustitución')
   }
 
-  function updateEditLineItem(resourceId: string, field: string, value: any) {
+  function updateEditLineItem(instanceId: string, field: string, value: any) {
     setEditLineItems(prev => prev.map(li => {
-      if (li.resourceId !== resourceId) return li
+      if (li.instanceId !== instanceId) return li
       const updated = { ...li, [field]: value }
       // Recalculate actual line total when actual quantity or discount changes
       if (field === 'actualQuantity' || field === 'actualDiscountPct') {
@@ -420,8 +422,8 @@ export default function OrderDetailPage() {
     }))
   }
 
-  function removeEditLineItem(resourceId: string) {
-    setEditLineItems(prev => prev.filter(li => li.resourceId !== resourceId))
+  function removeEditLineItem(instanceId: string) {
+    setEditLineItems(prev => prev.filter(li => li.instanceId !== instanceId))
   }
 
   const lineColumns = [
@@ -907,7 +909,7 @@ export default function OrderDetailPage() {
                 children: (
                   <Table
                     dataSource={editLineItems}
-                    rowKey="resourceId"
+                    rowKey="instanceId"
                     size="small"
                     pagination={false}
                     scroll={{ x: 'max-content' }}
@@ -951,7 +953,7 @@ export default function OrderDetailPage() {
                   <div style={{ backgroundColor: '#f0f5ff', padding: '12px', borderRadius: '6px', marginBottom: '16px' }}>
                     <Table
                       dataSource={editLineItems}
-                      rowKey="resourceId"
+                      rowKey="instanceId"
                       size="small"
                       pagination={false}
                       scroll={{ x: 'max-content' }}
@@ -969,14 +971,14 @@ export default function OrderDetailPage() {
                         {
                           title: '✓ Cantidad Real', dataIndex: 'actualQuantity', key: 'aqty', width: 110,
                           render: (v: number, r: any) => (
-                            <InputNumber min={0.001} value={v} onChange={val => updateEditLineItem(r.resourceId, 'actualQuantity', val)} style={{ width: 90, fontWeight: 500 }} size="small" />
+                            <InputNumber min={0.001} value={v} onChange={val => updateEditLineItem(r.instanceId, 'actualQuantity', val)} style={{ width: 90, fontWeight: 500 }} size="small" />
                           ),
                           onCell: () => ({ style: { backgroundColor: '#e6f4ff', fontWeight: 500 } })
                         },
                         {
                           title: '✓ Desc. Real %', dataIndex: 'actualDiscountPct', key: 'adisc', width: 110,
                           render: (v: number, r: any) => (
-                            <InputNumber min={0} max={100} value={v} onChange={val => updateEditLineItem(r.resourceId, 'actualDiscountPct', val)} style={{ width: 90, fontWeight: 500 }} size="small" />
+                            <InputNumber min={0} max={100} value={v} onChange={val => updateEditLineItem(r.instanceId, 'actualDiscountPct', val)} style={{ width: 90, fontWeight: 500 }} size="small" />
                           ),
                           onCell: () => ({ style: { backgroundColor: '#e6f4ff', fontWeight: 500 } })
                         },
@@ -988,7 +990,7 @@ export default function OrderDetailPage() {
                         {
                           title: '✓ Obs. Real', dataIndex: 'actualObservations', key: 'aobs', width: 160,
                           render: (v: string, r: any) => (
-                            <Input value={v} onChange={e => updateEditLineItem(r.resourceId, 'actualObservations', e.target.value)} size="small" style={{ fontWeight: 500 }} />
+                            <Input value={v} onChange={e => updateEditLineItem(r.instanceId, 'actualObservations', e.target.value)} size="small" style={{ fontWeight: 500 }} />
                           ),
                           onCell: () => ({ style: { backgroundColor: '#e6f4ff', fontWeight: 500 } })
                         },
@@ -1012,7 +1014,7 @@ export default function OrderDetailPage() {
           ) : (
             <Table
               dataSource={editLineItems}
-              rowKey="resourceId"
+              rowKey="instanceId"
               size="small"
               pagination={false}
               scroll={{ x: 'max-content' }}
@@ -1036,13 +1038,13 @@ export default function OrderDetailPage() {
                 {
                   title: 'Cantidad', dataIndex: 'quantity', key: 'qty', width: 90,
                   render: (v: number, r: any) => (
-                    <InputNumber min={0.001} value={v} onChange={val => updateEditLineItem(r.resourceId, 'quantity', val)} style={{ width: 80 }} size="small" />
+                    <InputNumber min={0.001} value={v} onChange={val => updateEditLineItem(r.instanceId, 'quantity', val)} style={{ width: 80 }} size="small" />
                   ),
                 },
                 {
                   title: 'Desc. %', dataIndex: 'discountPct', key: 'disc', width: 80,
                   render: (v: number, r: any) => (
-                    <InputNumber min={0} max={100} value={v} onChange={val => updateEditLineItem(r.resourceId, 'discountPct', val)} style={{ width: 70 }} size="small" />
+                    <InputNumber min={0} max={100} value={v} onChange={val => updateEditLineItem(r.instanceId, 'discountPct', val)} style={{ width: 70 }} size="small" />
                   ),
                 },
                 {
@@ -1055,13 +1057,13 @@ export default function OrderDetailPage() {
                 {
                   title: 'Observaciones', dataIndex: 'observations', key: 'obs', width: 160,
                   render: (v: string, r: any) => (
-                    <Input value={v} onChange={e => updateEditLineItem(r.resourceId, 'observations', e.target.value)} size="small" />
+                    <Input value={v} onChange={e => updateEditLineItem(r.instanceId, 'observations', e.target.value)} size="small" />
                   ),
                 },
                 {
                   title: '', key: 'del', width: 48,
                   render: (_: any, r: any) => (
-                    <Button danger size="small" icon={<DeleteOutlined />} onClick={() => removeEditLineItem(r.resourceId)} />
+                    <Button danger size="small" icon={<DeleteOutlined />} onClick={() => removeEditLineItem(r.instanceId)} />
                   ),
                 },
               ]}
