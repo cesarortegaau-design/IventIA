@@ -156,8 +156,11 @@ export default function ResourcesPage() {
       }
     },
     onError: (err: any) => {
-      const detail = err?.response?.data?.message || err?.message || 'Error desconocido'
-      message.error(`Error al guardar recurso: ${detail}`)
+      const errData = err?.response?.data?.error
+      const detail = errData?.details
+        ? JSON.stringify(errData.details.fieldErrors ?? errData.details)
+        : (errData?.message || err?.message || 'Error desconocido')
+      message.error(`Error al guardar recurso: ${detail}`, 10)
     },
   })
 
