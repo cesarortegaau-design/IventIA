@@ -26,7 +26,7 @@ const resourceBaseSchema = z.object({
   type: z.enum(['CONSUMABLE', 'EQUIPMENT', 'SPACE', 'FURNITURE', 'SERVICE', 'DISCOUNT', 'TAX', 'PERSONAL']),
   description: z.string().optional().nullable(),
   unit: z.string().max(50).optional().nullable(),
-  factor: z.number().positive().default(1).nullable().transform(v => v ?? 1),
+  factor: z.coerce.number().positive().default(1).nullable().transform(v => v ?? 1),
   stock: z.number().int().min(0).default(0).nullable().transform(v => v ?? 0),
   stockLocation: z.string().optional().nullable(),
   checkStock: z.boolean().default(false),
