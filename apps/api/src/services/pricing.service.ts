@@ -25,12 +25,31 @@ export function getPriceForTier(
   }
 }
 
+export function calculateTimeUnitValue(
+  timeUnit: string | null | undefined,
+  factor: Decimal | number,
+  startDate: Date | null | undefined,
+  endDate: Date | null | undefined
+): Decimal {
+  const factorDec = new Decimal(factor.toString())
+  if (!timeUnit || timeUnit === 'no aplica') return new Decimal(1)
+  if (timeUnit === 'días') {
+    if (!startDate || !endDate) return factorDec
+    const diffMs = new Date(endDate).getTime() - new Date(startDate).getTime()
+    const days = diffMs <= 0 ? 1 : Math.max(1, Math.ceil(diffMs / 86400000))
+    return new Decimal(days).mul(factorDec)
+  }
+  // 'horas' or unknown → multiplier 1
+  return new Decimal(1)
+}
+
 export function calculateLineTotal(
   unitPrice: Decimal,
   quantity: Decimal,
-  discountPct: Decimal
+  discountPct: Decimal,
+  timeUnitValue: Decimal = new Decimal(1)
 ): Decimal {
-  const gross = unitPrice.mul(quantity)
+  const gross = unitPrice.mul(quantity).mul(timeUnitValue)
   const discount = gross.mul(discountPct.div(100))
   return gross.sub(discount)
 }

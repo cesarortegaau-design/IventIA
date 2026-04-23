@@ -13,4 +13,6 @@ export const priceListsApi = {
     apiClient.post(`/price-lists/${id}/items`, data).then(r => r.data),
   removeItem: (id: string, resourceId: string) =>
     apiClient.delete(`/price-lists/${id}/items/${resourceId}`).then(r => r.data),
+  importItems: (id: string, rows: any[]) =>
+    apiClient.post(`/price-lists/${id}/items/import`, { rows }).then(r => r.data),
 }

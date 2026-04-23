@@ -20,7 +20,15 @@ const TYPE_COLORS: Record<string, string> = {
   FURNITURE: 'purple', SERVICE: 'cyan', DISCOUNT: 'red', TAX: 'gold', PERSONAL: 'magenta',
 }
 
-const VALID_UNITS = ['pieza', 'litro', 'kilogramo', 'metro', 'metro cuadrado', 'turno']
+const UNIT_OPTIONS = [
+  { value: 'kg',     label: 'kg - kilogramos' },
+  { value: 'lt',     label: 'lt - litros' },
+  { value: 'pza',    label: 'pza - piezas' },
+  { value: 'unidad', label: 'unidad' },
+  { value: 'turno',  label: 'turno' },
+  { value: 'm2',     label: 'm2 - metros cuadrados' },
+  { value: 'm',      label: 'm - metros' },
+]
 
 const apiUrl = import.meta.env.VITE_API_URL || ''
 const imgSrc = (path: string | null | undefined) =>
@@ -227,6 +235,7 @@ export default function ResourcesPage() {
       render: (v: boolean) => v ? <Tag color="blue">Paquete</Tag> : '-',
     },
     { title: 'Unidad', dataIndex: 'unit', key: 'unit' },
+    { title: 'Factor', dataIndex: 'factor', key: 'factor', render: (v: any) => v != null ? Number(v) : 1 },
     {
       title: 'Portal', dataIndex: 'portalVisible', key: 'portal',
       render: (v: boolean) => <Tag color={v ? 'green' : 'default'}>{v ? 'Visible' : 'Oculto'}</Tag>,
@@ -288,15 +297,14 @@ export default function ResourcesPage() {
             </Form.Item>
           </Col>
           <Col span={8}>
-            {selectedType === 'PERSONAL' ? (
-              <Form.Item name="unit" label="Unidad" rules={[{ required: true, message: 'Selecciona una unidad' }]}>
-                <Select placeholder="Selecciona unidad" options={VALID_UNITS.map(u => ({ value: u, label: u }))} />
-              </Form.Item>
-            ) : (
-              <Form.Item name="unit" label="Unidad">
-                <Input placeholder="pza, hr, m2..." />
-              </Form.Item>
-            )}
+            <Form.Item name="unit" label="Unidad">
+              <Select allowClear placeholder="Seleccionar unidad" options={UNIT_OPTIONS} />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item name="factor" label="Factor" initialValue={1}>
+              <InputNumber min={0.001} step={0.01} style={{ width: '100%' }} precision={2} />
+            </Form.Item>
           </Col>
           <Col span={12}>
             <Form.Item name="portalVisible" label="Visible en Portal" valuePropName="checked">

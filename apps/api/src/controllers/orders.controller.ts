@@ -150,6 +150,7 @@ export async function getOrder(req: Request, res: Response, next: NextFunction) 
             unitPrice: true,
             lineTotal: true,
             discountPct: true,
+            timeUnit: true,
             observations: true,
             actualQuantity: true,
             actualDiscountPct: true,
@@ -291,7 +292,7 @@ export async function updateOrder(req: Request, res: Response, next: NextFunctio
 
     // If lineItems provided, recalculate totals
     if (data.lineItems && data.lineItems.length > 0) {
-      const { determinePricingTier, getPriceForTier, calculateLineTotal, calculateOrderTotals } = await import('../services/pricing.service')
+      const { determinePricingTier, getPriceForTier, calculateLineTotal, calculateOrderTotals, calculateTimeUnitValue } = await import('../services/pricing.service')
       const { Decimal } = await import('decimal.js')
 
       const pricingTier = await determinePricingTier(order.priceListId)
@@ -307,12 +308,21 @@ export async function updateOrder(req: Request, res: Response, next: NextFunctio
 
       const itemMap = new Map(priceListItems.map(i => [i.resourceId, i]))
 
+      const newStartDate = data.startDate ? new Date(data.startDate) : (data.startDate === null ? null : order.startDate)
+      const newEndDate = data.endDate ? new Date(data.endDate) : (data.endDate === null ? null : order.endDate)
+
       const lineItemData = data.lineItems.map((li, idx) => {
         const plItem = itemMap.get(li.resourceId)!
         const unitPrice = getPriceForTier(plItem, pricingTier)
         const quantity = new Decimal(li.quantity)
         const discountPct = new Decimal(li.discountPct ?? 0)
-        const lineTotal = calculateLineTotal(unitPrice, quantity, discountPct)
+        const timeUnitValue = calculateTimeUnitValue(
+          (plItem as any).timeUnit,
+          (plItem.resource as any).factor ?? 1,
+          newStartDate,
+          newEndDate
+        )
+        const lineTotal = calculateLineTotal(unitPrice, quantity, discountPct, timeUnitValue)
 
         return {
           resourceId: li.resourceId,
@@ -322,6 +332,7 @@ export async function updateOrder(req: Request, res: Response, next: NextFunctio
           quantity,
           discountPct,
           lineTotal,
+          timeUnit: (plItem as any).timeUnit ?? null,
           observations: li.observations,
           sortOrder: li.sortOrder ?? idx,
           deliveryDate: li.deliveryDate ? new Date(li.deliveryDate) : undefined,

@@ -5,7 +5,7 @@ import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { uploadToCloudinary, deleteFromCloudinary } from '../lib/cloudinary'
 import { auditService } from '../services/audit.service'
-import { VALID_UNITS_ARRAY, UNIT_RESTRICTIONS } from '@iventia/shared'
+
 import { deptFilterForResource } from '../middleware/departmentScope'
 
 const SLOT_FIELDS: Record<string, 'imageMain' | 'imageDesc' | 'imageExtra'> = {
@@ -25,7 +25,8 @@ const resourceBaseSchema = z.object({
   name: z.string().min(1).max(200),
   type: z.enum(['CONSUMABLE', 'EQUIPMENT', 'SPACE', 'FURNITURE', 'SERVICE', 'DISCOUNT', 'TAX', 'PERSONAL']),
   description: z.string().optional().nullable(),
-  unit: z.string().optional().nullable(),
+  unit: z.enum(['kg', 'lt', 'pza', 'unidad', 'turno', 'm2', 'm']).optional().nullable(),
+  factor: z.number().positive().default(1).nullable().transform(v => v ?? 1),
   stock: z.number().int().min(0).default(0).nullable().transform(v => v ?? 0),
   stockLocation: z.string().optional().nullable(),
   checkStock: z.boolean().default(false),
@@ -42,17 +43,6 @@ const resourceBaseSchema = z.object({
 })
 
 const resourceSchema = resourceBaseSchema.refine(
-  (data) => {
-    if (data.type === 'PERSONAL' && data.unit) {
-      return VALID_UNITS_ARRAY.includes(data.unit)
-    }
-    return true
-  },
-  {
-    message: `Para tipo PERSONAL, la unidad debe ser una de: ${VALID_UNITS_ARRAY.join(', ')}`,
-    path: ['unit'],
-  }
-).refine(
   (data) => {
     if (data.isSubstitute && !data.isPackage) {
       return false

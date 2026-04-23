@@ -1,16 +1,61 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Table, Button, Card, Space, Tag, Modal, Form, Input, DatePicker,
-  InputNumber, Typography, Row, Col, App, Select, Descriptions
+  InputNumber, Typography, Row, Col, App, Select
 } from 'antd'
-import { PlusOutlined, EditOutlined, EyeOutlined, DownloadOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, EyeOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { priceListsApi } from '../../../api/priceLists'
 import { resourcesApi } from '../../../api/resources'
 import { exportToCsv } from '../../../utils/exportCsv'
 
 const { Title } = Typography
+
+const TIME_UNIT_OPTIONS = [
+  { value: 'no aplica', label: 'no aplica' },
+  { value: 'horas',     label: 'horas' },
+  { value: 'días',      label: 'días' },
+]
+
+const REQUIRED_CSV_COLUMNS = ['Recurso', 'P. Anticipado', 'P. Normal', 'P. Tardío', 'Unidad de Tiempo']
+const VALID_TIME_UNITS = ['no aplica', 'horas', 'días']
+
+function parsePriceListItemsCsv(text: string): { rows: any[]; error?: string } {
+  const lines = text.split(/\r?\n/).filter(l => l.trim())
+  if (lines.length < 2) return { rows: [], error: 'El archivo no contiene datos' }
+
+  const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim())
+  for (const col of REQUIRED_CSV_COLUMNS) {
+    if (!headers.includes(col)) {
+      return { rows: [], error: `Columna requerida no encontrada: "${col}". Las columnas deben ser exactamente: ${REQUIRED_CSV_COLUMNS.join(', ')}` }
+    }
+  }
+
+  const rows: any[] = []
+  for (let i = 1; i < lines.length; i++) {
+    const cells = lines[i].split(',').map(c => c.replace(/^"|"$/g, '').trim())
+    const row: Record<string, string> = {}
+    headers.forEach((h, idx) => { row[h] = cells[idx] ?? '' })
+
+    if (!row['Recurso']) continue
+
+    const earlyPrice = parseFloat(row['P. Anticipado'])
+    const normalPrice = parseFloat(row['P. Normal'])
+    const latePrice = parseFloat(row['P. Tardío'])
+    const timeUnit = row['Unidad de Tiempo']
+
+    if (isNaN(earlyPrice) || isNaN(normalPrice) || isNaN(latePrice)) {
+      return { rows: [], error: `Fila ${i + 1}: los campos de precio deben ser números válidos` }
+    }
+    if (!VALID_TIME_UNITS.includes(timeUnit)) {
+      return { rows: [], error: `Fila ${i + 1}: "Unidad de Tiempo" debe ser uno de: ${VALID_TIME_UNITS.join(', ')}` }
+    }
+
+    rows.push({ resourceCode: row['Recurso'], earlyPrice, normalPrice, latePrice, timeUnit })
+  }
+  return { rows }
+}
 
 export default function PriceListsPage() {
   const [form] = Form.useForm()
@@ -23,6 +68,9 @@ export default function PriceListsPage() {
   const [viewingId, setViewingId] = useState<string | null>(null)
   const [selectedResourceId, setSelectedResourceId] = useState<string | null>(null)
   const [packageQty, setPackageQty] = useState<number>(1)
+  const [importPreview, setImportPreview] = useState<any[] | null>(null)
+  const [importModalOpen, setImportModalOpen] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['price-lists'],
@@ -71,14 +119,86 @@ export default function PriceListsPage() {
   })
 
   const addItemMutation = useMutation({
-    mutationFn: (values: any) => priceListsApi.upsertItem(viewingId!, values),
+    mutationFn: (values: any) => {
+      const { unit: _unit, factor: _factor, ...rest } = values
+      return priceListsApi.upsertItem(viewingId!, rest)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['price-list-detail', viewingId] })
       setItemModalOpen(false)
       itemForm.resetFields()
+      setSelectedResourceId(null)
       message.success('Artículo agregado')
     },
   })
+
+  const importMutation = useMutation({
+    mutationFn: (rows: any[]) => priceListsApi.importItems(viewingId!, rows),
+    onSuccess: (res: any) => {
+      queryClient.invalidateQueries({ queryKey: ['price-list-detail', viewingId] })
+      setImportModalOpen(false)
+      setImportPreview(null)
+      message.success(`Importación exitosa: ${res.data?.imported ?? 0} artículos`)
+    },
+    onError: (err: any) => {
+      message.error(err?.response?.data?.message || 'Error al importar')
+    },
+  })
+
+  function handleCsvFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string
+      const { rows, error } = parsePriceListItemsCsv(text)
+      if (error) {
+        message.error(error)
+        if (fileInputRef.current) fileInputRef.current.value = ''
+        return
+      }
+      setImportPreview(rows)
+      setImportModalOpen(true)
+    }
+    reader.readAsText(file, 'utf-8')
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  function downloadTemplate() {
+    const templateRows = [{ resourceCode: 'RECURSO-001', earlyPrice: 100, normalPrice: 120, latePrice: 140, timeUnit: 'no aplica' }]
+    exportToCsv('plantilla-lista-precios', templateRows, [
+      { header: 'Recurso', key: 'resourceCode' },
+      { header: 'P. Anticipado', key: 'earlyPrice' },
+      { header: 'P. Normal', key: 'normalPrice' },
+      { header: 'P. Tardío', key: 'latePrice' },
+      { header: 'Unidad de Tiempo', key: 'timeUnit' },
+    ])
+  }
+
+  function exportItems() {
+    const items = detailData?.data?.items ?? []
+    exportToCsv(`lista-precios-${detailData?.data?.name ?? viewingId}-articulos`, items.map((r: any) => ({
+      recurso: r.resource?.code ?? '',
+      nombre: r.resource?.name ?? '',
+      unidad: r.resource?.unit ?? '',
+      factor: r.resource?.factor != null ? Number(r.resource.factor) : 1,
+      unidadTiempo: r.timeUnit ?? 'no aplica',
+      detalle: r.detail ?? '',
+      earlyPrice: Number(r.earlyPrice).toFixed(2),
+      normalPrice: Number(r.normalPrice).toFixed(2),
+      latePrice: Number(r.latePrice).toFixed(2),
+    })), [
+      { header: 'Recurso', key: 'recurso' },
+      { header: 'Nombre', key: 'nombre' },
+      { header: 'Unidad', key: 'unidad' },
+      { header: 'Factor', key: 'factor' },
+      { header: 'Unidad de Tiempo', key: 'unidadTiempo' },
+      { header: 'Detalle', key: 'detalle' },
+      { header: 'P. Anticipado', key: 'earlyPrice' },
+      { header: 'P. Normal', key: 'normalPrice' },
+      { header: 'P. Tardío', key: 'latePrice' },
+    ])
+  }
 
   const columns = [
     { title: 'Nombre', dataIndex: 'name', key: 'name' },
@@ -135,66 +255,85 @@ export default function PriceListsPage() {
         onCancel={() => setViewingId(null)}
         footer={[
           <Button key="add" type="primary" icon={<PlusOutlined />} onClick={() => setItemModalOpen(true)}>Agregar artículo</Button>,
+          <Button key="import" icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>Importar CSV</Button>,
+          <Button key="template" icon={<DownloadOutlined />} onClick={downloadTemplate}>Descargar plantilla</Button>,
+          <Button key="export" icon={<DownloadOutlined />} onClick={exportItems}>Exportar CSV</Button>,
           <Button key="close" onClick={() => setViewingId(null)}>Cerrar</Button>,
         ]}
-        width={900}
+        width={1100}
       >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv"
+          style={{ display: 'none' }}
+          onChange={handleCsvFileChange}
+        />
         <Table
           dataSource={detailData?.data?.items ?? []}
           rowKey="id"
           size="small"
           columns={[
             { title: 'Recurso', render: (_: any, r: any) => r.resource?.name },
+            { title: 'Unidad', render: (_: any, r: any) => r.resource?.unit ?? '—' },
+            { title: 'Factor', render: (_: any, r: any) => r.resource?.factor != null ? Number(r.resource.factor) : 1 },
+            { title: 'Unidad de Tiempo', dataIndex: 'timeUnit', render: (v: string) => v || 'no aplica' },
+            { title: 'Detalle', dataIndex: 'detail', render: (v: string) => v || '—' },
             { title: 'P. Anticipado', dataIndex: 'earlyPrice', render: (v: number) => `$${Number(v).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` },
             { title: 'P. Normal', dataIndex: 'normalPrice', render: (v: number) => `$${Number(v).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` },
             { title: 'P. Tardío', dataIndex: 'latePrice', render: (v: number) => `$${Number(v).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` },
-            { title: 'Unidad', dataIndex: 'unit' },
           ]}
           expandable={{
             expandedRowRender: (r: any) => {
               if (!r.resource?.isPackage || !r.resource?.packageComponents?.length) return null
               return (
                 <div style={{ padding: '12px 0' }}>
-                  <strong style={{ fontSize: '12px', marginBottom: '8px', display: 'block' }}>📦 Componentes requeridos por {r.unit || 'paquete'}</strong>
+                  <strong style={{ fontSize: '12px', marginBottom: '8px', display: 'block' }}>📦 Componentes requeridos por {r.resource?.unit || 'paquete'}</strong>
                   <Table
                     dataSource={r.resource.packageComponents}
                     rowKey="componentResourceId"
                     size="small"
                     pagination={false}
                     columns={[
-                      {
-                        title: 'Código',
-                        key: 'code',
-                        width: 80,
-                        render: (_: any, comp: any) => comp.componentResource.code,
-                      },
-                      {
-                        title: 'Nombre',
-                        key: 'name',
-                        render: (_: any, comp: any) => comp.componentResource.name,
-                      },
-                      {
-                        title: 'Cantidad',
-                        key: 'quantity',
-                        width: 100,
-                        align: 'right' as const,
-                        render: (_: any, comp: any) => Number(comp.quantity).toFixed(3),
-                      },
-                      {
-                        title: 'Unidad',
-                        key: 'unit',
-                        width: 100,
-                        render: (_: any, comp: any) => comp.componentResource.unit || '—',
-                      },
+                      { title: 'Código', key: 'code', width: 80, render: (_: any, comp: any) => comp.componentResource.code },
+                      { title: 'Nombre', key: 'name', render: (_: any, comp: any) => comp.componentResource.name },
+                      { title: 'Cantidad', key: 'quantity', width: 100, align: 'right' as const, render: (_: any, comp: any) => Number(comp.quantity).toFixed(3) },
+                      { title: 'Unidad', key: 'unit', width: 100, render: (_: any, comp: any) => comp.componentResource.unit || '—' },
                     ]}
                   />
-                  <div style={{ marginTop: '8px', fontSize: '11px', color: '#999' }}>
-                    * Cantidades requeridas por cada {r.unit || 'paquete'} agregado a la lista de precios
-                  </div>
                 </div>
               )
             },
           }}
+        />
+      </Modal>
+
+      {/* Import preview modal */}
+      <Modal
+        title="Vista previa de importación"
+        open={importModalOpen}
+        onCancel={() => { setImportModalOpen(false); setImportPreview(null) }}
+        onOk={() => importPreview && importMutation.mutate(importPreview)}
+        confirmLoading={importMutation.isPending}
+        okText={`Importar ${importPreview?.length ?? 0} artículos`}
+        width={700}
+      >
+        <p style={{ color: '#d46b08', marginBottom: 12 }}>
+          Al importar, todos los artículos actuales de la lista serán reemplazados.
+        </p>
+        <Table
+          dataSource={importPreview ?? []}
+          rowKey={(_, i) => String(i)}
+          size="small"
+          pagination={false}
+          scroll={{ y: 300 }}
+          columns={[
+            { title: 'Recurso', dataIndex: 'resourceCode' },
+            { title: 'Unidad de Tiempo', dataIndex: 'timeUnit' },
+            { title: 'P. Anticipado', dataIndex: 'earlyPrice', render: (v: number) => `$${v.toFixed(2)}` },
+            { title: 'P. Normal', dataIndex: 'normalPrice', render: (v: number) => `$${v.toFixed(2)}` },
+            { title: 'P. Tardío', dataIndex: 'latePrice', render: (v: number) => `$${v.toFixed(2)}` },
+          ]}
         />
       </Modal>
 
@@ -248,9 +387,26 @@ export default function PriceListsPage() {
               onChange={(value) => {
                 setSelectedResourceId(value)
                 setPackageQty(1)
+                const resource = (resourcesData?.data ?? []).find((r: any) => r.id === value)
+                if (resource) {
+                  itemForm.setFieldsValue({ unit: resource.unit, factor: resource.factor != null ? Number(resource.factor) : 1 })
+                }
               }}
             />
           </Form.Item>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="unit" label="Unidad (del recurso)">
+                <Input disabled />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="factor" label="Factor (del recurso)">
+                <InputNumber disabled style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
 
           {selectedResourceData?.data?.isPackage && packageComponentsData?.data?.components && (
             <div style={{ background: '#f5f5f5', padding: '12px', borderRadius: '4px', marginBottom: '16px' }}>
@@ -276,43 +432,13 @@ export default function PriceListsPage() {
                 size="small"
                 pagination={false}
                 columns={[
-                  {
-                    title: 'Código',
-                    key: 'code',
-                    width: 70,
-                    render: (_: any, r: any) => r.componentResource.code,
-                  },
-                  {
-                    title: 'Nombre',
-                    key: 'name',
-                    render: (_: any, r: any) => r.componentResource.name,
-                  },
-                  {
-                    title: 'Qty × Paq',
-                    key: 'qtyPackage',
-                    width: 80,
-                    align: 'right' as const,
-                    render: (_: any, r: any) => Number(r.quantity).toFixed(3),
-                  },
-                  {
-                    title: 'Total Requerido',
-                    key: 'qtyTotal',
-                    width: 110,
-                    align: 'right' as const,
-                    render: (_: any, r: any) => (Number(r.quantity) * packageQty).toFixed(3),
-                  },
-                  {
-                    title: 'Unidad',
-                    key: 'unit',
-                    width: 80,
-                    render: (_: any, r: any) => r.componentResource.unit || '—',
-                  },
+                  { title: 'Código', key: 'code', width: 70, render: (_: any, r: any) => r.componentResource.code },
+                  { title: 'Nombre', key: 'name', render: (_: any, r: any) => r.componentResource.name },
+                  { title: 'Qty × Paq', key: 'qtyPackage', width: 80, align: 'right' as const, render: (_: any, r: any) => Number(r.quantity).toFixed(3) },
+                  { title: 'Total Requerido', key: 'qtyTotal', width: 110, align: 'right' as const, render: (_: any, r: any) => (Number(r.quantity) * packageQty).toFixed(3) },
+                  { title: 'Unidad', key: 'unit', width: 80, render: (_: any, r: any) => r.componentResource.unit || '—' },
                 ]}
               />
-              <div style={{ marginTop: '8px', fontSize: '11px', color: '#666' }}>
-                * "Qty × Paq": cantidad de cada componente por cada paquete<br/>
-                * "Total Requerido": cantidad total si se agregan {packageQty} paquete(s)
-              </div>
             </div>
           )}
 
@@ -321,7 +447,16 @@ export default function PriceListsPage() {
             <Col span={8}><Form.Item name="normalPrice" label="Precio Normal" rules={[{ required: true }]}><InputNumber min={0} style={{ width: '100%' }} prefix="$" /></Form.Item></Col>
             <Col span={8}><Form.Item name="latePrice" label="Precio Tardío" rules={[{ required: true }]}><InputNumber min={0} style={{ width: '100%' }} prefix="$" /></Form.Item></Col>
           </Row>
-          <Form.Item name="unit" label="Unidad"><Input placeholder="pza, hr, m2..." /></Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="timeUnit" label="Unidad de Tiempo" initialValue="no aplica">
+                <Select options={TIME_UNIT_OPTIONS} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Form.Item name="detail" label="Detalle">
+            <Input.TextArea rows={2} placeholder="Descripción adicional del artículo en esta lista..." />
+          </Form.Item>
         </Form>
       </Modal>
     </div>

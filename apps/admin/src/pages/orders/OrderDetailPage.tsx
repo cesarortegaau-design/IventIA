@@ -23,6 +23,17 @@ import { templatesApi } from '../../api/templates'
 
 const { Title, Text } = Typography
 
+function calcTimeUnitValue(timeUnit: string | null | undefined, factor: number, startDate: string | null | undefined, endDate: string | null | undefined): number {
+  if (!timeUnit || timeUnit === 'no aplica') return 1
+  if (timeUnit === 'días') {
+    if (!startDate || !endDate) return factor
+    const diffMs = new Date(endDate).getTime() - new Date(startDate).getTime()
+    const days = diffMs <= 0 ? 1 : Math.max(1, Math.ceil(diffMs / 86400000))
+    return days * factor
+  }
+  return 1
+}
+
 const STATUS_COLORS: Record<string, string> = {
   QUOTED: 'blue', CONFIRMED: 'green', EXECUTED: 'geekblue',
   INVOICED: 'cyan', CANCELLED: 'red', CREDIT_NOTE: 'gold',
@@ -310,6 +321,8 @@ export default function OrderDetailPage() {
         quantity: Number(li.quantity),
         discountPct: Number(li.discountPct),
         lineTotal: Number(li.lineTotal),
+        timeUnit: li.timeUnit ?? null,
+        factor: Number(li.resource?.factor ?? 1),
         observations: li.observations || '',
         actualQuantity: li.actualQuantity != null ? Number(li.actualQuantity) : Number(li.quantity),
         actualDiscountPct: li.actualDiscountPct != null ? Number(li.actualDiscountPct) : Number(li.discountPct),
@@ -359,6 +372,8 @@ export default function OrderDetailPage() {
       latePrice: Number(item.latePrice),
       quantity: 1,
       discountPct: 0,
+      timeUnit: (item as any).timeUnit ?? null,
+      factor: Number((item.resource as any).factor ?? 1),
       observations: '',
       isPackage: item.resource.isPackage ?? false,
       packageComponents: item.resource.packageComponents ?? [],
@@ -416,7 +431,8 @@ export default function OrderDetailPage() {
       if (field === 'actualQuantity' || field === 'actualDiscountPct') {
         const qty = field === 'actualQuantity' ? (value ?? li.actualQuantity) : li.actualQuantity
         const disc = field === 'actualDiscountPct' ? (value ?? li.actualDiscountPct) : li.actualDiscountPct
-        updated.actualLineTotal = qty * (li.unitPrice || li.normalPrice || 0) * (1 - (disc || 0) / 100)
+        const tuv = calcTimeUnitValue(li.timeUnit, li.factor ?? 1, order?.startDate, order?.endDate)
+        updated.actualLineTotal = qty * (li.unitPrice || li.normalPrice || 0) * tuv * (1 - (disc || 0) / 100)
       }
       return updated
     }))
@@ -442,6 +458,24 @@ export default function OrderDetailPage() {
       title: 'Departamento',
       key: 'department',
       render: (_: any, record: any) => record.resource?.department?.name ?? '—',
+    },
+    {
+      title: 'Ud. Tiempo',
+      key: 'timeUnit',
+      render: (_: any, record: any) => record.timeUnit || 'no aplica',
+    },
+    {
+      title: 'Factor',
+      key: 'factor',
+      render: (_: any, record: any) => record.resource?.factor != null ? Number(record.resource.factor) : 1,
+    },
+    {
+      title: '× Tiempo',
+      key: 'timeUnitValue',
+      render: (_: any, record: any) => {
+        const tuv = calcTimeUnitValue(record.timeUnit, Number(record.resource?.factor ?? 1), order.startDate, order.endDate)
+        return tuv
+      },
     },
     { title: 'Precio Unit.', dataIndex: 'unitPrice', key: 'unitPrice', render: (v: number) => `$${Number(v).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` },
     { title: 'Cantidad', dataIndex: 'quantity', key: 'quantity', render: (v: number) => Number(v) },
@@ -1050,7 +1084,8 @@ export default function OrderDetailPage() {
                 {
                   title: 'Total', key: 'total', width: 120,
                   render: (_: any, r: any) => {
-                    const total = (r.quantity || 0) * (r.normalPrice || 0) * (1 - (r.discountPct || 0) / 100)
+                    const tuv = calcTimeUnitValue(r.timeUnit, r.factor ?? 1, editForm.getFieldValue('startDate')?.toISOString(), editForm.getFieldValue('endDate')?.toISOString())
+                    const total = (r.quantity || 0) * (r.normalPrice || 0) * tuv * (1 - (r.discountPct || 0) / 100)
                     return `$${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
                   },
                 },
@@ -1106,7 +1141,10 @@ export default function OrderDetailPage() {
                 },
               }}
               footer={() => {
-                const subtotal = editLineItems.reduce((sum, li) => sum + (li.quantity * (li.normalPrice || 0) * (1 - (li.discountPct || 0) / 100)), 0)
+                const subtotal = editLineItems.reduce((sum, li) => {
+                  const tuv = calcTimeUnitValue(li.timeUnit, li.factor ?? 1, editForm.getFieldValue('startDate')?.toISOString(), editForm.getFieldValue('endDate')?.toISOString())
+                  return sum + (li.quantity * (li.normalPrice || 0) * tuv * (1 - (li.discountPct || 0) / 100))
+                }, 0)
                 const tax = subtotal * 0.16
                 return (
                   <Row justify="end" gutter={16}>

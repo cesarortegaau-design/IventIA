@@ -1,7 +1,7 @@
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { ORDER_STATUS_TRANSITIONS, OrderStatus } from '@iventia/shared'
-import { determinePricingTier, getPriceForTier, calculateLineTotal, calculateOrderTotals } from './pricing.service'
+import { determinePricingTier, getPriceForTier, calculateLineTotal, calculateOrderTotals, calculateTimeUnitValue } from './pricing.service'
 import { auditService } from './audit.service'
 import Decimal from 'decimal.js'
 
@@ -69,7 +69,13 @@ export async function createOrder(input: CreateOrderInput) {
     const unitPrice = getPriceForTier(plItem, pricingTier)
     const quantity = new Decimal(li.quantity)
     const discountPct = new Decimal(li.discountPct ?? 0)
-    const lineTotal = calculateLineTotal(unitPrice, quantity, discountPct)
+    const timeUnitValue = calculateTimeUnitValue(
+      (plItem as any).timeUnit,
+      (plItem.resource as any).factor ?? 1,
+      input.startDate,
+      input.endDate
+    )
+    const lineTotal = calculateLineTotal(unitPrice, quantity, discountPct, timeUnitValue)
 
     return {
       resourceId: li.resourceId,
@@ -79,6 +85,7 @@ export async function createOrder(input: CreateOrderInput) {
       quantity,
       discountPct,
       lineTotal,
+      timeUnit: (plItem as any).timeUnit ?? null,
       observations: li.observations,
       sortOrder: li.sortOrder ?? idx,
       deliveryDate: li.deliveryDate,

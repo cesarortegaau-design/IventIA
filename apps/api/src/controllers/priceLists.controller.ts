@@ -17,7 +17,8 @@ const priceListItemSchema = z.object({
   earlyPrice: z.number().min(0),
   normalPrice: z.number().min(0),
   latePrice: z.number().min(0),
-  unit: z.string().optional(),
+  timeUnit: z.enum(['no aplica', 'horas', 'días']).optional().nullable(),
+  detail: z.string().optional().nullable(),
 })
 
 export async function listPriceLists(req: Request, res: Response, next: NextFunction) {
@@ -55,6 +56,8 @@ export async function getPriceList(req: Request, res: Response, next: NextFuncti
                 name: true,
                 code: true,
                 type: true,
+                unit: true,
+                factor: true,
                 isPackage: true,
                 checkDuplicate: true,
                 department: { select: { id: true, name: true } },
@@ -152,10 +155,11 @@ export async function upsertPriceListItem(req: Request, res: Response, next: Nex
     })
     if (!priceList) throw new AppError(404, 'PRICE_LIST_NOT_FOUND', 'Price list not found')
 
+    const { resourceId, ...itemData } = data
     const item = await prisma.priceListItem.upsert({
-      where: { priceListId_resourceId: { priceListId: req.params.id, resourceId: data.resourceId } },
-      create: { priceListId: req.params.id, ...data },
-      update: data,
+      where: { priceListId_resourceId: { priceListId: req.params.id, resourceId } },
+      create: { priceListId: req.params.id, resourceId, ...itemData },
+      update: itemData,
     })
     res.json({ success: true, data: item })
   } catch (err) {
@@ -175,6 +179,57 @@ export async function removePriceListItem(req: Request, res: Response, next: Nex
       data: { isActive: false },
     })
     res.json({ success: true, data: { message: 'Item removed from price list' } })
+  } catch (err) {
+    next(err)
+  }
+}
+
+const importRowSchema = z.object({
+  resourceCode: z.string().min(1),
+  earlyPrice: z.number().min(0),
+  normalPrice: z.number().min(0),
+  latePrice: z.number().min(0),
+  timeUnit: z.enum(['no aplica', 'horas', 'días']),
+})
+
+export async function importPriceListItems(req: Request, res: Response, next: NextFunction) {
+  try {
+    const tenantId = req.user!.tenantId
+    const priceList = await prisma.priceList.findFirst({
+      where: { id: req.params.id, tenantId },
+    })
+    if (!priceList) throw new AppError(404, 'PRICE_LIST_NOT_FOUND', 'Price list not found')
+
+    const rows = z.array(importRowSchema).parse(req.body.rows)
+
+    // Validate all resource codes exist
+    const codes = rows.map(r => r.resourceCode)
+    const resources = await prisma.resource.findMany({
+      where: { tenantId, code: { in: codes }, isActive: true },
+    })
+    const resourceMap = new Map(resources.map(r => [r.code, r]))
+
+    const missing = codes.filter(c => !resourceMap.has(c))
+    if (missing.length > 0) {
+      throw new AppError(400, 'INVALID_RESOURCES', `Recursos no encontrados: ${missing.join(', ')}`)
+    }
+
+    // Replace all items in a transaction
+    await prisma.$transaction(async (tx) => {
+      await tx.priceListItem.deleteMany({ where: { priceListId: req.params.id } })
+      await tx.priceListItem.createMany({
+        data: rows.map(r => ({
+          priceListId: req.params.id,
+          resourceId: resourceMap.get(r.resourceCode)!.id,
+          earlyPrice: r.earlyPrice,
+          normalPrice: r.normalPrice,
+          latePrice: r.latePrice,
+          timeUnit: r.timeUnit,
+        })),
+      })
+    })
+
+    res.json({ success: true, data: { imported: rows.length } })
   } catch (err) {
     next(err)
   }
