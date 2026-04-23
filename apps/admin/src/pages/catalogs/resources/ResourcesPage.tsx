@@ -125,9 +125,16 @@ export default function ResourcesPage() {
   })
 
   const saveMutation = useMutation({
-    mutationFn: (values: any) => editingId
-      ? resourcesApi.update(editingId, values)
-      : resourcesApi.create(values),
+    mutationFn: (values: any) => {
+      const payload = {
+        ...values,
+        departmentId: values.departmentId || null,
+        factor: values.factor ?? 1,
+        areaSqm: values.areaSqm ?? null,
+        capacity: values.capacity ?? null,
+      }
+      return editingId ? resourcesApi.update(editingId, payload) : resourcesApi.create(payload)
+    },
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['resources'] })
       if (!editingId) {

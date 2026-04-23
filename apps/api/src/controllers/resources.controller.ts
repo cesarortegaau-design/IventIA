@@ -34,7 +34,7 @@ const resourceBaseSchema = z.object({
   recoveryTime: z.coerce.number().int().min(0).default(0).nullable().transform(v => v ?? 0),
   areaSqm: z.coerce.number().optional().nullable(),
   capacity: z.coerce.number().int().optional().nullable(),
-  departmentId: z.preprocess(v => (v === '' ? null : v), z.string().uuid().optional().nullable()),
+  departmentId: z.string().uuid().optional().nullable(),
   portalVisible: z.boolean().default(false),
   portalDesc: z.string().optional().nullable(),
   isPackage: z.boolean().default(false),
