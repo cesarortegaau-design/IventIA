@@ -16,6 +16,17 @@ import { useAuthStore } from '../../stores/authStore'
 
 const { Title, Text } = Typography
 
+function calcTimeUnitValue(timeUnit: string | null | undefined, factor: number, startDate: string | null | undefined, endDate: string | null | undefined): number {
+  if (!timeUnit || timeUnit === 'no aplica') return 1
+  if (timeUnit === 'días') {
+    if (!startDate || !endDate) return factor
+    const diffMs = new Date(endDate).getTime() - new Date(startDate).getTime()
+    const days = diffMs <= 0 ? 1 : Math.max(1, Math.ceil(diffMs / 86400000))
+    return days * factor
+  }
+  return 1
+}
+
 export default function OrderFormWizard() {
   const { eventId } = useParams<{ eventId: string }>()
   const navigate = useNavigate()
@@ -176,6 +187,8 @@ export default function OrderFormWizard() {
       latePrice: Number(item.latePrice),
       quantity: 1,
       discountPct: 0,
+      timeUnit: (item as any).timeUnit ?? null,
+      factor: Number((item.resource as any).factor ?? 1),
       observations: '',
       isPackage: item.resource.isPackage ?? false,
       packageComponents: item.resource.packageComponents ?? [],
@@ -283,6 +296,20 @@ export default function OrderFormWizard() {
       render: (v: number, r: any) => (
         <InputNumber min={0} max={100} value={v} onChange={val => updateLineItem(r.instanceId, 'discountPct', val)} style={{ width: 70 }} />
       ),
+    },
+    { title: 'Ud. Tiempo', key: 'tu', width: 90, render: (_: any, r: any) => r.timeUnit || 'no aplica' },
+    { title: 'Factor', key: 'factor', width: 70, render: (_: any, r: any) => r.factor ?? 1 },
+    {
+      title: '× Tiempo', key: 'tuv', width: 80,
+      render: (_: any, r: any) => calcTimeUnitValue(r.timeUnit, r.factor ?? 1, form.getFieldValue('startDate')?.toISOString(), form.getFieldValue('endDate')?.toISOString()),
+    },
+    {
+      title: 'Total', key: 'total', width: 120,
+      render: (_: any, r: any) => {
+        const tuv = calcTimeUnitValue(r.timeUnit, r.factor ?? 1, form.getFieldValue('startDate')?.toISOString(), form.getFieldValue('endDate')?.toISOString())
+        const total = (r.quantity || 0) * (r.normalPrice || 0) * tuv * (1 - (r.discountPct || 0) / 100)
+        return `$${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
+      },
     },
     {
       title: 'Observaciones', dataIndex: 'observations', key: 'obs', width: 160,
@@ -470,7 +497,10 @@ export default function OrderFormWizard() {
               },
             }}
             footer={() => {
-              const subtotal = lineItems.reduce((sum, li) => sum + (li.quantity * (li.normalPrice || 0) * (1 - (li.discountPct || 0) / 100)), 0)
+              const subtotal = lineItems.reduce((sum, li) => {
+                const tuv = calcTimeUnitValue(li.timeUnit, li.factor ?? 1, form.getFieldValue('startDate')?.toISOString(), form.getFieldValue('endDate')?.toISOString())
+                return sum + (li.quantity * (li.normalPrice || 0) * tuv * (1 - (li.discountPct || 0) / 100))
+              }, 0)
               const tax = subtotal * 0.16
               return (
                 <Row justify="end" gutter={16} style={{ flexWrap: 'wrap' }}>
