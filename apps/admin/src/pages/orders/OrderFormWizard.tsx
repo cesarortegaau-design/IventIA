@@ -189,6 +189,7 @@ export default function OrderFormWizard() {
       discountPct: 0,
       timeUnit: (item as any).timeUnit ?? null,
       factor: Number((item.resource as any).factor ?? 1),
+      unit: item.resource?.unit ?? '',
       observations: '',
       isPackage: item.resource.isPackage ?? false,
       packageComponents: item.resource.packageComponents ?? [],
@@ -285,6 +286,7 @@ export default function OrderFormWizard() {
       ),
     },
     { title: 'P. Normal', dataIndex: 'normalPrice', width: 110, render: (v: number) => `$${v.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` },
+    { title: 'Unidad', key: 'unit', width: 80, render: (_: any, r: any) => r.unit || '—' },
     {
       title: 'Cantidad', dataIndex: 'quantity', key: 'qty', width: 90,
       render: (v: number, r: any) => (

@@ -323,6 +323,7 @@ export default function OrderDetailPage() {
         lineTotal: Number(li.lineTotal),
         timeUnit: li.timeUnit ?? null,
         factor: Number(li.resource?.factor ?? 1),
+        unit: li.resource?.unit ?? '',
         observations: li.observations || '',
         actualQuantity: li.actualQuantity != null ? Number(li.actualQuantity) : Number(li.quantity),
         actualDiscountPct: li.actualDiscountPct != null ? Number(li.actualDiscountPct) : Number(li.discountPct),
@@ -374,6 +375,7 @@ export default function OrderDetailPage() {
       discountPct: 0,
       timeUnit: (item as any).timeUnit ?? null,
       factor: Number((item.resource as any).factor ?? 1),
+      unit: item.resource?.unit ?? '',
       observations: '',
       isPackage: item.resource.isPackage ?? false,
       packageComponents: item.resource.packageComponents ?? [],
@@ -460,6 +462,11 @@ export default function OrderDetailPage() {
       render: (_: any, record: any) => record.resource?.department?.name ?? '—',
     },
     {
+      title: 'Unidad',
+      key: 'unit',
+      render: (_: any, record: any) => record.resource?.unit ?? '—',
+    },
+    {
       title: 'Ud. Tiempo',
       key: 'timeUnit',
       render: (_: any, record: any) => record.timeUnit || 'no aplica',
@@ -480,13 +487,30 @@ export default function OrderDetailPage() {
     { title: 'Precio Unit.', dataIndex: 'unitPrice', key: 'unitPrice', render: (v: number) => `$${Number(v).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` },
     { title: 'Cantidad', dataIndex: 'quantity', key: 'quantity', render: (v: number) => Number(v) },
     { title: 'Descuento', dataIndex: 'discountPct', key: 'discountPct', render: (v: number) => `${v}%` },
-    { title: 'Total', dataIndex: 'lineTotal', key: 'lineTotal', render: (v: number) => `$${Number(v).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` },
+    {
+      title: 'Total', key: 'lineTotal',
+      render: (_: any, record: any) => {
+        const tuv = calcTimeUnitValue(record.timeUnit, Number(record.resource?.factor ?? 1), order.startDate, order.endDate)
+        const total = Number(record.unitPrice) * Number(record.quantity) * tuv * (1 - Number(record.discountPct) / 100)
+        return `$${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
+      },
+    },
     { title: 'Observaciones', dataIndex: 'observations', key: 'observations' },
     { title: 'F. Entrega', dataIndex: 'deliveryDate', key: 'deliveryDate', render: (v: any) => v ? dayjs(v).format('DD/MM/YYYY HH:mm') : '—' },
     ...(isConfirmedOrLater ? [
       { title: '✓ Cant. Real', dataIndex: 'actualQuantity', key: 'actualQuantity', render: (v: any) => <span style={{ backgroundColor: '#e6f4ff', padding: '2px 6px', borderRadius: '3px', fontWeight: 500, color: '#0050b3' }}>{v != null ? Number(v) : '—'}</span>, onCell: () => ({ style: { backgroundColor: '#f0f5ff' } }) },
       { title: '✓ Desc. Real', dataIndex: 'actualDiscountPct', key: 'actualDiscountPct', render: (v: any) => <span style={{ backgroundColor: '#e6f4ff', padding: '2px 6px', borderRadius: '3px', fontWeight: 500, color: '#0050b3' }}>{v != null ? `${v}%` : '—'}</span>, onCell: () => ({ style: { backgroundColor: '#f0f5ff' } }) },
-      { title: '✓ Total Real', dataIndex: 'actualLineTotal', key: 'actualLineTotal', render: (v: any) => <span style={{ backgroundColor: '#e6f4ff', padding: '2px 6px', borderRadius: '3px', fontWeight: 500, color: '#0050b3' }}>{v != null ? `$${Number(v).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—'}</span>, onCell: () => ({ style: { backgroundColor: '#f0f5ff' } }) },
+      {
+        title: '✓ Total Real', key: 'actualLineTotal',
+        render: (_: any, record: any) => {
+          const tuv = calcTimeUnitValue(record.timeUnit, Number(record.resource?.factor ?? 1), order.startDate, order.endDate)
+          const total = record.actualQuantity != null
+            ? Number(record.unitPrice) * Number(record.actualQuantity) * tuv * (1 - Number(record.actualDiscountPct ?? record.discountPct) / 100)
+            : null
+          return <span style={{ backgroundColor: '#e6f4ff', padding: '2px 6px', borderRadius: '3px', fontWeight: 500, color: '#0050b3' }}>{total != null ? `$${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—'}</span>
+        },
+        onCell: () => ({ style: { backgroundColor: '#f0f5ff' } }),
+      },
       { title: '✓ Obs. Real', dataIndex: 'actualObservations', key: 'actualObservations', render: (v: any) => <span style={{ backgroundColor: '#e6f4ff', padding: '2px 6px', borderRadius: '3px', fontWeight: 500, color: '#0050b3' }}>{v ?? '—'}</span>, onCell: () => ({ style: { backgroundColor: '#f0f5ff' } }) },
     ] : []),
   ]
@@ -958,6 +982,7 @@ export default function OrderDetailPage() {
                         title: 'P. Unitario', dataIndex: 'normalPrice', width: 110,
                         render: (v: number) => v ? `$${v.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—',
                       },
+                      { title: 'Unidad', key: 'unit', width: 80, render: (_: any, r: any) => r.unit || '—' },
                       { title: 'Cantidad', dataIndex: 'quantity', width: 90, render: (v: number) => Number(v) },
                       { title: 'Desc. %', dataIndex: 'discountPct', width: 80, render: (v: number) => `${v}%` },
                       { title: 'Ud. Tiempo', key: 'tu', width: 90, render: (_: any, r: any) => r.timeUnit || 'no aplica' },
@@ -1012,6 +1037,7 @@ export default function OrderDetailPage() {
                           title: 'P. Unitario', dataIndex: 'normalPrice', width: 110,
                           render: (v: number) => v ? `$${v.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—',
                         },
+                        { title: 'Unidad', key: 'unit', width: 80, render: (_: any, r: any) => r.unit || '—' },
                         { title: 'Ud. Tiempo', key: 'tu', width: 90, render: (_: any, r: any) => r.timeUnit || 'no aplica' },
                         { title: 'Factor', key: 'factor', width: 70, render: (_: any, r: any) => r.factor ?? 1 },
                         { title: '× Tiempo', key: 'tuv', width: 80, render: (_: any, r: any) => calcTimeUnitValue(r.timeUnit, r.factor ?? 1, order?.startDate, order?.endDate) },
@@ -1094,6 +1120,7 @@ export default function OrderDetailPage() {
                     <InputNumber min={0} max={100} value={v} onChange={val => updateEditLineItem(r.instanceId, 'discountPct', val)} style={{ width: 70 }} size="small" />
                   ),
                 },
+                { title: 'Unidad', key: 'unit', width: 80, render: (_: any, r: any) => r.unit || '—' },
                 { title: 'Ud. Tiempo', key: 'tu', width: 90, render: (_: any, r: any) => r.timeUnit || 'no aplica' },
                 { title: 'Factor', key: 'factor', width: 70, render: (_: any, r: any) => r.factor ?? 1 },
                 {
