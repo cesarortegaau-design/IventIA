@@ -52,7 +52,7 @@ function parsePriceListItemsCsv(text: string): { rows: any[]; error?: string } {
       return { rows: [], error: `Fila ${i + 1}: "Unidad de Tiempo" debe ser uno de: ${VALID_TIME_UNITS.join(', ')}` }
     }
 
-    rows.push({ resourceCode: row['Recurso'], earlyPrice, normalPrice, latePrice, timeUnit })
+    rows.push({ resourceCode: row['Recurso'], earlyPrice, normalPrice, latePrice, timeUnit, detail: row['Detalle'] ?? '' })
   }
   return { rows }
 }
@@ -165,13 +165,14 @@ export default function PriceListsPage() {
   }
 
   function downloadTemplate() {
-    const templateRows = [{ resourceCode: 'RECURSO-001', earlyPrice: 100, normalPrice: 120, latePrice: 140, timeUnit: 'no aplica' }]
+    const templateRows = [{ resourceCode: 'RECURSO-001', earlyPrice: 100, normalPrice: 120, latePrice: 140, timeUnit: 'no aplica', detail: '' }]
     exportToCsv('plantilla-lista-precios', templateRows, [
       { header: 'Recurso', key: 'resourceCode' },
       { header: 'P. Anticipado', key: 'earlyPrice' },
       { header: 'P. Normal', key: 'normalPrice' },
       { header: 'P. Tardío', key: 'latePrice' },
       { header: 'Unidad de Tiempo', key: 'timeUnit' },
+      { header: 'Detalle', key: 'detail' },
     ])
   }
 

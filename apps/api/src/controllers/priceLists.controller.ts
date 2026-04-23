@@ -190,6 +190,7 @@ const importRowSchema = z.object({
   normalPrice: z.number().min(0),
   latePrice: z.number().min(0),
   timeUnit: z.enum(['no aplica', 'horas', 'días']),
+  detail: z.string().optional().nullable(),
 })
 
 export async function importPriceListItems(req: Request, res: Response, next: NextFunction) {
@@ -225,6 +226,7 @@ export async function importPriceListItems(req: Request, res: Response, next: Ne
           normalPrice: r.normalPrice,
           latePrice: r.latePrice,
           timeUnit: r.timeUnit,
+          detail: r.detail ?? null,
         })),
       })
     })

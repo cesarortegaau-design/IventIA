@@ -960,14 +960,24 @@ export default function OrderDetailPage() {
                       },
                       { title: 'Cantidad', dataIndex: 'quantity', width: 90, render: (v: number) => Number(v) },
                       { title: 'Desc. %', dataIndex: 'discountPct', width: 80, render: (v: number) => `${v}%` },
+                      { title: 'Ud. Tiempo', key: 'tu', width: 90, render: (_: any, r: any) => r.timeUnit || 'no aplica' },
+                      { title: 'Factor', key: 'factor', width: 70, render: (_: any, r: any) => r.factor ?? 1 },
+                      { title: '× Tiempo', key: 'tuv', width: 80, render: (_: any, r: any) => calcTimeUnitValue(r.timeUnit, r.factor ?? 1, order?.startDate, order?.endDate) },
                       {
-                        title: 'Total', dataIndex: 'lineTotal', width: 120,
-                        render: (v: number) => `$${Number(v).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
+                        title: 'Total', key: 'total', width: 120,
+                        render: (_: any, r: any) => {
+                          const tuv = calcTimeUnitValue(r.timeUnit, r.factor ?? 1, order?.startDate, order?.endDate)
+                          const total = Number(r.unitPrice || r.normalPrice || 0) * Number(r.quantity) * tuv * (1 - (Number(r.discountPct) || 0) / 100)
+                          return `$${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
+                        },
                       },
                       { title: 'Observaciones', dataIndex: 'observations', width: 160 },
                     ]}
                     footer={() => {
-                      const subtotal = editLineItems.reduce((sum, li) => sum + Number(li.lineTotal), 0)
+                      const subtotal = editLineItems.reduce((sum, li) => {
+                        const tuv = calcTimeUnitValue(li.timeUnit, li.factor ?? 1, order?.startDate, order?.endDate)
+                        return sum + Number(li.unitPrice || li.normalPrice || 0) * Number(li.quantity) * tuv * (1 - (Number(li.discountPct) || 0) / 100)
+                      }, 0)
                       const tax = subtotal * 0.16
                       return (
                         <Row justify="end" gutter={16}>
@@ -1002,6 +1012,9 @@ export default function OrderDetailPage() {
                           title: 'P. Unitario', dataIndex: 'normalPrice', width: 110,
                           render: (v: number) => v ? `$${v.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—',
                         },
+                        { title: 'Ud. Tiempo', key: 'tu', width: 90, render: (_: any, r: any) => r.timeUnit || 'no aplica' },
+                        { title: 'Factor', key: 'factor', width: 70, render: (_: any, r: any) => r.factor ?? 1 },
+                        { title: '× Tiempo', key: 'tuv', width: 80, render: (_: any, r: any) => calcTimeUnitValue(r.timeUnit, r.factor ?? 1, order?.startDate, order?.endDate) },
                         {
                           title: '✓ Cantidad Real', dataIndex: 'actualQuantity', key: 'aqty', width: 110,
                           render: (v: number, r: any) => (
@@ -1080,6 +1093,12 @@ export default function OrderDetailPage() {
                   render: (v: number, r: any) => (
                     <InputNumber min={0} max={100} value={v} onChange={val => updateEditLineItem(r.instanceId, 'discountPct', val)} style={{ width: 70 }} size="small" />
                   ),
+                },
+                { title: 'Ud. Tiempo', key: 'tu', width: 90, render: (_: any, r: any) => r.timeUnit || 'no aplica' },
+                { title: 'Factor', key: 'factor', width: 70, render: (_: any, r: any) => r.factor ?? 1 },
+                {
+                  title: '× Tiempo', key: 'tuv', width: 80,
+                  render: (_: any, r: any) => calcTimeUnitValue(r.timeUnit, r.factor ?? 1, editForm.getFieldValue('startDate')?.toISOString(), editForm.getFieldValue('endDate')?.toISOString()),
                 },
                 {
                   title: 'Total', key: 'total', width: 120,
