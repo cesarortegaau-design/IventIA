@@ -131,7 +131,16 @@ export async function createResource(req: Request, res: Response, next: NextFunc
 
 export async function updateResource(req: Request, res: Response, next: NextFunction) {
   try {
-    const { packageComponents, ...data } = resourceBaseSchema.partial().parse(req.body)
+    const body = {
+      ...req.body,
+      departmentId: req.body.departmentId || null,
+      factor: req.body.factor != null ? Number(req.body.factor) || 1 : undefined,
+      areaSqm: req.body.areaSqm != null ? Number(req.body.areaSqm) || null : undefined,
+      stock: req.body.stock != null ? Number(req.body.stock) || 0 : undefined,
+      recoveryTime: req.body.recoveryTime != null ? Number(req.body.recoveryTime) || 0 : undefined,
+      capacity: req.body.capacity != null ? Number(req.body.capacity) || null : undefined,
+    }
+    const { packageComponents, ...data } = resourceBaseSchema.partial().parse(body)
     const resource = await prisma.resource.findFirst({
       where: { id: req.params.id, tenantId: req.user!.tenantId },
     })
