@@ -24,6 +24,12 @@ function calcTimeUnitValue(timeUnit: string | null | undefined, factor: number, 
     const days = diffMs <= 0 ? 1 : Math.max(1, Math.ceil(diffMs / 86400000))
     return days * factor
   }
+  if (timeUnit === 'horas') {
+    if (!startDate || !endDate) return factor
+    const diffMs = new Date(endDate).getTime() - new Date(startDate).getTime()
+    const hours = diffMs <= 0 ? 1 : Math.max(1, Math.ceil(diffMs / 3600000))
+    return hours * factor
+  }
   return 1
 }
 

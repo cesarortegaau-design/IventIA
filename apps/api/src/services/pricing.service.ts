@@ -39,7 +39,12 @@ export function calculateTimeUnitValue(
     const days = diffMs <= 0 ? 1 : Math.max(1, Math.ceil(diffMs / 86400000))
     return new Decimal(days).mul(factorDec)
   }
-  // 'horas' or unknown → multiplier 1
+  if (timeUnit === 'horas') {
+    if (!startDate || !endDate) return factorDec
+    const diffMs = new Date(endDate).getTime() - new Date(startDate).getTime()
+    const hours = diffMs <= 0 ? 1 : Math.max(1, Math.ceil(diffMs / 3600000))
+    return new Decimal(hours).mul(factorDec)
+  }
   return new Decimal(1)
 }
 
