@@ -902,6 +902,7 @@ model OrderLineItem {
   discountPct  Decimal     @default(0) @map("discount_pct") @db.Decimal(5, 2)
   lineTotal    Decimal     @map("line_total") @db.Decimal(12, 2)
   timeUnit     String?     @map("time_unit") @db.VarChar(20)
+  detail       String?     @db.Text
   observations String?     @db.Text
   actualQuantity    Decimal?    @map("actual_quantity") @db.Decimal(10, 3)
   actualDiscountPct Decimal?    @map("actual_discount_pct") @db.Decimal(5, 2)

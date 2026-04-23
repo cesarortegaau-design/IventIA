@@ -86,6 +86,7 @@ export async function createOrder(input: CreateOrderInput) {
       discountPct,
       lineTotal,
       timeUnit: (plItem as any).timeUnit ?? null,
+      detail: (plItem as any).detail ?? null,
       observations: li.observations,
       sortOrder: li.sortOrder ?? idx,
       deliveryDate: li.deliveryDate,
