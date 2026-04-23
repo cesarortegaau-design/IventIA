@@ -131,16 +131,28 @@ export async function createResource(req: Request, res: Response, next: NextFunc
 
 export async function updateResource(req: Request, res: Response, next: NextFunction) {
   try {
-    const body = {
-      ...req.body,
-      departmentId: req.body.departmentId || null,
-      factor: req.body.factor != null ? Number(req.body.factor) || 1 : undefined,
-      areaSqm: req.body.areaSqm != null ? Number(req.body.areaSqm) || null : undefined,
-      stock: req.body.stock != null ? Number(req.body.stock) || 0 : undefined,
-      recoveryTime: req.body.recoveryTime != null ? Number(req.body.recoveryTime) || 0 : undefined,
-      capacity: req.body.capacity != null ? Number(req.body.capacity) || null : undefined,
-    }
-    const { packageComponents, ...data } = resourceBaseSchema.partial().parse(body)
+    const b = req.body
+    const ALLOWED_TYPES = ['CONSUMABLE','EQUIPMENT','SPACE','FURNITURE','SERVICE','DISCOUNT','TAX','PERSONAL']
+    const data: any = {}
+    if (b.code     !== undefined) data.code          = String(b.code)
+    if (b.name     !== undefined) data.name          = String(b.name)
+    if (b.type     !== undefined && ALLOWED_TYPES.includes(b.type)) data.type = b.type
+    if (b.description !== undefined) data.description = b.description || null
+    if (b.unit     !== undefined) data.unit          = b.unit || null
+    if (b.factor   !== undefined) data.factor        = Number(b.factor) || 1
+    if (b.stock    !== undefined) data.stock         = Math.max(0, parseInt(b.stock) || 0)
+    if (b.stockLocation !== undefined) data.stockLocation = b.stockLocation || null
+    if (b.checkStock    !== undefined) data.checkStock    = Boolean(b.checkStock)
+    if (b.checkDuplicate !== undefined) data.checkDuplicate = Boolean(b.checkDuplicate)
+    if (b.recoveryTime  !== undefined) data.recoveryTime  = Math.max(0, parseInt(b.recoveryTime) || 0)
+    if (b.areaSqm  !== undefined) data.areaSqm       = b.areaSqm != null && b.areaSqm !== '' ? Number(b.areaSqm) : null
+    if (b.capacity !== undefined) data.capacity      = b.capacity != null && b.capacity !== '' ? parseInt(b.capacity) : null
+    if (b.departmentId !== undefined) data.departmentId = b.departmentId || null
+    if (b.portalVisible !== undefined) data.portalVisible = Boolean(b.portalVisible)
+    if (b.portalDesc !== undefined) data.portalDesc  = b.portalDesc || null
+    if (b.isPackage   !== undefined) data.isPackage   = Boolean(b.isPackage)
+    if (b.isSubstitute !== undefined) data.isSubstitute = Boolean(b.isSubstitute)
+
     const resource = await prisma.resource.findFirst({
       where: { id: req.params.id, tenantId: req.user!.tenantId },
     })
