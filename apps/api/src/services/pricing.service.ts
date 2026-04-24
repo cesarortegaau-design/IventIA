@@ -32,18 +32,19 @@ export function calculateTimeUnitValue(
   endDate: Date | null | undefined
 ): Decimal {
   const factorDec = new Decimal(factor.toString())
+  const sinFactor = timeUnit?.endsWith('sin factor') ?? false
   if (!timeUnit || timeUnit === 'no aplica') return new Decimal(1)
-  if (timeUnit === 'días') {
-    if (!startDate || !endDate) return factorDec
+  if (timeUnit === 'días' || timeUnit === 'días sin factor') {
+    if (!startDate || !endDate) return sinFactor ? new Decimal(1) : factorDec
     const diffMs = new Date(endDate).getTime() - new Date(startDate).getTime()
     const days = diffMs <= 0 ? 1 : Math.max(1, Math.ceil(diffMs / 86400000))
-    return new Decimal(days).mul(factorDec)
+    return sinFactor ? new Decimal(days) : new Decimal(days).mul(factorDec)
   }
-  if (timeUnit === 'horas') {
-    if (!startDate || !endDate) return factorDec
+  if (timeUnit === 'horas' || timeUnit === 'horas sin factor') {
+    if (!startDate || !endDate) return sinFactor ? new Decimal(1) : factorDec
     const diffMs = new Date(endDate).getTime() - new Date(startDate).getTime()
     const hours = diffMs <= 0 ? 1 : Math.max(1, Math.ceil(diffMs / 3600000))
-    return new Decimal(hours).mul(factorDec)
+    return sinFactor ? new Decimal(hours) : new Decimal(hours).mul(factorDec)
   }
   return new Decimal(1)
 }
