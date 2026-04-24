@@ -185,8 +185,8 @@ export default function OrderFormWizard() {
     }
 
     const newItem = {
-      instanceId: `${resourceId}-${Date.now()}-${Math.random()}`,
-      resourceId,
+      instanceId: `${item.resourceId}-${Date.now()}-${Math.random()}`,
+      resourceId: item.resourceId,
       description: item.resource.name,
       earlyPrice: Number(item.earlyPrice),
       normalPrice: Number(item.normalPrice),
