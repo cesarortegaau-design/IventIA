@@ -17,7 +17,7 @@ const priceListItemSchema = z.object({
   earlyPrice: z.number().min(0),
   normalPrice: z.number().min(0),
   latePrice: z.number().min(0),
-  timeUnit: z.enum(['no aplica', 'horas', 'días']).optional().nullable(),
+  timeUnit: z.enum(['no aplica', 'horas', 'días', 'horas sin factor', 'días sin factor']).optional().nullable(),
   detail: z.string().optional().nullable(),
 })
 
@@ -189,7 +189,7 @@ const importRowSchema = z.object({
   earlyPrice: z.number().min(0),
   normalPrice: z.number().min(0),
   latePrice: z.number().min(0),
-  timeUnit: z.enum(['no aplica', 'horas', 'días']),
+  timeUnit: z.enum(['no aplica', 'horas', 'días', 'horas sin factor', 'días sin factor']),
   detail: z.string().optional().nullable(),
 })
 

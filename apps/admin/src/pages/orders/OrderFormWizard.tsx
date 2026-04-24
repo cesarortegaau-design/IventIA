@@ -18,12 +18,12 @@ const { Title, Text } = Typography
 
 function calcTimeUnitValue(timeUnit: string | null | undefined, startDate: string | null | undefined, endDate: string | null | undefined): number {
   if (!timeUnit || timeUnit === 'no aplica') return 1
-  if (timeUnit === 'días') {
+  if (timeUnit === 'días' || timeUnit === 'días sin factor') {
     if (!startDate || !endDate) return 1
     const diffMs = new Date(endDate).getTime() - new Date(startDate).getTime()
     return diffMs <= 0 ? 1 : Math.max(1, Math.ceil(diffMs / 86400000))
   }
-  if (timeUnit === 'horas') {
+  if (timeUnit === 'horas' || timeUnit === 'horas sin factor') {
     if (!startDate || !endDate) return 1
     const diffMs = new Date(endDate).getTime() - new Date(startDate).getTime()
     return diffMs <= 0 ? 1 : Math.max(1, Math.ceil(diffMs / 3600000))
@@ -315,7 +315,8 @@ export default function OrderFormWizard() {
       title: 'Total', key: 'total', width: 120,
       render: (_: any, r: any) => {
         const tuv = calcTimeUnitValue(r.timeUnit, form.getFieldValue('startDate')?.toISOString(), form.getFieldValue('endDate')?.toISOString())
-        const total = (r.quantity || 0) * (r.normalPrice || 0) * tuv * (r.factor ?? 1) * (1 - (r.discountPct || 0) / 100)
+        const efFactor = r.timeUnit?.endsWith('sin factor') ? 1 : (r.factor ?? 1)
+        const total = (r.quantity || 0) * (r.normalPrice || 0) * tuv * efFactor * (1 - (r.discountPct || 0) / 100)
         return `$${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
       },
     },
@@ -507,7 +508,8 @@ export default function OrderFormWizard() {
             footer={() => {
               const subtotal = lineItems.reduce((sum, li) => {
                 const tuv = calcTimeUnitValue(li.timeUnit, form.getFieldValue('startDate')?.toISOString(), form.getFieldValue('endDate')?.toISOString())
-                return sum + (li.quantity * (li.normalPrice || 0) * tuv * (li.factor ?? 1) * (1 - (li.discountPct || 0) / 100))
+                const efFactor = li.timeUnit?.endsWith('sin factor') ? 1 : (li.factor ?? 1)
+                return sum + (li.quantity * (li.normalPrice || 0) * tuv * efFactor * (1 - (li.discountPct || 0) / 100))
               }, 0)
               const tax = subtotal * 0.16
               return (

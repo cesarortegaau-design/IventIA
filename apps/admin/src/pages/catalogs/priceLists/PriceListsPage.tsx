@@ -13,13 +13,15 @@ import { exportToCsv } from '../../../utils/exportCsv'
 const { Title } = Typography
 
 const TIME_UNIT_OPTIONS = [
-  { value: 'no aplica', label: 'no aplica' },
-  { value: 'horas',     label: 'horas' },
-  { value: 'días',      label: 'días' },
+  { value: 'no aplica',       label: 'no aplica' },
+  { value: 'horas',           label: 'horas' },
+  { value: 'días',            label: 'días' },
+  { value: 'horas sin factor', label: 'horas sin factor' },
+  { value: 'días sin factor',  label: 'días sin factor' },
 ]
 
 const REQUIRED_CSV_COLUMNS = ['Recurso', 'P. Anticipado', 'P. Normal', 'P. Tardío', 'Unidad de Tiempo']
-const VALID_TIME_UNITS = ['no aplica', 'horas', 'días']
+const VALID_TIME_UNITS = ['no aplica', 'horas', 'días', 'horas sin factor', 'días sin factor']
 
 function parsePriceListItemsCsv(text: string): { rows: any[]; error?: string } {
   const lines = text.split(/\r?\n/).filter(l => l.trim())
