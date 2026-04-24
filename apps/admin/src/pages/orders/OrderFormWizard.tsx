@@ -171,12 +171,12 @@ export default function OrderFormWizard() {
     })
   }
 
-  async function addLineItem(resourceId: string) {
-    const item = priceListItems.find((i: any) => i.resourceId === resourceId)
+  async function addLineItem(itemId: string) {
+    const item = priceListItems.find((i: any) => i.id === itemId)
     if (!item) return
 
     // Validate duplicate based on resource's checkDuplicate setting
-    const alreadyAdded = lineItems.find(li => li.resourceId === resourceId)
+    const alreadyAdded = lineItems.find(li => li.resourceId === item.resourceId)
     if (alreadyAdded) {
       if (item.resource.checkDuplicate !== false) {
         message.warning('Este recurso no permite repetición en la Orden de Servicio')
@@ -414,8 +414,8 @@ export default function OrderFormWizard() {
                 placeholder="Seleccionar recurso..."
                 showSearch
                 options={priceListItems.map((i: any) => ({
-                  value: i.resourceId,
-                  label: `${i.resource.isPackage ? '📦 ' : ''}${i.resource.name} — $${Number(i.normalPrice).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
+                  value: i.id,
+                  label: `${i.resource.isPackage ? '📦 ' : ''}${i.resource.name}${i.detail ? ` · ${i.detail}` : ''} — $${Number(i.normalPrice).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
                 }))}
                 onChange={addLineItem}
                 value={null}
