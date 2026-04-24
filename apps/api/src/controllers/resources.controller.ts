@@ -34,7 +34,7 @@ const resourceBaseSchema = z.object({
   recoveryTime: z.coerce.number().int().min(0).default(0).nullable().transform(v => v ?? 0),
   areaSqm: z.coerce.number().optional().nullable(),
   capacity: z.coerce.number().int().optional().nullable(),
-  departmentId: z.preprocess(v => v || null, z.string().uuid().nullable().optional()),
+  departmentId: z.string().uuid().optional().nullable(),
   portalVisible: z.boolean().default(false),
   portalDesc: z.string().optional().nullable(),
   isPackage: z.boolean().default(false),
@@ -100,8 +100,11 @@ export async function getResource(req: Request, res: Response, next: NextFunctio
 
 export async function createResource(req: Request, res: Response, next: NextFunction) {
   try {
-    const body = { ...req.body, departmentId: req.body.departmentId || null }
-    const { packageComponents, departmentId, ...data } = resourceSchema.parse(body)
+    // Extract departmentId before Zod to avoid UUID validation edge cases
+    const { departmentId: rawDeptId, ...bodyWithoutDept } = req.body
+    const departmentId: string | null = (rawDeptId && typeof rawDeptId === 'string') ? rawDeptId : null
+
+    const { packageComponents, ...data } = resourceSchema.parse(bodyWithoutDept)
     const tenantId = req.user!.tenantId
 
     const exists = await prisma.resource.findFirst({ where: { tenantId, code: data.code } })
@@ -111,7 +114,7 @@ export async function createResource(req: Request, res: Response, next: NextFunc
       data: {
         ...data,
         tenantId,
-        departmentId: departmentId || undefined,
+        departmentId: departmentId || null,
       } as any,
     })
 
