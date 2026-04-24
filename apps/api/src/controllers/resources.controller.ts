@@ -100,7 +100,8 @@ export async function getResource(req: Request, res: Response, next: NextFunctio
 
 export async function createResource(req: Request, res: Response, next: NextFunction) {
   try {
-    const { packageComponents, departmentId, ...data } = resourceSchema.parse(req.body)
+    const body = { ...req.body, departmentId: req.body.departmentId || null }
+    const { packageComponents, departmentId, ...data } = resourceSchema.parse(body)
     const tenantId = req.user!.tenantId
 
     const exists = await prisma.resource.findFirst({ where: { tenantId, code: data.code } })
@@ -131,7 +132,8 @@ export async function createResource(req: Request, res: Response, next: NextFunc
 
 export async function updateResource(req: Request, res: Response, next: NextFunction) {
   try {
-    const b = req.body
+    // Sanitize before any processing — never let empty string reach UUID validation
+    const b = { ...req.body, departmentId: req.body.departmentId || null }
     const ALLOWED_TYPES = ['CONSUMABLE','EQUIPMENT','SPACE','FURNITURE','SERVICE','DISCOUNT','TAX','PERSONAL']
     const data: any = {}
     if (b.code     !== undefined) data.code          = String(b.code)
