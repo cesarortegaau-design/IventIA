@@ -23,19 +23,17 @@ import { templatesApi } from '../../api/templates'
 
 const { Title, Text } = Typography
 
-function calcTimeUnitValue(timeUnit: string | null | undefined, factor: number, startDate: string | null | undefined, endDate: string | null | undefined): number {
+function calcTimeUnitValue(timeUnit: string | null | undefined, startDate: string | null | undefined, endDate: string | null | undefined): number {
   if (!timeUnit || timeUnit === 'no aplica') return 1
   if (timeUnit === 'días') {
-    if (!startDate || !endDate) return factor
+    if (!startDate || !endDate) return 1
     const diffMs = new Date(endDate).getTime() - new Date(startDate).getTime()
-    const days = diffMs <= 0 ? 1 : Math.max(1, Math.ceil(diffMs / 86400000))
-    return days * factor
+    return diffMs <= 0 ? 1 : Math.max(1, Math.ceil(diffMs / 86400000))
   }
   if (timeUnit === 'horas') {
-    if (!startDate || !endDate) return factor
+    if (!startDate || !endDate) return 1
     const diffMs = new Date(endDate).getTime() - new Date(startDate).getTime()
-    const hours = diffMs <= 0 ? 1 : Math.max(1, Math.ceil(diffMs / 3600000))
-    return hours * factor
+    return diffMs <= 0 ? 1 : Math.max(1, Math.ceil(diffMs / 3600000))
   }
   return 1
 }
@@ -441,8 +439,8 @@ export default function OrderDetailPage() {
       if (field === 'actualQuantity' || field === 'actualDiscountPct') {
         const qty = field === 'actualQuantity' ? (value ?? li.actualQuantity) : li.actualQuantity
         const disc = field === 'actualDiscountPct' ? (value ?? li.actualDiscountPct) : li.actualDiscountPct
-        const tuv = calcTimeUnitValue(li.timeUnit, li.factor ?? 1, order?.startDate, order?.endDate)
-        updated.actualLineTotal = qty * (li.unitPrice || li.normalPrice || 0) * tuv * (1 - (disc || 0) / 100)
+        const tuv = calcTimeUnitValue(li.timeUnit, order?.startDate, order?.endDate)
+        updated.actualLineTotal = qty * (li.unitPrice || li.normalPrice || 0) * tuv * (li.factor ?? 1) * (1 - (disc || 0) / 100)
       }
       return updated
     }))
@@ -492,10 +490,7 @@ export default function OrderDetailPage() {
     {
       title: '× Tiempo',
       key: 'timeUnitValue',
-      render: (_: any, record: any) => {
-        const tuv = calcTimeUnitValue(record.timeUnit, Number(record.resource?.factor ?? 1), order.startDate, order.endDate)
-        return tuv
-      },
+      render: (_: any, record: any) => calcTimeUnitValue(record.timeUnit, order.startDate, order.endDate),
     },
     { title: 'Precio Unit.', dataIndex: 'unitPrice', key: 'unitPrice', render: (v: number) => `$${Number(v).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` },
     { title: 'Cantidad', dataIndex: 'quantity', key: 'quantity', render: (v: number) => Number(v) },
@@ -503,8 +498,8 @@ export default function OrderDetailPage() {
     {
       title: 'Total', key: 'lineTotal',
       render: (_: any, record: any) => {
-        const tuv = calcTimeUnitValue(record.timeUnit, Number(record.resource?.factor ?? 1), order.startDate, order.endDate)
-        const total = Number(record.unitPrice) * Number(record.quantity) * tuv * (1 - Number(record.discountPct) / 100)
+        const tuv = calcTimeUnitValue(record.timeUnit, order.startDate, order.endDate)
+        const total = Number(record.unitPrice) * Number(record.quantity) * tuv * Number(record.resource?.factor ?? 1) * (1 - Number(record.discountPct) / 100)
         return `$${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
       },
     },
@@ -516,9 +511,9 @@ export default function OrderDetailPage() {
       {
         title: '✓ Total Real', key: 'actualLineTotal',
         render: (_: any, record: any) => {
-          const tuv = calcTimeUnitValue(record.timeUnit, Number(record.resource?.factor ?? 1), order.startDate, order.endDate)
+          const tuv = calcTimeUnitValue(record.timeUnit, order.startDate, order.endDate)
           const total = record.actualQuantity != null
-            ? Number(record.unitPrice) * Number(record.actualQuantity) * tuv * (1 - Number(record.actualDiscountPct ?? record.discountPct) / 100)
+            ? Number(record.unitPrice) * Number(record.actualQuantity) * tuv * Number(record.resource?.factor ?? 1) * (1 - Number(record.actualDiscountPct ?? record.discountPct) / 100)
             : null
           return <span style={{ backgroundColor: '#e6f4ff', padding: '2px 6px', borderRadius: '3px', fontWeight: 500, color: '#0050b3' }}>{total != null ? `$${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—'}</span>
         },
@@ -1001,12 +996,12 @@ export default function OrderDetailPage() {
                       { title: 'Desc. %', dataIndex: 'discountPct', width: 80, render: (v: number) => `${v}%` },
                       { title: 'Ud. Tiempo', key: 'tu', width: 90, render: (_: any, r: any) => r.timeUnit || 'no aplica' },
                       { title: 'Factor', key: 'factor', width: 70, render: (_: any, r: any) => r.factor ?? 1 },
-                      { title: '× Tiempo', key: 'tuv', width: 80, render: (_: any, r: any) => calcTimeUnitValue(r.timeUnit, r.factor ?? 1, order?.startDate, order?.endDate) },
+                      { title: '× Tiempo', key: 'tuv', width: 80, render: (_: any, r: any) => calcTimeUnitValue(r.timeUnit, order?.startDate, order?.endDate) },
                       {
                         title: 'Total', key: 'total', width: 120,
                         render: (_: any, r: any) => {
-                          const tuv = calcTimeUnitValue(r.timeUnit, r.factor ?? 1, order?.startDate, order?.endDate)
-                          const total = Number(r.unitPrice || r.normalPrice || 0) * Number(r.quantity) * tuv * (1 - (Number(r.discountPct) || 0) / 100)
+                          const tuv = calcTimeUnitValue(r.timeUnit, order?.startDate, order?.endDate)
+                          const total = Number(r.unitPrice || r.normalPrice || 0) * Number(r.quantity) * tuv * (r.factor ?? 1) * (1 - (Number(r.discountPct) || 0) / 100)
                           return `$${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
                         },
                       },
@@ -1014,8 +1009,8 @@ export default function OrderDetailPage() {
                     ]}
                     footer={() => {
                       const subtotal = editLineItems.reduce((sum, li) => {
-                        const tuv = calcTimeUnitValue(li.timeUnit, li.factor ?? 1, order?.startDate, order?.endDate)
-                        return sum + Number(li.unitPrice || li.normalPrice || 0) * Number(li.quantity) * tuv * (1 - (Number(li.discountPct) || 0) / 100)
+                        const tuv = calcTimeUnitValue(li.timeUnit, order?.startDate, order?.endDate)
+                        return sum + Number(li.unitPrice || li.normalPrice || 0) * Number(li.quantity) * tuv * (li.factor ?? 1) * (1 - (Number(li.discountPct) || 0) / 100)
                       }, 0)
                       const tax = subtotal * 0.16
                       return (
@@ -1055,7 +1050,7 @@ export default function OrderDetailPage() {
                         { title: 'Detalle', key: 'detail', width: 140, render: (_: any, r: any) => r.detail || '—' },
                         { title: 'Ud. Tiempo', key: 'tu', width: 90, render: (_: any, r: any) => r.timeUnit || 'no aplica' },
                         { title: 'Factor', key: 'factor', width: 70, render: (_: any, r: any) => r.factor ?? 1 },
-                        { title: '× Tiempo', key: 'tuv', width: 80, render: (_: any, r: any) => calcTimeUnitValue(r.timeUnit, r.factor ?? 1, order?.startDate, order?.endDate) },
+                        { title: '× Tiempo', key: 'tuv', width: 80, render: (_: any, r: any) => calcTimeUnitValue(r.timeUnit, order?.startDate, order?.endDate) },
                         {
                           title: '✓ Cantidad Real', dataIndex: 'actualQuantity', key: 'aqty', width: 110,
                           render: (v: number, r: any) => (
@@ -1141,13 +1136,13 @@ export default function OrderDetailPage() {
                 { title: 'Factor', key: 'factor', width: 70, render: (_: any, r: any) => r.factor ?? 1 },
                 {
                   title: '× Tiempo', key: 'tuv', width: 80,
-                  render: (_: any, r: any) => calcTimeUnitValue(r.timeUnit, r.factor ?? 1, editForm.getFieldValue('startDate')?.toISOString(), editForm.getFieldValue('endDate')?.toISOString()),
+                  render: (_: any, r: any) => calcTimeUnitValue(r.timeUnit, editForm.getFieldValue('startDate')?.toISOString(), editForm.getFieldValue('endDate')?.toISOString()),
                 },
                 {
                   title: 'Total', key: 'total', width: 120,
                   render: (_: any, r: any) => {
-                    const tuv = calcTimeUnitValue(r.timeUnit, r.factor ?? 1, editForm.getFieldValue('startDate')?.toISOString(), editForm.getFieldValue('endDate')?.toISOString())
-                    const total = (r.quantity || 0) * (r.normalPrice || 0) * tuv * (1 - (r.discountPct || 0) / 100)
+                    const tuv = calcTimeUnitValue(r.timeUnit, editForm.getFieldValue('startDate')?.toISOString(), editForm.getFieldValue('endDate')?.toISOString())
+                    const total = (r.quantity || 0) * (r.normalPrice || 0) * tuv * (r.factor ?? 1) * (1 - (r.discountPct || 0) / 100)
                     return `$${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
                   },
                 },
@@ -1204,8 +1199,8 @@ export default function OrderDetailPage() {
               }}
               footer={() => {
                 const subtotal = editLineItems.reduce((sum, li) => {
-                  const tuv = calcTimeUnitValue(li.timeUnit, li.factor ?? 1, editForm.getFieldValue('startDate')?.toISOString(), editForm.getFieldValue('endDate')?.toISOString())
-                  return sum + (li.quantity * (li.normalPrice || 0) * tuv * (1 - (li.discountPct || 0) / 100))
+                  const tuv = calcTimeUnitValue(li.timeUnit, editForm.getFieldValue('startDate')?.toISOString(), editForm.getFieldValue('endDate')?.toISOString())
+                  return sum + (li.quantity * (li.normalPrice || 0) * tuv * (li.factor ?? 1) * (1 - (li.discountPct || 0) / 100))
                 }, 0)
                 const tax = subtotal * 0.16
                 return (
