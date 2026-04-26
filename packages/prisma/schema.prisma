@@ -96,6 +96,29 @@ enum TaskStatus {
   CANCELLED
 }
 
+enum GameStatus {
+  PENDING
+  ATTENDANCE
+  IN_PROGRESS
+  HALFTIME
+  FINISHED
+}
+
+enum GameEventType {
+  TOUCHDOWN
+  EXTRA_POINT
+  SAFETY
+  FLAG_PENALTY
+  DOWN_UPDATE
+  POSSESSION_CHANGE
+  GAME_START
+  GAME_END
+  HALFTIME_START
+  HALFTIME_END
+  TIMER_START
+  TIMER_STOP
+}
+
 enum SenderType {
   ADMIN
   PORTAL_USER
@@ -282,6 +305,10 @@ model Tenant {
   // Client Relations
   clientRelations ClientRelation[]
 
+  // I-Flag
+  footballGames FootballGame[]
+  gameEvents    GameEvent[]
+
   @@map("tenants")
 }
 
@@ -355,6 +382,8 @@ model User {
   createdContracts    Contract[]           @relation("ContractCreatedBy")
   contractPayments    ContractPayment[]
   createdTemplates    DocumentTemplate[]   @relation("TemplateCreatedBy")
+  footballGames       FootballGame[]
+  gameEvents          GameEvent[]
 
   @@index([tenantId, isActive])
   @@map("users")
@@ -570,6 +599,8 @@ model Client {
   addressZip     String?    @map("address_zip") @db.VarChar(20)
   addressCountry String     @default("MX") @map("address_country") @db.VarChar(100)
   portalUserId   String?    @unique @map("portal_user_id")
+  logoUrl        String?    @map("logo_url") @db.VarChar(500)
+  isTeam         Boolean    @default(false) @map("is_team")
   isActive       Boolean    @default(true) @map("is_active")
   metadata       Json       @default("{}")
   createdAt      DateTime   @default(now()) @map("created_at")
@@ -590,6 +621,9 @@ model Client {
   relationsFrom     ClientRelation[]    @relation("ClientRelationsFrom")
   relationsTo       ClientRelation[]    @relation("ClientRelationsTo")
   portalUserClients PortalUserClient[]
+  localGames        FootballGame[]      @relation("GameLocalTeam")
+  visitingGames     FootballGame[]      @relation("GameVisitingTeam")
+  playerAttendance  PlayerAttendance[]
 
   @@index([tenantId, isActive])
   @@map("clients")
@@ -732,26 +766,29 @@ model Event {
   eventCategory   String?     @map("event_category") @db.VarChar(100)
   coordinator     String?     @db.VarChar(200)
   executive       String?     @db.VarChar(200)
-  portalEnabled   Boolean     @default(false) @map("portal_enabled")
-  portalSlug      String?     @unique @map("portal_slug") @db.VarChar(100)
-  portalSettings  Json        @default("{}") @map("portal_settings")
+  portalEnabled        Boolean     @default(false) @map("portal_enabled")
+  portalSlug           String?     @unique @map("portal_slug") @db.VarChar(100)
+  portalSettings       Json        @default("{}") @map("portal_settings")
+  sportLocalTeamId     String?     @map("sport_local_team_id")
+  sportVisitingTeamId  String?     @map("sport_visiting_team_id")
   notes           String?     @db.Text
   clientNotes     String?     @map("client_notes") @db.Text
   createdById     String      @map("created_by_id")
   createdAt       DateTime    @default(now()) @map("created_at")
   updatedAt       DateTime    @updatedAt @map("updated_at")
 
-  tenant            Tenant             @relation(fields: [tenantId], references: [id])
-  primaryClient     Client?            @relation(fields: [primaryClientId], references: [id])
-  priceList         PriceList?         @relation(fields: [priceListId], references: [id])
-  createdBy         User               @relation("EventCreatedBy", fields: [createdById], references: [id])
-  spaces            EventSpace[]
-  documents         EventDocument[]
-  stands            Stand[]
-  orders            Order[]
-  portalAccessCodes PortalAccessCode[]
-  portalUserEvents  PortalUserEvent[]
-  conversations     Conversation[]
+  tenant              Tenant             @relation(fields: [tenantId], references: [id])
+  primaryClient       Client?            @relation(fields: [primaryClientId], references: [id])
+  priceList           PriceList?         @relation(fields: [priceListId], references: [id])
+  createdBy           User               @relation("EventCreatedBy", fields: [createdById], references: [id])
+  spaces              EventSpace[]
+  documents           EventDocument[]
+  stands              Stand[]
+  orders              Order[]
+  portalAccessCodes   PortalAccessCode[]
+  portalUserEvents    PortalUserEvent[]
+  conversations       Conversation[]
+  footballGames       FootballGame[]
 
   @@unique([tenantId, code])
   @@index([tenantId, status])
@@ -2190,4 +2227,84 @@ model SupplierDocument {
 
   @@index([tenantId, supplierId])
   @@map("supplier_documents")
+}
+
+// ─── I-Flag Football ──────────────────────────────────────────────────────────
+
+model FootballGame {
+  id                String     @id @default(uuid())
+  tenantId          String     @map("tenant_id")
+  eventId           String     @map("event_id")
+  localTeamId       String     @map("local_team_id")
+  visitingTeamId    String     @map("visiting_team_id")
+  status            GameStatus @default(PENDING)
+  localScore        Int        @default(0) @map("local_score")
+  visitingScore     Int        @default(0) @map("visiting_score")
+  currentQuarter    Int        @default(1) @map("current_quarter")
+  offenseTeamId     String?    @map("offense_team_id")
+  currentDown       Int        @default(1) @map("current_down")
+  yardsToFirst      Int        @default(10) @map("yards_to_first")
+  timerSeconds      Int        @default(0) @map("timer_seconds")
+  timerRunning      Boolean    @default(false) @map("timer_running")
+  timerLastStarted  DateTime?  @map("timer_last_started")
+  notes             String?    @db.Text
+  startedAt         DateTime?  @map("started_at")
+  finishedAt        DateTime?  @map("finished_at")
+  createdById       String     @map("created_by_id")
+  createdAt         DateTime   @default(now()) @map("created_at")
+  updatedAt         DateTime   @updatedAt @map("updated_at")
+
+  tenant        Tenant             @relation(fields: [tenantId], references: [id])
+  event         Event              @relation(fields: [eventId], references: [id])
+  localTeam     Client             @relation("GameLocalTeam", fields: [localTeamId], references: [id])
+  visitingTeam  Client             @relation("GameVisitingTeam", fields: [visitingTeamId], references: [id])
+  createdBy     User               @relation(fields: [createdById], references: [id])
+  attendance    PlayerAttendance[]
+  gameEvents    GameEvent[]
+
+  @@index([tenantId, eventId])
+  @@map("football_games")
+}
+
+model PlayerAttendance {
+  id         String   @id @default(uuid())
+  gameId     String   @map("game_id")
+  playerId   String   @map("player_id")
+  teamId     String   @map("team_id")
+  present    Boolean  @default(false)
+  number     String?  @db.VarChar(10)
+  position   String?  @db.VarChar(50)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  game   FootballGame @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  player Client       @relation(fields: [playerId], references: [id])
+
+  @@unique([gameId, playerId])
+  @@index([gameId, teamId])
+  @@map("player_attendance")
+}
+
+model GameEvent {
+  id          String        @id @default(uuid())
+  gameId      String        @map("game_id")
+  tenantId    String        @map("tenant_id")
+  type        GameEventType
+  teamId      String?       @map("team_id")
+  playerId    String?       @map("player_id")
+  quarter     Int?
+  down        Int?
+  points      Int           @default(0)
+  description String?       @db.VarChar(500)
+  metadata    Json          @default("{}")
+  createdById String        @map("created_by_id")
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  game      FootballGame @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  tenant    Tenant       @relation(fields: [tenantId], references: [id])
+  createdBy User         @relation(fields: [createdById], references: [id])
+
+  @@index([gameId])
+  @@index([tenantId])
+  @@map("game_events")
 }
