@@ -27,6 +27,7 @@ import templatesRoutes from './templates.routes'
 import productionRoutes from './production.routes'
 import supplierPortalRoutes from './supplier-portal.routes'
 import supplierPortalCodesRoutes from './supplier-portal-codes.routes'
+import iflagRoutes from './iflag.routes'
 
 const router = Router()
 
@@ -58,5 +59,6 @@ router.use('/templates', templatesRoutes)
 router.use('/production', productionRoutes)
 router.use('/supplier-portal', supplierPortalRoutes)
 router.use('/suppliers/:supplierId/portal-codes', supplierPortalCodesRoutes)
+router.use('/iflag', iflagRoutes)
 
 export default router
