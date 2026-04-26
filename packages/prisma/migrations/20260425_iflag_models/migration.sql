@@ -5,8 +5,8 @@ ALTER TABLE "clients" ADD COLUMN IF NOT EXISTS "logo_url" VARCHAR(500);
 ALTER TABLE "clients" ADD COLUMN IF NOT EXISTS "is_team" BOOLEAN NOT NULL DEFAULT false;
 
 -- Add sport team fields to events
-ALTER TABLE "events" ADD COLUMN IF NOT EXISTS "sport_local_team_id" UUID;
-ALTER TABLE "events" ADD COLUMN IF NOT EXISTS "sport_visiting_team_id" UUID;
+ALTER TABLE "events" ADD COLUMN IF NOT EXISTS "sport_local_team_id" TEXT;
+ALTER TABLE "events" ADD COLUMN IF NOT EXISTS "sport_visiting_team_id" TEXT;
 
 -- Create GameStatus enum
 DO $$ BEGIN
@@ -29,16 +29,16 @@ END $$;
 
 -- Create football_games table
 CREATE TABLE IF NOT EXISTS "football_games" (
-  "id"                  UUID        NOT NULL DEFAULT gen_random_uuid(),
-  "tenant_id"           UUID        NOT NULL,
-  "event_id"            UUID        NOT NULL,
-  "local_team_id"       UUID        NOT NULL,
-  "visiting_team_id"    UUID        NOT NULL,
+  "id"                  TEXT        NOT NULL,
+  "tenant_id"           TEXT        NOT NULL,
+  "event_id"            TEXT        NOT NULL,
+  "local_team_id"       TEXT        NOT NULL,
+  "visiting_team_id"    TEXT        NOT NULL,
   "status"              "GameStatus" NOT NULL DEFAULT 'PENDING',
   "local_score"         INTEGER     NOT NULL DEFAULT 0,
   "visiting_score"      INTEGER     NOT NULL DEFAULT 0,
   "current_quarter"     INTEGER     NOT NULL DEFAULT 1,
-  "offense_team_id"     UUID,
+  "offense_team_id"     TEXT,
   "current_down"        INTEGER     NOT NULL DEFAULT 1,
   "yards_to_first"      INTEGER     NOT NULL DEFAULT 10,
   "timer_seconds"       INTEGER     NOT NULL DEFAULT 0,
@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS "football_games" (
   "notes"               TEXT,
   "started_at"          TIMESTAMP(3),
   "finished_at"         TIMESTAMP(3),
-  "created_by_id"       UUID        NOT NULL,
+  "created_by_id"       TEXT        NOT NULL,
   "created_at"          TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updated_at"          TIMESTAMP(3) NOT NULL,
 
@@ -71,10 +71,10 @@ ALTER TABLE "football_games"
 
 -- Create player_attendance table
 CREATE TABLE IF NOT EXISTS "player_attendance" (
-  "id"         UUID         NOT NULL DEFAULT gen_random_uuid(),
-  "game_id"    UUID         NOT NULL,
-  "player_id"  UUID         NOT NULL,
-  "team_id"    UUID         NOT NULL,
+  "id"         TEXT         NOT NULL,
+  "game_id"    TEXT         NOT NULL,
+  "player_id"  TEXT         NOT NULL,
+  "team_id"    TEXT         NOT NULL,
   "present"    BOOLEAN      NOT NULL DEFAULT false,
   "number"     VARCHAR(10),
   "position"   VARCHAR(50),
@@ -98,18 +98,18 @@ ALTER TABLE "player_attendance"
 
 -- Create game_events table
 CREATE TABLE IF NOT EXISTS "game_events" (
-  "id"           UUID           NOT NULL DEFAULT gen_random_uuid(),
-  "game_id"      UUID           NOT NULL,
-  "tenant_id"    UUID           NOT NULL,
+  "id"           TEXT           NOT NULL,
+  "game_id"      TEXT           NOT NULL,
+  "tenant_id"    TEXT           NOT NULL,
   "type"         "GameEventType" NOT NULL,
-  "team_id"      UUID,
-  "player_id"    UUID,
+  "team_id"      TEXT,
+  "player_id"    TEXT,
   "quarter"      INTEGER,
   "down"         INTEGER,
   "points"       INTEGER        NOT NULL DEFAULT 0,
   "description"  VARCHAR(500),
   "metadata"     JSONB          NOT NULL DEFAULT '{}',
-  "created_by_id" UUID          NOT NULL,
+  "created_by_id" TEXT          NOT NULL,
   "created_at"   TIMESTAMP(3)   NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
   CONSTRAINT "game_events_pkey" PRIMARY KEY ("id")
