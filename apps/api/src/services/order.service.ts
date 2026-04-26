@@ -35,6 +35,7 @@ export interface CreateOrderInput {
   initialStatus?: 'QUOTED' | 'CONFIRMED' | 'CREDIT_NOTE'
   lineItems: Array<{
     resourceId: string
+    priceListItemId?: string
     quantity: number
     discountPct?: number
     observations?: string
@@ -49,10 +50,15 @@ export async function createOrder(input: CreateOrderInput) {
   // Validate all line item resources exist in the price list
   const resourceIds = input.lineItems.map((li) => li.resourceId)
   const uniqueResourceIds = [...new Set(resourceIds)]
+  const priceListItemIds = input.lineItems.map((li) => li.priceListItemId).filter(Boolean) as string[]
+
   const priceListItems = await prisma.priceListItem.findMany({
     where: {
       priceListId: input.priceListId,
-      resourceId: { in: uniqueResourceIds },
+      OR: [
+        { resourceId: { in: uniqueResourceIds } },
+        ...(priceListItemIds.length ? [{ id: { in: priceListItemIds } }] : []),
+      ],
       isActive: true,
     },
     include: { resource: true },
@@ -64,11 +70,12 @@ export async function createOrder(input: CreateOrderInput) {
     throw new AppError(400, 'INVALID_RESOURCES', 'Some resources are not in the price list')
   }
 
-  // itemMap: one entry per resourceId (first match used for pricing)
+  // Prefer lookup by priceListItemId (exact entry), fall back to resourceId
+  const itemIdMap = new Map(priceListItems.map((i) => [i.id, i]))
   const itemMap = new Map(priceListItems.map((i) => [i.resourceId, i]))
 
   const lineItemData = input.lineItems.map((li, idx) => {
-    const plItem = itemMap.get(li.resourceId)!
+    const plItem = (li.priceListItemId ? itemIdMap.get(li.priceListItemId) : undefined) ?? itemMap.get(li.resourceId)!
     const unitPrice = getPriceForTier(plItem, pricingTier)
     const quantity = new Decimal(li.quantity)
     const discountPct = new Decimal(li.discountPct ?? 0)

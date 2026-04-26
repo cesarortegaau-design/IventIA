@@ -19,6 +19,7 @@ const createOrderSchema = z.object({
   originalOrderId: z.string().min(1).optional(),
   lineItems: z.array(z.object({
     resourceId: z.string().min(1),
+    priceListItemId: z.string().optional(),
     quantity: z.number(),
     discountPct: z.number().min(0).max(100).default(0),
     observations: z.string().optional(),
@@ -263,6 +264,7 @@ const updateOrderSchema = z.object({
   organizacionId: z.string().uuid().optional().nullable(),
   lineItems: z.array(z.object({
     resourceId: z.string().min(1),
+    priceListItemId: z.string().optional(),
     quantity: z.number().positive(),
     discountPct: z.number().min(0).max(100).default(0),
     observations: z.string().optional(),
@@ -298,8 +300,15 @@ export async function updateOrder(req: Request, res: Response, next: NextFunctio
 
       const pricingTier = await determinePricingTier(order.priceListId)
       const resourceIds = data.lineItems.map(li => li.resourceId)
+      const priceListItemIds = data.lineItems.map(li => li.priceListItemId).filter(Boolean) as string[]
       const priceListItems = await prisma.priceListItem.findMany({
-        where: { priceListId: order.priceListId, resourceId: { in: resourceIds } },
+        where: {
+          priceListId: order.priceListId,
+          OR: [
+            { resourceId: { in: resourceIds } },
+            ...(priceListItemIds.length ? [{ id: { in: priceListItemIds } }] : []),
+          ],
+        },
         include: { resource: true },
       })
 
@@ -309,13 +318,14 @@ export async function updateOrder(req: Request, res: Response, next: NextFunctio
         throw new AppError(400, 'INVALID_RESOURCES', 'Some resources are not in the price list')
       }
 
+      const itemIdMap = new Map(priceListItems.map(i => [i.id, i]))
       const itemMap = new Map(priceListItems.map(i => [i.resourceId, i]))
 
       const newStartDate = data.startDate ? new Date(data.startDate) : (data.startDate === null ? null : order.startDate)
       const newEndDate = data.endDate ? new Date(data.endDate) : (data.endDate === null ? null : order.endDate)
 
       const lineItemData = data.lineItems.map((li, idx) => {
-        const plItem = itemMap.get(li.resourceId)!
+        const plItem = (li.priceListItemId ? itemIdMap.get(li.priceListItemId) : undefined) ?? itemMap.get(li.resourceId)!
         const unitPrice = getPriceForTier(plItem, pricingTier)
         const quantity = new Decimal(li.quantity)
         const discountPct = new Decimal(li.discountPct ?? 0)

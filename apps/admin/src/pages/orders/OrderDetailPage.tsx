@@ -190,6 +190,7 @@ export default function OrderDetailPage() {
         }
         return {
           resourceId: li.resourceId,
+          priceListItemId: li.priceListItemId,
           quantity: li.quantity,
           discountPct: li.discountPct ?? 0,
           observations,
@@ -364,17 +365,18 @@ export default function OrderDetailPage() {
     )
   }
 
-  async function addEditLineItem(resourceId: string) {
-    const item = editPriceListItems.find((i: any) => i.resourceId === resourceId)
+  async function addEditLineItem(itemId: string) {
+    const item = editPriceListItems.find((i: any) => i.id === itemId)
     if (!item) return
-    if (item.resource?.checkDuplicate !== false && editLineItems.find(li => li.resourceId === resourceId)) {
+    if (item.resource?.checkDuplicate !== false && editLineItems.find(li => li.resourceId === item.resourceId)) {
       message.warning('Este recurso no permite repetición en la Orden de Servicio')
       return
     }
 
     const newItem = {
-      instanceId: `${resourceId}-${Date.now()}-${Math.random()}`,
-      resourceId,
+      instanceId: `${item.resourceId}-${Date.now()}-${Math.random()}`,
+      resourceId: item.resourceId,
+      priceListItemId: item.id,
       description: item.resource.name,
       resourceCode: item.resource.code || '',
       earlyPrice: Number(item.earlyPrice),
@@ -960,8 +962,8 @@ export default function OrderDetailPage() {
                   placeholder="Seleccionar recurso..."
                   showSearch
                   options={editPriceListItems.filter((i: any) => i.isActive !== false).map((i: any) => ({
-                    value: i.resourceId,
-                    label: `${i.resource?.isPackage ? '📦 ' : ''}${i.resource?.name ?? ''} — $${Number(i.normalPrice).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
+                    value: i.id,
+                    label: `${i.resource?.isPackage ? '📦 ' : ''}${i.resource?.name ?? ''}${i.detail ? ` · ${i.detail}` : ''} — $${Number(i.normalPrice).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
                   }))}
                   onChange={addEditLineItem}
                   value={null}
