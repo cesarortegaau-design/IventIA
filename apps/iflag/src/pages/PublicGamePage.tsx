@@ -31,6 +31,8 @@ const EVENT_LABELS: Record<string, string> = {
   TIMER_START: 'Cronómetro iniciado',
   TIMER_STOP: 'Cronómetro detenido',
   GAME_START: 'Partido creado',
+  TIMEOUT: 'Tiempo fuera',
+  SCORE_ADJUST: 'Ajuste de marcador',
 }
 
 export default function PublicGamePage() {
@@ -75,6 +77,9 @@ export default function PublicGamePage() {
   const isFinished = game.status === 'FINISHED'
   const isHalftime = game.status === 'HALFTIME'
   const gameEvents = game.gameEvents ?? []
+  const isSecondHalf = game.currentQuarter >= 3
+  const localTimeoutsUsed = isSecondHalf ? (game.localTimeoutsH2 ?? 0) : (game.localTimeoutsH1 ?? 0)
+  const visitingTimeoutsUsed = isSecondHalf ? (game.visitingTimeoutsH2 ?? 0) : (game.visitingTimeoutsH1 ?? 0)
 
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--bg)', paddingBottom: 16 }}>
@@ -155,6 +160,31 @@ export default function PublicGamePage() {
                   <div key={d} className={`down-dot ${d <= game.currentDown ? 'active' : ''}`} />
                 ))}
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Timeout indicators */}
+        <div style={{ display: 'flex', justifyContent: 'space-around', marginTop: 12, padding: '0 16px' }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+              {playerName(game.localTeam)}
+            </div>
+            <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+              {[1, 2].map(i => (
+                <div key={i} style={{ width: 10, height: 10, borderRadius: '50%', background: i <= localTimeoutsUsed ? '#faad14' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)' }} />
+              ))}
+            </div>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', alignSelf: 'center' }}>Tiempos fuera</div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+              {playerName(game.visitingTeam)}
+            </div>
+            <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+              {[1, 2].map(i => (
+                <div key={i} style={{ width: 10, height: 10, borderRadius: '50%', background: i <= visitingTimeoutsUsed ? '#faad14' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)' }} />
+              ))}
             </div>
           </div>
         </div>

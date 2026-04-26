@@ -404,10 +404,10 @@ const gameEventSchema = z.object({
     'TOUCHDOWN', 'EXTRA_POINT', 'SAFETY', 'FLAG_PENALTY',
     'DOWN_UPDATE', 'POSSESSION_CHANGE',
     'GAME_START', 'GAME_END', 'HALFTIME_START', 'HALFTIME_END',
-    'TIMER_START', 'TIMER_STOP',
+    'TIMER_START', 'TIMER_STOP', 'TIMEOUT', 'SCORE_ADJUST',
   ]),
-  teamId: z.string().uuid().optional().nullable(),
-  playerId: z.string().uuid().optional().nullable(),
+  teamId: z.string().optional().nullable(),
+  playerId: z.string().optional().nullable(),
   quarter: z.number().int().min(1).max(4).optional().nullable(),
   down: z.number().int().min(1).max(4).optional().nullable(),
   points: z.number().int().default(0),
@@ -417,8 +417,11 @@ const gameEventSchema = z.object({
   applyScore: z.boolean().optional(),  // if true, add points to the team score
   newDown: z.number().int().min(1).max(4).optional().nullable(),
   newYardsToFirst: z.number().int().min(0).optional().nullable(),
-  newOffenseTeamId: z.string().uuid().optional().nullable(),
+  newOffenseTeamId: z.string().optional().nullable(),
   newCurrentDown: z.number().int().min(1).max(4).optional().nullable(),
+  // Score adjustment
+  newLocalScore: z.number().int().min(0).optional(),
+  newVisitingScore: z.number().int().min(0).optional(),
 })
 
 export async function recordGameEvent(req: Request, res: Response, next: NextFunction) {
@@ -442,6 +445,26 @@ export async function recordGameEvent(req: Request, res: Response, next: NextFun
       if (data.newOffenseTeamId !== undefined) gameUpdates.offenseTeamId = data.newOffenseTeamId
       if (data.newCurrentDown !== undefined) gameUpdates.currentDown = data.newCurrentDown
       if (data.newYardsToFirst !== undefined) gameUpdates.yardsToFirst = data.newYardsToFirst
+      // Timeout handling (2 per team per half)
+      if (data.type === 'TIMEOUT' && data.teamId) {
+        const isSecondHalf = game.currentQuarter >= 3
+        if (data.teamId === game.localTeamId) {
+          const field = isSecondHalf ? 'localTimeoutsH2' : 'localTimeoutsH1'
+          if (game[field] >= 2) throw new AppError(400, 'NO_TIMEOUTS', 'No quedan tiempos fuera para este equipo en esta mitad')
+          gameUpdates[field] = game[field] + 1
+        } else if (data.teamId === game.visitingTeamId) {
+          const field = isSecondHalf ? 'visitingTimeoutsH2' : 'visitingTimeoutsH1'
+          if (game[field] >= 2) throw new AppError(400, 'NO_TIMEOUTS', 'No quedan tiempos fuera para este equipo en esta mitad')
+          gameUpdates[field] = game[field] + 1
+        }
+      }
+
+      // Score adjustment
+      if (data.type === 'SCORE_ADJUST') {
+        if (data.newLocalScore !== undefined) gameUpdates.localScore = data.newLocalScore
+        if (data.newVisitingScore !== undefined) gameUpdates.visitingScore = data.newVisitingScore
+      }
+
       if (data.type === 'HALFTIME_START') gameUpdates.status = 'HALFTIME'
       if (data.type === 'HALFTIME_END') gameUpdates.status = 'IN_PROGRESS'
       if (data.type === 'GAME_END') {

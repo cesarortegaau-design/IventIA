@@ -117,6 +117,8 @@ enum GameEventType {
   HALFTIME_END
   TIMER_START
   TIMER_STOP
+  TIMEOUT
+  SCORE_ADJUST
 }
 
 enum SenderType {
@@ -2247,6 +2249,10 @@ model FootballGame {
   timerSeconds      Int        @default(0) @map("timer_seconds")
   timerRunning      Boolean    @default(false) @map("timer_running")
   timerLastStarted  DateTime?  @map("timer_last_started")
+  localTimeoutsH1   Int        @default(0) @map("local_timeouts_h1")
+  localTimeoutsH2   Int        @default(0) @map("local_timeouts_h2")
+  visitingTimeoutsH1 Int       @default(0) @map("visiting_timeouts_h1")
+  visitingTimeoutsH2 Int       @default(0) @map("visiting_timeouts_h2")
   notes             String?    @db.Text
   startedAt         DateTime?  @map("started_at")
   finishedAt        DateTime?  @map("finished_at")
