@@ -457,11 +457,11 @@ const importRowSchema = z.object({
     return (n === 'moral' || n === 'empresa') ? 'MORAL' : 'PHYSICAL'
   }),
   nombre: z.string().min(1).max(300),
-  rfc: z.string().max(20).optional().or(z.literal('')).transform(v => v || undefined),
-  email: z.string().email().optional().or(z.literal('')).transform(v => v || undefined),
-  telefono: z.string().max(30).optional(),
+  rfc: z.string().optional().transform(v => (v && v.trim()) || undefined),
+  email: z.string().optional().transform(v => (v && v.trim()) || undefined),
+  telefono: z.string().optional().transform(v => (v && v.trim()) || undefined),
   equipo: z.string().optional().transform(v => v === '1' || v?.toLowerCase() === 'sí' || v?.toLowerCase() === 'si' || v?.toLowerCase() === 'true'),
-})
+}).passthrough()
 
 export async function importClients(req: Request, res: Response, next: NextFunction) {
   try {
