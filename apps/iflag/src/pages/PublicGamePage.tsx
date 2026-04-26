@@ -138,56 +138,58 @@ export default function PublicGamePage() {
 
       {/* Down tracker */}
       {!isFinished && !isHalftime && (
-        <div className="down-section">
-          <div className="down-card">
-            <div className="down-row">
-              <div>
-                <div className="down-label">Down</div>
-                <div className="down-value">{DOWN_LABELS[game.currentDown] ?? `${game.currentDown}°`}</div>
-              </div>
-              <div>
-                <div className="down-label">Yardas</div>
-                <div className="down-value">{game.yardsToFirst === 0 ? 'GOAL' : `${game.yardsToFirst}y`}</div>
-              </div>
-              <div>
-                <div className="down-label">Posesión</div>
-                <div className="down-value" style={{ fontSize: 14, color: 'var(--green)' }}>
-                  {playerName(offenseTeam)}
+        <>
+          <div className="down-section">
+            <div className="down-card">
+              <div className="down-row">
+                <div>
+                  <div className="down-label">Down</div>
+                  <div className="down-value">{DOWN_LABELS[game.currentDown] ?? `${game.currentDown}°`}</div>
+                </div>
+                <div>
+                  <div className="down-label">Yardas</div>
+                  <div className="down-value">{game.yardsToFirst === 0 ? 'GOAL' : `${game.yardsToFirst}y`}</div>
+                </div>
+                <div>
+                  <div className="down-label">Posesión</div>
+                  <div className="down-value" style={{ fontSize: 14, color: 'var(--green)' }}>
+                    {playerName(offenseTeam)}
+                  </div>
+                </div>
+                <div className="down-dots">
+                  {[1, 2, 3, 4].map(d => (
+                    <div key={d} className={`down-dot ${d <= game.currentDown ? 'active' : ''}`} />
+                  ))}
                 </div>
               </div>
-              <div className="down-dots">
-                {[1, 2, 3, 4].map(d => (
-                  <div key={d} className={`down-dot ${d <= game.currentDown ? 'active' : ''}`} />
+            </div>
+          </div>
+
+          {/* Timeout indicators */}
+          <div style={{ display: 'flex', justifyContent: 'space-around', marginTop: 12, padding: '0 16px' }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                {playerName(game.localTeam)}
+              </div>
+              <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                {[1, 2].map(i => (
+                  <div key={i} style={{ width: 10, height: 10, borderRadius: '50%', background: i <= localTimeoutsUsed ? '#faad14' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)' }} />
+                ))}
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', alignSelf: 'center' }}>Tiempos fuera</div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                {playerName(game.visitingTeam)}
+              </div>
+              <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                {[1, 2].map(i => (
+                  <div key={i} style={{ width: 10, height: 10, borderRadius: '50%', background: i <= visitingTimeoutsUsed ? '#faad14' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)' }} />
                 ))}
               </div>
             </div>
           </div>
-        </div>
-
-        {/* Timeout indicators */}
-        <div style={{ display: 'flex', justifyContent: 'space-around', marginTop: 12, padding: '0 16px' }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-              {playerName(game.localTeam)}
-            </div>
-            <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-              {[1, 2].map(i => (
-                <div key={i} style={{ width: 10, height: 10, borderRadius: '50%', background: i <= localTimeoutsUsed ? '#faad14' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)' }} />
-              ))}
-            </div>
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', alignSelf: 'center' }}>Tiempos fuera</div>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-              {playerName(game.visitingTeam)}
-            </div>
-            <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-              {[1, 2].map(i => (
-                <div key={i} style={{ width: 10, height: 10, borderRadius: '50%', background: i <= visitingTimeoutsUsed ? '#faad14' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)' }} />
-              ))}
-            </div>
-          </div>
-        </div>
+        </>
       )}
 
       {/* Finished summary */}
