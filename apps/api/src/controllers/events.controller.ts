@@ -45,7 +45,7 @@ export async function listEvents(req: Request, res: Response, next: NextFunction
     const tenantId = req.user!.tenantId
 
     const where: any = { tenantId }
-    if (status) where.status = status
+    if (status) where.status = status.includes(',') ? { in: status.split(',') } : status
     if (search) where.name = { contains: search, mode: 'insensitive' }
     if (from || to) {
       where.eventStart = {}
