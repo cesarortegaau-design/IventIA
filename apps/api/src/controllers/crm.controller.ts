@@ -294,7 +294,17 @@ export async function getClientSummary(req: Request, res: Response, next: NextFu
     const [client, interactions, tasks, orders, events] = await Promise.all([
       prisma.client.findFirst({
         where: { id: clientId, tenantId },
-        include: { contacts: { where: { isActive: true } }, documents: { orderBy: { createdAt: 'desc' } }, portalUser: { select: { id: true, email: true, firstName: true, lastName: true, isActive: true } } },
+        include: {
+          contacts: { where: { isActive: true } },
+          documents: { orderBy: { createdAt: 'desc' } },
+          portalUser: { select: { id: true, email: true, firstName: true, lastName: true, isActive: true } },
+          relationsFrom: {
+            include: { relatedClient: { select: { id: true, companyName: true, firstName: true, lastName: true, personType: true } } },
+          },
+          relationsTo: {
+            include: { client: { select: { id: true, companyName: true, firstName: true, lastName: true, personType: true } } },
+          },
+        },
       }),
       prisma.clientInteraction.findMany({
         where: { clientId, tenantId },
