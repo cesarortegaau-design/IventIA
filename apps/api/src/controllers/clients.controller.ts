@@ -452,11 +452,12 @@ export async function toggleClientActive(req: Request, res: Response, next: Next
 // ── Client Import ──────────────────────────────────────────────────────────────
 
 const importRowSchema = z.object({
-  tipo: z.enum(['Moral', 'Física', 'MORAL', 'PHYSICAL']).transform(v =>
-    (v === 'Moral' || v === 'MORAL') ? 'MORAL' : 'PHYSICAL'
-  ),
+  tipo: z.string().min(1).transform(v => {
+    const n = v.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    return (n === 'moral' || n === 'empresa') ? 'MORAL' : 'PHYSICAL'
+  }),
   nombre: z.string().min(1).max(300),
-  rfc: z.string().max(20).optional(),
+  rfc: z.string().max(20).optional().or(z.literal('')).transform(v => v || undefined),
   email: z.string().email().optional().or(z.literal('')).transform(v => v || undefined),
   telefono: z.string().max(30).optional(),
   equipo: z.string().optional().transform(v => v === '1' || v?.toLowerCase() === 'sí' || v?.toLowerCase() === 'si' || v?.toLowerCase() === 'true'),
