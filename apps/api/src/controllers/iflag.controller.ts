@@ -56,7 +56,7 @@ export async function publicGetGame(req: Request, res: Response, next: NextFunct
 export async function publicListGames(req: Request, res: Response, next: NextFunction) {
   try {
     const { eventId } = req.query as { eventId?: string }
-    const where: any = { status: { not: 'PENDING' } }
+    const where: any = {}
     if (eventId) where.eventId = eventId
 
     const games = await prisma.footballGame.findMany({

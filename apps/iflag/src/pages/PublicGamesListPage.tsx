@@ -10,6 +10,7 @@ function playerName(c: any) {
 }
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
+  PENDING: { label: 'Próximo', color: '#1677ff' },
   ATTENDANCE: { label: 'Asistencia', color: '#1677ff' },
   IN_PROGRESS: { label: 'En Juego', color: '#52c41a' },
   HALFTIME: { label: 'Medio Tiempo', color: '#faad14' },
@@ -27,6 +28,7 @@ export default function PublicGamesListPage() {
   const games = gamesData?.data ?? []
 
   const liveGames = games.filter((g: any) => g.status === 'IN_PROGRESS' || g.status === 'HALFTIME' || g.status === 'ATTENDANCE')
+  const upcomingGames = games.filter((g: any) => g.status === 'PENDING')
   const finishedGames = games.filter((g: any) => g.status === 'FINISHED')
 
   return (
@@ -56,6 +58,15 @@ export default function PublicGamesListPage() {
             </div>
             {liveGames.map((g: any) => (
               <GameCard key={g.id} game={g} onClick={() => navigate(`/live/${g.id}`)} live />
+            ))}
+          </>
+        )}
+
+        {upcomingGames.length > 0 && (
+          <>
+            <div className="section-header" style={{ marginTop: 20 }}>Próximos</div>
+            {upcomingGames.map((g: any) => (
+              <GameCard key={g.id} game={g} onClick={() => navigate(`/live/${g.id}`)} />
             ))}
           </>
         )}
