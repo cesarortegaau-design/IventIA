@@ -20,6 +20,66 @@ async function getGameForTenant(gameId: string, tenantId: string) {
   return game
 }
 
+// ── Public (no auth) ──────────────────────────────────────────────────────────
+
+export async function publicGetGame(req: Request, res: Response, next: NextFunction) {
+  try {
+    const game = await prisma.footballGame.findFirst({
+      where: { id: req.params.gameId },
+      include: {
+        localTeam: { select: { id: true, companyName: true, logoUrl: true } },
+        visitingTeam: { select: { id: true, companyName: true, logoUrl: true } },
+        event: { select: { id: true, code: true, name: true } },
+        attendance: {
+          include: {
+            player: { select: { id: true, firstName: true, lastName: true, companyName: true } },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+        gameEvents: {
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+        },
+      },
+    })
+    if (!game) throw new AppError(404, 'GAME_NOT_FOUND', 'Partido no encontrado')
+
+    res.json({
+      success: true,
+      data: { ...game, timerSeconds: elapsedSeconds(game) },
+    })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function publicListGames(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { eventId } = req.query as { eventId?: string }
+    const where: any = { status: { not: 'PENDING' } }
+    if (eventId) where.eventId = eventId
+
+    const games = await prisma.footballGame.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        localTeam: { select: { id: true, companyName: true, logoUrl: true } },
+        visitingTeam: { select: { id: true, companyName: true, logoUrl: true } },
+        event: { select: { id: true, code: true, name: true } },
+      },
+    })
+
+    const enriched = games.map(g => ({
+      ...g,
+      timerSeconds: elapsedSeconds(g),
+    }))
+
+    res.json({ success: true, data: enriched })
+  } catch (err) {
+    next(err)
+  }
+}
+
 // ── List / Get ─────────────────────────────────────────────────────────────────
 
 export async function listGames(req: Request, res: Response, next: NextFunction) {

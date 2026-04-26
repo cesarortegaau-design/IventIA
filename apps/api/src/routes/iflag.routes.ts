@@ -6,9 +6,14 @@ import {
   getAttendance, upsertAttendance,
   recordGameEvent, listGameEvents,
   getTeamPlayers,
+  publicGetGame, publicListGames,
 } from '../controllers/iflag.controller'
 
 const router = Router()
+
+// Public endpoints (no auth)
+router.get('/public/games', publicListGames)
+router.get('/public/games/:gameId', publicGetGame)
 
 router.use(authenticate)
 

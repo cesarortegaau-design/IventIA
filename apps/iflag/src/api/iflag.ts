@@ -1,4 +1,10 @@
+import axios from 'axios'
 import { apiClient } from './client'
+
+const publicBaseURL = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL}/api/v1`
+  : '/api/v1'
+const publicClient = axios.create({ baseURL: publicBaseURL })
 
 export const iflagApi = {
   listGames: (params?: { eventId?: string }) =>
@@ -29,4 +35,10 @@ export const iflagApi = {
     apiClient.get('/events', { params }).then(r => r.data),
   listTeams: () =>
     apiClient.get('/clients', { params: { isTeam: true, pageSize: 100 } }).then(r => r.data),
+
+  // Public (no auth)
+  publicGetGame: (gameId: string) =>
+    publicClient.get(`/iflag/public/games/${gameId}`).then(r => r.data),
+  publicListGames: (params?: { eventId?: string }) =>
+    publicClient.get('/iflag/public/games', { params }).then(r => r.data),
 }
