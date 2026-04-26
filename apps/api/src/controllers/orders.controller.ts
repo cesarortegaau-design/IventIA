@@ -303,7 +303,9 @@ export async function updateOrder(req: Request, res: Response, next: NextFunctio
         include: { resource: true },
       })
 
-      if (priceListItems.length !== new Set(resourceIds).size) {
+      const foundResourceIds = new Set(priceListItems.map(i => i.resourceId))
+      const missingIds = [...new Set(resourceIds)].filter(id => !foundResourceIds.has(id))
+      if (missingIds.length > 0) {
         throw new AppError(400, 'INVALID_RESOURCES', 'Some resources are not in the price list')
       }
 
