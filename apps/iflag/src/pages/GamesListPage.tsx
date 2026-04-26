@@ -41,7 +41,7 @@ export default function GamesListPage() {
 
   const { data: eventsData } = useQuery({
     queryKey: ['iflag-events'],
-    queryFn: () => iflagApi.listEvents({ pageSize: 50, status: 'CONFIRMED,IN_EXECUTION' }),
+    queryFn: () => iflagApi.listEvents({ pageSize: 50, status: 'CONFIRMED,IN_EXECUTION', eventType: 'Deportivo' }),
     enabled: createOpen,
   })
   const events = eventsData?.data ?? []

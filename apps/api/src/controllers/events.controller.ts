@@ -34,6 +34,7 @@ const listQuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
   pageSize: z.coerce.number().min(1).max(500).default(20),
   status: z.string().optional(),
+  eventType: z.string().optional(),
   search: z.string().optional(),
   from: z.string().optional(),
   to: z.string().optional(),
@@ -41,11 +42,12 @@ const listQuerySchema = z.object({
 
 export async function listEvents(req: Request, res: Response, next: NextFunction) {
   try {
-    const { page, pageSize, status, search, from, to } = listQuerySchema.parse(req.query)
+    const { page, pageSize, status, eventType, search, from, to } = listQuerySchema.parse(req.query)
     const tenantId = req.user!.tenantId
 
     const where: any = { tenantId }
     if (status) where.status = status.includes(',') ? { in: status.split(',') } : status
+    if (eventType) where.eventType = eventType
     if (search) where.name = { contains: search, mode: 'insensitive' }
     if (from || to) {
       where.eventStart = {}
