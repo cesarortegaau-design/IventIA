@@ -6,7 +6,7 @@ import {
   Tabs, App, Select, Typography, Divider, InputNumber, Form, DatePicker, Modal, Switch, Badge,
   Tooltip, Popconfirm, Input, Upload, Timeline, Spin, Alert,
 } from 'antd'
-import { EditOutlined, PlusOutlined, ArrowLeftOutlined, CopyOutlined, StopOutlined, GlobalOutlined, DownloadOutlined, DeleteOutlined, CalendarOutlined, FileOutlined, UploadOutlined, AuditOutlined, WarningOutlined, ImportOutlined, FileProtectOutlined, EyeOutlined } from '@ant-design/icons'
+import { EditOutlined, PlusOutlined, ArrowLeftOutlined, CopyOutlined, StopOutlined, GlobalOutlined, DownloadOutlined, DeleteOutlined, CalendarOutlined, FileOutlined, UploadOutlined, AuditOutlined, WarningOutlined, ImportOutlined, FileProtectOutlined, EyeOutlined, TrophyOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { eventsApi } from '../../api/events'
 import { portalCodesApi } from '../../api/portalCodes'
@@ -14,6 +14,7 @@ import { eventSpacesApi } from '../../api/eventSpaces'
 import { resourcesApi } from '../../api/resources'
 import { bookingsApi } from '../../api/bookings'
 import { auditApi } from '../../api/audit'
+import { clientsApi } from '../../api/clients'
 import { exportToCsv } from '../../utils/exportCsv'
 import AuditTimeline from '../../components/AuditTimeline'
 import AuditDrawer from '../../components/AuditDrawer'
@@ -188,6 +189,21 @@ export default function EventDetailPage() {
     queryFn: () => resourcesApi.list({ pageSize: 500, isActive: true }),
   })
   const allResources = resourcesData?.data ?? []
+
+  const { data: teamClientsData } = useQuery({
+    queryKey: ['clients-teams'],
+    queryFn: () => clientsApi.list({ pageSize: 200, isTeam: true }),
+  })
+  const teamClients = (teamClientsData?.data ?? []).filter((c: any) => c.isTeam)
+
+  const updateEventMutation = useMutation({
+    mutationFn: (vals: any) => eventsApi.update(id!, vals),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['event', id] })
+      message.success('Portal deportivo actualizado')
+    },
+    onError: () => message.error('Error al actualizar'),
+  })
 
   const saveSpaceMutation = useMutation({
     mutationFn: (values: any) => {
@@ -943,6 +959,66 @@ export default function EventDetailPage() {
                     </Form>
                   </Modal>
                 </>
+              ),
+            },
+            {
+              key: 'sport',
+              label: (
+                <Space>
+                  <TrophyOutlined />
+                  Portal Deportivo
+                </Space>
+              ),
+              children: (
+                <div style={{ maxWidth: 560 }}>
+                  <Card size="small" title="Equipos del partido">
+                    <Form
+                      layout="vertical"
+                      initialValues={{
+                        sportLocalTeamId: event.sportLocalTeamId ?? undefined,
+                        sportVisitingTeamId: event.sportVisitingTeamId ?? undefined,
+                      }}
+                      onFinish={(vals) => updateEventMutation.mutate(vals)}
+                    >
+                      <Form.Item name="sportLocalTeamId" label="Equipo Local">
+                        <Select
+                          allowClear
+                          showSearch
+                          optionFilterProp="label"
+                          placeholder="Seleccionar equipo local..."
+                          options={teamClients.map((c: any) => ({
+                            value: c.id,
+                            label: c.companyName || `${c.firstName} ${c.lastName}`,
+                          }))}
+                        />
+                      </Form.Item>
+                      <Form.Item name="sportVisitingTeamId" label="Equipo Visitante">
+                        <Select
+                          allowClear
+                          showSearch
+                          optionFilterProp="label"
+                          placeholder="Seleccionar equipo visitante..."
+                          options={teamClients.map((c: any) => ({
+                            value: c.id,
+                            label: c.companyName || `${c.firstName} ${c.lastName}`,
+                          }))}
+                        />
+                      </Form.Item>
+                      <Form.Item>
+                        <Button type="primary" htmlType="submit" loading={updateEventMutation.isPending}>
+                          Guardar equipos
+                        </Button>
+                      </Form.Item>
+                    </Form>
+                    {(event.sportLocalTeamId || event.sportVisitingTeamId) && (
+                      <div style={{ marginTop: 8 }}>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          Los jugadores de cada equipo se obtienen de las relaciones de tipo "Jugador" del cliente marcado como equipo.
+                        </Text>
+                      </div>
+                    )}
+                  </Card>
+                </div>
               ),
             },
             {

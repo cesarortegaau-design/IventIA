@@ -19,14 +19,17 @@ const clientSchema = z.object({
   addressState: z.string().optional(),
   addressZip: z.string().optional(),
   addressCountry: z.string().default('MX'),
+  logoUrl: z.string().url().optional().nullable(),
+  isTeam: z.boolean().optional(),
 }).strip()
 
 export async function listClients(req: Request, res: Response, next: NextFunction) {
   try {
-    const { search, active, page = '1', pageSize = '20' } = req.query as Record<string, string>
+    const { search, active, isTeam, page = '1', pageSize = '20' } = req.query as Record<string, string>
     const tenantId = req.user!.tenantId
     const where: any = { tenantId }
     if (active !== undefined) where.isActive = active === 'true'
+    if (isTeam !== undefined) where.isTeam = isTeam === 'true'
     if (search) {
       where.OR = [
         { companyName: { contains: search, mode: 'insensitive' } },
@@ -187,7 +190,7 @@ export async function linkPortalUser(req: Request, res: Response, next: NextFunc
 
 const relationSchema = z.object({
   relatedClientId: z.string().uuid(),
-  relationType: z.enum(['BILLING', 'SUBSIDIARY', 'PARTNER', 'PARENT', 'OTHER']),
+  relationType: z.enum(['BILLING', 'SUBSIDIARY', 'PARTNER', 'PARENT', 'JUGADOR', 'OTHER']),
   notes: z.string().max(500).optional(),
   isActive: z.boolean().default(true),
 }).strip()
@@ -441,6 +444,64 @@ export async function toggleClientActive(req: Request, res: Response, next: Next
       data: { isActive: !client.isActive },
     })
     res.json({ success: true, data: updated })
+  } catch (err) {
+    next(err)
+  }
+}
+
+// ── Client Import ──────────────────────────────────────────────────────────────
+
+const importRowSchema = z.object({
+  tipo: z.enum(['Moral', 'Física', 'MORAL', 'PHYSICAL']).transform(v =>
+    (v === 'Moral' || v === 'MORAL') ? 'MORAL' : 'PHYSICAL'
+  ),
+  nombre: z.string().min(1).max(300),
+  rfc: z.string().max(20).optional(),
+  email: z.string().email().optional().or(z.literal('')).transform(v => v || undefined),
+  telefono: z.string().max(30).optional(),
+  equipo: z.string().optional().transform(v => v === '1' || v?.toLowerCase() === 'sí' || v?.toLowerCase() === 'si' || v?.toLowerCase() === 'true'),
+})
+
+export async function importClients(req: Request, res: Response, next: NextFunction) {
+  try {
+    const tenantId = req.user!.tenantId
+    const rows = z.array(importRowSchema).parse(req.body)
+
+    let created = 0
+    let updated = 0
+
+    for (const row of rows) {
+      const isTeam = row.equipo ?? false
+      const personType = row.tipo
+      const companyName = personType === 'MORAL' ? row.nombre : undefined
+      const firstName = personType === 'PHYSICAL' ? row.nombre.split(' ')[0] : undefined
+      const lastName = personType === 'PHYSICAL' ? row.nombre.split(' ').slice(1).join(' ') || undefined : undefined
+
+      const existing = row.rfc
+        ? await prisma.client.findFirst({ where: { tenantId, rfc: row.rfc } })
+        : null
+
+      if (existing) {
+        await prisma.client.update({
+          where: { id: existing.id },
+          data: { companyName, firstName, lastName, email: row.email, phone: row.telefono, isTeam },
+        })
+        updated++
+      } else {
+        await prisma.client.create({
+          data: {
+            tenantId, personType, companyName, firstName, lastName,
+            rfc: row.rfc || undefined,
+            email: row.email,
+            phone: row.telefono,
+            isTeam,
+          },
+        })
+        created++
+      }
+    }
+
+    res.json({ success: true, data: { created, updated, total: rows.length } })
   } catch (err) {
     next(err)
   }

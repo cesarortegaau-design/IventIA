@@ -195,3 +195,27 @@ export async function deleteOrderDocument(req: Request, res: Response, next: Nex
     next(err)
   }
 }
+
+// ── Client Logo ────────────────────────────────────────────────────────────────
+
+export async function uploadClientLogo(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params
+    const tenantId = req.user!.tenantId
+
+    const client = await prisma.client.findFirst({ where: { id, tenantId } })
+    if (!client) throw new AppError(404, 'NOT_FOUND', 'Cliente no encontrado')
+    if (!req.file) throw new AppError(400, 'NO_FILE', 'No se recibió ningún archivo')
+
+    const { url } = await uploadToCloudinary(req.file.buffer, 'iventia/client-logos', 'image')
+
+    const updated = await prisma.client.update({
+      where: { id },
+      data: { logoUrl: url },
+    })
+
+    res.json({ success: true, data: { logoUrl: updated.logoUrl } })
+  } catch (err) {
+    next(err)
+  }
+}

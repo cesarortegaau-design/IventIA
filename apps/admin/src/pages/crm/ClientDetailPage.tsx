@@ -4,14 +4,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Row, Col, Typography, Tag, Button, Tabs, Timeline, List, Avatar,
   Form, Input, Select, DatePicker, Modal, Popconfirm, Badge, Empty, Spin,
-  Space, Tooltip, Divider, Table, App, Upload,
+  Space, Tooltip, Divider, Table, App, Upload, Switch, Image,
 } from 'antd'
 import {
   ArrowLeftOutlined, PhoneOutlined, MailOutlined, MessageOutlined,
   TeamOutlined, FileTextOutlined, PlusOutlined, CheckOutlined,
   DeleteOutlined, EditOutlined, UserOutlined, CalendarOutlined,
   ShoppingCartOutlined, ClockCircleOutlined, LinkOutlined, DisconnectOutlined,
-  DownloadOutlined, FileOutlined, UploadOutlined,
+  DownloadOutlined, FileOutlined, UploadOutlined, TrophyOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { crmApi } from '../../api/crm'
@@ -144,6 +144,30 @@ export default function ClientDetailPage() {
   })
 
   const [docUploading, setDocUploading] = useState(false)
+  const [logoUploading, setLogoUploading] = useState(false)
+
+  async function handleLogoUpload(file: File) {
+    setLogoUploading(true)
+    try {
+      await clientsApi.uploadLogo(clientId!, file)
+      qc.invalidateQueries({ queryKey: ['client-summary', clientId] })
+      message.success('Logotipo actualizado')
+    } catch {
+      message.error('Error al subir el logotipo')
+    } finally {
+      setLogoUploading(false)
+    }
+    return false
+  }
+
+  const updateIsTeamMutation = useMutation({
+    mutationFn: (isTeam: boolean) => clientsApi.update(clientId!, { isTeam }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['client-summary', clientId] })
+      qc.invalidateQueries({ queryKey: ['clients'] })
+      message.success('Actualizado')
+    },
+  })
 
   const deleteDocMutation = useMutation({
     mutationFn: (docId: string) => clientsApi.deleteDocument(clientId!, docId),
@@ -592,6 +616,52 @@ export default function ClientDetailPage() {
             })(),
           },
           {
+            key: 'imagen',
+            label: (
+              <Space>
+                <TrophyOutlined />
+                Imagen
+              </Space>
+            ),
+            children: (
+              <div style={{ maxWidth: 480 }}>
+                <Card size="small" title="Logotipo" style={{ marginBottom: 16 }}>
+                  {client.logoUrl ? (
+                    <div style={{ marginBottom: 12 }}>
+                      <Image src={client.logoUrl} height={80} style={{ objectFit: 'contain', borderRadius: 4 }} />
+                    </div>
+                  ) : (
+                    <Empty description="Sin logotipo" image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ margin: '8px 0' }} />
+                  )}
+                  <Upload
+                    beforeUpload={handleLogoUpload}
+                    showUploadList={false}
+                    accept="image/*"
+                  >
+                    <Button icon={<UploadOutlined />} loading={logoUploading}>
+                      {client.logoUrl ? 'Cambiar logotipo' : 'Subir logotipo'}
+                    </Button>
+                  </Upload>
+                </Card>
+                <Card size="small" title="Equipo deportivo">
+                  <Space>
+                    <Switch
+                      checked={client.isTeam ?? false}
+                      loading={updateIsTeamMutation.isPending}
+                      onChange={(v) => updateIsTeamMutation.mutate(v)}
+                    />
+                    <span>Marcar como Equipo</span>
+                  </Space>
+                  <div style={{ marginTop: 8 }}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      Los clientes de tipo Persona Moral marcados como Equipo aparecerán disponibles para seleccionar como equipos locales o visitantes en el Portal Deportivo del Evento.
+                    </Text>
+                  </div>
+                </Card>
+              </div>
+            ),
+          },
+          {
             key: 'documents',
             label: `Documentos (${client.documents?.length ?? 0})`,
             children: (
@@ -658,6 +728,7 @@ export default function ClientDetailPage() {
                 SUBSIDIARY: { label: 'Filial', color: 'purple' },
                 PARTNER: { label: 'Socio', color: 'green' },
                 PARENT: { label: 'Empresa Matriz', color: 'orange' },
+                JUGADOR: { label: 'Jugador', color: 'gold' },
                 OTHER: { label: 'Otro', color: 'default' },
               }
               const relationsFrom = (client.relationsFrom ?? []).map((r: any) => ({
@@ -778,6 +849,7 @@ export default function ClientDetailPage() {
               { value: 'SUBSIDIARY', label: 'Filial' },
               { value: 'PARTNER', label: 'Socio' },
               { value: 'PARENT', label: 'Empresa Matriz' },
+              { value: 'JUGADOR', label: 'Jugador' },
               { value: 'OTHER', label: 'Otro' },
             ]} />
           </Form.Item>
@@ -881,6 +953,14 @@ export default function ClientDetailPage() {
                     <Form.Item name="addressZip" label="C.P."><Input /></Form.Item>
                   </Col>
                 </Row>
+              ),
+            },
+            {
+              key: 'imagen', label: 'Imagen',
+              children: (
+                <Form.Item name="isTeam" label="Equipo deportivo" valuePropName="checked">
+                  <Switch />
+                </Form.Item>
               ),
             },
           ]} />

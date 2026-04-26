@@ -53,4 +53,11 @@ export const clientsApi = {
   },
   deleteDocument: (id: string, docId: string) =>
     apiClient.delete(`/clients/${id}/documents/${docId}`).then(r => r.data),
+  uploadLogo: (id: string, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return apiClient.post(`/clients/${id}/logo`, form, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data)
+  },
+  importClients: (rows: any[]) =>
+    apiClient.post('/clients/import', rows).then(r => r.data),
 }

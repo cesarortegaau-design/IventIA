@@ -10,8 +10,9 @@ import {
   getPortalUser, updatePortalUser, resetPortalUserPassword,
   addPortalUserClient, removePortalUserClient,
   listSupplierPortalUsers, getSupplierPortalUser, updateSupplierPortalUser, resetSupplierPortalUserPassword,
+  importClients,
 } from '../controllers/clients.controller'
-import { uploadClientDocument, deleteClientDocument } from '../controllers/documents.controller'
+import { uploadClientDocument, deleteClientDocument, uploadClientLogo } from '../controllers/documents.controller'
 
 const docUpload = multer({
   storage: multer.memoryStorage(),
@@ -47,6 +48,12 @@ router.get('/supplier-portal-users', requirePrivilege(PRIVILEGES.SUPPLIER_VIEW),
 router.get('/supplier-portal-users/:supplierPortalUserId', requirePrivilege(PRIVILEGES.SUPPLIER_VIEW), getSupplierPortalUser)
 router.patch('/supplier-portal-users/:supplierPortalUserId', requirePrivilege(PRIVILEGES.SUPPLIER_EDIT), updateSupplierPortalUser)
 router.post('/supplier-portal-users/:supplierPortalUserId/reset-password', requirePrivilege(PRIVILEGES.SUPPLIER_EDIT), resetSupplierPortalUserPassword)
+
+// Import
+router.post('/import', requirePrivilege(PRIVILEGES.CLIENT_CREATE), importClients)
+
+// Logo
+router.post('/:id/logo', requirePrivilege(PRIVILEGES.CLIENT_EDIT), docUpload.single('file'), uploadClientLogo)
 
 // Documents
 router.post('/:id/documents', requirePrivilege(PRIVILEGES.CLIENT_EDIT), docUpload.single('file'), uploadClientDocument)

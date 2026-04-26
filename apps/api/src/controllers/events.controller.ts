@@ -26,6 +26,8 @@ const createEventSchema = z.object({
   status: z.string().nullish(),
   portalEnabled: z.boolean().nullish(),
   portalSettings: z.any().optional(),
+  sportLocalTeamId: z.string().uuid().nullish(),
+  sportVisitingTeamId: z.string().uuid().nullish(),
 })
 
 const listQuerySchema = z.object({

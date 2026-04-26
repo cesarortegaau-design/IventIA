@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Table, Button, Card, Input, Space, Tag, Modal, Form, Typography,
-  Row, Col, App, Select, Tabs
+  Row, Col, App, Select, Tabs, Switch, Upload,
 } from 'antd'
-import { PlusOutlined, EditOutlined, PoweroffOutlined, EyeOutlined, DownloadOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, PoweroffOutlined, EyeOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { clientsApi } from '../../../api/clients'
 import { exportToCsv } from '../../../utils/exportCsv'
@@ -19,6 +19,8 @@ export default function ClientsPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [importPreview, setImportPreview] = useState<any[] | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['clients', { search }],
@@ -46,6 +48,44 @@ export default function ClientsPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['clients'] }),
   })
 
+  const importMutation = useMutation({
+    mutationFn: (rows: any[]) => clientsApi.importClients(rows),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['clients'] })
+      setImportPreview(null)
+      message.success(`Importación completada: ${res.data.created} creados, ${res.data.updated} actualizados`)
+    },
+    onError: (err: any) => message.error(err?.response?.data?.error?.message ?? 'Error al importar'),
+  })
+
+  function downloadTemplate() {
+    const csv = 'tipo,nombre,rfc,email,telefono,equipo\nMoral,Empresa Ejemplo SA,ABC123456XXX,ejemplo@email.com,5512345678,0\nFísica,Juan Pérez,,,,0'
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = 'plantilla_clientes.csv'
+    a.click()
+  }
+
+  function parseCsvFile(file: File) {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const text = e.target?.result as string
+      const lines = text.split(/\r?\n/).filter(Boolean)
+      if (lines.length < 2) { message.error('El archivo está vacío'); return }
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase())
+      const rows = lines.slice(1).map(line => {
+        const vals = line.split(',')
+        const row: any = {}
+        headers.forEach((h, i) => { row[h] = vals[i]?.trim() ?? '' })
+        return row
+      }).filter(r => r.nombre)
+      setImportPreview(rows)
+    }
+    reader.readAsText(file)
+    return false
+  }
+
   function openEdit(record: any) {
     setEditingId(record.id)
     form.setFieldsValue(record)
@@ -59,7 +99,13 @@ export default function ClientsPage() {
     },
     {
       title: 'Nombre / Razón Social', key: 'name',
-      render: (_: any, r: any) => r.companyName || `${r.firstName} ${r.lastName}`,
+      render: (_: any, r: any) => (
+        <Space>
+          {r.logoUrl && <img src={r.logoUrl} height={20} style={{ objectFit: 'contain', borderRadius: 2 }} alt="" />}
+          {r.companyName || `${r.firstName} ${r.lastName}`}
+          {r.isTeam && <Tag color="gold" style={{ marginLeft: 4 }}>Equipo</Tag>}
+        </Space>
+      ),
     },
     { title: 'RFC / TAX ID', dataIndex: 'rfc', key: 'rfc' },
     { title: 'Email', dataIndex: 'email', key: 'email' },
@@ -85,6 +131,16 @@ export default function ClientsPage() {
       <Row justify="space-between" align="middle" style={{ marginBottom: 16, gap: 8 }}>
         <Title level={4} style={{ margin: 0 }}>Catálogo de Clientes</Title>
         <Space wrap>
+          <Button icon={<DownloadOutlined />} onClick={downloadTemplate}>
+            Plantilla CSV
+          </Button>
+          <Upload
+            beforeUpload={parseCsvFile}
+            showUploadList={false}
+            accept=".csv"
+          >
+            <Button icon={<UploadOutlined />}>Importar CSV</Button>
+          </Upload>
           <Button
             icon={<DownloadOutlined />}
             onClick={() => exportToCsv('clientes', (data?.data ?? []).map((r: any) => ({
@@ -93,14 +149,14 @@ export default function ClientsPage() {
               rfc: r.rfc ?? '',
               email: r.email ?? '',
               telefono: r.phone ?? '',
-              activo: r.isActive ? 'Activo' : 'Inactivo',
+              equipo: r.isTeam ? '1' : '0',
             })), [
-              { header: 'Tipo', key: 'tipo' },
-              { header: 'Nombre/Razón Social', key: 'nombre' },
-              { header: 'RFC', key: 'rfc' },
-              { header: 'Email', key: 'email' },
-              { header: 'Teléfono', key: 'telefono' },
-              { header: 'Activo', key: 'activo' },
+              { header: 'tipo', key: 'tipo' },
+              { header: 'nombre', key: 'nombre' },
+              { header: 'rfc', key: 'rfc' },
+              { header: 'email', key: 'email' },
+              { header: 'telefono', key: 'telefono' },
+              { header: 'equipo', key: 'equipo' },
             ])}
           >
             Exportar CSV
@@ -215,8 +271,43 @@ export default function ClientsPage() {
                 </Row>
               ),
             },
+            {
+              key: 'imagen', label: 'Imagen',
+              children: (
+                <Form.Item name="isTeam" label="Equipo deportivo" valuePropName="checked">
+                  <Switch />
+                </Form.Item>
+              ),
+            },
           ]} />
         </Form>
+      </Modal>
+
+      {/* Import Preview Modal */}
+      <Modal
+        open={importPreview !== null}
+        title={`Importar Clientes — ${importPreview?.length ?? 0} filas encontradas`}
+        onCancel={() => setImportPreview(null)}
+        onOk={() => importMutation.mutate(importPreview!)}
+        confirmLoading={importMutation.isPending}
+        okText="Importar"
+        width="min(800px, 95vw)"
+      >
+        <Table
+          dataSource={importPreview ?? []}
+          rowKey={(r, i) => String(i)}
+          size="small"
+          pagination={{ pageSize: 10 }}
+          scroll={{ x: 'max-content' }}
+          columns={[
+            { title: 'Tipo', dataIndex: 'tipo', width: 80 },
+            { title: 'Nombre', dataIndex: 'nombre' },
+            { title: 'RFC', dataIndex: 'rfc', width: 130 },
+            { title: 'Email', dataIndex: 'email' },
+            { title: 'Teléfono', dataIndex: 'telefono', width: 120 },
+            { title: 'Equipo', dataIndex: 'equipo', width: 80 },
+          ]}
+        />
       </Modal>
     </div>
   )
