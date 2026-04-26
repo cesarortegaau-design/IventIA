@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      prisma:
+        specifier: ^5.13.0
+        version: 5.22.0
       terser:
         specifier: ^5.46.1
         version: 5.46.1
