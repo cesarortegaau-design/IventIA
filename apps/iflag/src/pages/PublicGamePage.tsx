@@ -33,6 +33,7 @@ const EVENT_LABELS: Record<string, string> = {
   GAME_START: 'Partido creado',
   TIMEOUT: 'Tiempo fuera',
   SCORE_ADJUST: 'Ajuste de marcador',
+  INTERCEPTION: 'Intercepción',
 }
 
 export default function PublicGamePage() {
@@ -72,6 +73,7 @@ export default function PublicGamePage() {
     return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Cargando partido...</div>
   }
 
+  const HALF_DURATION = 20 * 60
   const isOffenseLocal = game.offenseTeamId === game.localTeamId
   const offenseTeam = isOffenseLocal ? game.localTeam : game.visitingTeam
   const isFinished = game.status === 'FINISHED'
@@ -80,6 +82,9 @@ export default function PublicGamePage() {
   const isSecondHalf = game.currentQuarter >= 3
   const localTimeoutsUsed = isSecondHalf ? (game.localTimeoutsH2 ?? 0) : (game.localTimeoutsH1 ?? 0)
   const visitingTimeoutsUsed = isSecondHalf ? (game.visitingTimeoutsH2 ?? 0) : (game.visitingTimeoutsH1 ?? 0)
+  const halfLabel = isSecondHalf ? '2T' : '1T'
+  const remaining = HALF_DURATION - localSeconds
+  const isOvertime = remaining < 0
 
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--bg)', paddingBottom: 16 }}>
@@ -130,9 +135,21 @@ export default function PublicGamePage() {
       {/* Timer */}
       {!isFinished && (
         <div className="timer-section">
-          <div className={`timer-display ${timerRunning ? 'running' : ''}`}>
+          <div className={`timer-display ${timerRunning ? 'running' : ''} ${isOvertime ? 'warning' : ''}`}>
             {formatTimer(localSeconds)}
           </div>
+          <div style={{ fontSize: 13, color: isOvertime ? 'var(--orange)' : 'var(--text-muted)', marginTop: 4 }}>
+            {isOvertime ? 'TIEMPO EXTRA' : `${halfLabel} — ${formatTimer(remaining)} restante`}
+          </div>
+        </div>
+      )}
+
+      {/* Possession bar */}
+      {!isFinished && !isHalftime && (
+        <div style={{ margin: '0 16px 12px', padding: '10px 14px', background: 'rgba(0,230,118,0.08)', border: '1px solid var(--green)', borderRadius: 'var(--radius)', textAlign: 'center' }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)' }}>
+            🏈 Posesión: {playerName(offenseTeam)}
+          </span>
         </div>
       )}
 

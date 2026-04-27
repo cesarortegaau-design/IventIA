@@ -119,6 +119,7 @@ enum GameEventType {
   TIMER_STOP
   TIMEOUT
   SCORE_ADJUST
+  INTERCEPTION
 }
 
 enum SenderType {

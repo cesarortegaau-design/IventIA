@@ -270,6 +270,9 @@ html, body {
 .action-btn.possession { background: #1a1a2e; color: var(--blue); border: 1px solid var(--blue); }
 .action-btn.halftime { background: var(--surface2); color: var(--gold); border: 1px solid var(--gold); }
 .action-btn.end-game { background: #2d0000; color: var(--red); border: 1px solid var(--red); }
+.action-btn.interception { background: #2d0020; color: #e91e63; border: 1px solid #e91e63; }
+.action-btn.score-adjust { background: #1a0030; color: #9c27b0; border: 1px solid #9c27b0; }
+.action-btn.timeout { background: #2d2000; color: #faad14; border: 1px solid #faad14; }
 
 /* ── Section header ── */
 .section-header {
@@ -486,6 +489,9 @@ html, body {
 .event-dot.GAME_END       { background: var(--red); }
 .event-dot.TIMER_START    { background: var(--green); }
 .event-dot.TIMER_STOP     { background: var(--red); }
+.event-dot.TIMEOUT        { background: #faad14; }
+.event-dot.SCORE_ADJUST   { background: #9c27b0; }
+.event-dot.INTERCEPTION   { background: #e91e63; }
 
 .event-type {
   font-size: 13px;
@@ -595,3 +601,11 @@ html, body {
 .ant-drawer-header { background: var(--surface) !important; border-bottom: 1px solid var(--border) !important; }
 .ant-drawer-title { color: var(--text) !important; }
 .ant-drawer-close { color: var(--text-muted) !important; }
+.ant-select-selection-placeholder { color: var(--text-muted) !important; }
+.ant-select-arrow { color: var(--text-muted) !important; }
+.ant-input-number { background: var(--surface2) !important; border-color: var(--border) !important; color: var(--text) !important; }
+.ant-input-number-input { color: var(--text) !important; }
+.ant-radio-button-wrapper { background: var(--surface2) !important; border-color: var(--border) !important; color: var(--text) !important; }
+.ant-radio-button-wrapper-checked { background: rgba(0,230,118,0.15) !important; border-color: var(--green) !important; color: var(--green) !important; }
+.ant-modal-footer .ant-btn-default { background: var(--surface2) !important; border-color: var(--border) !important; color: var(--text) !important; }
+.ant-modal-close { color: var(--text-muted) !important; }

@@ -404,7 +404,7 @@ const gameEventSchema = z.object({
     'TOUCHDOWN', 'EXTRA_POINT', 'SAFETY', 'FLAG_PENALTY',
     'DOWN_UPDATE', 'POSSESSION_CHANGE',
     'GAME_START', 'GAME_END', 'HALFTIME_START', 'HALFTIME_END',
-    'TIMER_START', 'TIMER_STOP', 'TIMEOUT', 'SCORE_ADJUST',
+    'TIMER_START', 'TIMER_STOP', 'TIMEOUT', 'SCORE_ADJUST', 'INTERCEPTION',
   ]),
   teamId: z.string().optional().nullable(),
   playerId: z.string().optional().nullable(),
@@ -457,6 +457,14 @@ export async function recordGameEvent(req: Request, res: Response, next: NextFun
           if (game[field] >= 2) throw new AppError(400, 'NO_TIMEOUTS', 'No quedan tiempos fuera para este equipo en esta mitad')
           gameUpdates[field] = game[field] + 1
         }
+      }
+
+      // Interception — auto change possession
+      if (data.type === 'INTERCEPTION') {
+        const newOffense = game.offenseTeamId === game.localTeamId ? game.visitingTeamId : game.localTeamId
+        gameUpdates.offenseTeamId = newOffense
+        gameUpdates.currentDown = 1
+        gameUpdates.yardsToFirst = 10
       }
 
       // Score adjustment

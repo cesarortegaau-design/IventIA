@@ -15,6 +15,8 @@ function playerName(c: any) {
   return c.companyName || `${c?.firstName ?? ''} ${c?.lastName ?? ''}`.trim() || '—'
 }
 
+const HALF_DURATION = 20 * 60 // 20 min per half
+
 function formatTimer(seconds: number) {
   const m = Math.floor(seconds / 60)
   const s = seconds % 60
@@ -37,9 +39,20 @@ const EVENT_LABELS: Record<string, string> = {
   GAME_START: 'Partido creado',
   TIMEOUT: 'Tiempo fuera',
   SCORE_ADJUST: 'Ajuste de marcador',
+  INTERCEPTION: 'Intercepción',
 }
 
-type ActionType = 'TD' | 'XP' | 'SAFETY' | 'PENALTY' | 'NEXT_DOWN' | 'POSSESSION' | 'HALFTIME' | 'END_GAME' | 'TIMEOUT' | 'SCORE_ADJUST' | null
+type ActionType =
+  | 'TD' | 'XP1' | 'XP2' | 'SAFETY' | 'PENALTY'
+  | 'NEXT_DOWN' | 'PREV_DOWN' | 'POSSESSION'
+  | 'HALFTIME' | 'END_GAME' | 'TIMEOUT' | 'SCORE_ADJUST'
+  | 'INTERCEPTION' | null
+
+// Label helper for attendance player
+function plyLabel(a: any) {
+  const num = a.number || a.player?.playerNumber
+  return `${num ? `#${num} ` : ''}${playerName(a.player)}`
+}
 
 export default function GamePage() {
   const { gameId } = useParams<{ gameId: string }>()
@@ -56,6 +69,14 @@ export default function GamePage() {
   const [action, setAction] = useState<ActionType>(null)
   const [selectedTeamId, setSelectedTeamId] = useState<string | undefined>()
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | undefined>()
+  // TD extra fields
+  const [tdPasser, setTdPasser] = useState<string | undefined>()
+  const [tdReceiver, setTdReceiver] = useState<string | undefined>()
+  const [tdIsRush, setTdIsRush] = useState(false)
+  const [tdRunner, setTdRunner] = useState<string | undefined>()
+  // Interception
+  const [intPlayer, setIntPlayer] = useState<string | undefined>()
+
   const [logOpen, setLogOpen] = useState(false)
   const [adjustLocalScore, setAdjustLocalScore] = useState(0)
   const [adjustVisitingScore, setAdjustVisitingScore] = useState(0)
@@ -81,7 +102,7 @@ export default function GamePage() {
     setTimerRunning(game.timerRunning ?? false)
   }, [game?.timerSeconds, game?.timerRunning])
 
-  // Local tick
+  // Local tick (ascending)
   useEffect(() => {
     if (timerRunning && !isSpectator) {
       intervalRef.current = setInterval(() => {
@@ -129,68 +150,120 @@ export default function GamePage() {
         setLocalSeconds(res.data.game.timerSeconds ?? localSeconds)
         setTimerRunning(res.data.game.timerRunning ?? timerRunning)
       }
-      setAction(null)
-      setSelectedTeamId(undefined)
-      setSelectedPlayerId(undefined)
+      resetActionState()
       message.success('Registrado')
     },
     onError: (err: any) => message.error(err?.response?.data?.error?.message ?? 'Error al registrar'),
   })
+
+  function resetActionState() {
+    setAction(null)
+    setSelectedTeamId(undefined)
+    setSelectedPlayerId(undefined)
+    setTdPasser(undefined)
+    setTdReceiver(undefined)
+    setTdIsRush(false)
+    setTdRunner(undefined)
+    setIntPlayer(undefined)
+  }
 
   const handleAction = useCallback((type: ActionType) => {
     if (isSpectator) return
     setAction(type)
     setSelectedTeamId(game?.offenseTeamId ?? game?.localTeamId)
     setSelectedPlayerId(undefined)
+    setTdPasser(undefined)
+    setTdReceiver(undefined)
+    setTdIsRush(false)
+    setTdRunner(undefined)
+    setIntPlayer(undefined)
     if (type === 'SCORE_ADJUST' && game) {
       setAdjustLocalScore(game.localScore)
       setAdjustVisitingScore(game.visitingScore)
     }
   }, [isSpectator, game])
 
+  // Direct actions (no confirmation modal)
+  function doNextDown() {
+    if (!game) return
+    const nextDown = (game.currentDown % 4) + 1
+    const newOffense = nextDown === 1
+      ? (game.offenseTeamId === game.localTeamId ? game.visitingTeamId : game.localTeamId)
+      : game.offenseTeamId
+    recordEventMutation.mutate({
+      type: 'DOWN_UPDATE',
+      quarter: game.currentQuarter,
+      down: nextDown,
+      newCurrentDown: nextDown,
+      newYardsToFirst: nextDown === 1 ? 10 : game.yardsToFirst,
+      newOffenseTeamId: newOffense,
+      description: `${DOWN_LABELS[nextDown]} down`,
+    })
+  }
+
+  function doPrevDown() {
+    if (!game) return
+    const prevDown = game.currentDown > 1 ? game.currentDown - 1 : 1
+    recordEventMutation.mutate({
+      type: 'DOWN_UPDATE',
+      quarter: game.currentQuarter,
+      down: prevDown,
+      newCurrentDown: prevDown,
+      description: `Regresar a ${DOWN_LABELS[prevDown]} down`,
+    })
+  }
+
+  function getPlayerLabel(playerId: string | undefined) {
+    if (!playerId || !game) return ''
+    const att = (game.attendance ?? []).find((a: any) => a.playerId === playerId)
+    if (!att) return ''
+    return plyLabel(att)
+  }
+
   function confirmAction() {
     if (!action || !game) return
 
     const base = { teamId: selectedTeamId, playerId: selectedPlayerId ?? null }
     const teamLabel = selectedTeamId === game.localTeamId ? playerName(game.localTeam) : playerName(game.visitingTeam)
-    const selectedPlayer = selectedPlayerId
-      ? (game.attendance ?? []).find((a: any) => a.playerId === selectedPlayerId)
-      : null
-    const playerLabel = selectedPlayer ? ` (${selectedPlayer.number ? `#${selectedPlayer.number} ` : ''}${playerName(selectedPlayer.player)})` : ''
 
     if (action === 'TD') {
+      let desc = `Touchdown — ${teamLabel}`
+      if (tdIsRush && tdRunner) {
+        desc += ` | Carrera: ${getPlayerLabel(tdRunner)}`
+      } else {
+        if (tdPasser) desc += ` | Pase: ${getPlayerLabel(tdPasser)}`
+        if (tdReceiver) desc += ` | Recepción: ${getPlayerLabel(tdReceiver)}`
+      }
       recordEventMutation.mutate({
         type: 'TOUCHDOWN', ...base, points: 6, applyScore: true,
-        description: `Touchdown — ${teamLabel}${playerLabel}`,
+        playerId: tdIsRush ? tdRunner : tdReceiver ?? tdPasser ?? null,
+        description: desc,
+        metadata: {
+          passerId: tdIsRush ? null : tdPasser,
+          receiverId: tdIsRush ? null : tdReceiver,
+          runnerId: tdIsRush ? tdRunner : null,
+          isRush: tdIsRush,
+        },
       })
-    } else if (action === 'XP') {
+    } else if (action === 'XP1') {
       recordEventMutation.mutate({
         type: 'EXTRA_POINT', ...base, points: 1, applyScore: true,
-        description: `Punto extra — ${teamLabel}${playerLabel}`,
+        description: `Punto extra (1pt) — ${teamLabel}`,
+      })
+    } else if (action === 'XP2') {
+      recordEventMutation.mutate({
+        type: 'EXTRA_POINT', ...base, points: 2, applyScore: true,
+        description: `Punto extra (2pts) — ${teamLabel}`,
       })
     } else if (action === 'SAFETY') {
       recordEventMutation.mutate({
         type: 'SAFETY', ...base, points: 2, applyScore: true,
-        description: `Safety — ${teamLabel}${playerLabel}`,
+        description: `Safety — ${teamLabel}`,
       })
     } else if (action === 'PENALTY') {
       recordEventMutation.mutate({
         type: 'FLAG_PENALTY', ...base, points: 0,
-        description: `Castigo — ${teamLabel}${playerLabel}`,
-      })
-    } else if (action === 'NEXT_DOWN') {
-      const nextDown = (game.currentDown % 4) + 1
-      const newOffense = nextDown === 1
-        ? (game.offenseTeamId === game.localTeamId ? game.visitingTeamId : game.localTeamId)
-        : game.offenseTeamId
-      recordEventMutation.mutate({
-        type: 'DOWN_UPDATE',
-        quarter: game.currentQuarter,
-        down: nextDown,
-        newCurrentDown: nextDown,
-        newYardsToFirst: nextDown === 1 ? 10 : game.yardsToFirst,
-        newOffenseTeamId: newOffense,
-        description: `${DOWN_LABELS[nextDown]} down`,
+        description: `Castigo — ${teamLabel}`,
       })
     } else if (action === 'POSSESSION') {
       const newOffense = game.offenseTeamId === game.localTeamId ? game.visitingTeamId : game.localTeamId
@@ -199,18 +272,28 @@ export default function GamePage() {
         newOffenseTeamId: newOffense,
         newCurrentDown: 1,
         newYardsToFirst: 10,
-        description: `Cambio de posesión`,
+        description: 'Cambio de posesión',
+      })
+    } else if (action === 'INTERCEPTION') {
+      const defenseTeamId = game.offenseTeamId === game.localTeamId ? game.visitingTeamId : game.localTeamId
+      let desc = `Intercepción — ${defenseTeamId === game.localTeamId ? playerName(game.localTeam) : playerName(game.visitingTeam)}`
+      if (intPlayer) desc += ` | ${getPlayerLabel(intPlayer)}`
+      recordEventMutation.mutate({
+        type: 'INTERCEPTION',
+        teamId: defenseTeamId,
+        playerId: intPlayer ?? null,
+        description: desc,
       })
     } else if (action === 'HALFTIME') {
-      const isHalftime = game.status === 'HALFTIME'
+      const isHT = game.status === 'HALFTIME'
       recordEventMutation.mutate({
-        type: isHalftime ? 'HALFTIME_END' : 'HALFTIME_START',
-        description: isHalftime ? 'Inicio segunda mitad' : 'Inicio de medio tiempo',
+        type: isHT ? 'HALFTIME_END' : 'HALFTIME_START',
+        description: isHT ? 'Inicio segunda mitad' : 'Inicio de medio tiempo',
       })
     } else if (action === 'TIMEOUT') {
       recordEventMutation.mutate({
         type: 'TIMEOUT', teamId: selectedTeamId,
-        description: `Tiempo fuera — ${selectedTeamId === game.localTeamId ? playerName(game.localTeam) : playerName(game.visitingTeam)}`,
+        description: `Tiempo fuera — ${teamLabel}`,
       })
     } else if (action === 'SCORE_ADJUST') {
       recordEventMutation.mutate({
@@ -232,23 +315,32 @@ export default function GamePage() {
   const isFinished = game.status === 'FINISHED'
   const isHalftime = game.status === 'HALFTIME'
 
-  // Players for current action's team
+  // Players for selected team
   const actionTeamPlayers = (game.attendance ?? [])
     .filter((a: any) => a.teamId === selectedTeamId && a.present)
+  // Players for defense team (interception)
+  const defenseTeamId = game.offenseTeamId === game.localTeamId ? game.visitingTeamId : game.localTeamId
+  const defenseTeamPlayers = (game.attendance ?? [])
+    .filter((a: any) => a.teamId === defenseTeamId && a.present)
 
   const isSecondHalf = game.currentQuarter >= 3
   const localTimeoutsUsed = isSecondHalf ? (game.localTimeoutsH2 ?? 0) : (game.localTimeoutsH1 ?? 0)
   const visitingTimeoutsUsed = isSecondHalf ? (game.visitingTimeoutsH2 ?? 0) : (game.visitingTimeoutsH1 ?? 0)
 
-  const actionLabel: Record<ActionType & string, string> = {
-    TD: 'Touchdown', XP: 'Punto Extra', SAFETY: 'Safety',
-    PENALTY: 'Castigo', NEXT_DOWN: 'Siguiente Down',
+  // Timer display: ascending, show half limit
+  const halfLabel = isSecondHalf ? '2T' : '1T'
+  const overTime = localSeconds > HALF_DURATION
+
+  const actionLabel: Record<string, string> = {
+    TD: 'Touchdown', XP1: 'Punto Extra (1pt)', XP2: 'Punto Extra (2pts)', SAFETY: 'Safety',
+    PENALTY: 'Castigo', NEXT_DOWN: 'Siguiente Down', PREV_DOWN: 'Regresar Down',
     POSSESSION: 'Cambio Posesión', HALFTIME: isHalftime ? 'Fin Medio Tiempo' : 'Medio Tiempo',
     END_GAME: 'Finalizar Partido', TIMEOUT: 'Tiempo Fuera',
-    SCORE_ADJUST: 'Ajustar Marcador',
+    SCORE_ADJUST: 'Ajustar Marcador', INTERCEPTION: 'Intercepción',
   }
 
-  const needsTeamPlayer = action === 'TD' || action === 'XP' || action === 'SAFETY' || action === 'PENALTY'
+  const selectStyle = { width: '100%' }
+  const labelStyle = { fontSize: 12, color: '#e6edf3', marginBottom: 6, fontWeight: 600 as const, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }
 
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--bg)', paddingBottom: 16 }}>
@@ -278,9 +370,9 @@ export default function GamePage() {
           {game.localTeam?.logoUrl && (
             <img src={game.localTeam.logoUrl} height={28} style={{ objectFit: 'contain', borderRadius: 4 }} alt="" />
           )}
-          <div className={`team-name ${game.offenseTeamId === game.localTeamId ? 'offense' : ''}`}>
+          <div className={`team-name ${isOffenseLocal ? 'offense' : ''}`}>
             {playerName(game.localTeam)}
-            {game.offenseTeamId === game.localTeamId && <span style={{ marginLeft: 4 }}>🏈</span>}
+            {isOffenseLocal && <span style={{ marginLeft: 4 }}>🏈</span>}
           </div>
           <div className="score-number">{game.localScore}</div>
         </div>
@@ -296,44 +388,48 @@ export default function GamePage() {
           {game.visitingTeam?.logoUrl && (
             <img src={game.visitingTeam.logoUrl} height={28} style={{ objectFit: 'contain', borderRadius: 4 }} alt="" />
           )}
-          <div className={`team-name ${game.offenseTeamId === game.visitingTeamId ? 'offense' : ''}`}>
-            {game.offenseTeamId === game.visitingTeamId && <span style={{ marginRight: 4 }}>🏈</span>}
+          <div className={`team-name ${!isOffenseLocal ? 'offense' : ''}`}>
+            {!isOffenseLocal && <span style={{ marginRight: 4 }}>🏈</span>}
             {playerName(game.visitingTeam)}
           </div>
           <div className="score-number">{game.visitingScore}</div>
         </div>
       </div>
 
+      {/* Possession bar */}
+      {!isFinished && !isHalftime && (
+        <div style={{
+          background: 'rgba(0,230,118,0.08)', borderBottom: '2px solid var(--green)',
+          padding: '8px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        }}>
+          <span style={{ fontSize: 18 }}>🏈</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Posesión: {playerName(offenseTeam)}
+          </span>
+        </div>
+      )}
+
       {/* Timer */}
       {!isFinished && (
         <div className="timer-section">
-          <div className={`timer-display ${timerRunning ? 'running' : ''}`}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
+            {halfLabel} — {overTime ? 'TIEMPO EXTRA' : `${formatTimer(HALF_DURATION - localSeconds)} restante`}
+          </div>
+          <div className={`timer-display ${timerRunning ? 'running' : ''} ${overTime ? 'warning' : ''}`}>
             {formatTimer(localSeconds)}
           </div>
           {!isSpectator && !isHalftime && (
             <div className="timer-controls">
               {timerRunning ? (
-                <button
-                  className="timer-btn stop"
-                  onClick={() => timerStopMutation.mutate()}
-                  disabled={timerStopMutation.isPending}
-                >
+                <button className="timer-btn stop" onClick={() => timerStopMutation.mutate()} disabled={timerStopMutation.isPending}>
                   <PauseCircleOutlined style={{ marginRight: 4 }} /> Detener
                 </button>
               ) : (
-                <button
-                  className="timer-btn start"
-                  onClick={() => timerStartMutation.mutate()}
-                  disabled={timerStartMutation.isPending}
-                >
+                <button className="timer-btn start" onClick={() => timerStartMutation.mutate()} disabled={timerStartMutation.isPending}>
                   <PlayCircleOutlined style={{ marginRight: 4 }} /> Iniciar
                 </button>
               )}
-              <button
-                className="timer-btn reset"
-                onClick={() => timerResetMutation.mutate()}
-                disabled={timerResetMutation.isPending}
-              >
+              <button className="timer-btn reset" onClick={() => timerResetMutation.mutate()} disabled={timerResetMutation.isPending}>
                 Reset
               </button>
             </div>
@@ -341,7 +437,7 @@ export default function GamePage() {
         </div>
       )}
 
-      {/* Down tracker */}
+      {/* Down tracker + direct down buttons */}
       {!isFinished && !isHalftime && (
         <div className="down-section">
           <div className="down-card">
@@ -354,18 +450,33 @@ export default function GamePage() {
                 <div className="down-label">Yardas</div>
                 <div className="down-value">{game.yardsToFirst === 0 ? 'GOAL' : `${game.yardsToFirst}y`}</div>
               </div>
-              <div>
-                <div className="down-label">Posesión</div>
-                <div className="down-value" style={{ fontSize: 14, color: 'var(--green)' }}>
-                  {playerName(offenseTeam)}
-                </div>
-              </div>
               <div className="down-dots">
                 {[1, 2, 3, 4].map(d => (
                   <div key={d} className={`down-dot ${d <= game.currentDown ? 'active' : ''}`} />
                 ))}
               </div>
             </div>
+            {/* Direct down buttons — no modal confirmation */}
+            {!isSpectator && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                <button
+                  className="timer-btn reset"
+                  style={{ flex: 1, padding: '8px 0', fontSize: 13 }}
+                  onClick={doPrevDown}
+                  disabled={game.currentDown <= 1 || recordEventMutation.isPending}
+                >
+                  ◀ Regresar
+                </button>
+                <button
+                  className="timer-btn start"
+                  style={{ flex: 1, padding: '8px 0', fontSize: 13 }}
+                  onClick={doNextDown}
+                  disabled={recordEventMutation.isPending}
+                >
+                  Siguiente ▶
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -381,9 +492,13 @@ export default function GamePage() {
                   <span className="action-icon">🏈</span>
                   Touchdown +6
                 </button>
-                <button className="action-btn xp" onClick={() => handleAction('XP')}>
+                <button className="action-btn xp" onClick={() => handleAction('XP1')}>
                   <span className="action-icon">✔</span>
-                  Punto Extra +1
+                  Extra +1
+                </button>
+                <button className="action-btn xp" onClick={() => handleAction('XP2')}>
+                  <span className="action-icon">✔✔</span>
+                  Extra +2
                 </button>
                 <button className="action-btn safety" onClick={() => handleAction('SAFETY')}>
                   <span className="action-icon">🛡</span>
@@ -393,26 +508,21 @@ export default function GamePage() {
                   <span className="action-icon">🚩</span>
                   Castigo
                 </button>
-                <button className="action-btn nextdown" onClick={() => handleAction('NEXT_DOWN')}>
-                  <span className="action-icon">▶</span>
-                  Siguiente Down
+                <button className="action-btn interception" onClick={() => handleAction('INTERCEPTION')}>
+                  <span className="action-icon">🤚</span>
+                  Intercepción
                 </button>
                 <button className="action-btn possession" onClick={() => handleAction('POSSESSION')}>
                   <span className="action-icon"><TeamOutlined /></span>
                   Cambiar Posesión
                 </button>
+                <button className="action-btn timeout" onClick={() => handleAction('TIMEOUT')}>
+                  <span className="action-icon">⏱</span>
+                  Tiempo Fuera
+                </button>
               </>
             )}
-            {!isHalftime && (
-              <button className="action-btn timeout" onClick={() => handleAction('TIMEOUT')}>
-                <span className="action-icon">⏱</span>
-                Tiempo Fuera
-              </button>
-            )}
-            <button
-              className="action-btn halftime"
-              onClick={() => handleAction('HALFTIME')}
-            >
+            <button className="action-btn halftime" onClick={() => handleAction('HALFTIME')}>
               <span className="action-icon">⏸</span>
               {isHalftime ? 'Fin Medio Tiempo' : 'Medio Tiempo'}
             </button>
@@ -470,11 +580,7 @@ export default function GamePage() {
               {dayjs(game.finishedAt).format('DD/MM/YYYY HH:mm')}
             </div>
           )}
-          <button
-            className="timer-btn start"
-            style={{ marginTop: 24 }}
-            onClick={() => navigate('/games')}
-          >
+          <button className="timer-btn start" style={{ marginTop: 24 }} onClick={() => navigate('/games')}>
             Volver a Partidos
           </button>
         </div>
@@ -483,52 +589,129 @@ export default function GamePage() {
       {/* Action confirmation modal */}
       <Modal
         open={action !== null}
-        title={<span style={{ color: 'var(--text)' }}>{action ? actionLabel[action as string] : ''}</span>}
-        onCancel={() => { setAction(null); setSelectedTeamId(undefined); setSelectedPlayerId(undefined) }}
+        title={<span style={{ color: '#e6edf3' }}>{action ? actionLabel[action as string] : ''}</span>}
+        onCancel={resetActionState}
         onOk={confirmAction}
         okText="Confirmar"
         okButtonProps={{
           loading: recordEventMutation.isPending,
           style: { background: 'var(--green)', borderColor: 'var(--green)', color: '#000', fontWeight: 700 },
         }}
-        cancelButtonProps={{ style: { color: 'var(--text-muted)' } }}
+        cancelButtonProps={{ style: { color: '#e6edf3' } }}
         destroyOnClose
       >
         {action === 'END_GAME' ? (
-          <div style={{ color: 'var(--text)', fontSize: 15 }}>
+          <div style={{ color: '#e6edf3', fontSize: 15 }}>
             ¿Confirmar el cierre del partido?<br />
-            <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Esta acción publicará el marcador final.</span>
+            <span style={{ color: '#adb5bd', fontSize: 13 }}>Esta acción publicará el marcador final.</span>
+          </div>
+        ) : action === 'TD' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {/* Team selector */}
+            <div>
+              <div style={labelStyle}>Equipo</div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                {[game.localTeam, game.visitingTeam].map((t: any) => (
+                  <button
+                    key={t.id}
+                    className={`player-option ${selectedTeamId === t.id ? 'selected' : ''}`}
+                    style={{ flex: 1 }}
+                    onClick={() => { setSelectedTeamId(t.id); setTdPasser(undefined); setTdReceiver(undefined); setTdRunner(undefined) }}
+                  >
+                    <div style={{ fontWeight: 700, fontSize: 14, color: '#e6edf3' }}>{playerName(t)}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* Rush or Pass toggle */}
+            <div>
+              <div style={labelStyle}>Tipo de anotación</div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  className={`player-option ${!tdIsRush ? 'selected' : ''}`}
+                  style={{ flex: 1 }}
+                  onClick={() => setTdIsRush(false)}
+                >
+                  <div style={{ fontWeight: 700, fontSize: 13, color: '#e6edf3' }}>Pase</div>
+                </button>
+                <button
+                  className={`player-option ${tdIsRush ? 'selected' : ''}`}
+                  style={{ flex: 1 }}
+                  onClick={() => setTdIsRush(true)}
+                >
+                  <div style={{ fontWeight: 700, fontSize: 13, color: '#e6edf3' }}>Carrera</div>
+                </button>
+              </div>
+            </div>
+            {/* Pass: passer + receiver */}
+            {!tdIsRush && selectedTeamId && (
+              <>
+                <div>
+                  <div style={labelStyle}>Lanza el pase</div>
+                  <Select
+                    style={selectStyle}
+                    placeholder="Seleccionar QB..."
+                    allowClear showSearch optionFilterProp="label"
+                    value={tdPasser} onChange={setTdPasser}
+                    options={actionTeamPlayers.map((a: any) => ({ value: a.playerId, label: plyLabel(a) }))}
+                  />
+                </div>
+                <div>
+                  <div style={labelStyle}>Recibe / Anota</div>
+                  <Select
+                    style={selectStyle}
+                    placeholder="Seleccionar receptor..."
+                    allowClear showSearch optionFilterProp="label"
+                    value={tdReceiver} onChange={setTdReceiver}
+                    options={actionTeamPlayers.map((a: any) => ({ value: a.playerId, label: plyLabel(a) }))}
+                  />
+                </div>
+              </>
+            )}
+            {/* Rush: runner */}
+            {tdIsRush && selectedTeamId && (
+              <div>
+                <div style={labelStyle}>Anotó por carrera</div>
+                <Select
+                  style={selectStyle}
+                  placeholder="Seleccionar corredor..."
+                  allowClear showSearch optionFilterProp="label"
+                  value={tdRunner} onChange={setTdRunner}
+                  options={actionTeamPlayers.map((a: any) => ({ value: a.playerId, label: plyLabel(a) }))}
+                />
+              </div>
+            )}
+          </div>
+        ) : action === 'INTERCEPTION' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ color: '#e6edf3', fontSize: 14 }}>
+              La posesión cambiará automáticamente a <strong>{playerName(defenseTeam)}</strong>
+            </div>
+            <div>
+              <div style={labelStyle}>Jugador que intercepta</div>
+              <Select
+                style={selectStyle}
+                placeholder="Seleccionar jugador..."
+                allowClear showSearch optionFilterProp="label"
+                value={intPlayer} onChange={setIntPlayer}
+                options={defenseTeamPlayers.map((a: any) => ({ value: a.playerId, label: plyLabel(a) }))}
+              />
+            </div>
           </div>
         ) : action === 'SCORE_ADJUST' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                {playerName(game.localTeam)}
-              </div>
-              <InputNumber
-                style={{ width: '100%' }}
-                min={0}
-                value={adjustLocalScore}
-                onChange={v => setAdjustLocalScore(v ?? 0)}
-                size="large"
-              />
+              <div style={labelStyle}>{playerName(game.localTeam)}</div>
+              <InputNumber style={{ width: '100%' }} min={0} value={adjustLocalScore} onChange={v => setAdjustLocalScore(v ?? 0)} size="large" />
             </div>
             <div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                {playerName(game.visitingTeam)}
-              </div>
-              <InputNumber
-                style={{ width: '100%' }}
-                min={0}
-                value={adjustVisitingScore}
-                onChange={v => setAdjustVisitingScore(v ?? 0)}
-                size="large"
-              />
+              <div style={labelStyle}>{playerName(game.visitingTeam)}</div>
+              <InputNumber style={{ width: '100%' }} min={0} value={adjustVisitingScore} onChange={v => setAdjustVisitingScore(v ?? 0)} size="large" />
             </div>
           </div>
         ) : action === 'TIMEOUT' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Equipo</div>
+            <div style={labelStyle}>Equipo</div>
             <div style={{ display: 'flex', gap: 10 }}>
               {[game.localTeam, game.visitingTeam].map((t: any) => {
                 const used = t.id === game.localTeamId ? localTimeoutsUsed : visitingTimeoutsUsed
@@ -541,7 +724,7 @@ export default function GamePage() {
                     onClick={() => setSelectedTeamId(t.id)}
                     disabled={remaining <= 0}
                   >
-                    <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>{playerName(t)}</div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: '#e6edf3' }}>{playerName(t)}</div>
                     <div style={{ fontSize: 11, color: remaining > 0 ? 'var(--green)' : '#ff4d4f', marginTop: 4 }}>
                       {remaining > 0 ? `${remaining} restante${remaining > 1 ? 's' : ''}` : 'Sin tiempos'}
                     </div>
@@ -550,16 +733,15 @@ export default function GamePage() {
               })}
             </div>
           </div>
-        ) : action === 'NEXT_DOWN' || action === 'POSSESSION' || action === 'HALFTIME' ? (
-          <div style={{ color: 'var(--text)', fontSize: 15 }}>
-            {action === 'NEXT_DOWN' && `Siguiente down: ${DOWN_LABELS[(game.currentDown % 4) + 1] ?? ''}`}
+        ) : action === 'POSSESSION' || action === 'HALFTIME' ? (
+          <div style={{ color: '#e6edf3', fontSize: 15 }}>
             {action === 'POSSESSION' && `La posesión pasará a: ${game.offenseTeamId === game.localTeamId ? playerName(game.visitingTeam) : playerName(game.localTeam)}`}
             {action === 'HALFTIME' && (isHalftime ? 'Reanudar el partido (2ª mitad)' : 'Pausar el partido para medio tiempo')}
           </div>
-        ) : needsTeamPlayer ? (
+        ) : (action === 'XP1' || action === 'XP2' || action === 'SAFETY' || action === 'PENALTY') ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Equipo</div>
+              <div style={labelStyle}>Equipo</div>
               <div style={{ display: 'flex', gap: 10 }}>
                 {[game.localTeam, game.visitingTeam].map((t: any) => (
                   <button
@@ -568,27 +750,19 @@ export default function GamePage() {
                     style={{ flex: 1 }}
                     onClick={() => { setSelectedTeamId(t.id); setSelectedPlayerId(undefined) }}
                   >
-                    <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>{playerName(t)}</div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: '#e6edf3' }}>{playerName(t)}</div>
                   </button>
                 ))}
               </div>
             </div>
             <div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                Jugador (opcional)
-              </div>
+              <div style={labelStyle}>Jugador (opcional)</div>
               <Select
-                style={{ width: '100%' }}
+                style={selectStyle}
                 placeholder="Seleccionar jugador..."
-                allowClear
-                showSearch
-                optionFilterProp="label"
-                value={selectedPlayerId}
-                onChange={setSelectedPlayerId}
-                options={actionTeamPlayers.map((a: any) => ({
-                  value: a.playerId,
-                  label: `${a.number ? `#${a.number} ` : ''}${playerName(a.player)}`,
-                }))}
+                allowClear showSearch optionFilterProp="label"
+                value={selectedPlayerId} onChange={setSelectedPlayerId}
+                options={actionTeamPlayers.map((a: any) => ({ value: a.playerId, label: plyLabel(a) }))}
               />
             </div>
           </div>
@@ -597,7 +771,7 @@ export default function GamePage() {
 
       {/* Event log drawer */}
       <Drawer
-        title={<span style={{ color: 'var(--text)' }}>Auditoría del Partido</span>}
+        title={<span style={{ color: '#e6edf3' }}>Auditoría del Partido</span>}
         placement="bottom"
         height="65vh"
         open={logOpen}
