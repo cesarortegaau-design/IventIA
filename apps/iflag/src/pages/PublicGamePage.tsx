@@ -11,6 +11,21 @@ function playerName(c: any) {
   return c.companyName || `${c?.firstName ?? ''} ${c?.lastName ?? ''}`.trim() || '—'
 }
 
+function TeamTag({ team, size = 22 }: { team: any; size?: number }) {
+  if (!team) return <span>—</span>
+  const name = playerName(team)
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      {team.logoUrl
+        ? <img src={team.logoUrl} alt="" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+        : <span style={{ width: size, height: size, borderRadius: '50%', background: 'var(--surface2)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.5, color: 'var(--text-muted)', flexShrink: 0 }}>
+            {(name[0] ?? '?').toUpperCase()}
+          </span>}
+      <span>{name}</span>
+    </span>
+  )
+}
+
 function formatTimer(seconds: number) {
   const m = Math.floor(seconds / 60)
   const s = seconds % 60
@@ -103,12 +118,9 @@ export default function PublicGamePage() {
       {/* Scoreboard */}
       <div className="scoreboard">
         <div className="team-score home">
-          {game.localTeam?.logoUrl && (
-            <img src={game.localTeam.logoUrl} height={28} style={{ objectFit: 'contain', borderRadius: 4 }} alt="" />
-          )}
-          <div className={`team-name ${game.offenseTeamId === game.localTeamId ? 'offense' : ''}`}>
-            {playerName(game.localTeam)}
-            {game.offenseTeamId === game.localTeamId && <span style={{ marginLeft: 4 }}>🏈</span>}
+          <div className={`team-name ${game.offenseTeamId === game.localTeamId ? 'offense' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <TeamTag team={game.localTeam} size={24} />
+            {game.offenseTeamId === game.localTeamId && <span>🏈</span>}
           </div>
           <div className="score-number">{game.localScore}</div>
         </div>
@@ -121,12 +133,9 @@ export default function PublicGamePage() {
         </div>
 
         <div className="team-score away">
-          {game.visitingTeam?.logoUrl && (
-            <img src={game.visitingTeam.logoUrl} height={28} style={{ objectFit: 'contain', borderRadius: 4 }} alt="" />
-          )}
-          <div className={`team-name ${game.offenseTeamId === game.visitingTeamId ? 'offense' : ''}`}>
-            {game.offenseTeamId === game.visitingTeamId && <span style={{ marginRight: 4 }}>🏈</span>}
-            {playerName(game.visitingTeam)}
+          <div className={`team-name ${game.offenseTeamId === game.visitingTeamId ? 'offense' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+            {game.offenseTeamId === game.visitingTeamId && <span>🏈</span>}
+            <TeamTag team={game.visitingTeam} size={24} />
           </div>
           <div className="score-number">{game.visitingScore}</div>
         </div>
@@ -147,8 +156,8 @@ export default function PublicGamePage() {
       {/* Possession bar */}
       {!isFinished && !isHalftime && (
         <div style={{ margin: '0 16px 12px', padding: '10px 14px', background: 'rgba(0,230,118,0.08)', border: '1px solid var(--green)', borderRadius: 'var(--radius)', textAlign: 'center' }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)' }}>
-            🏈 Posesión: {playerName(offenseTeam)}
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            🏈 Posesión: <TeamTag team={offenseTeam} size={20} />
           </span>
         </div>
       )}
@@ -170,7 +179,7 @@ export default function PublicGamePage() {
                 <div>
                   <div className="down-label">Posesión</div>
                   <div className="down-value" style={{ fontSize: 14, color: 'var(--green)' }}>
-                    {playerName(offenseTeam)}
+                    <TeamTag team={offenseTeam} size={18} />
                   </div>
                 </div>
                 <div className="down-dots">
@@ -185,8 +194,8 @@ export default function PublicGamePage() {
           {/* Timeout indicators */}
           <div style={{ display: 'flex', justifyContent: 'space-around', marginTop: 12, padding: '0 16px' }}>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                {playerName(game.localTeam)}
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                <TeamTag team={game.localTeam} size={16} />
               </div>
               <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
                 {[1, 2].map(i => (
@@ -196,8 +205,8 @@ export default function PublicGamePage() {
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', alignSelf: 'center' }}>Tiempos fuera</div>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                {playerName(game.visitingTeam)}
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                <TeamTag team={game.visitingTeam} size={16} />
               </div>
               <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
                 {[1, 2].map(i => (
@@ -216,10 +225,10 @@ export default function PublicGamePage() {
           <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>Partido Finalizado</div>
           <div style={{ fontSize: 16, color: 'var(--text-muted)' }}>
             {game.localScore > game.visitingScore
-              ? `Ganador: ${playerName(game.localTeam)}`
+              ? <span>Ganador: <TeamTag team={game.localTeam} size={22} /></span>
               : game.visitingScore > game.localScore
-              ? `Ganador: ${playerName(game.visitingTeam)}`
-              : 'Empate'}
+              ? <span>Ganador: <TeamTag team={game.visitingTeam} size={22} /></span>
+              : <span>Empate</span>}
           </div>
           {game.finishedAt && (
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>

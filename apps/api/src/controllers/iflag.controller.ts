@@ -32,7 +32,7 @@ export async function publicGetGame(req: Request, res: Response, next: NextFunct
         event: { select: { id: true, code: true, name: true } },
         attendance: {
           include: {
-            player: { select: { id: true, firstName: true, lastName: true, companyName: true } },
+            player: { select: { id: true, firstName: true, lastName: true, companyName: true, logoUrl: true, playerNumber: true } },
           },
           orderBy: { createdAt: 'asc' },
         },
@@ -126,7 +126,7 @@ export async function getGame(req: Request, res: Response, next: NextFunction) {
         attendance: {
           include: {
             player: {
-              select: { id: true, firstName: true, lastName: true, companyName: true },
+              select: { id: true, firstName: true, lastName: true, companyName: true, logoUrl: true, playerNumber: true },
             },
           },
           orderBy: { createdAt: 'asc' },
@@ -346,7 +346,7 @@ export async function getAttendance(req: Request, res: Response, next: NextFunct
       where: { gameId: req.params.gameId },
       include: {
         player: {
-          select: { id: true, firstName: true, lastName: true, companyName: true },
+          select: { id: true, firstName: true, lastName: true, companyName: true, logoUrl: true, playerNumber: true },
         },
       },
       orderBy: { createdAt: 'asc' },
@@ -552,7 +552,7 @@ export async function getTeamPlayers(req: Request, res: Response, next: NextFunc
       where: { clientId: teamId, relationType: 'JUGADOR', isActive: true },
       include: {
         relatedClient: {
-          select: { id: true, firstName: true, lastName: true, companyName: true },
+          select: { id: true, firstName: true, lastName: true, companyName: true, logoUrl: true, playerNumber: true },
         },
       },
     })

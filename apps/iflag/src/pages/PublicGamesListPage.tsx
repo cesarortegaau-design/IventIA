@@ -9,6 +9,21 @@ function playerName(c: any) {
   return c.companyName || `${c?.firstName ?? ''} ${c?.lastName ?? ''}`.trim() || '—'
 }
 
+function TeamTag({ team, size = 22 }: { team: any; size?: number }) {
+  if (!team) return <span>—</span>
+  const name = playerName(team)
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      {team.logoUrl
+        ? <img src={team.logoUrl} alt="" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+        : <span style={{ width: size, height: size, borderRadius: '50%', background: 'var(--surface2)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.5, color: 'var(--text-muted)', flexShrink: 0 }}>
+            {(name[0] ?? '?').toUpperCase()}
+          </span>}
+      <span>{name}</span>
+    </span>
+  )
+}
+
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   PENDING: { label: 'Próximo', color: '#1677ff' },
   ATTENDANCE: { label: 'Asistencia', color: '#1677ff' },
@@ -107,16 +122,14 @@ function GameCard({ game, onClick, live }: { game: any; onClick: () => void; liv
         </span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
-          {game.localTeam?.logoUrl && <img src={game.localTeam.logoUrl} height={22} style={{ objectFit: 'contain', borderRadius: 3 }} alt="" />}
-          <span style={{ color: 'var(--text)', fontWeight: 600, fontSize: 14 }}>{playerName(game.localTeam)}</span>
+        <div style={{ flex: 1, fontWeight: 600, fontSize: 14, color: 'var(--text)' }}>
+          <TeamTag team={game.localTeam} size={22} />
         </div>
         <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', minWidth: 70, textAlign: 'center', fontFamily: 'monospace' }}>
           {game.localScore} - {game.visitingScore}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, justifyContent: 'flex-end' }}>
-          <span style={{ color: 'var(--text)', fontWeight: 600, fontSize: 14 }}>{playerName(game.visitingTeam)}</span>
-          {game.visitingTeam?.logoUrl && <img src={game.visitingTeam.logoUrl} height={22} style={{ objectFit: 'contain', borderRadius: 3 }} alt="" />}
+        <div style={{ flex: 1, fontWeight: 600, fontSize: 14, color: 'var(--text)', display: 'flex', justifyContent: 'flex-end' }}>
+          <TeamTag team={game.visitingTeam} size={22} />
         </div>
       </div>
       {game.createdAt && (

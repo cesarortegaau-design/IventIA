@@ -48,10 +48,53 @@ type ActionType =
   | 'HALFTIME' | 'END_GAME' | 'TIMEOUT' | 'SCORE_ADJUST'
   | 'INTERCEPTION' | null
 
-// Label helper for attendance player
+// Label helper for attendance player (text-only)
 function plyLabel(a: any) {
   const num = a.number || a.player?.playerNumber
   return `${num ? `#${num} ` : ''}${playerName(a.player)}`
+}
+
+// Avatar + number + name inline element for player display
+function PlayerTag({ player, size = 20 }: { player: any; size?: number }) {
+  if (!player) return <span>—</span>
+  const num = player.playerNumber
+  const name = player.companyName || `${player.firstName ?? ''} ${player.lastName ?? ''}`.trim() || '—'
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      {player.logoUrl
+        ? <img src={player.logoUrl} alt="" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+        : <span style={{ width: size, height: size, borderRadius: '50%', background: 'var(--surface2)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.5, color: 'var(--text-muted)', flexShrink: 0 }}>
+            {(name[0] ?? '?').toUpperCase()}
+          </span>}
+      {num && <span style={{ fontWeight: 800, fontSize: size * 0.65, color: 'var(--green)' }}>#{num}</span>}
+      <span>{name}</span>
+    </span>
+  )
+}
+
+// Team badge with logo + name
+function TeamTag({ team, size = 22 }: { team: any; size?: number }) {
+  if (!team) return <span>—</span>
+  const name = playerName(team)
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      {team.logoUrl
+        ? <img src={team.logoUrl} alt="" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+        : <span style={{ width: size, height: size, borderRadius: '50%', background: 'var(--surface2)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.5, color: 'var(--text-muted)', flexShrink: 0 }}>
+            {(name[0] ?? '?').toUpperCase()}
+          </span>}
+      <span>{name}</span>
+    </span>
+  )
+}
+
+// Build Ant Select options with player image+number
+function playerOptions(attendees: any[]) {
+  return attendees.map((a: any) => ({
+    value: a.playerId,
+    label: <PlayerTag player={a.player} size={18} />,
+    searchLabel: plyLabel(a),
+  }))
 }
 
 export default function GamePage() {
@@ -341,6 +384,11 @@ export default function GamePage() {
 
   const selectStyle = { width: '100%' }
   const labelStyle = { fontSize: 12, color: '#e6edf3', marginBottom: 6, fontWeight: 600 as const, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }
+  // Custom filter for Select with ReactNode labels
+  const filterPlayer = (input: string, option: any) => {
+    const text = option?.searchLabel ?? ''
+    return text.toLowerCase().includes(input.toLowerCase())
+  }
 
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--bg)', paddingBottom: 16 }}>
@@ -367,12 +415,9 @@ export default function GamePage() {
       {/* Scoreboard */}
       <div className="scoreboard">
         <div className="team-score home">
-          {game.localTeam?.logoUrl && (
-            <img src={game.localTeam.logoUrl} height={28} style={{ objectFit: 'contain', borderRadius: 4 }} alt="" />
-          )}
-          <div className={`team-name ${isOffenseLocal ? 'offense' : ''}`}>
-            {playerName(game.localTeam)}
-            {isOffenseLocal && <span style={{ marginLeft: 4 }}>🏈</span>}
+          <div className={`team-name ${isOffenseLocal ? 'offense' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <TeamTag team={game.localTeam} size={24} />
+            {isOffenseLocal && <span>🏈</span>}
           </div>
           <div className="score-number">{game.localScore}</div>
         </div>
@@ -385,12 +430,9 @@ export default function GamePage() {
         </div>
 
         <div className="team-score away">
-          {game.visitingTeam?.logoUrl && (
-            <img src={game.visitingTeam.logoUrl} height={28} style={{ objectFit: 'contain', borderRadius: 4 }} alt="" />
-          )}
-          <div className={`team-name ${!isOffenseLocal ? 'offense' : ''}`}>
-            {!isOffenseLocal && <span style={{ marginRight: 4 }}>🏈</span>}
-            {playerName(game.visitingTeam)}
+          <div className={`team-name ${!isOffenseLocal ? 'offense' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+            {!isOffenseLocal && <span>🏈</span>}
+            <TeamTag team={game.visitingTeam} size={24} />
           </div>
           <div className="score-number">{game.visitingScore}</div>
         </div>
@@ -402,9 +444,8 @@ export default function GamePage() {
           background: 'rgba(0,230,118,0.08)', borderBottom: '2px solid var(--green)',
           padding: '8px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
         }}>
-          <span style={{ fontSize: 18 }}>🏈</span>
-          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            Posesión: {playerName(offenseTeam)}
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            🏈 Posesión: <TeamTag team={offenseTeam} size={20} />
           </span>
         </div>
       )}
@@ -539,8 +580,8 @@ export default function GamePage() {
           {/* Timeout indicators */}
           <div style={{ display: 'flex', justifyContent: 'space-around', marginTop: 12, padding: '0 16px' }}>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                {playerName(game.localTeam)}
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                <TeamTag team={game.localTeam} size={16} />
               </div>
               <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
                 {[1, 2].map(i => (
@@ -550,8 +591,8 @@ export default function GamePage() {
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', alignSelf: 'center' }}>Tiempos fuera</div>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                {playerName(game.visitingTeam)}
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                <TeamTag team={game.visitingTeam} size={16} />
               </div>
               <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
                 {[1, 2].map(i => (
@@ -568,12 +609,12 @@ export default function GamePage() {
         <div style={{ padding: 24, textAlign: 'center' }}>
           <div style={{ fontSize: 48, marginBottom: 12 }}>🏆</div>
           <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>Partido Finalizado</div>
-          <div style={{ fontSize: 16, color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: 16, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
             {game.localScore > game.visitingScore
-              ? `Ganador: ${playerName(game.localTeam)}`
+              ? <span>Ganador: <TeamTag team={game.localTeam} size={22} /></span>
               : game.visitingScore > game.localScore
-              ? `Ganador: ${playerName(game.visitingTeam)}`
-              : 'Empate'}
+              ? <span>Ganador: <TeamTag team={game.visitingTeam} size={22} /></span>
+              : <span>Empate</span>}
           </div>
           {game.finishedAt && (
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
@@ -618,7 +659,7 @@ export default function GamePage() {
                     style={{ flex: 1 }}
                     onClick={() => { setSelectedTeamId(t.id); setTdPasser(undefined); setTdReceiver(undefined); setTdRunner(undefined) }}
                   >
-                    <div style={{ fontWeight: 700, fontSize: 14, color: '#e6edf3' }}>{playerName(t)}</div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: '#e6edf3' }}><TeamTag team={t} size={20} /></div>
                   </button>
                 ))}
               </div>
@@ -651,9 +692,9 @@ export default function GamePage() {
                   <Select
                     style={selectStyle}
                     placeholder="Seleccionar QB..."
-                    allowClear showSearch optionFilterProp="label"
+                    allowClear showSearch filterOption={filterPlayer}
                     value={tdPasser} onChange={setTdPasser}
-                    options={actionTeamPlayers.map((a: any) => ({ value: a.playerId, label: plyLabel(a) }))}
+                    options={playerOptions(actionTeamPlayers)}
                   />
                 </div>
                 <div>
@@ -661,9 +702,9 @@ export default function GamePage() {
                   <Select
                     style={selectStyle}
                     placeholder="Seleccionar receptor..."
-                    allowClear showSearch optionFilterProp="label"
+                    allowClear showSearch filterOption={filterPlayer}
                     value={tdReceiver} onChange={setTdReceiver}
-                    options={actionTeamPlayers.map((a: any) => ({ value: a.playerId, label: plyLabel(a) }))}
+                    options={playerOptions(actionTeamPlayers)}
                   />
                 </div>
               </>
@@ -675,9 +716,9 @@ export default function GamePage() {
                 <Select
                   style={selectStyle}
                   placeholder="Seleccionar corredor..."
-                  allowClear showSearch optionFilterProp="label"
+                  allowClear showSearch filterOption={filterPlayer}
                   value={tdRunner} onChange={setTdRunner}
-                  options={actionTeamPlayers.map((a: any) => ({ value: a.playerId, label: plyLabel(a) }))}
+                  options={playerOptions(actionTeamPlayers)}
                 />
               </div>
             )}
@@ -685,27 +726,27 @@ export default function GamePage() {
         ) : action === 'INTERCEPTION' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ color: '#e6edf3', fontSize: 14 }}>
-              La posesión cambiará automáticamente a <strong>{playerName(defenseTeam)}</strong>
+              La posesión cambiará automáticamente a <strong><TeamTag team={defenseTeam} size={18} /></strong>
             </div>
             <div>
               <div style={labelStyle}>Jugador que intercepta</div>
               <Select
                 style={selectStyle}
                 placeholder="Seleccionar jugador..."
-                allowClear showSearch optionFilterProp="label"
+                allowClear showSearch filterOption={filterPlayer}
                 value={intPlayer} onChange={setIntPlayer}
-                options={defenseTeamPlayers.map((a: any) => ({ value: a.playerId, label: plyLabel(a) }))}
+                options={playerOptions(defenseTeamPlayers)}
               />
             </div>
           </div>
         ) : action === 'SCORE_ADJUST' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
-              <div style={labelStyle}>{playerName(game.localTeam)}</div>
+              <div style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 6 }}><TeamTag team={game.localTeam} size={20} /></div>
               <InputNumber style={{ width: '100%' }} min={0} value={adjustLocalScore} onChange={v => setAdjustLocalScore(v ?? 0)} size="large" />
             </div>
             <div>
-              <div style={labelStyle}>{playerName(game.visitingTeam)}</div>
+              <div style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 6 }}><TeamTag team={game.visitingTeam} size={20} /></div>
               <InputNumber style={{ width: '100%' }} min={0} value={adjustVisitingScore} onChange={v => setAdjustVisitingScore(v ?? 0)} size="large" />
             </div>
           </div>
@@ -724,7 +765,7 @@ export default function GamePage() {
                     onClick={() => setSelectedTeamId(t.id)}
                     disabled={remaining <= 0}
                   >
-                    <div style={{ fontWeight: 700, fontSize: 14, color: '#e6edf3' }}>{playerName(t)}</div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: '#e6edf3' }}><TeamTag team={t} size={20} /></div>
                     <div style={{ fontSize: 11, color: remaining > 0 ? 'var(--green)' : '#ff4d4f', marginTop: 4 }}>
                       {remaining > 0 ? `${remaining} restante${remaining > 1 ? 's' : ''}` : 'Sin tiempos'}
                     </div>
@@ -735,7 +776,9 @@ export default function GamePage() {
           </div>
         ) : action === 'POSSESSION' || action === 'HALFTIME' ? (
           <div style={{ color: '#e6edf3', fontSize: 15 }}>
-            {action === 'POSSESSION' && `La posesión pasará a: ${game.offenseTeamId === game.localTeamId ? playerName(game.visitingTeam) : playerName(game.localTeam)}`}
+            {action === 'POSSESSION' && (
+              <span>La posesión pasará a: <TeamTag team={game.offenseTeamId === game.localTeamId ? game.visitingTeam : game.localTeam} size={20} /></span>
+            )}
             {action === 'HALFTIME' && (isHalftime ? 'Reanudar el partido (2ª mitad)' : 'Pausar el partido para medio tiempo')}
           </div>
         ) : (action === 'XP1' || action === 'XP2' || action === 'SAFETY' || action === 'PENALTY') ? (
@@ -750,7 +793,7 @@ export default function GamePage() {
                     style={{ flex: 1 }}
                     onClick={() => { setSelectedTeamId(t.id); setSelectedPlayerId(undefined) }}
                   >
-                    <div style={{ fontWeight: 700, fontSize: 14, color: '#e6edf3' }}>{playerName(t)}</div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: '#e6edf3' }}><TeamTag team={t} size={20} /></div>
                   </button>
                 ))}
               </div>
@@ -760,9 +803,9 @@ export default function GamePage() {
               <Select
                 style={selectStyle}
                 placeholder="Seleccionar jugador..."
-                allowClear showSearch optionFilterProp="label"
+                allowClear showSearch filterOption={filterPlayer}
                 value={selectedPlayerId} onChange={setSelectedPlayerId}
-                options={actionTeamPlayers.map((a: any) => ({ value: a.playerId, label: plyLabel(a) }))}
+                options={playerOptions(actionTeamPlayers)}
               />
             </div>
           </div>
