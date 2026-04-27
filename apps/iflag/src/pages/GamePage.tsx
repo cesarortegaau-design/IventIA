@@ -308,6 +308,26 @@ export default function GamePage() {
     })
   }
 
+  // Grant "Primera Oportunidad y Línea" — offense still in own half, must reach midfield
+  function doFirstAndLine() {
+    if (!game) return
+    recordEventMutation.mutate({
+      type: 'DOWN_UPDATE', quarter: game.currentQuarter,
+      newCurrentDown: 1, newYardsToFirst: 10,
+      description: '1° y 10 — Primera oportunidad (propia mitad)',
+    })
+  }
+
+  // Grant "Primera Oportunidad y Goal" — offense crossed midfield, must score
+  function doFirstAndGoal() {
+    if (!game) return
+    recordEventMutation.mutate({
+      type: 'DOWN_UPDATE', quarter: game.currentQuarter,
+      newCurrentDown: 1, newYardsToFirst: 0,
+      description: '1° y GOAL — Ofensiva en zona anotación',
+    })
+  }
+
   function getPlayerLabel(playerId: string | undefined) {
     if (!playerId || !game) return ''
     const att = (game.attendance ?? []).find((a: any) => a.playerId === playerId)
@@ -524,28 +544,75 @@ export default function GamePage() {
                 {!isHalftime && (
                   <div style={{ width: '100%' }}>
                     <div className="down-card">
+                      {/* Zone badge */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+                        <div style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 6,
+                          background: game.yardsToFirst === 0 ? 'rgba(0,230,118,0.15)' : 'rgba(33,150,243,0.15)',
+                          border: `1px solid ${game.yardsToFirst === 0 ? 'var(--green)' : 'var(--blue)'}`,
+                          borderRadius: 20, padding: '3px 12px',
+                        }}>
+                          <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: game.yardsToFirst === 0 ? 'var(--green)' : 'var(--blue)' }}>
+                            {game.yardsToFirst === 0 ? '🏈 1° y GOAL' : '📏 1° y 10'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Down row */}
                       <div className="down-row">
                         <div>
                           <div className="down-label">Down</div>
                           <div className="down-value">{DOWN_LABELS[game.currentDown] ?? `${game.currentDown}°`}</div>
                         </div>
                         <div>
-                          <div className="down-label">Yardas</div>
-                          <div className="down-value">{game.yardsToFirst === 0 ? 'GOAL' : `${game.yardsToFirst}y`}</div>
+                          <div className="down-label">Para anotar</div>
+                          <div className="down-value" style={{ color: game.yardsToFirst === 0 ? 'var(--green)' : 'var(--text)' }}>
+                            {game.yardsToFirst === 0 ? 'GOAL' : `${game.yardsToFirst}y`}
+                          </div>
                         </div>
                         <div className="down-dots">
                           {[1, 2, 3, 4].map(d => <div key={d} className={`down-dot ${d <= game.currentDown ? 'active' : ''}`} />)}
                         </div>
                       </div>
+
                       {!isSpectator && (
-                        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                          <button className="timer-btn reset" style={{ flex: 1, padding: '8px 0', fontSize: 13 }} onClick={doPrevDown} disabled={game.currentDown <= 1 || recordEventMutation.isPending}>
-                            ◀ Regresar
-                          </button>
-                          <button className="timer-btn start" style={{ flex: 1, padding: '8px 0', fontSize: 13 }} onClick={doNextDown} disabled={recordEventMutation.isPending}>
-                            Siguiente ▶
-                          </button>
-                        </div>
+                        <>
+                          {/* Primera oportunidad buttons */}
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 12, marginBottom: 6 }}>
+                            Primera Oportunidad
+                          </div>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button
+                              className={`first-down-btn line ${game.yardsToFirst !== 0 ? 'active' : ''}`}
+                              onClick={doFirstAndLine}
+                              disabled={recordEventMutation.isPending}
+                            >
+                              📏 1° y 10
+                              <span>Propia mitad</span>
+                            </button>
+                            <button
+                              className={`first-down-btn goal ${game.yardsToFirst === 0 ? 'active' : ''}`}
+                              onClick={doFirstAndGoal}
+                              disabled={recordEventMutation.isPending}
+                            >
+                              🏈 1° y GOAL
+                              <span>Zona anotación</span>
+                            </button>
+                          </div>
+
+                          {/* Down navigation */}
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 12, marginBottom: 6 }}>
+                            Mover Down
+                          </div>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button className="timer-btn reset" style={{ flex: 1, padding: '8px 0', fontSize: 13 }} onClick={doPrevDown} disabled={game.currentDown <= 1 || recordEventMutation.isPending}>
+                              ◀ Regresar
+                            </button>
+                            <button className="timer-btn start" style={{ flex: 1, padding: '8px 0', fontSize: 13 }} onClick={doNextDown} disabled={recordEventMutation.isPending}>
+                              Siguiente ▶
+                            </button>
+                          </div>
+                        </>
                       )}
                     </div>
                   </div>
