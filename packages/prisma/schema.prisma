@@ -602,6 +602,7 @@ model Client {
   addressCountry String     @default("MX") @map("address_country") @db.VarChar(100)
   portalUserId   String?    @unique @map("portal_user_id")
   logoUrl        String?    @map("logo_url") @db.VarChar(500)
+  playerNumber   String?    @map("player_number") @db.VarChar(10)
   isTeam         Boolean    @default(false) @map("is_team")
   isActive       Boolean    @default(true) @map("is_active")
   metadata       Json       @default("{}")

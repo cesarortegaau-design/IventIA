@@ -161,7 +161,7 @@ export default function ClientDetailPage() {
   }
 
   const updateIsTeamMutation = useMutation({
-    mutationFn: (isTeam: boolean) => clientsApi.update(clientId!, { isTeam }),
+    mutationFn: (data: any) => clientsApi.update(clientId!, typeof data === 'boolean' ? { isTeam: data } : data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['client-summary', clientId] })
       qc.invalidateQueries({ queryKey: ['clients'] })
@@ -643,19 +643,39 @@ export default function ClientDetailPage() {
                     </Button>
                   </Upload>
                 </Card>
-                <Card size="small" title="Equipo deportivo">
-                  <Space>
-                    <Switch
-                      checked={client.isTeam ?? false}
-                      loading={updateIsTeamMutation.isPending}
-                      onChange={(v) => updateIsTeamMutation.mutate(v)}
-                    />
-                    <span>Marcar como Equipo</span>
-                  </Space>
-                  <div style={{ marginTop: 8 }}>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      Los clientes de tipo Persona Moral marcados como Equipo aparecerán disponibles para seleccionar como equipos locales o visitantes en el Portal Deportivo del Evento.
-                    </Text>
+                <Card size="small" title="Deportivo" style={{ marginBottom: 16 }}>
+                  <div style={{ marginBottom: 12 }}>
+                    <Space>
+                      <Switch
+                        checked={client.isTeam ?? false}
+                        loading={updateIsTeamMutation.isPending}
+                        onChange={(v) => updateIsTeamMutation.mutate(v)}
+                      />
+                      <span>Marcar como Equipo</span>
+                    </Space>
+                    <div style={{ marginTop: 8 }}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        Los clientes de tipo Persona Moral marcados como Equipo aparecerán disponibles para seleccionar como equipos locales o visitantes en el Portal Deportivo del Evento.
+                      </Text>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 12 }}>
+                    <Text strong style={{ display: 'block', marginBottom: 6 }}>Número de jugador</Text>
+                    <Space>
+                      <Input
+                        style={{ width: 120 }}
+                        placeholder="Ej: 7"
+                        maxLength={10}
+                        defaultValue={client.playerNumber ?? ''}
+                        onBlur={(e) => {
+                          const val = e.target.value.trim() || null
+                          if (val !== (client.playerNumber ?? null)) {
+                            updateIsTeamMutation.mutate({ playerNumber: val } as any)
+                          }
+                        }}
+                        onPressEnter={(e) => (e.target as HTMLInputElement).blur()}
+                      />
+                    </Space>
                   </div>
                 </Card>
               </div>

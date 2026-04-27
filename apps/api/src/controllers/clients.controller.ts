@@ -20,6 +20,7 @@ const clientSchema = z.object({
   addressZip: z.string().optional(),
   addressCountry: z.string().default('MX'),
   logoUrl: z.string().url().optional().nullable(),
+  playerNumber: z.string().max(10).optional().nullable(),
   isTeam: z.boolean().optional(),
 }).strip()
 
@@ -460,6 +461,7 @@ const importRowSchema = z.object({
   rfc: z.string().optional().transform(v => (v && v.trim()) || undefined),
   email: z.string().optional().transform(v => (v && v.trim()) || undefined),
   telefono: z.string().optional().transform(v => (v && v.trim()) || undefined),
+  numero: z.string().optional().transform(v => (v && v.trim()) || undefined),
   equipo: z.string().optional().transform(v => v === '1' || v?.toLowerCase() === 'sí' || v?.toLowerCase() === 'si' || v?.toLowerCase() === 'true'),
 }).passthrough()
 
@@ -485,7 +487,7 @@ export async function importClients(req: Request, res: Response, next: NextFunct
       if (existing) {
         await prisma.client.update({
           where: { id: existing.id },
-          data: { companyName, firstName, lastName, email: row.email, phone: row.telefono, isTeam },
+          data: { companyName, firstName, lastName, email: row.email, phone: row.telefono, playerNumber: row.numero, isTeam },
         })
         updated++
       } else {
@@ -495,6 +497,7 @@ export async function importClients(req: Request, res: Response, next: NextFunct
             rfc: row.rfc || undefined,
             email: row.email,
             phone: row.telefono,
+            playerNumber: row.numero,
             isTeam,
           },
         })

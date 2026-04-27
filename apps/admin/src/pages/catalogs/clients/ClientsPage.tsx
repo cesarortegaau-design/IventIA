@@ -59,7 +59,7 @@ export default function ClientsPage() {
   })
 
   function downloadTemplate() {
-    const csv = 'tipo,nombre,rfc,email,telefono,equipo\nMoral,Empresa Ejemplo SA,ABC123456XXX,ejemplo@email.com,5512345678,0\nFísica,Juan Pérez,,,,0'
+    const csv = 'tipo,nombre,rfc,email,telefono,numero,equipo\nMoral,Empresa Ejemplo SA,ABC123456XXX,ejemplo@email.com,5512345678,,0\nFísica,Juan Pérez,,,,7,0'
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
@@ -149,6 +149,7 @@ export default function ClientsPage() {
               rfc: r.rfc ?? '',
               email: r.email ?? '',
               telefono: r.phone ?? '',
+              numero: r.playerNumber ?? '',
               equipo: r.isTeam ? '1' : '0',
             })), [
               { header: 'tipo', key: 'tipo' },
@@ -156,6 +157,7 @@ export default function ClientsPage() {
               { header: 'rfc', key: 'rfc' },
               { header: 'email', key: 'email' },
               { header: 'telefono', key: 'telefono' },
+              { header: 'numero', key: 'numero' },
               { header: 'equipo', key: 'equipo' },
             ])}
           >
@@ -272,11 +274,16 @@ export default function ClientsPage() {
               ),
             },
             {
-              key: 'imagen', label: 'Imagen',
+              key: 'imagen', label: 'Deportivo',
               children: (
-                <Form.Item name="isTeam" label="Equipo deportivo" valuePropName="checked">
-                  <Switch />
-                </Form.Item>
+                <>
+                  <Form.Item name="playerNumber" label="Número de jugador">
+                    <Input maxLength={10} style={{ width: 120 }} placeholder="Ej: 7" />
+                  </Form.Item>
+                  <Form.Item name="isTeam" label="Equipo deportivo" valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                </>
               ),
             },
           ]} />
@@ -305,6 +312,7 @@ export default function ClientsPage() {
             { title: 'RFC', dataIndex: 'rfc', width: 130 },
             { title: 'Email', dataIndex: 'email' },
             { title: 'Teléfono', dataIndex: 'telefono', width: 120 },
+            { title: 'Número', dataIndex: 'numero', width: 80 },
             { title: 'Equipo', dataIndex: 'equipo', width: 80 },
           ]}
         />
