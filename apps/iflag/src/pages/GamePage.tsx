@@ -122,31 +122,34 @@ function PlayerGrid({
 }
 
 // Circular countdown timer with SVG progress ring
-function CircularTimer({ elapsed, total, running, warning }: { elapsed: number; total: number; running: boolean; warning: boolean }) {
-  const r = 58
+function CircularTimer({ elapsed, total, running, warning, size = 148 }: { elapsed: number; total: number; running: boolean; warning: boolean; size?: number }) {
+  const cx = size / 2
+  const r = size * 0.392  // ~58 at size=148, ~46 at size=118
+  const sw = size * 0.068 // stroke width
   const circ = 2 * Math.PI * r
   const progress = Math.min(elapsed / total, 1)
   const offset = circ * (1 - progress)
   const color = warning ? 'var(--orange)' : 'var(--green)'
   const shadow = warning ? 'rgba(255,152,0,0.4)' : 'rgba(0,230,118,0.4)'
   const displaySec = Math.max(0, total - elapsed)
+  const fontSize = size * 0.257  // ~38 at size=148, ~30 at size=118
 
   return (
-    <div style={{ position: 'relative', width: 148, height: 148, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <svg width={148} height={148} style={{ position: 'absolute', top: 0, left: 0 }}>
-        <circle cx={74} cy={74} r={r} fill="none" stroke="var(--surface2)" strokeWidth={10} />
+    <div style={{ position: 'relative', width: size, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <svg width={size} height={size} style={{ position: 'absolute', top: 0, left: 0 }}>
+        <circle cx={cx} cy={cx} r={r} fill="none" stroke="var(--surface2)" strokeWidth={sw} />
         <circle
-          cx={74} cy={74} r={r} fill="none"
-          stroke={color} strokeWidth={10} strokeLinecap="round"
+          cx={cx} cy={cx} r={r} fill="none"
+          stroke={color} strokeWidth={sw} strokeLinecap="round"
           strokeDasharray={circ} strokeDashoffset={offset}
-          transform="rotate(-90 74 74)"
+          transform={`rotate(-90 ${cx} ${cx})`}
           style={{ transition: 'stroke-dashoffset 0.8s linear, stroke 0.3s' }}
         />
       </svg>
       <div style={{ textAlign: 'center', zIndex: 1 }}>
         <div
           className={running ? 'timer-pulse' : ''}
-          style={{ fontFamily: "'Bebas Neue','Inter',sans-serif", fontSize: 38, color, letterSpacing: '0.04em', lineHeight: 1, textShadow: `0 0 20px ${shadow}` }}
+          style={{ fontFamily: "'Bebas Neue','Inter',sans-serif", fontSize, color, letterSpacing: '0.04em', lineHeight: 1, textShadow: `0 0 20px ${shadow}` }}
         >
           {formatTimer(displaySec)}
         </div>
@@ -487,7 +490,7 @@ export default function GamePage() {
       {!isFinished && !isHalftime && (
         <div style={{
           background: 'rgba(0,230,118,0.08)', borderBottom: '2px solid var(--green)',
-          padding: '7px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, flexShrink: 0,
+          padding: '5px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, flexShrink: 0,
         }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             🏈 Posesión: <TeamTag team={offenseTeam} size={20} />
@@ -515,100 +518,79 @@ export default function GamePage() {
           {/* Swipe panels */}
           <div ref={swipeRef} className="swipe-container" onScroll={handleSwipeScroll}>
 
-            {/* Panel 1 — Timer + Down */}
+            {/* Panel 1 — Timer + Down (compact, no vertical scroll) */}
             <div className="swipe-panel">
-              <div style={{ padding: '16px 16px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700 }}>
-                  {halfLabel} {isHalftime && '— Medio Tiempo'}
+              <div style={{ padding: '8px 12px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+
+                {/* Timer + controls side by side */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16, width: '100%', justifyContent: 'center' }}>
+                  <CircularTimer elapsed={localSeconds} total={HALF_DURATION} running={timerRunning} warning={overTime} size={116} />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'stretch', minWidth: 110 }}>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700 }}>
+                      {halfLabel}{isHalftime ? ' · Medio Tiempo' : ''}
+                    </div>
+                    {!isSpectator && !isHalftime && (
+                      <>
+                        {timerRunning ? (
+                          <button className="timer-btn stop" style={{ padding: '9px 14px', fontSize: 13, minWidth: 0 }} onClick={() => timerStopMutation.mutate()} disabled={timerStopMutation.isPending}>
+                            <PauseCircleOutlined style={{ marginRight: 4 }} /> Detener
+                          </button>
+                        ) : (
+                          <button className="timer-btn start" style={{ padding: '9px 14px', fontSize: 13, minWidth: 0 }} onClick={() => timerStartMutation.mutate()} disabled={timerStartMutation.isPending}>
+                            <PlayCircleOutlined style={{ marginRight: 4 }} /> Iniciar
+                          </button>
+                        )}
+                        <button className="timer-btn reset" style={{ padding: '5px 14px', fontSize: 12, minWidth: 0 }} onClick={() => timerResetMutation.mutate()} disabled={timerResetMutation.isPending}>
+                          Reset
+                        </button>
+                      </>
+                    )}
+                    {isHalftime && <div style={{ color: 'var(--gold)', fontWeight: 700, fontSize: 13, textTransform: 'uppercase' }}>⏸ En pausa</div>}
+                  </div>
                 </div>
 
-                <CircularTimer elapsed={localSeconds} total={HALF_DURATION} running={timerRunning} warning={overTime} />
-
-                {!isSpectator && !isHalftime && (
-                  <div className="timer-controls">
-                    {timerRunning ? (
-                      <button className="timer-btn stop" onClick={() => timerStopMutation.mutate()} disabled={timerStopMutation.isPending}>
-                        <PauseCircleOutlined style={{ marginRight: 4 }} /> Detener
-                      </button>
-                    ) : (
-                      <button className="timer-btn start" onClick={() => timerStartMutation.mutate()} disabled={timerStartMutation.isPending}>
-                        <PlayCircleOutlined style={{ marginRight: 4 }} /> Iniciar
-                      </button>
-                    )}
-                    <button className="timer-btn reset" onClick={() => timerResetMutation.mutate()} disabled={timerResetMutation.isPending}>
-                      Reset
-                    </button>
-                  </div>
-                )}
-
+                {/* Compact down card */}
                 {!isHalftime && (
                   <div style={{ width: '100%' }}>
-                    <div className="down-card">
-                      {/* Zone badge */}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+                    <div className="down-card" style={{ padding: '8px 10px' }}>
+                      {/* Zone badge + Down + Dots in one row */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 7 }}>
                         <div style={{
-                          display: 'inline-flex', alignItems: 'center', gap: 6,
+                          display: 'inline-flex', alignItems: 'center',
                           background: game.yardsToFirst === 0 ? 'rgba(0,230,118,0.15)' : 'rgba(33,150,243,0.15)',
                           border: `1px solid ${game.yardsToFirst === 0 ? 'var(--green)' : 'var(--blue)'}`,
-                          borderRadius: 20, padding: '3px 12px',
+                          borderRadius: 20, padding: '2px 9px',
                         }}>
-                          <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: game.yardsToFirst === 0 ? 'var(--green)' : 'var(--blue)' }}>
+                          <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: game.yardsToFirst === 0 ? 'var(--green)' : 'var(--blue)' }}>
                             {game.yardsToFirst === 0 ? '🏈 1° y GOAL' : '📏 1° y 10'}
                           </span>
                         </div>
-                      </div>
-
-                      {/* Down row */}
-                      <div className="down-row">
-                        <div>
-                          <div className="down-label">Down</div>
-                          <div className="down-value">{DOWN_LABELS[game.currentDown] ?? `${game.currentDown}°`}</div>
-                        </div>
-                        <div>
-                          <div className="down-label">Para anotar</div>
-                          <div className="down-value" style={{ color: game.yardsToFirst === 0 ? 'var(--green)' : 'var(--text)' }}>
-                            {game.yardsToFirst === 0 ? 'GOAL' : `${game.yardsToFirst}y`}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div>
+                            <div className="down-label" style={{ marginBottom: 0 }}>Down</div>
+                            <div className="down-value" style={{ fontSize: 20 }}>{DOWN_LABELS[game.currentDown] ?? `${game.currentDown}°`}</div>
                           </div>
-                        </div>
-                        <div className="down-dots">
-                          {[1, 2, 3, 4].map(d => <div key={d} className={`down-dot ${d <= game.currentDown ? 'active' : ''}`} />)}
+                          <div className="down-dots">
+                            {[1, 2, 3, 4].map(d => <div key={d} className={`down-dot ${d <= game.currentDown ? 'active' : ''}`} />)}
+                          </div>
                         </div>
                       </div>
 
                       {!isSpectator && (
                         <>
-                          {/* Primera oportunidad buttons */}
-                          <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 12, marginBottom: 6 }}>
-                            Primera Oportunidad
-                          </div>
-                          <div style={{ display: 'flex', gap: 8 }}>
-                            <button
-                              className={`first-down-btn line ${game.yardsToFirst !== 0 ? 'active' : ''}`}
-                              onClick={doFirstAndLine}
-                              disabled={recordEventMutation.isPending}
-                            >
-                              📏 1° y 10
-                              <span>Propia mitad</span>
+                          <div style={{ display: 'flex', gap: 6, marginBottom: 5 }}>
+                            <button className={`first-down-btn line ${game.yardsToFirst !== 0 ? 'active' : ''}`} onClick={doFirstAndLine} disabled={recordEventMutation.isPending}>
+                              📏 1° y 10<span>Propia mitad</span>
                             </button>
-                            <button
-                              className={`first-down-btn goal ${game.yardsToFirst === 0 ? 'active' : ''}`}
-                              onClick={doFirstAndGoal}
-                              disabled={recordEventMutation.isPending}
-                            >
-                              🏈 1° y GOAL
-                              <span>Zona anotación</span>
+                            <button className={`first-down-btn goal ${game.yardsToFirst === 0 ? 'active' : ''}`} onClick={doFirstAndGoal} disabled={recordEventMutation.isPending}>
+                              🏈 1° y GOAL<span>Zona anotación</span>
                             </button>
                           </div>
-
-                          {/* Down navigation */}
-                          <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 12, marginBottom: 6 }}>
-                            Mover Down
-                          </div>
-                          <div style={{ display: 'flex', gap: 8 }}>
-                            <button className="timer-btn reset" style={{ flex: 1, padding: '8px 0', fontSize: 13 }} onClick={doPrevDown} disabled={game.currentDown <= 1 || recordEventMutation.isPending}>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button className="timer-btn reset" style={{ flex: 1, padding: '6px 0', fontSize: 12 }} onClick={doPrevDown} disabled={game.currentDown <= 1 || recordEventMutation.isPending}>
                               ◀ Regresar
                             </button>
-                            <button className="timer-btn start" style={{ flex: 1, padding: '8px 0', fontSize: 13 }} onClick={doNextDown} disabled={recordEventMutation.isPending}>
+                            <button className="timer-btn start" style={{ flex: 1, padding: '6px 0', fontSize: 12 }} onClick={doNextDown} disabled={recordEventMutation.isPending}>
                               Siguiente ▶
                             </button>
                           </div>
@@ -620,7 +602,7 @@ export default function GamePage() {
               </div>
 
               {!isSpectator && (
-                <div style={{ textAlign: 'center', padding: '12px 0', color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.04em' }}>
+                <div style={{ textAlign: 'center', padding: '6px 0', color: 'var(--text-muted)', fontSize: 11 }}>
                   Desliza para Acciones →
                 </div>
               )}
