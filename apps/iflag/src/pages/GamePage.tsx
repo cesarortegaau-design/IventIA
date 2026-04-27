@@ -84,7 +84,7 @@ function PlayerGrid({
   players: any[]; selected: string | undefined; onSelect: (id: string | undefined) => void; optional?: boolean
 }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, maxHeight: 230, overflowY: 'auto' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, maxHeight: 150, overflowY: 'auto' }}>
       {optional && (
         <button
           className={`player-card ${!selected ? 'selected' : ''}`}
@@ -735,7 +735,7 @@ export default function GamePage() {
           </div>
 
         ) : action === 'TD' ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto', maxHeight: '60vh', paddingRight: 2 }}>
             <div>
               <div style={labelStyle}>Equipo</div>
               <TeamButtons onSelect={() => { setTdPasser(undefined); setTdReceiver(undefined); setTdRunner(undefined) }} />
@@ -743,10 +743,10 @@ export default function GamePage() {
             <div>
               <div style={labelStyle}>Tipo</div>
               <div style={{ display: 'flex', gap: 10 }}>
-                <button className={`player-option ${!tdIsRush ? 'selected' : ''}`} style={{ flex: 1, padding: 14 }} onClick={() => setTdIsRush(false)}>
+                <button className={`player-option ${!tdIsRush ? 'selected' : ''}`} style={{ flex: 1, padding: 12 }} onClick={() => setTdIsRush(false)}>
                   <div style={{ fontWeight: 700, fontSize: 15, color: '#e6edf3', textAlign: 'center' }}>🏈 Pase</div>
                 </button>
-                <button className={`player-option ${tdIsRush ? 'selected' : ''}`} style={{ flex: 1, padding: 14 }} onClick={() => setTdIsRush(true)}>
+                <button className={`player-option ${tdIsRush ? 'selected' : ''}`} style={{ flex: 1, padding: 12 }} onClick={() => setTdIsRush(true)}>
                   <div style={{ fontWeight: 700, fontSize: 15, color: '#e6edf3', textAlign: 'center' }}>🏃 Carrera</div>
                 </button>
               </div>
