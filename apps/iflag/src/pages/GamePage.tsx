@@ -5,7 +5,7 @@ import { App, Modal, Drawer, InputNumber } from 'antd'
 import {
   ArrowLeftOutlined, HistoryOutlined, EyeOutlined,
   TeamOutlined, PauseCircleOutlined, PlayCircleOutlined,
-  EditOutlined,
+  EditOutlined, TrophyOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { iflagApi } from '../api/iflag'
@@ -35,7 +35,7 @@ const EVENT_LABELS: Record<string, string> = {
 }
 
 type ActionType =
-  | 'TD' | 'XP1' | 'XP2' | 'SAFETY' | 'PENALTY'
+  | 'TD' | 'XP1' | 'XP2' | 'SAFETY' | 'PENALTY' | 'SACK'
   | 'NEXT_DOWN' | 'PREV_DOWN' | 'POSSESSION'
   | 'HALFTIME' | 'END_GAME' | 'TIMEOUT' | 'SCORE_ADJUST'
   | 'INTERCEPTION' | null
@@ -187,6 +187,7 @@ export default function GamePage() {
   const [tdRunner, setTdRunner] = useState<string | undefined>()
   const [intPlayer, setIntPlayer] = useState<string | undefined>()
   const [logOpen, setLogOpen] = useState(false)
+  const [statsOpen, setStatsOpen] = useState(false)
   const [adjustLocalScore, setAdjustLocalScore] = useState(0)
   const [adjustVisitingScore, setAdjustVisitingScore] = useState(0)
 
@@ -200,7 +201,7 @@ export default function GamePage() {
   const { data: eventsData } = useQuery({
     queryKey: ['iflag-game-events', gameId],
     queryFn: () => iflagApi.listGameEvents(gameId!),
-    enabled: logOpen,
+    enabled: logOpen || statsOpen,
   })
   const gameEvents = eventsData?.data ?? []
 
@@ -270,6 +271,10 @@ export default function GamePage() {
 
     if (type === 'TD' || type === 'XP1' || type === 'XP2' || type === 'SAFETY' || type === 'PENALTY') {
       setSelectedTeamId(game?.offenseTeamId ?? game?.localTeamId)
+    } else if (type === 'SACK') {
+      // Pre-select defense team (who makes the sack)
+      const def = game?.offenseTeamId === game?.localTeamId ? game?.visitingTeamId : game?.localTeamId
+      setSelectedTeamId(def)
     } else if (type === 'POSSESSION') {
       // Pre-select defense team (who would receive)
       const def = game?.offenseTeamId === game?.localTeamId ? game?.visitingTeamId : game?.localTeamId
@@ -362,7 +367,16 @@ export default function GamePage() {
     } else if (action === 'SAFETY') {
       recordEventMutation.mutate({ type: 'SAFETY', ...base, points: 2, applyScore: true, description: `Safety — ${teamLabel}` })
     } else if (action === 'PENALTY') {
-      recordEventMutation.mutate({ type: 'FLAG_PENALTY', ...base, points: 0, description: `Castigo — ${teamLabel}` })
+      const playerLabel = selectedPlayerId ? ` | ${getPlayerLabel(selectedPlayerId)}` : ''
+      recordEventMutation.mutate({ type: 'FLAG_PENALTY', ...base, points: 0, description: `Castigo — ${teamLabel}${playerLabel}`, metadata: { eventKind: 'PENALTY' } })
+    } else if (action === 'SACK') {
+      const offLabel = playerName(isOffenseLocal ? game.localTeam : game.visitingTeam)
+      const defTeamId = game.offenseTeamId === game.localTeamId ? game.visitingTeamId : game.localTeamId
+      const playerLabel = selectedPlayerId ? ` | ${getPlayerLabel(selectedPlayerId)}` : ''
+      recordEventMutation.mutate({
+        type: 'FLAG_PENALTY', teamId: defTeamId, playerId: selectedPlayerId ?? null, points: 0,
+        description: `Sack a ${offLabel}${playerLabel}`, metadata: { eventKind: 'SACK' },
+      })
     } else if (action === 'POSSESSION') {
       const newLabel = selectedTeamId === game.localTeamId ? playerName(game.localTeam) : playerName(game.visitingTeam)
       recordEventMutation.mutate({
@@ -404,6 +418,33 @@ export default function GamePage() {
   const defenseTeamId = game.offenseTeamId === game.localTeamId ? game.visitingTeamId : game.localTeamId
   const defenseTeamPlayers = (game.attendance ?? []).filter((a: any) => a.teamId === defenseTeamId && a.present)
 
+  // Quick lookup: playerId → attendance record
+  const attMap: Record<string, any> = Object.fromEntries((game.attendance ?? []).map((a: any) => [a.playerId, a]))
+
+  // Build stats from event log
+  const stats = (() => {
+    const tdScorers: Record<string, number> = {}
+    const tdPassers: Record<string, number> = {}
+    const interceptions: Record<string, number> = {}
+    const sacks: Record<string, number> = {}
+    const penalties: Record<string, number> = {}
+    gameEvents.forEach((evt: any) => {
+      if (evt.type === 'TOUCHDOWN') {
+        if (evt.playerId) tdScorers[evt.playerId] = (tdScorers[evt.playerId] ?? 0) + 1
+        if (!evt.metadata?.isRush && evt.metadata?.passerId) tdPassers[evt.metadata.passerId] = (tdPassers[evt.metadata.passerId] ?? 0) + 1
+      } else if (evt.type === 'INTERCEPTION' && evt.playerId) {
+        interceptions[evt.playerId] = (interceptions[evt.playerId] ?? 0) + 1
+      } else if (evt.type === 'FLAG_PENALTY') {
+        if (evt.metadata?.eventKind === 'SACK' && evt.playerId) {
+          sacks[evt.playerId] = (sacks[evt.playerId] ?? 0) + 1
+        } else if (evt.metadata?.eventKind !== 'SACK' && evt.playerId) {
+          penalties[evt.playerId] = (penalties[evt.playerId] ?? 0) + 1
+        }
+      }
+    })
+    return { tdScorers, tdPassers, interceptions, sacks, penalties }
+  })()
+
   const isSecondHalf = game.currentQuarter >= 3
   const localTimeoutsUsed = isSecondHalf ? (game.localTimeoutsH2 ?? 0) : (game.localTimeoutsH1 ?? 0)
   const visitingTimeoutsUsed = isSecondHalf ? (game.visitingTimeoutsH2 ?? 0) : (game.visitingTimeoutsH1 ?? 0)
@@ -412,7 +453,7 @@ export default function GamePage() {
 
   const actionLabel: Record<string, string> = {
     TD: 'Touchdown', XP1: 'Punto Extra (1pt)', XP2: 'Punto Extra (2pts)', SAFETY: 'Safety',
-    PENALTY: 'Castigo', POSSESSION: 'Posesión del Balón',
+    PENALTY: 'Castigo', SACK: 'Sack', POSSESSION: 'Posesión del Balón',
     HALFTIME: isHalftime ? 'Fin Medio Tiempo' : 'Medio Tiempo',
     END_GAME: 'Finalizar Partido', TIMEOUT: 'Tiempo Fuera',
     SCORE_ADJUST: 'Ajustar Marcador', INTERCEPTION: 'Intercepción',
@@ -452,6 +493,9 @@ export default function GamePage() {
       <div className="navbar" style={{ flexShrink: 0 }}>
         <button className="nav-back" onClick={() => navigate('/games')}><ArrowLeftOutlined /></button>
         <div className="nav-title" style={{ fontSize: 13 }}>{game.event?.name ?? 'Partido'}</div>
+        <button className="nav-action" onClick={() => { setStatsOpen(true); qc.invalidateQueries({ queryKey: ['iflag-game-events', gameId] }) }}>
+          <TrophyOutlined />
+        </button>
         <button className="nav-action" onClick={() => { setLogOpen(true); qc.invalidateQueries({ queryKey: ['iflag-game-events', gameId] }) }}>
           <HistoryOutlined />
         </button>
@@ -631,6 +675,9 @@ export default function GamePage() {
                         <button className="action-btn penalty" onClick={() => handleAction('PENALTY')}>
                           <span className="action-icon">🚩</span>Castigo
                         </button>
+                        <button className="action-btn sack" onClick={() => handleAction('SACK')}>
+                          <span className="action-icon">💨</span>Sack
+                        </button>
                         <button className="action-btn interception" onClick={() => handleAction('INTERCEPTION')}>
                           <span className="action-icon">🤚</span>Intercepción
                         </button>
@@ -739,6 +786,17 @@ export default function GamePage() {
             </div>
           </div>
 
+        ) : action === 'SACK' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ color: '#e6edf3', fontSize: 14, padding: '8px 12px', background: 'rgba(206,147,216,0.08)', borderRadius: 8, border: '1px solid rgba(206,147,216,0.25)' }}>
+              💨 Sack a <strong><TeamTag team={offenseTeam} size={18} /></strong>
+            </div>
+            <div>
+              <div style={labelStyle}>Jugador que hace el sack (opcional)</div>
+              <PlayerGrid players={defenseTeamPlayers} selected={selectedPlayerId} onSelect={setSelectedPlayerId} optional />
+            </div>
+          </div>
+
         ) : action === 'SCORE_ADJUST' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
@@ -820,7 +878,19 @@ export default function GamePage() {
             )}
           </div>
 
-        ) : (action === 'XP1' || action === 'XP2' || action === 'SAFETY' || action === 'PENALTY') ? (
+        ) : action === 'PENALTY' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <div style={labelStyle}>Equipo penalizado</div>
+              <TeamButtons onSelect={() => setSelectedPlayerId(undefined)} />
+            </div>
+            <div>
+              <div style={labelStyle}>Jugador penalizado (opcional)</div>
+              <PlayerGrid players={actionTeamPlayers} selected={selectedPlayerId} onSelect={setSelectedPlayerId} optional />
+            </div>
+          </div>
+
+        ) : (action === 'XP1' || action === 'XP2' || action === 'SAFETY') ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div>
               <div style={labelStyle}>Equipo</div>
@@ -851,6 +921,73 @@ export default function GamePage() {
             </div>
           ))}
         </div>
+      </Drawer>
+
+      {/* Stats drawer */}
+      <Drawer
+        title={<span style={{ color: '#e6edf3' }}>🏆 Estadísticas del Partido</span>}
+        placement="bottom" height="75vh"
+        open={statsOpen} onClose={() => setStatsOpen(false)}
+      >
+        {gameEvents.length === 0 ? (
+          <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 30 }}>Sin eventos registrados aún</div>
+        ) : (
+          <div style={{ paddingBottom: 24 }}>
+            {(
+              [
+                { key: 'tdScorers',     emoji: '🏈', label: 'Touchdowns Anotados',  color: 'var(--green)' },
+                { key: 'tdPassers',     emoji: '📤', label: 'Touchdowns Lanzados',  color: '#4db6ac' },
+                { key: 'interceptions', emoji: '🤚', label: 'Intercepciones',        color: '#e91e63' },
+                { key: 'sacks',         emoji: '💨', label: 'Sacks',                color: '#ce93d8' },
+                { key: 'penalties',     emoji: '🚩', label: 'Castigos',             color: 'var(--orange)' },
+              ] as const
+            ).map(({ key, emoji, label, color }) => {
+              const map = stats[key as keyof typeof stats]
+              const entries = Object.entries(map)
+              if (entries.length === 0) return null
+              return (
+                <div key={key} style={{ marginBottom: 22 }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12, paddingBottom: 6, borderBottom: `1px solid ${color}30` }}>
+                    {emoji} {label}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14 }}>
+                    {entries.map(([playerId, count]) => {
+                      const att = attMap[playerId]
+                      if (!att) return null
+                      const num = att.number ?? att.player?.playerNumber
+                      const name = playerName(att.player)
+                      const first = name.split(' ')[0] || name
+                      return (
+                        <div key={playerId} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, position: 'relative' }}>
+                          <div style={{ position: 'relative' }}>
+                            {att.player?.logoUrl
+                              ? <img src={att.player.logoUrl} alt="" style={{ width: 56, height: 56, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${color}` }} />
+                              : <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 700, color: 'var(--text-muted)', border: `2px solid ${color}40` }}>
+                                  {(first[0] || '?').toUpperCase()}
+                                </div>}
+                            {(count as number) > 1 && (
+                              <div style={{ position: 'absolute', top: -4, right: -4, background: color, color: '#000', borderRadius: '50%', width: 20, height: 20, fontSize: 11, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                {count as number}
+                              </div>
+                            )}
+                          </div>
+                          {num != null && (
+                            <div style={{ fontFamily: "'Bebas Neue','Inter',sans-serif", fontSize: 17, fontWeight: 900, color, lineHeight: 1 }}>
+                              #{num}
+                            </div>
+                          )}
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'center', maxWidth: 64, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>
+                            {first}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </Drawer>
     </div>
   )

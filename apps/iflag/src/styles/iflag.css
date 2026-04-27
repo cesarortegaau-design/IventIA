@@ -390,6 +390,7 @@ html, body {
 .action-btn.halftime { background: var(--surface2); color: var(--gold); border: 1px solid var(--gold); }
 .action-btn.end-game { background: #2d0000; color: var(--red); border: 1px solid var(--red); }
 .action-btn.interception { background: #2d0020; color: #e91e63; border: 1px solid #e91e63; }
+.action-btn.sack { background: #1a0028; color: #ce93d8; border: 1px solid #ce93d8; }
 .action-btn.score-adjust { background: #1a0030; color: #9c27b0; border: 1px solid #9c27b0; }
 .action-btn.timeout { background: #2d2000; color: #faad14; border: 1px solid #faad14; }
 
