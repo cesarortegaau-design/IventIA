@@ -291,8 +291,9 @@ export default function EventDetailPage() {
       setSelectedFpId(fp.data.id)
       message.success('Plano subido correctamente')
     } catch (err: any) {
+      const status = err?.response?.status
       const detail = err?.response?.data?.error?.message ?? err?.message ?? 'Error al subir el plano'
-      message.error(detail, 8)
+      message.error(status === 413 ? 'El archivo DXF es demasiado grande (máx. 100 MB).' : detail, 8)
     } finally {
       setFpUploading(false)
     }

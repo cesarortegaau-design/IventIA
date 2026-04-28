@@ -1,4 +1,4 @@
-import { Router } from 'express'
+import { Router, Request, Response, NextFunction } from 'express'
 import multer from 'multer'
 import { authenticate } from '../middleware/authenticate'
 import { requirePrivilege } from '../middleware/authorize'
@@ -10,10 +10,24 @@ import { uploadEventDocument, deleteEventDocument } from '../controllers/documen
 import { importStands, listStands, createStand, updateStand, deleteStand } from '../controllers/stands.controller'
 import { listFloorPlans, uploadFloorPlan, deleteFloorPlan, getFloorPlanContent } from '../controllers/floorPlans.controller'
 
+const DXF_SIZE_LIMIT = 100 * 1024 * 1024  // 100 MB — complex multi-drawing DXF files can be large
+
 const docUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 20 * 1024 * 1024 },
+  limits: { fileSize: DXF_SIZE_LIMIT },
 })
+
+// Catch multer LIMIT_FILE_SIZE and return a readable 413 instead of a 500
+function multerErrorHandler(err: any, _req: Request, res: Response, next: NextFunction) {
+  if (err?.code === 'LIMIT_FILE_SIZE') {
+    res.status(413).json({
+      success: false,
+      error: { code: 'FILE_TOO_LARGE', message: `El archivo excede el límite de ${DXF_SIZE_LIMIT / 1024 / 1024} MB.` },
+    })
+    return
+  }
+  next(err)
+}
 
 const router = Router()
 
@@ -38,7 +52,7 @@ router.get('/:eventId/spaces/:spaceId/audit', requirePrivilege(PRIVILEGES.EVENT_
 
 // Floor plans
 router.get('/:eventId/floor-plans', requirePrivilege(PRIVILEGES.EVENT_VIEW), listFloorPlans)
-router.post('/:eventId/floor-plans', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), docUpload.single('file'), uploadFloorPlan)
+router.post('/:eventId/floor-plans', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), docUpload.single('file'), multerErrorHandler, uploadFloorPlan)
 router.get('/:eventId/floor-plans/:fpId/content', requirePrivilege(PRIVILEGES.EVENT_VIEW), getFloorPlanContent)
 router.delete('/:eventId/floor-plans/:fpId', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), deleteFloorPlan)
 
