@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import {
   Spin, Alert, Checkbox, Space, Typography, Tag, Drawer, Form, Input,
-  Select, InputNumber, Button, Popconfirm, App,
+  Select, InputNumber, Button, Popconfirm, App, Modal,
 } from 'antd'
 import Konva from 'konva'
 import { Stage, Layer, Line, Circle, Text, Group } from 'react-konva'
@@ -391,10 +391,6 @@ export default function DxfViewer({
         )
       })
   }
-
-  // ── Portal stand modal ───────────────────────────────────────────────────
-  // (shown when readonly and a stand is clicked)
-  const { Modal } = require('antd')
 
   return (
     <div>
