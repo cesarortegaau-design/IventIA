@@ -7,7 +7,7 @@ import {
   ShoppingCartOutlined, ArrowLeftOutlined, FileOutlined,
   AppstoreOutlined, DownloadOutlined, CalendarOutlined,
   EnvironmentOutlined, ClockCircleOutlined, CheckCircleOutlined,
-  FileTextOutlined,
+  FileTextOutlined, LayoutOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { eventsApi } from '../../api/events'
@@ -164,6 +164,16 @@ export default function EventPortalPage() {
 
           {/* Action buttons */}
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <Button
+              icon={<LayoutOutlined />}
+              onClick={() => navigate(`/events/${eventId}/floor-plan`)}
+              style={{
+                background: 'rgba(255,255,255,0.12)',
+                borderColor: 'rgba(255,255,255,0.25)', color: '#fff', borderRadius: 10,
+              }}
+            >
+              Ver Plano
+            </Button>
             <Button
               icon={<AppstoreOutlined />}
               onClick={() => navigate(`/events/${eventId}/catalog`)}

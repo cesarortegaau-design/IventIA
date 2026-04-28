@@ -21,8 +21,9 @@ import AuditDrawer from '../../components/AuditDrawer'
 import GenerateDocumentModal from '../../components/GenerateDocumentModal'
 import CreateOrderFromSpacesModal from '../../components/CreateOrderFromSpacesModal'
 import { templatesApi } from '../../api/templates'
-import DxfViewer from '../../components/DxfViewer'
+import DxfViewer, { StandSaveData } from '../../components/DxfViewer'
 import { floorPlansApi } from '../../api/floorPlans'
+import { standsApi } from '../../api/stands'
 
 const { Title, Text } = Typography
 
@@ -268,6 +269,13 @@ export default function EventDetailPage() {
     onError: () => message.error('Error al eliminar plano'),
   })
 
+  const { data: standsData, refetch: refetchStands } = useQuery({
+    queryKey: ['stands-geo', id],
+    queryFn: () => standsApi.list(id!),
+    enabled: !!id,
+  })
+  const standsGeo: any[] = standsData?.data ?? []
+
   async function handleFloorPlanUpload(file: File) {
     setFpUploading(true)
     try {
@@ -281,6 +289,25 @@ export default function EventDetailPage() {
       setFpUploading(false)
     }
     return false
+  }
+
+  async function handleStandSave(data: StandSaveData) {
+    if (data.id) {
+      await standsApi.update(id!, data.id, data)
+      message.success('Stand actualizado')
+    } else {
+      await standsApi.create(id!, data)
+      message.success('Stand identificado')
+    }
+    refetchStands()
+    queryClient.invalidateQueries({ queryKey: ['event', id] })
+  }
+
+  async function handleStandDelete(standId: string) {
+    await standsApi.delete(id!, standId)
+    message.success('Stand eliminado')
+    refetchStands()
+    queryClient.invalidateQueries({ queryKey: ['event', id] })
   }
 
   function downloadStandsTemplate() {
@@ -1118,6 +1145,9 @@ export default function EventDetailPage() {
                       eventId={id!}
                       floorPlan={floorPlans.find((fp: any) => fp.id === selectedFpId)}
                       fetchContent={(fpId) => floorPlansApi.getContent(id!, fpId)}
+                      stands={standsGeo}
+                      onStandSave={handleStandSave}
+                      onStandDelete={handleStandDelete}
                       height={580}
                     />
                   )}

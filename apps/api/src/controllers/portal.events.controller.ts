@@ -64,6 +64,90 @@ export async function portalGetEvent(req: Request, res: Response, next: NextFunc
   }
 }
 
+// GET /portal/events/:eventId/floor-plan  — floor plan + stands for portal viewer
+export async function portalGetFloorPlan(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { portalUserId, tenantId } = req.portalUser!
+    const { eventId } = req.params
+
+    const access = await prisma.portalUserEvent.findUnique({
+      where: { portalUserId_eventId: { portalUserId, eventId } },
+    })
+    if (!access) throw new AppError(403, 'FORBIDDEN', 'No tienes acceso a este evento')
+
+    const event = await prisma.event.findFirst({
+      where: { id: eventId, tenantId, portalEnabled: true },
+      select: { id: true },
+    })
+    if (!event) throw new AppError(404, 'NOT_FOUND', 'Evento no encontrado')
+
+    // Return the most recent floor plan
+    const floorPlan = await prisma.floorPlan.findFirst({
+      where: { eventId },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    if (!floorPlan) {
+      return res.json({ success: true, data: null })
+    }
+
+    // Return stands with polygon (exclude BLOCKED from portal)
+    const stands = await prisma.stand.findMany({
+      where: { eventId, floorPlanId: floorPlan.id, isActive: true, status: { not: 'BLOCKED' } },
+      select: {
+        id: true, code: true, status: true, polygon: true, dxfEntityIdx: true,
+        widthM: true, depthM: true, heightM: true, locationNotes: true,
+        client: { select: { companyName: true, firstName: true, lastName: true } },
+      },
+    })
+
+    res.json({ success: true, data: { floorPlan, stands } })
+  } catch (err) {
+    next(err)
+  }
+}
+
+// GET /portal/events/:eventId/floor-plan/:fpId/content — proxy DXF content
+export async function portalGetFloorPlanContent(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { portalUserId, tenantId } = req.portalUser!
+    const { eventId, fpId } = req.params
+
+    const access = await prisma.portalUserEvent.findUnique({
+      where: { portalUserId_eventId: { portalUserId, eventId } },
+    })
+    if (!access) throw new AppError(403, 'FORBIDDEN', 'No tienes acceso a este evento')
+
+    const event = await prisma.event.findFirst({
+      where: { id: eventId, tenantId, portalEnabled: true },
+      select: { id: true },
+    })
+    if (!event) throw new AppError(404, 'NOT_FOUND', 'Evento no encontrado')
+
+    const fp = await prisma.floorPlan.findFirst({ where: { id: fpId, eventId } })
+    if (!fp) throw new AppError(404, 'NOT_FOUND', 'Plano no encontrado')
+
+    const https = await import('https')
+    const http = await import('http')
+    const fileUrl = fp.fileUrl
+    const client = fileUrl.startsWith('https') ? https.default : http.default
+
+    const content = await new Promise<string>((resolve, reject) => {
+      client.get(fileUrl, (proxyRes: any) => {
+        let data = ''
+        proxyRes.setEncoding('utf8')
+        proxyRes.on('data', (chunk: string) => { data += chunk })
+        proxyRes.on('end', () => resolve(data))
+        proxyRes.on('error', reject)
+      }).on('error', reject)
+    })
+
+    res.json({ success: true, data: { content, fileName: fp.fileName } })
+  } catch (err) {
+    next(err)
+  }
+}
+
 export async function portalGetCatalog(req: Request, res: Response, next: NextFunction) {
   try {
     const { portalUserId, tenantId } = req.portalUser!

@@ -162,6 +162,13 @@ enum ContractStatus {
   CANCELADO
 }
 
+enum StandStatus {
+  AVAILABLE
+  RESERVED
+  SOLD
+  BLOCKED
+}
+
 enum TemplateContext {
   EVENT
   ORDER
@@ -844,7 +851,8 @@ model FloorPlan {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event  Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  stands Stand[]
 
   @@index([eventId])
   @@map("floor_plans")
@@ -853,24 +861,31 @@ model FloorPlan {
 // ─── Stands ───────────────────────────────────────────────────────────────────
 
 model Stand {
-  id            String   @id @default(uuid())
-  eventId       String   @map("event_id")
-  clientId      String?  @map("client_id")
-  code          String   @db.VarChar(50)
-  widthM        Decimal? @map("width_m") @db.Decimal(8, 2)
-  depthM        Decimal? @map("depth_m") @db.Decimal(8, 2)
-  heightM       Decimal? @map("height_m") @db.Decimal(8, 2)
-  locationNotes String?  @map("location_notes") @db.Text
-  isActive      Boolean  @default(true) @map("is_active")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id            String      @id @default(uuid())
+  eventId       String      @map("event_id")
+  clientId      String?     @map("client_id")
+  code          String      @db.VarChar(50)
+  widthM        Decimal?    @map("width_m") @db.Decimal(8, 2)
+  depthM        Decimal?    @map("depth_m") @db.Decimal(8, 2)
+  heightM       Decimal?    @map("height_m") @db.Decimal(8, 2)
+  locationNotes String?     @map("location_notes") @db.Text
+  isActive      Boolean     @default(true) @map("is_active")
+  // Floor plan geometry
+  floorPlanId   String?     @map("floor_plan_id")
+  polygon       Json?       // [[x,y], ...] in DXF coordinate space
+  dxfEntityIdx  Int?        @map("dxf_entity_idx")
+  status        StandStatus @default(AVAILABLE)
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
 
   event     Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
   client    Client?         @relation(fields: [clientId], references: [id])
+  floorPlan FloorPlan?      @relation(fields: [floorPlanId], references: [id], onDelete: SetNull)
   documents StandDocument[]
   orders    Order[]
 
   @@unique([eventId, code])
+  @@index([floorPlanId])
   @@map("stands")
 }
 

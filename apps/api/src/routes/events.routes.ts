@@ -7,7 +7,7 @@ import { listEvents, getEvent, createEvent, updateEvent, updateEventStatus } fro
 import { listOrdersForEvent, createOrder } from '../controllers/orders.controller'
 import { listEventSpaces, createEventSpace, updateEventSpace, deleteEventSpace, getEventSpaceAudit } from '../controllers/eventSpaces.controller'
 import { uploadEventDocument, deleteEventDocument } from '../controllers/documents.controller'
-import { importStands } from '../controllers/stands.controller'
+import { importStands, listStands, createStand, updateStand, deleteStand } from '../controllers/stands.controller'
 import { listFloorPlans, uploadFloorPlan, deleteFloorPlan, getFloorPlanContent } from '../controllers/floorPlans.controller'
 
 const docUpload = multer({
@@ -42,7 +42,11 @@ router.post('/:eventId/floor-plans', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOT
 router.get('/:eventId/floor-plans/:fpId/content', requirePrivilege(PRIVILEGES.EVENT_VIEW), getFloorPlanContent)
 router.delete('/:eventId/floor-plans/:fpId', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), deleteFloorPlan)
 
-// Stands import
+// Stands
+router.get('/:eventId/stands', requirePrivilege(PRIVILEGES.EVENT_VIEW), listStands)
+router.post('/:eventId/stands', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), createStand)
+router.put('/:eventId/stands/:standId', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), updateStand)
+router.delete('/:eventId/stands/:standId', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), deleteStand)
 router.post('/:eventId/stands/import', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), importStands)
 
 // Documents

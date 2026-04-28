@@ -352,12 +352,21 @@ importers:
       dayjs:
         specifier: ^1.11.20
         version: 1.11.20
+      dxf-parser:
+        specifier: ^1.1.2
+        version: 1.1.2
+      konva:
+        specifier: ^10.2.5
+        version: 10.2.5
       react:
         specifier: ^18.2.0
         version: 18.3.1
       react-dom:
         specifier: ^18.2.0
         version: 18.3.1(react@18.3.1)
+      react-konva:
+        specifier: '18'
+        version: 18.2.14(@types/react@18.3.28)(konva@10.2.5)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       react-router-dom:
         specifier: ^6.22.3
         version: 6.30.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)

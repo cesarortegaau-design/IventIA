@@ -4,6 +4,137 @@ import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { auditService } from '../services/audit.service'
 
+const STAND_INCLUDE = {
+  client: { select: { id: true, firstName: true, lastName: true, companyName: true } },
+} as const
+
+// GET /events/:eventId/stands — list with geometry for DXF viewer
+export async function listStands(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { eventId } = req.params
+    const tenantId = req.user!.tenantId
+
+    const event = await prisma.event.findFirst({ where: { id: eventId, tenantId } })
+    if (!event) throw new AppError(404, 'NOT_FOUND', 'Evento no encontrado')
+
+    const stands = await prisma.stand.findMany({
+      where: { eventId, isActive: true },
+      include: STAND_INCLUDE,
+      orderBy: { code: 'asc' },
+    })
+
+    res.json({ success: true, data: stands })
+  } catch (err) {
+    next(err)
+  }
+}
+
+const createStandSchema = z.object({
+  code:          z.string().min(1).max(50),
+  status:        z.enum(['AVAILABLE', 'RESERVED', 'SOLD', 'BLOCKED']).default('AVAILABLE'),
+  widthM:        z.number().positive().nullable().optional(),
+  depthM:        z.number().positive().nullable().optional(),
+  heightM:       z.number().positive().nullable().optional(),
+  locationNotes: z.string().nullable().optional(),
+  floorPlanId:   z.string().nullable().optional(),
+  polygon:       z.array(z.tuple([z.number(), z.number()])).nullable().optional(),
+  dxfEntityIdx:  z.number().int().nullable().optional(),
+  clientId:      z.string().nullable().optional(),
+})
+
+// POST /events/:eventId/stands
+export async function createStand(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { eventId } = req.params
+    const tenantId = req.user!.tenantId
+
+    const event = await prisma.event.findFirst({ where: { id: eventId, tenantId } })
+    if (!event) throw new AppError(404, 'NOT_FOUND', 'Evento no encontrado')
+
+    const data = createStandSchema.parse(req.body)
+
+    const stand = await prisma.stand.create({
+      data: {
+        eventId,
+        code:          data.code,
+        status:        data.status,
+        widthM:        data.widthM ?? undefined,
+        depthM:        data.depthM ?? undefined,
+        heightM:       data.heightM ?? undefined,
+        locationNotes: data.locationNotes ?? undefined,
+        floorPlanId:   data.floorPlanId ?? undefined,
+        polygon:       data.polygon ?? undefined,
+        dxfEntityIdx:  data.dxfEntityIdx ?? undefined,
+        clientId:      data.clientId ?? undefined,
+      },
+      include: STAND_INCLUDE,
+    })
+
+    res.status(201).json({ success: true, data: stand })
+  } catch (err) {
+    next(err)
+  }
+}
+
+const updateStandSchema = createStandSchema.partial()
+
+// PUT /events/:eventId/stands/:standId
+export async function updateStand(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { eventId, standId } = req.params
+    const tenantId = req.user!.tenantId
+
+    const event = await prisma.event.findFirst({ where: { id: eventId, tenantId } })
+    if (!event) throw new AppError(404, 'NOT_FOUND', 'Evento no encontrado')
+
+    const existing = await prisma.stand.findFirst({ where: { id: standId, eventId } })
+    if (!existing) throw new AppError(404, 'NOT_FOUND', 'Stand no encontrado')
+
+    const data = updateStandSchema.parse(req.body)
+
+    const stand = await prisma.stand.update({
+      where: { id: standId },
+      data: {
+        ...(data.code          !== undefined && { code: data.code }),
+        ...(data.status        !== undefined && { status: data.status }),
+        ...(data.widthM        !== undefined && { widthM: data.widthM }),
+        ...(data.depthM        !== undefined && { depthM: data.depthM }),
+        ...(data.heightM       !== undefined && { heightM: data.heightM }),
+        ...(data.locationNotes !== undefined && { locationNotes: data.locationNotes }),
+        ...(data.floorPlanId   !== undefined && { floorPlanId: data.floorPlanId }),
+        ...(data.polygon       !== undefined && { polygon: data.polygon }),
+        ...(data.dxfEntityIdx  !== undefined && { dxfEntityIdx: data.dxfEntityIdx }),
+        ...(data.clientId      !== undefined && { clientId: data.clientId }),
+      },
+      include: STAND_INCLUDE,
+    })
+
+    res.json({ success: true, data: stand })
+  } catch (err) {
+    next(err)
+  }
+}
+
+// DELETE /events/:eventId/stands/:standId
+export async function deleteStand(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { eventId, standId } = req.params
+    const tenantId = req.user!.tenantId
+
+    const event = await prisma.event.findFirst({ where: { id: eventId, tenantId } })
+    if (!event) throw new AppError(404, 'NOT_FOUND', 'Evento no encontrado')
+
+    const existing = await prisma.stand.findFirst({ where: { id: standId, eventId } })
+    if (!existing) throw new AppError(404, 'NOT_FOUND', 'Stand no encontrado')
+
+    await prisma.stand.delete({ where: { id: standId } })
+
+    res.json({ success: true })
+  } catch (err) {
+    next(err)
+  }
+}
+
 const standRowSchema = z.object({
   codigo:           z.string().min(1),
   ancho_m:          z.preprocess(v => v === '' || v == null ? null : Number(v), z.number().positive().nullable()),

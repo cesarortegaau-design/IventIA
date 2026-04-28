@@ -5,7 +5,7 @@ import {
   portalVerifyCode, portalRegister, portalLogin, portalRefresh, portalMe, portalUpdateMe,
   portalSelectClient, portalCreateClient, portalUpdateClient, portalForgotPassword, portalResetPassword,
 } from '../controllers/portal.auth.controller'
-import { portalListEvents, portalGetEvent, portalGetCatalog } from '../controllers/portal.events.controller'
+import { portalListEvents, portalGetEvent, portalGetCatalog, portalGetFloorPlan, portalGetFloorPlanContent } from '../controllers/portal.events.controller'
 import { portalListOrders, portalGetOrder, portalCreateOrder, portalCalendar } from '../controllers/portal.orders.controller'
 import { createStripeCheckout, uploadPaymentVoucher, verifyStripePayment } from '../controllers/portal.payments.controller'
 import {
@@ -51,6 +51,8 @@ router.post('/me/select-client', portalSelectClient)
 router.get('/events', portalListEvents)
 router.get('/events/:eventId', portalGetEvent)
 router.get('/events/:eventId/catalog', portalGetCatalog)
+router.get('/events/:eventId/floor-plan', portalGetFloorPlan)
+router.get('/events/:eventId/floor-plan/:fpId/content', portalGetFloorPlanContent)
 router.post('/events/:eventId/orders', portalCreateOrder)
 
 router.get('/orders', portalListOrders)

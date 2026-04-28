@@ -17,6 +17,7 @@ import OrdersPage from '../pages/orders/OrdersPage'
 import OrderDetailPage from '../pages/orders/OrderDetailPage'
 import CalendarPage from '../pages/calendar/CalendarPage'
 import CatalogPage from '../pages/catalog/CatalogPage'
+import FloorPlanPortalPage from '../pages/event/FloorPlanPortalPage'
 import ClientSetupPage from '../pages/onboarding/ClientSetupPage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -64,6 +65,7 @@ export default function AppRouter() {
         <Route path="/events/:eventId" element={<EventPortalPage />} />
         <Route path="/events/:eventId/new-order" element={<NewOrderPage />} />
         <Route path="/events/:eventId/catalog" element={<CatalogPage />} />
+        <Route path="/events/:eventId/floor-plan" element={<FloorPlanPortalPage />} />
         <Route path="/orders" element={<OrdersPage />} />
         <Route path="/orders/:orderId" element={<OrderDetailPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
