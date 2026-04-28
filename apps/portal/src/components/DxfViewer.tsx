@@ -363,13 +363,25 @@ export default function DxfViewer({
 
   // ── Render stand overlays ────────────────────────────────────────────────
   function renderStandOverlays() {
-    return stands
+    const elements: React.ReactNode[] = []
+
+    stands
       .filter((s) => s.polygon && s.polygon.length >= 3 && s.floorPlanId === floorPlan.id)
-      .map((stand) => {
-        const pts = stand.polygon!.flatMap(([x, y]) => [x, -y])
+      .forEach((stand) => {
+        const poly = stand.polygon!
+        const pts = poly.flatMap(([x, y]) => [x, -y])
         const color = STATUS_COLORS[stand.status] ?? '#94a3b8'
         const isEditingThis = editingStand?.id === stand.id
-        return (
+
+        // Centroid for label positioning
+        const cx = poly.reduce((s, [x]) => s + x, 0) / poly.length
+        const cy = poly.reduce((s, [, y]) => s + y, 0) / poly.length
+
+        // Font size fixed in screen pixels regardless of zoom
+        const fontSize = 13 / scale
+        const labelWidth = stand.code.length * fontSize * 0.65
+
+        elements.push(
           <Line
             key={stand.id}
             points={pts}
@@ -387,9 +399,21 @@ export default function DxfViewer({
               e.target.opacity(1)
               stageRef.current?.container().style.setProperty('cursor', 'grab')
             }}
-          />
+          />,
+          <Text
+            key={`${stand.id}-label`}
+            x={cx - labelWidth / 2}
+            y={-cy - fontSize / 2}
+            text={stand.code}
+            fontSize={fontSize}
+            fontStyle="bold"
+            fill="#ffffff"
+            listening={false}
+          />,
         )
       })
+
+    return elements
   }
 
   return (
