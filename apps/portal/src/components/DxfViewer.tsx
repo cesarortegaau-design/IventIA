@@ -294,7 +294,13 @@ export default function DxfViewer({
     }
     setEditingStand(draft); setEditingStandFull(stand)
     setSelectedEntityIdx(stand.dxfEntityIdx)
-    form.setFieldsValue({ code: stand.code, status: stand.status, widthM: stand.widthM, depthM: stand.depthM, heightM: stand.heightM, locationNotes: stand.locationNotes, clientId: stand.clientId ?? null })
+    form.setFieldsValue({
+      code: stand.code, status: stand.status,
+      widthM: stand.widthM != null ? Number(stand.widthM) : null,
+      depthM: stand.depthM != null ? Number(stand.depthM) : null,
+      heightM: stand.heightM != null ? Number(stand.heightM) : null,
+      locationNotes: stand.locationNotes, clientId: stand.clientId ?? null,
+    })
     setDrawerOpen(true)
   }
 

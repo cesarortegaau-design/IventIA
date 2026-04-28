@@ -33,12 +33,14 @@ export async function listStands(req: Request, res: Response, next: NextFunction
   }
 }
 
+const toNum = (v: unknown) => (v === '' || v == null ? null : Number(v))
+
 const createStandSchema = z.object({
   code:          z.string().min(1).max(50),
   status:        z.enum(['AVAILABLE', 'RESERVED', 'SOLD', 'BLOCKED']).default('AVAILABLE'),
-  widthM:        z.number().positive().nullable().optional(),
-  depthM:        z.number().positive().nullable().optional(),
-  heightM:       z.number().positive().nullable().optional(),
+  widthM:        z.preprocess(toNum, z.number().positive().nullable()).optional(),
+  depthM:        z.preprocess(toNum, z.number().positive().nullable()).optional(),
+  heightM:       z.preprocess(toNum, z.number().positive().nullable()).optional(),
   locationNotes: z.string().nullable().optional(),
   floorPlanId:   z.string().nullable().optional(),
   polygon:       z.array(z.tuple([z.number(), z.number()])).nullable().optional(),
