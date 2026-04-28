@@ -131,17 +131,28 @@ export async function portalGetFloorPlanContent(req: Request, res: Response, nex
     const https = await import('https')
     const http = await import('http')
     const zlib = await import('zlib')
-    const fileUrl = fp.fileUrl
-    const client = fileUrl.startsWith('https') ? https.default : http.default
 
-    const raw = await new Promise<Buffer>((resolve, reject) => {
-      client.get(fileUrl, (proxyRes: any) => {
-        const chunks: Buffer[] = []
-        proxyRes.on('data', (chunk: Buffer) => { chunks.push(chunk) })
-        proxyRes.on('end', () => resolve(Buffer.concat(chunks)))
-        proxyRes.on('error', reject)
-      }).on('error', reject)
-    })
+    function fetchBuf(url: string, hops = 5): Promise<Buffer> {
+      return new Promise((resolve, reject) => {
+        const client2 = url.startsWith('https') ? https.default : http.default
+        client2.get(url, (proxyRes: any) => {
+          const { statusCode, headers } = proxyRes
+          if (statusCode >= 300 && statusCode < 400 && headers.location) {
+            proxyRes.resume()
+            if (hops === 0) { reject(new Error('Too many redirects')); return }
+            fetchBuf(headers.location, hops - 1).then(resolve).catch(reject)
+            return
+          }
+          if (statusCode >= 400) { proxyRes.resume(); reject(new Error(`HTTP ${statusCode}`)); return }
+          const chunks: Buffer[] = []
+          proxyRes.on('data', (chunk: Buffer) => { chunks.push(chunk) })
+          proxyRes.on('end', () => resolve(Buffer.concat(chunks)))
+          proxyRes.on('error', reject)
+        }).on('error', reject)
+      })
+    }
+
+    const raw = await fetchBuf(fp.fileUrl)
 
     const buffer = fp.fileName.endsWith('.gz')
       ? await new Promise<Buffer>((resolve, reject) => {

@@ -131,10 +131,23 @@ export async function getFloorPlanContent(req: Request, res: Response, next: Nex
   }
 }
 
-function fetchUrlAsBuffer(url: string): Promise<Buffer> {
+function fetchUrlAsBuffer(url: string, redirectsLeft = 5): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const client = url.startsWith('https') ? https : http
     client.get(url, (proxyRes) => {
+      const { statusCode, headers } = proxyRes
+      // Follow redirects
+      if (statusCode && statusCode >= 300 && statusCode < 400 && headers.location) {
+        proxyRes.resume() // discard body
+        if (redirectsLeft === 0) { reject(new Error('Too many redirects')); return }
+        fetchUrlAsBuffer(headers.location, redirectsLeft - 1).then(resolve).catch(reject)
+        return
+      }
+      if (statusCode && statusCode >= 400) {
+        proxyRes.resume()
+        reject(new Error(`Failed to fetch file: HTTP ${statusCode}`))
+        return
+      }
       const chunks: Buffer[] = []
       proxyRes.on('data', (chunk: Buffer) => { chunks.push(chunk) })
       proxyRes.on('end', () => resolve(Buffer.concat(chunks)))
