@@ -34,6 +34,7 @@ export async function listStands(req: Request, res: Response, next: NextFunction
 }
 
 const toNum = (v: unknown) => (v === '' || v == null ? null : Number(v))
+const toInt  = (v: unknown) => (v == null ? null : Math.round(Number(v)))
 
 const createStandSchema = z.object({
   code:          z.string().min(1).max(50),
@@ -43,8 +44,16 @@ const createStandSchema = z.object({
   heightM:       z.preprocess(toNum, z.number().positive().nullable()).optional(),
   locationNotes: z.string().nullable().optional(),
   floorPlanId:   z.string().nullable().optional(),
-  polygon:       z.array(z.tuple([z.number(), z.number()])).nullable().optional(),
-  dxfEntityIdx:  z.number().int().nullable().optional(),
+  // Accept any array of numeric pairs (>= 2 numbers per vertex — DXF may include bulge/z)
+  polygon: z.preprocess(
+    (v) => {
+      if (v == null) return null
+      if (!Array.isArray(v)) return v
+      return v.map((pt: any) => Array.isArray(pt) ? [Number(pt[0]), Number(pt[1])] : pt)
+    },
+    z.array(z.tuple([z.number(), z.number()])).nullable()
+  ).optional(),
+  dxfEntityIdx:  z.preprocess(toInt, z.number().int().nullable()).optional(),
   clientId:      z.string().nullable().optional(),
 })
 
