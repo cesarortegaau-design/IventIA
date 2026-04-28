@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import {
   Spin, Alert, Checkbox, Space, Typography, Tag, Drawer, Form, Input,
-  Select, InputNumber, Button, Popconfirm, App, Modal,
+  Select, InputNumber, Button, Popconfirm, App, Modal, Tooltip,
 } from 'antd'
+import { EditOutlined, StopOutlined } from '@ant-design/icons'
 import Konva from 'konva'
 import { Stage, Layer, Line, Circle, Text, Group } from 'react-konva'
 // @ts-ignore — no official types for dxf-parser
@@ -158,6 +159,11 @@ export default function DxfViewer({
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
+  // Draw mode
+  const [drawMode, setDrawMode] = useState(false)
+  const [drawPoints, setDrawPoints] = useState<[number, number][]>([])
+  const [cursorDxf, setCursorDxf] = useState<[number, number] | null>(null)
+
   // Portal modal
   const [portalStand, setPortalStand] = useState<StandGeo | null>(null)
 
@@ -216,6 +222,126 @@ export default function DxfViewer({
     setScale(next)
     setPos({ x: ptr.x - mousePt.x * next, y: ptr.y - mousePt.y * next })
   }, [])
+
+  // ── Draw mode helpers ────────────────────────────────────────────────────
+  function screenToDxf(screenX: number, screenY: number): [number, number] {
+    return [(screenX - pos.x) / scale, -((screenY - pos.y) / scale)]
+  }
+
+  function isNearFirstPoint(dx: number, dy: number): boolean {
+    if (drawPoints.length < 3) return false
+    const [fx, fy] = drawPoints[0]
+    const screenDist = Math.sqrt(((dx - fx) * scale) ** 2 + ((dy - fy) * scale) ** 2)
+    return screenDist < 14
+  }
+
+  function finishPolygon(pts: [number, number][]) {
+    if (pts.length < 3) return
+    setDrawMode(false)
+    setDrawPoints([])
+    setCursorDxf(null)
+    const draft: Partial<StandSaveData> = {
+      code: '', status: 'AVAILABLE',
+      polygon: pts, dxfEntityIdx: null, floorPlanId: floorPlan.id,
+    }
+    setEditingStand(draft)
+    form.setFieldsValue({ code: '', status: 'AVAILABLE', widthM: null, depthM: null, heightM: null, locationNotes: null })
+    setDrawerOpen(true)
+  }
+
+  function cancelDraw() {
+    setDrawMode(false)
+    setDrawPoints([])
+    setCursorDxf(null)
+  }
+
+  function handleStageClick(e: Konva.KonvaEventObject<MouseEvent>) {
+    if (!drawMode) return
+    // ignore clicks on stand overlays (they have their own handler)
+    if (e.target !== e.currentTarget && e.target.getParent()?.getParent() !== stageRef.current?.findOne('Layer')) {
+      // let it through — we only care about stage-level clicks
+    }
+    const stage = stageRef.current
+    if (!stage) return
+    const ptr = stage.getPointerPosition()!
+    const [dx, dy] = screenToDxf(ptr.x, ptr.y)
+
+    if (isNearFirstPoint(dx, dy)) {
+      finishPolygon(drawPoints)
+      return
+    }
+    setDrawPoints((prev) => [...prev, [dx, dy]])
+  }
+
+  function handleStageDblClick() {
+    if (!drawMode || drawPoints.length < 3) return
+    finishPolygon(drawPoints)
+  }
+
+  function handleStageMouseMove(e: Konva.KonvaEventObject<MouseEvent>) {
+    if (!drawMode) return
+    const stage = stageRef.current
+    if (!stage) return
+    const ptr = stage.getPointerPosition()!
+    setCursorDxf(screenToDxf(ptr.x, ptr.y))
+  }
+
+  // Escape cancels draw
+  useEffect(() => {
+    if (!drawMode) return
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') cancelDraw() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [drawMode]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Render draw preview ───────────────────────────────────────────────────
+  function renderDrawPreview() {
+    if (!drawMode || drawPoints.length === 0) return null
+    const nearFirst = cursorDxf ? isNearFirstPoint(cursorDxf[0], cursorDxf[1]) : false
+    const sw = 2 / scale
+
+    return (
+      <>
+        {/* Solid drawn segments */}
+        {drawPoints.length > 1 && (
+          <Line
+            points={drawPoints.flatMap(([x, y]) => [x, -y])}
+            stroke="#f59e0b" strokeWidth={sw} listening={false}
+          />
+        )}
+        {/* Dashed preview to cursor */}
+        {cursorDxf && (
+          <Line
+            points={[
+              drawPoints[drawPoints.length - 1][0], -drawPoints[drawPoints.length - 1][1],
+              cursorDxf[0], -cursorDxf[1],
+            ]}
+            stroke={nearFirst ? '#22c55e' : '#f59e0b'}
+            strokeWidth={sw}
+            dash={[6 / scale, 3 / scale]}
+            listening={false}
+          />
+        )}
+        {/* Snap ring on first point when close */}
+        {nearFirst && (
+          <Circle
+            x={drawPoints[0][0]} y={-drawPoints[0][1]}
+            radius={10 / scale}
+            stroke="#22c55e" strokeWidth={sw} listening={false}
+          />
+        )}
+        {/* Vertex dots */}
+        {drawPoints.map(([x, y], i) => (
+          <Circle
+            key={i} x={x} y={-y}
+            radius={4 / scale}
+            fill={i === 0 ? '#22c55e' : '#f59e0b'}
+            listening={false}
+          />
+        ))}
+      </>
+    )
+  }
 
   // ── Entity click (admin identify mode) ───────────────────────────────────
   function handleEntityClick(entityIdx: number, entity: DxfEntity) {
@@ -441,16 +567,41 @@ export default function DxfViewer({
         </div>
       )}
 
-      {/* Legend (admin mode) */}
+      {/* Toolbar (admin mode) */}
       {!readonly && (
-        <div style={{ marginBottom: 8, display: 'flex', gap: 12, fontSize: 12, color: '#94a3b8' }}>
-          <span>Haz clic en un <strong style={{ color: '#f59e0b' }}>polígono cerrado</strong> del DXF para identificarlo como stand</span>
-          {Object.entries(STATUS_COLORS).map(([k, c]) => (
-            <span key={k} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ width: 12, height: 12, background: c, borderRadius: 2, display: 'inline-block' }} />
-              {STATUS_LABELS[k]}
+        <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <Tooltip title="Dibuja un polígono personalizado para crear un stand. Clic = agregar vértice · Clic en primer punto o doble-clic = cerrar · Escape = cancelar">
+            <Button
+              icon={drawMode ? <StopOutlined /> : <EditOutlined />}
+              type={drawMode ? 'primary' : 'default'}
+              danger={drawMode}
+              onClick={() => drawMode ? cancelDraw() : setDrawMode(true)}
+            >
+              {drawMode ? `Cancelar (${drawPoints.length} pts)` : 'Dibujar stand'}
+            </Button>
+          </Tooltip>
+          {!drawMode && (
+            <span style={{ fontSize: 12, color: '#94a3b8' }}>
+              O haz clic en un <strong style={{ color: '#f59e0b' }}>polígono cerrado</strong> del DXF para identificarlo
             </span>
-          ))}
+          )}
+          {drawMode && (
+            <span style={{ fontSize: 12, color: '#f59e0b' }}>
+              {drawPoints.length === 0
+                ? 'Haz clic para agregar el primer vértice'
+                : drawPoints.length < 3
+                ? `${drawPoints.length} vértice(s) — agrega al menos 3`
+                : 'Cierra el polígono haciendo clic en el primer punto (verde) o doble-clic'}
+            </span>
+          )}
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 10 }}>
+            {Object.entries(STATUS_COLORS).map(([k, c]) => (
+              <span key={k} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#94a3b8' }}>
+                <span style={{ width: 10, height: 10, background: c, borderRadius: 2, display: 'inline-block' }} />
+                {STATUS_LABELS[k]}
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
@@ -470,15 +621,22 @@ export default function DxfViewer({
         {!loading && !error && dxf && (
           <Stage ref={stageRef} width={stageWidth} height={height}
             scaleX={scale} scaleY={scale} x={pos.x} y={pos.y}
-            draggable
+            draggable={!drawMode}
+            style={{ cursor: drawMode ? 'crosshair' : undefined }}
             onWheel={handleWheel}
             onDragEnd={(e) => setPos({ x: e.target.x(), y: e.target.y() })}
+            onClick={drawMode ? handleStageClick : undefined}
+            onDblClick={drawMode ? handleStageDblClick : undefined}
+            onMouseMove={drawMode ? handleStageMouseMove : undefined}
           >
             <Layer>
               <Group>{renderEntities()}</Group>
             </Layer>
             <Layer>
               {renderStandOverlays()}
+            </Layer>
+            <Layer>
+              {renderDrawPreview()}
             </Layer>
           </Stage>
         )}
