@@ -227,6 +227,12 @@ export default function GamePage() {
     setActivePanel(Math.round(scrollLeft / clientWidth))
   }
 
+  function goToPanel(panel: number) {
+    if (!swipeRef.current) return
+    swipeRef.current.scrollTo({ left: panel * swipeRef.current.clientWidth, behavior: 'smooth' })
+    setActivePanel(panel)
+  }
+
   const timerStartMutation = useMutation({
     mutationFn: () => iflagApi.startTimer(gameId!),
     onSuccess: (res) => { setTimerRunning(true); setLocalSeconds(res.data.timerSeconds ?? localSeconds) },
@@ -682,8 +688,20 @@ export default function GamePage() {
               )}
 
               {!isSpectator && (
-                <div style={{ textAlign: 'center', padding: '5px 0', color: 'var(--text-muted)', fontSize: 11 }}>
-                  Desliza para Acciones →
+                <div style={{ padding: '6px 12px 0' }}>
+                  <button
+                    onClick={() => goToPanel(1)}
+                    style={{
+                      width: '100%', padding: '10px 0',
+                      background: 'var(--surface2)', border: '1px solid var(--border)',
+                      borderRadius: 10, cursor: 'pointer',
+                      fontSize: 13, fontWeight: 700, color: 'var(--text-muted)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                      letterSpacing: '0.04em',
+                    }}
+                  >
+                    ⚡ Acciones <span style={{ fontSize: 16 }}>→</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -692,7 +710,20 @@ export default function GamePage() {
             {!isSpectator && (
               <div className="swipe-panel">
                 <div style={{ padding: '16px 16px 24px' }}>
-                  <div className="section-header">← Acciones</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <button
+                      onClick={() => goToPanel(0)}
+                      style={{
+                        padding: '7px 14px', background: 'var(--surface2)',
+                        border: '1px solid var(--border)', borderRadius: 8,
+                        cursor: 'pointer', fontSize: 13, fontWeight: 700, color: 'var(--text-muted)',
+                        display: 'flex', alignItems: 'center', gap: 5,
+                      }}
+                    >
+                      <span style={{ fontSize: 16 }}>←</span> Principal
+                    </button>
+                    <div className="section-header" style={{ margin: 0, flex: 1 }}>Acciones</div>
+                  </div>
                   <div className="actions-grid">
                     {!isHalftime && (
                       <>
