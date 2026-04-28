@@ -202,7 +202,7 @@ const AI_TOOLS: Anthropic.Tool[] = [
 async function executeTool(name: string, input: any, tenantId: string, userId: string): Promise<any> {
   switch (name) {
     case 'search_events': return toolSearchEvents(input, tenantId)
-    case 'copy_event': return toolCopyEvent(input, tenantId)
+    case 'copy_event': return toolCopyEvent(input, tenantId, userId)
     case 'check_space_availability': return toolCheckSpaceAvailability(input, tenantId)
     case 'create_order': return toolCreateOrder(input, tenantId, userId)
     default: throw new Error(`Tool desconocido: ${name}`)

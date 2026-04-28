@@ -25,6 +25,7 @@ export async function toolSearchEvents(
 export async function toolCopyEvent(
   input: { sourceEventId: string; newStartDate: string; newName?: string },
   tenantId: string,
+  userId: string,
 ) {
   const src = await prisma.event.findFirst({ where: { id: input.sourceEventId, tenantId } })
   if (!src) throw new Error(`Evento con id ${input.sourceEventId} no encontrado`)
@@ -35,15 +36,21 @@ export async function toolCopyEvent(
   const shift = (d: Date | null) => d ? new Date(d.getTime() + offsetMs) : null
 
   const yearMatch = src.code?.match(/(\d{4})$/)
+  const baseCode = src.code ?? 'EVT'
   const newCode = yearMatch
-    ? src.code!.replace(/\d{4}$/, String(newStart.getFullYear()))
-    : src.code ? `${src.code}-COPY` : undefined
+    ? baseCode.replace(/\d{4}$/, String(newStart.getFullYear()))
+    : `${baseCode}-COPY`
+
+  // If generated code already exists, append a suffix to avoid the unique constraint
+  const codeExists = await prisma.event.findFirst({ where: { tenantId, code: newCode } })
+  const finalCode = codeExists ? `${newCode}-2` : newCode
 
   const newEvent = await prisma.event.create({
     data: {
       tenantId,
       name: input.newName ?? src.name,
-      code: newCode ?? undefined,
+      code: finalCode,
+      createdById: userId,
       description: src.description,
       venueLocation: src.venueLocation,
       setupStart: shift(src.setupStart),
