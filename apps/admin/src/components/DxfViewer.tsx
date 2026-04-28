@@ -306,9 +306,14 @@ export default function DxfViewer({
   // ── Save / delete ─────────────────────────────────────────────────────────
   async function handleSave() {
     if (!editingStand || !onStandSave) return
+    let values: any
     try {
-      const values = await form.validateFields()
-      setSaving(true)
+      values = await form.validateFields()
+    } catch {
+      return // form validation errors — Ant Design already highlights the fields
+    }
+    setSaving(true)
+    try {
       await onStandSave({
         id: editingStand.id, code: values.code, status: values.status,
         widthM: values.widthM ?? null, depthM: values.depthM ?? null, heightM: values.heightM ?? null,
@@ -317,7 +322,11 @@ export default function DxfViewer({
         floorPlanId: floorPlan.id,
       })
       setDrawerOpen(false); setSelectedEntityIdx(null)
-    } catch { /* validation errors */ } finally { setSaving(false) }
+    } catch (err: any) {
+      message.error(err?.response?.data?.message ?? err?.message ?? 'Error al guardar el stand')
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function handleDelete(standId: string) {

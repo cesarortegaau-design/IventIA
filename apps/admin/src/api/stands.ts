@@ -8,6 +8,7 @@ export interface StandSaveData {
   depthM?: number | null
   heightM?: number | null
   locationNotes?: string | null
+  clientId?: string | null
   polygon: [number, number][]
   dxfEntityIdx: number | null
   floorPlanId: string
