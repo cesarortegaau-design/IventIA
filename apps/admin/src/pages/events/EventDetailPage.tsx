@@ -21,6 +21,8 @@ import AuditDrawer from '../../components/AuditDrawer'
 import GenerateDocumentModal from '../../components/GenerateDocumentModal'
 import CreateOrderFromSpacesModal from '../../components/CreateOrderFromSpacesModal'
 import { templatesApi } from '../../api/templates'
+import DxfViewer from '../../components/DxfViewer'
+import { floorPlansApi } from '../../api/floorPlans'
 
 const { Title, Text } = Typography
 
@@ -53,6 +55,8 @@ export default function EventDetailPage() {
   const [standsImportModalOpen, setStandsImportModalOpen] = useState(false)
   const [generateDocOpen, setGenerateDocOpen] = useState(false)
   const [orderFromSpacesOpen, setOrderFromSpacesOpen] = useState(false)
+  const [fpUploading, setFpUploading] = useState(false)
+  const [selectedFpId, setSelectedFpId] = useState<string | null>(null)
 
   const deleteDocMutation = useMutation({
     mutationFn: (docId: string) => eventsApi.deleteDocument(id!, docId),
@@ -246,6 +250,38 @@ export default function EventDetailPage() {
     },
     onError: () => message.error('Error al importar stands'),
   })
+
+  const { data: floorPlansData, refetch: refetchFloorPlans } = useQuery({
+    queryKey: ['floor-plans', id],
+    queryFn: () => floorPlansApi.list(id!),
+    enabled: !!id,
+  })
+  const floorPlans: any[] = floorPlansData?.data ?? []
+
+  const deleteFloorPlanMutation = useMutation({
+    mutationFn: (fpId: string) => floorPlansApi.delete(id!, fpId),
+    onSuccess: () => {
+      refetchFloorPlans()
+      setSelectedFpId(null)
+      message.success('Plano eliminado')
+    },
+    onError: () => message.error('Error al eliminar plano'),
+  })
+
+  async function handleFloorPlanUpload(file: File) {
+    setFpUploading(true)
+    try {
+      const fp = await floorPlansApi.upload(id!, file)
+      refetchFloorPlans()
+      setSelectedFpId(fp.data.id)
+      message.success('Plano subido correctamente')
+    } catch {
+      message.error('Error al subir el plano')
+    } finally {
+      setFpUploading(false)
+    }
+    return false
+  }
 
   function downloadStandsTemplate() {
     const header = 'codigo,ancho_m,largo_m,alto_m,notas_ubicacion'
@@ -1027,6 +1063,71 @@ export default function EventDetailPage() {
                       </div>
                     )}
                   </Card>
+                </div>
+              ),
+            },
+            {
+              key: 'floor-plan',
+              label: (
+                <Space>
+                  <FileOutlined />
+                  {`Plano (${floorPlans.length})`}
+                </Space>
+              ),
+              children: (
+                <div>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <Upload
+                      accept=".dxf"
+                      showUploadList={false}
+                      beforeUpload={handleFloorPlanUpload}
+                    >
+                      <Button icon={<UploadOutlined />} loading={fpUploading} type="primary">
+                        Subir DXF
+                      </Button>
+                    </Upload>
+                    {floorPlans.map((fp: any) => (
+                      <Space key={fp.id} size={4}>
+                        <Button
+                          size="small"
+                          type={selectedFpId === fp.id ? 'primary' : 'default'}
+                          onClick={() => setSelectedFpId(fp.id)}
+                        >
+                          {fp.name}
+                        </Button>
+                        <Popconfirm
+                          title="¿Eliminar este plano?"
+                          onConfirm={() => deleteFloorPlanMutation.mutate(fp.id)}
+                        >
+                          <Button
+                            size="small"
+                            danger
+                            icon={<DeleteOutlined />}
+                            loading={deleteFloorPlanMutation.isPending}
+                          />
+                        </Popconfirm>
+                      </Space>
+                    ))}
+                    {floorPlans.length === 0 && (
+                      <Text type="secondary">Sube un archivo DXF para visualizar el plano del venue.</Text>
+                    )}
+                  </div>
+
+                  {selectedFpId && floorPlans.find((fp: any) => fp.id === selectedFpId) && (
+                    <DxfViewer
+                      eventId={id!}
+                      floorPlan={floorPlans.find((fp: any) => fp.id === selectedFpId)}
+                      fetchContent={(fpId) => floorPlansApi.getContent(id!, fpId)}
+                      height={580}
+                    />
+                  )}
+
+                  {!selectedFpId && floorPlans.length > 0 && (
+                    <Alert
+                      type="info"
+                      message="Selecciona un plano de la lista para visualizarlo."
+                    />
+                  )}
                 </div>
               ),
             },
