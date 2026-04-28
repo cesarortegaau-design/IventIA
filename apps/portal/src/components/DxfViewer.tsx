@@ -414,6 +414,7 @@ export default function DxfViewer({
             closed={!!entity.shape || isClosedPolyline(entity)}
             listening={isIdentifiable && !isAlreadyStand}
             onClick={() => openDrawerForEntity(idx, entity)}
+            onTap={() => openDrawerForEntity(idx, entity)}
             onMouseEnter={isIdentifiable && !isAlreadyStand ? (e) => { e.target.stroke('#f59e0b'); stageRef.current?.container().style.setProperty('cursor', 'pointer') } : undefined}
             onMouseLeave={isIdentifiable && !isAlreadyStand ? (e) => { e.target.stroke(color); stageRef.current?.container().style.setProperty('cursor', 'grab') } : undefined}
           />
@@ -450,6 +451,7 @@ export default function DxfViewer({
             fill={color + '55'} stroke={isEditingThis ? '#f59e0b' : color}
             strokeWidth={(isEditingThis ? 3 : 2) / scale} listening
             onClick={() => handleStandOverlayClick(stand)}
+            onTap={() => handleStandOverlayClick(stand)}
             onMouseEnter={(e) => { e.target.opacity(0.8); stageRef.current?.container().style.setProperty('cursor', 'pointer') }}
             onMouseLeave={(e) => { e.target.opacity(1); stageRef.current?.container().style.setProperty('cursor', 'grab') }}
           />,
