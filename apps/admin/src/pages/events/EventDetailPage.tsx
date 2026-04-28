@@ -6,7 +6,7 @@ import {
   Tabs, App, Select, Typography, Divider, InputNumber, Form, DatePicker, Modal, Switch, Badge,
   Tooltip, Popconfirm, Input, Upload, Timeline, Spin, Alert,
 } from 'antd'
-import { EditOutlined, PlusOutlined, ArrowLeftOutlined, CopyOutlined, StopOutlined, GlobalOutlined, DownloadOutlined, DeleteOutlined, CalendarOutlined, FileOutlined, UploadOutlined, AuditOutlined, WarningOutlined, ImportOutlined, FileProtectOutlined, EyeOutlined, TrophyOutlined } from '@ant-design/icons'
+import { EditOutlined, PlusOutlined, ArrowLeftOutlined, CopyOutlined, StopOutlined, GlobalOutlined, DownloadOutlined, DeleteOutlined, CalendarOutlined, FileOutlined, UploadOutlined, AuditOutlined, WarningOutlined, ImportOutlined, FileProtectOutlined, EyeOutlined, TrophyOutlined, ShoppingCartOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { eventsApi } from '../../api/events'
 import { portalCodesApi } from '../../api/portalCodes'
@@ -19,6 +19,7 @@ import { exportToCsv } from '../../utils/exportCsv'
 import AuditTimeline from '../../components/AuditTimeline'
 import AuditDrawer from '../../components/AuditDrawer'
 import GenerateDocumentModal from '../../components/GenerateDocumentModal'
+import CreateOrderFromSpacesModal from '../../components/CreateOrderFromSpacesModal'
 import { templatesApi } from '../../api/templates'
 
 const { Title, Text } = Typography
@@ -51,6 +52,7 @@ export default function EventDetailPage() {
   const [standsImportPreview, setStandsImportPreview] = useState<any[] | null>(null)
   const [standsImportModalOpen, setStandsImportModalOpen] = useState(false)
   const [generateDocOpen, setGenerateDocOpen] = useState(false)
+  const [orderFromSpacesOpen, setOrderFromSpacesOpen] = useState(false)
 
   const deleteDocMutation = useMutation({
     mutationFn: (docId: string) => eventsApi.deleteDocument(id!, docId),
@@ -398,7 +400,14 @@ export default function EventDetailPage() {
               ),
               children: (
                 <>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <Button
+                      icon={<ShoppingCartOutlined />}
+                      disabled={spaces.length === 0}
+                      onClick={() => setOrderFromSpacesOpen(true)}
+                    >
+                      Crear Orden desde Reservas
+                    </Button>
                     <Button type="primary" icon={<PlusOutlined />} onClick={() => openSpaceModal()}>
                       Agregar reserva
                     </Button>
@@ -1034,6 +1043,17 @@ export default function EventDetailPage() {
           ]}
         />
       </Card>
+
+      <CreateOrderFromSpacesModal
+        open={orderFromSpacesOpen}
+        onClose={() => setOrderFromSpacesOpen(false)}
+        onSuccess={() => {
+          setOrderFromSpacesOpen(false)
+          queryClient.invalidateQueries({ queryKey: ['event', id] })
+        }}
+        eventId={id!}
+        eventName={event.name}
+      />
 
       <GenerateDocumentModal
         open={generateDocOpen}
