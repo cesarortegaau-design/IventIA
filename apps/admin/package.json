@@ -24,6 +24,7 @@
     "react-dom": "^18.2.0",
     "react-konva": "18",
     "react-router-dom": "^6.22.3",
+    "recharts": "^3.8.1",
     "serve": "^14.2.3",
     "socket.io-client": "^4.8.3",
     "zod": "^3.23.0",

@@ -21,6 +21,7 @@ import {
   FileProtectOutlined,
   FileWordOutlined,
   SafetyCertificateOutlined,
+  RobotOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '../stores/authStore'
@@ -80,6 +81,7 @@ export default function MainLayout() {
       ],
     },
     { key: '/produccion', icon: <BarChartOutlined />, label: 'Producción y Costos', show: hp(PRIVILEGES.PRODUCTION_VIEW) },
+    { key: '/analisis', icon: <RobotOutlined />, label: 'Análisis IA', show: true },
     { key: '/crm', icon: <ContactsOutlined />, label: 'CRM', show: hp(PRIVILEGES.CRM_VIEW) },
     { key: '/chat', icon: <MessageOutlined />, label: 'Colabora', show: hp(PRIVILEGES.CHAT_VIEW) },
     {

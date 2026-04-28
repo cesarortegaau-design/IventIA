@@ -35,6 +35,7 @@ import ProductionPage from '../pages/production/ProductionPage'
 import PortalUsersPage from '../pages/catalogs/portalUsers/PortalUsersPage'
 import ProfilesPage from '../pages/catalogs/profiles/ProfilesPage'
 import OrganizationsPage from '../pages/catalogs/organizations/OrganizationsPage'
+import AnalysisDashboard from '../pages/analysis/AnalysisDashboard'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.accessToken)
@@ -88,6 +89,7 @@ export function AppRouter() {
         <Route path="catalogos/perfiles" element={<ProfilesPage />} />
         <Route path="catalogos/usuarios-portal" element={<PortalUsersPage />} />
         <Route path="catalogos/organizaciones" element={<OrganizationsPage />} />
+        <Route path="analisis" element={<AnalysisDashboard />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
