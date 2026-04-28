@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { App } from 'antd'
-import { ArrowLeftOutlined, CheckOutlined, PlayCircleOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, PlayCircleOutlined } from '@ant-design/icons'
 import { iflagApi } from '../api/iflag'
 
 function playerName(c: any) {
@@ -33,8 +33,19 @@ export default function AttendancePage() {
 
   const toggleMutation = useMutation({
     mutationFn: (vars: any) => iflagApi.upsertAttendance(gameId!, vars),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['iflag-attendance', gameId] }),
-    onError: () => message.error('Error al actualizar asistencia'),
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: ['iflag-attendance', gameId] })
+      const prev = qc.getQueryData(['iflag-attendance', gameId])
+      qc.setQueryData(['iflag-attendance', gameId], (old: any) =>
+        old ? { ...old, data: old.data.map((a: any) => a.playerId === vars.playerId ? { ...a, present: vars.present } : a) } : old
+      )
+      return { prev }
+    },
+    onError: (_: any, __: any, ctx: any) => {
+      if (ctx?.prev) qc.setQueryData(['iflag-attendance', gameId], ctx.prev)
+      message.error('Error al actualizar asistencia')
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['iflag-attendance', gameId] }),
   })
 
   const startGameMutation = useMutation({
@@ -58,23 +69,23 @@ export default function AttendancePage() {
   const teamId = activeTeam === 'local' ? game.localTeamId : game.visitingTeamId
   const team = activeTeam === 'local' ? game.localTeam : game.visitingTeam
   const teamPlayers = attendance.filter((a: any) => a.teamId === teamId)
-  const presentCount = teamPlayers.filter((a: any) => a.present).length
 
-  function getStatus(playerId: string) {
-    const rec = attendance.find(a => a.playerId === playerId)
-    return rec ? rec.present : null
-  }
-
-  const totalPresent = attendance.filter(a => a.present).length
+  const totalPresent = attendance.filter((a: any) => a.present).length
   const totalPlayers = attendance.length
+
+  function sideCount(side: 'local' | 'visiting') {
+    const tid = side === 'local' ? game.localTeamId : game.visitingTeamId
+    return {
+      present: attendance.filter((a: any) => a.teamId === tid && a.present).length,
+      total:   attendance.filter((a: any) => a.teamId === tid).length,
+    }
+  }
 
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--bg)', paddingBottom: 100 }}>
       {/* Navbar */}
       <div className="navbar">
-        <button className="nav-back" onClick={() => navigate('/games')}>
-          <ArrowLeftOutlined />
-        </button>
+        <button className="nav-back" onClick={() => navigate('/games')}><ArrowLeftOutlined /></button>
         <div className="nav-title">Pase de Lista</div>
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{totalPresent}/{totalPlayers}</span>
       </div>
@@ -84,16 +95,14 @@ export default function AttendancePage() {
         {(['local', 'visiting'] as const).map(side => {
           const t = side === 'local' ? game.localTeam : game.visitingTeam
           const name = playerName(t)
-          const sideCount = attendance.filter(a => a.teamId === (side === 'local' ? game.localTeamId : game.visitingTeamId) && a.present).length
-          const sideTotal = attendance.filter(a => a.teamId === (side === 'local' ? game.localTeamId : game.visitingTeamId)).length
+          const { present, total } = sideCount(side)
           return (
             <button
               key={side}
               onClick={() => setActiveTeam(side)}
               style={{
-                flex: 1, padding: '14px 8px',
-                background: 'transparent',
-                border: 'none',
+                flex: 1, padding: '12px 8px',
+                background: 'transparent', border: 'none',
                 borderBottom: `3px solid ${activeTeam === side ? 'var(--green)' : 'transparent'}`,
                 cursor: 'pointer',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
@@ -101,53 +110,62 @@ export default function AttendancePage() {
               }}
             >
               {t?.logoUrl && <img src={t.logoUrl} height={28} style={{ objectFit: 'contain', borderRadius: 4 }} alt="" />}
-              <span style={{ fontSize: 13, fontWeight: 700, color: activeTeam === side ? 'var(--green)' : 'var(--text)' }}>
-                {name}
-              </span>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{sideCount}/{sideTotal} presentes</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: activeTeam === side ? 'var(--green)' : 'var(--text)' }}>{name}</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{present}/{total} presentes</span>
             </button>
           )
         })}
       </div>
 
-      {/* Player list */}
-      <div style={{ background: 'var(--surface)', margin: '16px', borderRadius: 'var(--radius)', overflow: 'hidden', border: '1px solid var(--border)' }}>
-        {attLoading && (
-          <div style={{ padding: 30, textAlign: 'center', color: 'var(--text-muted)' }}>Cargando jugadores...</div>
-        )}
-        {!attLoading && teamPlayers.length === 0 && (
-          <div style={{ padding: 30, textAlign: 'center', color: 'var(--text-muted)' }}>
-            <div style={{ fontSize: 32, marginBottom: 8 }}>👥</div>
-            <div>Sin jugadores registrados</div>
-            <div style={{ fontSize: 12, marginTop: 4 }}>Agrega jugadores como relaciones tipo "Jugador" al equipo</div>
-          </div>
-        )}
-        {teamPlayers.map((record: any) => {
-          const present = record.present
-          return (
-            <div
-              key={record.id}
-              className={`attendance-player ${present ? 'present' : 'absent'}`}
-            >
-              <div>
-                <div className="player-name">{playerName(record.player)}</div>
-                {record.number && <div className="player-num">#{record.number}</div>}
-              </div>
+      {/* Player grid */}
+      {attLoading ? (
+        <div style={{ padding: 30, textAlign: 'center', color: 'var(--text-muted)' }}>Cargando jugadores...</div>
+      ) : teamPlayers.length === 0 ? (
+        <div style={{ padding: 30, textAlign: 'center', color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>👥</div>
+          <div>Sin jugadores registrados</div>
+          <div style={{ fontSize: 12, marginTop: 4 }}>Agrega jugadores como relaciones tipo "Jugador" al equipo</div>
+        </div>
+      ) : (
+        <div className="att-grid">
+          {teamPlayers.map((record: any) => {
+            const present = record.present
+            const name = playerName(record.player)
+            const first = name.split(' ')[0] || name
+            const num = record.number ?? record.player?.playerNumber
+            return (
               <button
-                className={`attendance-toggle ${present ? 'present' : 'absent'}`}
-                onClick={() => toggleMutation.mutate({
-                  playerId: record.playerId,
-                  teamId: record.teamId,
-                  present: !present,
-                })}
-                disabled={toggleMutation.isPending}
+                key={record.id}
+                className={`att-card ${present ? 'present' : ''}`}
+                onClick={() => toggleMutation.mutate({ playerId: record.playerId, teamId: record.teamId, present: !present })}
               >
-                {present ? <CheckOutlined /> : '—'}
+                {record.player?.logoUrl
+                  ? <img src={record.player.logoUrl} alt="" style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${present ? 'var(--green)' : 'var(--border)'}` }} />
+                  : <div style={{
+                      width: 44, height: 44, borderRadius: '50%',
+                      background: present ? 'rgba(0,230,118,0.2)' : 'var(--surface)',
+                      border: `2px solid ${present ? 'var(--green)' : 'var(--border)'}`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 18, fontWeight: 700, color: present ? 'var(--green)' : 'var(--text-muted)',
+                    }}>
+                    {(first[0] || '?').toUpperCase()}
+                  </div>}
+                {num != null && (
+                  <div style={{ fontFamily: "'Bebas Neue','Inter',sans-serif", fontSize: 18, fontWeight: 900, color: present ? 'var(--green)' : 'var(--text-muted)', lineHeight: 1 }}>
+                    #{num}
+                  </div>
+                )}
+                <div style={{ fontSize: 10, fontWeight: 700, color: present ? 'var(--green)' : 'var(--text-muted)', textAlign: 'center', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.2 }}>
+                  {first}
+                </div>
+                <div style={{ fontSize: 9, color: present ? 'var(--green)' : 'rgba(255,255,255,0.25)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  {present ? '✓' : '—'}
+                </div>
               </button>
-            </div>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* Action buttons */}
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '16px', background: 'var(--bg)', borderTop: '1px solid var(--border)', display: 'flex', gap: 10 }}>

@@ -353,24 +353,24 @@ html, body {
 
 .actions-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 7px;
 }
 
 .action-btn {
   border: none;
   border-radius: var(--radius);
-  padding: 14px 8px;
-  font-size: 13px;
+  padding: 10px 6px;
+  font-size: 11px;
   font-weight: 700;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   transition: transform 0.1s, opacity 0.2s;
   -webkit-tap-highlight-color: transparent;
-  min-height: 70px;
+  min-height: 58px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -378,7 +378,7 @@ html, body {
 .action-btn:active { transform: scale(0.95); }
 
 .action-btn .action-icon {
-  font-size: 22px;
+  font-size: 18px;
 }
 
 .action-btn.td    { background: var(--green); color: #000; }
@@ -393,6 +393,7 @@ html, body {
 .action-btn.sack { background: #1a0028; color: #ce93d8; border: 1px solid #ce93d8; }
 .action-btn.score-adjust { background: #1a0030; color: #9c27b0; border: 1px solid #9c27b0; }
 .action-btn.timeout { background: #2d2000; color: #faad14; border: 1px solid #faad14; }
+.action-btn.void-score { background: #2d0a0a; color: #ff6b6b; border: 1px solid #ff6b6b; }
 
 /* ── Section header ── */
 .section-header {
@@ -440,7 +441,38 @@ html, body {
   max-width: 360px;
 }
 
-/* ── Attendance ── */
+/* ── Attendance grid ── */
+.att-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 12px;
+}
+
+.att-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 4px 8px;
+  border-radius: var(--radius);
+  border: 2px solid var(--border);
+  background: var(--surface2);
+  cursor: pointer;
+  transition: all 0.12s;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 80px;
+  justify-content: center;
+}
+
+.att-card.present {
+  border-color: var(--green);
+  background: rgba(0, 230, 118, 0.1);
+}
+
+.att-card:active { transform: scale(0.93); }
+
+/* ── Attendance (legacy list) ── */
 .attendance-player {
   display: flex;
   align-items: center;

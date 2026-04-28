@@ -38,7 +38,7 @@ type ActionType =
   | 'TD' | 'XP1' | 'XP2' | 'SAFETY' | 'PENALTY' | 'SACK'
   | 'NEXT_DOWN' | 'PREV_DOWN' | 'POSSESSION'
   | 'HALFTIME' | 'END_GAME' | 'TIMEOUT' | 'SCORE_ADJUST'
-  | 'INTERCEPTION' | null
+  | 'INTERCEPTION' | 'VOID_SCORE' | null
 
 function plyLabel(a: any) {
   const num = a.number || a.player?.playerNumber
@@ -190,6 +190,7 @@ export default function GamePage() {
   const [statsOpen, setStatsOpen] = useState(false)
   const [adjustLocalScore, setAdjustLocalScore] = useState(0)
   const [adjustVisitingScore, setAdjustVisitingScore] = useState(0)
+  const [voidType, setVoidType] = useState<'TD' | 'XP1' | 'XP2'>('TD')
 
   const { data: gameData, isLoading } = useQuery({
     queryKey: ['iflag-game', gameId],
@@ -260,7 +261,7 @@ export default function GamePage() {
   function resetActionState() {
     setAction(null); setSelectedTeamId(undefined); setSelectedPlayerId(undefined)
     setTdPasser(undefined); setTdReceiver(undefined); setTdIsRush(false)
-    setTdRunner(undefined); setIntPlayer(undefined)
+    setTdRunner(undefined); setIntPlayer(undefined); setVoidType('TD')
   }
 
   const handleAction = useCallback((type: ActionType) => {
@@ -291,6 +292,10 @@ export default function GamePage() {
     if (type === 'SCORE_ADJUST' && game) {
       setAdjustLocalScore(game.localScore)
       setAdjustVisitingScore(game.visitingScore)
+    }
+    if (type === 'VOID_SCORE' && game) {
+      setSelectedTeamId(game.offenseTeamId ?? game.localTeamId)
+      setVoidType('TD')
     }
   }, [isSpectator, game])
 
@@ -399,6 +404,13 @@ export default function GamePage() {
       recordEventMutation.mutate({ type: 'TIMEOUT', teamId: selectedTeamId, description: `Tiempo fuera — ${teamLabel}` })
     } else if (action === 'SCORE_ADJUST') {
       recordEventMutation.mutate({ type: 'SCORE_ADJUST', newLocalScore: adjustLocalScore, newVisitingScore: adjustVisitingScore, description: `Ajuste: ${adjustLocalScore} - ${adjustVisitingScore}` })
+    } else if (action === 'VOID_SCORE') {
+      const pts = voidType === 'TD' ? 6 : voidType === 'XP2' ? 2 : 1
+      const isLocal = selectedTeamId === game.localTeamId
+      const newLocal = isLocal ? Math.max(0, game.localScore - pts) : game.localScore
+      const newVisit = !isLocal ? Math.max(0, game.visitingScore - pts) : game.visitingScore
+      const typeLabel = voidType === 'TD' ? 'Touchdown (-6)' : voidType === 'XP1' ? 'Punto extra (-1)' : 'Punto extra (-2)'
+      recordEventMutation.mutate({ type: 'SCORE_ADJUST', newLocalScore: newLocal, newVisitingScore: newVisit, description: `Anulado: ${typeLabel} — ${teamLabel}` })
     } else if (action === 'END_GAME') {
       recordEventMutation.mutate({ type: 'GAME_END', description: 'Partido finalizado' })
     }
@@ -457,6 +469,7 @@ export default function GamePage() {
     HALFTIME: isHalftime ? 'Fin Medio Tiempo' : 'Medio Tiempo',
     END_GAME: 'Finalizar Partido', TIMEOUT: 'Tiempo Fuera',
     SCORE_ADJUST: 'Ajustar Marcador', INTERCEPTION: 'Intercepción',
+    VOID_SCORE: 'Anular Anotación',
   }
 
   const labelStyle = { fontSize: 12, color: '#e6edf3', marginBottom: 8, fontWeight: 600 as const, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }
@@ -576,15 +589,15 @@ export default function GamePage() {
                     {!isSpectator && !isHalftime && (
                       <>
                         {timerRunning ? (
-                          <button className="timer-btn stop" style={{ padding: '9px 14px', fontSize: 13, minWidth: 0 }} onClick={() => timerStopMutation.mutate()} disabled={timerStopMutation.isPending}>
-                            <PauseCircleOutlined style={{ marginRight: 4 }} /> Detener
+                          <button className="timer-btn stop" style={{ padding: '14px 16px', fontSize: 16, minWidth: 0 }} onClick={() => timerStopMutation.mutate()} disabled={timerStopMutation.isPending}>
+                            <PauseCircleOutlined style={{ marginRight: 5 }} /> Detener
                           </button>
                         ) : (
-                          <button className="timer-btn start" style={{ padding: '9px 14px', fontSize: 13, minWidth: 0 }} onClick={() => timerStartMutation.mutate()} disabled={timerStartMutation.isPending}>
-                            <PlayCircleOutlined style={{ marginRight: 4 }} /> Iniciar
+                          <button className="timer-btn start" style={{ padding: '14px 16px', fontSize: 16, minWidth: 0 }} onClick={() => timerStartMutation.mutate()} disabled={timerStartMutation.isPending}>
+                            <PlayCircleOutlined style={{ marginRight: 5 }} /> Iniciar
                           </button>
                         )}
-                        <button className="timer-btn reset" style={{ padding: '5px 14px', fontSize: 12, minWidth: 0 }} onClick={() => timerResetMutation.mutate()} disabled={timerResetMutation.isPending}>
+                        <button className="timer-btn reset" style={{ padding: '10px 14px', fontSize: 14, minWidth: 0 }} onClick={() => timerResetMutation.mutate()} disabled={timerResetMutation.isPending}>
                           Reset
                         </button>
                       </>
@@ -631,10 +644,10 @@ export default function GamePage() {
                             </button>
                           </div>
                           <div style={{ display: 'flex', gap: 6 }}>
-                            <button className="timer-btn reset" style={{ flex: 1, padding: '6px 0', fontSize: 12 }} onClick={doPrevDown} disabled={game.currentDown <= 1 || recordEventMutation.isPending}>
+                            <button className="timer-btn reset" style={{ flex: 1, padding: '11px 0', fontSize: 15 }} onClick={doPrevDown} disabled={game.currentDown <= 1 || recordEventMutation.isPending}>
                               ◀ Regresar
                             </button>
-                            <button className="timer-btn start" style={{ flex: 1, padding: '6px 0', fontSize: 12 }} onClick={doNextDown} disabled={recordEventMutation.isPending}>
+                            <button className="timer-btn start" style={{ flex: 1, padding: '11px 0', fontSize: 15 }} onClick={doNextDown} disabled={recordEventMutation.isPending}>
                               Siguiente ▶
                             </button>
                           </div>
@@ -645,8 +658,31 @@ export default function GamePage() {
                 )}
               </div>
 
+              {/* Timeout strip — always visible on Panel 1 */}
+              {!isHalftime && (
+                <div style={{ width: '100%', padding: '6px 4px 0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface2)', borderRadius: 10, padding: '7px 12px', border: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      {[1, 2].map(i => (
+                        <div key={i} style={{ width: 13, height: 13, borderRadius: '50%', background: i <= localTimeoutsUsed ? '#faad14' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', transition: 'background 0.2s' }} />
+                      ))}
+                      <TeamTag team={game.localTeam} size={18} />
+                    </div>
+                    <span style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                      T. Fuera {halfLabel}
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <TeamTag team={game.visitingTeam} size={18} />
+                      {[1, 2].map(i => (
+                        <div key={i} style={{ width: 13, height: 13, borderRadius: '50%', background: i <= visitingTimeoutsUsed ? '#faad14' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', transition: 'background 0.2s' }} />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {!isSpectator && (
-                <div style={{ textAlign: 'center', padding: '6px 0', color: 'var(--text-muted)', fontSize: 11 }}>
+                <div style={{ textAlign: 'center', padding: '5px 0', color: 'var(--text-muted)', fontSize: 11 }}>
                   Desliza para Acciones →
                 </div>
               )}
@@ -685,43 +721,24 @@ export default function GamePage() {
                           <span className="action-icon"><TeamOutlined /></span>Posesión
                         </button>
                         <button className="action-btn timeout" onClick={() => handleAction('TIMEOUT')}>
-                          <span className="action-icon">⏱</span>Tiempo Fuera
+                          <span className="action-icon">⏱</span>T. Fuera
+                        </button>
+                        <button className="action-btn void-score" onClick={() => handleAction('VOID_SCORE')}>
+                          <span className="action-icon">↩</span>Anular
                         </button>
                       </>
                     )}
                     <button className="action-btn halftime" onClick={() => handleAction('HALFTIME')}>
                       <span className="action-icon">⏸</span>
-                      {isHalftime ? 'Fin Medio Tiempo' : 'Medio Tiempo'}
+                      {isHalftime ? 'Fin Medio' : 'Medio Tiempo'}
                     </button>
                     <button className="action-btn score-adjust" onClick={() => handleAction('SCORE_ADJUST')}>
-                      <span className="action-icon"><EditOutlined /></span>Ajustar Marcador
+                      <span className="action-icon"><EditOutlined /></span>Ajustar
                     </button>
                     <button className="action-btn end-game" onClick={() => handleAction('END_GAME')}>
-                      <span className="action-icon">🏁</span>Finalizar Partido
+                      <span className="action-icon">🏁</span>Finalizar
                     </button>
                   </div>
-
-                  {!isHalftime && (
-                    <div style={{ display: 'flex', justifyContent: 'space-around', marginTop: 16 }}>
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                          <TeamTag team={game.localTeam} size={16} />
-                        </div>
-                        <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-                          {[1, 2].map(i => <div key={i} style={{ width: 10, height: 10, borderRadius: '50%', background: i <= localTimeoutsUsed ? '#faad14' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)' }} />)}
-                        </div>
-                      </div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', alignSelf: 'center' }}>Tiempos fuera</div>
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                          <TeamTag team={game.visitingTeam} size={16} />
-                        </div>
-                        <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-                          {[1, 2].map(i => <div key={i} style={{ width: 10, height: 10, borderRadius: '50%', background: i <= visitingTimeoutsUsed ? '#faad14' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)' }} />)}
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
             )}
@@ -888,6 +905,39 @@ export default function GamePage() {
               <div style={labelStyle}>Jugador penalizado (opcional)</div>
               <PlayerGrid players={actionTeamPlayers} selected={selectedPlayerId} onSelect={setSelectedPlayerId} optional />
             </div>
+          </div>
+
+        ) : action === 'VOID_SCORE' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <div style={labelStyle}>Equipo</div>
+              <TeamButtons onSelect={() => {}} />
+            </div>
+            <div>
+              <div style={labelStyle}>¿Qué anular?</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {([
+                  { key: 'TD' as const,  label: 'Touchdown',    pts: -6, color: 'var(--green)' },
+                  { key: 'XP1' as const, label: 'Extra 1pt',    pts: -1, color: '#4db6ac' },
+                  { key: 'XP2' as const, label: 'Extra 2pts',   pts: -2, color: '#4db6ac' },
+                ] as const).map(({ key, label, pts, color }) => (
+                  <button
+                    key={key}
+                    className={`player-option ${voidType === key ? 'selected' : ''}`}
+                    style={{ flex: 1, padding: 12 }}
+                    onClick={() => setVoidType(key)}
+                  >
+                    <div style={{ fontWeight: 700, fontSize: 13, color: voidType === key ? color : '#e6edf3', textAlign: 'center' }}>{label}</div>
+                    <div style={{ fontSize: 11, color: voidType === key ? color : 'var(--text-muted)' }}>{pts} pts</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            {selectedTeamId && (
+              <div style={{ padding: '10px 12px', background: 'rgba(255,107,107,0.08)', borderRadius: 8, border: '1px solid rgba(255,107,107,0.25)', fontSize: 13, color: '#ff6b6b' }}>
+                ↩ Se reducirán {voidType === 'TD' ? 6 : voidType === 'XP1' ? 1 : 2} puntos de <strong>{selectedTeamId === game.localTeamId ? playerName(game.localTeam) : playerName(game.visitingTeam)}</strong>
+              </div>
+            )}
           </div>
 
         ) : (action === 'XP1' || action === 'XP2' || action === 'SAFETY') ? (
