@@ -98,7 +98,7 @@ export async function portalGetFloorPlan(req: Request, res: Response, next: Next
         id: true, code: true, status: true, polygon: true, dxfEntityIdx: true,
         floorPlanId: true,
         widthM: true, depthM: true, heightM: true, locationNotes: true,
-        client: { select: { companyName: true, firstName: true, lastName: true } },
+        client: { select: { companyName: true, firstName: true, lastName: true, logoUrl: true } },
       },
     })
 

@@ -5,7 +5,7 @@ import { AppError } from '../middleware/errorHandler'
 import { auditService } from '../services/audit.service'
 
 const STAND_INCLUDE = {
-  client: { select: { id: true, firstName: true, lastName: true, companyName: true } },
+  client: { select: { id: true, firstName: true, lastName: true, companyName: true, logoUrl: true } },
   orders: {
     select: { id: true, orderNumber: true, status: true, total: true, createdAt: true },
     orderBy: { createdAt: 'desc' as const },

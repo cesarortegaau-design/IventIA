@@ -1177,6 +1177,7 @@ export default function EventDetailPage() {
                         clientName: s.client
                           ? (s.client.companyName || `${s.client.firstName ?? ''} ${s.client.lastName ?? ''}`.trim())
                           : null,
+                        clientLogoUrl: s.client?.logoUrl ?? null,
                       }))}
                       clients={allClients}
                       onStandSave={handleStandSave}

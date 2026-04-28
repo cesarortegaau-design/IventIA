@@ -5,7 +5,7 @@ import {
 } from 'antd'
 import { EditOutlined, StopOutlined, PlusOutlined, LinkOutlined, ZoomInOutlined, ZoomOutOutlined, FullscreenExitOutlined } from '@ant-design/icons'
 import Konva from 'konva'
-import { Stage, Layer, Line, Circle, Text, Group } from 'react-konva'
+import { Stage, Layer, Line, Circle, Text, Group, Image as KonvaImage } from 'react-konva'
 // @ts-ignore — no official types for dxf-parser
 import DxfParser from 'dxf-parser'
 
@@ -22,6 +22,7 @@ export interface StandGeo {
   floorPlanId: string | null
   clientId?: string | null
   clientName?: string | null
+  clientLogoUrl?: string | null
   widthM?: number | null
   depthM?: number | null
   heightM?: number | null
@@ -171,6 +172,22 @@ export default function DxfViewer({
 
   const lastTouchDist = useRef<number | null>(null)
   const [isPinching, setIsPinching] = useState(false)
+
+  // Image cache for client logos on canvas
+  const imgCache = useRef<Map<string, HTMLImageElement>>(new Map())
+  const [, setImgVersion] = useState(0)
+  useEffect(() => {
+    stands.forEach(s => {
+      const url = s.clientLogoUrl
+      if (!url || imgCache.current.has(url)) return
+      const img = new window.Image()
+      img.crossOrigin = 'anonymous'
+      img.onload = () => { imgCache.current.set(url, img); setImgVersion(v => v + 1) }
+      img.onerror = () => imgCache.current.set(url, img)
+      imgCache.current.set(url, img)
+      img.src = url
+    })
+  }, [stands])
 
   const [selectedEntityIdx, setSelectedEntityIdx] = useState<number | null>(null)
   const [editingStand, setEditingStand] = useState<Partial<StandSaveData> | null>(null)
@@ -339,7 +356,10 @@ export default function DxfViewer({
       locationNotes: stand.locationNotes, clientId: stand.clientId,
       polygon: stand.polygon ?? [], dxfEntityIdx: stand.dxfEntityIdx, floorPlanId: stand.floorPlanId ?? floorPlan.id,
     }
-    setEditingStand(draft); setEditingStandFull(stand)
+    // Carry logo URL from selected client if not yet on stand data (client just changed)
+    const selectedClient = clients.find(c => c.id === stand.clientId)
+    const fullStand: StandGeo = { ...stand, clientLogoUrl: stand.clientLogoUrl ?? (selectedClient as any)?.logoUrl ?? null }
+    setEditingStand(draft); setEditingStandFull(fullStand)
     setSelectedEntityIdx(stand.dxfEntityIdx)
     form.setFieldsValue({
       code: stand.code, status: stand.status,
@@ -472,6 +492,25 @@ export default function DxfViewer({
               text={name} fontSize={clientFontSize} fill="#e2e8f0" listening={false}
             />
           )
+        }
+        // Client logo (small square above the text block)
+        if (stand.clientLogoUrl) {
+          const img = imgCache.current.get(stand.clientLogoUrl)
+          if (img && img.complete && img.naturalWidth > 0) {
+            const logoSize = 22 / scale
+            const gap = 3 / scale
+            const textBlockTop = -cy - (stand.clientName ? lineH / 2 + codeFontSize / 2 : codeFontSize / 2)
+            elements.push(
+              <KonvaImage key={`${stand.id}-logo`}
+                image={img}
+                x={cx - logoSize / 2}
+                y={textBlockTop - gap - logoSize}
+                width={logoSize} height={logoSize}
+                cornerRadius={3 / scale}
+                listening={false}
+              />
+            )
+          }
         }
       })
     return elements
@@ -650,6 +689,14 @@ export default function DxfViewer({
             </Form.Item>
           </Form>
 
+          {/* Client logo */}
+          {editingStandFull?.clientLogoUrl && (
+            <div style={{ textAlign: 'center', marginBottom: 16 }}>
+              <img src={editingStandFull.clientLogoUrl} alt="Logo cliente"
+                style={{ maxHeight: 72, maxWidth: '100%', objectFit: 'contain', borderRadius: 6 }} />
+            </div>
+          )}
+
           {/* Órdenes vinculadas */}
           {editingStandFull?.id && (
             <div style={{ marginTop: 16 }}>
@@ -700,6 +747,12 @@ export default function DxfViewer({
           title={`Stand ${portalStand?.code ?? ''}`}>
           {portalStand && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {portalStand.clientLogoUrl && (
+                <div style={{ textAlign: 'center' }}>
+                  <img src={portalStand.clientLogoUrl} alt="Logo"
+                    style={{ maxHeight: 80, maxWidth: '100%', objectFit: 'contain', borderRadius: 6 }} />
+                </div>
+              )}
               <div>
                 <Tag color={portalStand.status === 'AVAILABLE' ? 'green' : portalStand.status === 'RESERVED' ? 'gold' : 'red'}>
                   {STATUS_LABELS[portalStand.status]}

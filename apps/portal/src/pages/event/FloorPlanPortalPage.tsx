@@ -36,6 +36,7 @@ export default function FloorPlanPortalPage() {
     clientName: s.client
       ? (s.client.companyName || `${s.client.firstName ?? ''} ${s.client.lastName ?? ''}`.trim())
       : null,
+    clientLogoUrl: s.client?.logoUrl ?? null,
   }))
 
   if (isLoading) {
