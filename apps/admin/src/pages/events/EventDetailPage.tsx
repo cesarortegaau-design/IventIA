@@ -290,9 +290,18 @@ export default function EventDetailPage() {
       const signRes = await floorPlansApi.getUploadSignature(id!)
       const { timestamp, signature, apiKey, cloudName, folder } = signRes.data
 
-      // 2. Upload directly from browser to Cloudinary (no server bottleneck)
+      // 2. Compress DXF in the browser before uploading (DXF is plain text → ~8:1 ratio)
+      let uploadBlob: Blob = file
+      let uploadFileName = file.name
+      if (typeof CompressionStream !== 'undefined') {
+        const compressed = file.stream().pipeThrough(new CompressionStream('gzip'))
+        uploadBlob = await new Response(compressed).blob()
+        uploadFileName = file.name + '.gz'
+      }
+
+      // 3. Upload directly from browser to Cloudinary (no server bottleneck)
       const form = new FormData()
-      form.append('file', file)
+      form.append('file', uploadBlob, uploadFileName)
       form.append('api_key', apiKey)
       form.append('timestamp', String(timestamp))
       form.append('signature', signature)
@@ -308,8 +317,12 @@ export default function EventDetailPage() {
       }
       const cloudData = await cloudRes.json()
 
-      // 3. Save record to backend
-      const fp = await floorPlansApi.createRecord(id!, { fileUrl: cloudData.secure_url, fileName: file.name })
+      // 4. Save record to backend
+      const fp = await floorPlansApi.createRecord(id!, {
+        fileUrl: cloudData.secure_url,
+        fileName: uploadFileName,
+        name: file.name.replace(/\.dxf$/i, ''),
+      })
       refetchFloorPlans()
       setSelectedFpId(fp.data.id)
       message.success('Plano subido correctamente')

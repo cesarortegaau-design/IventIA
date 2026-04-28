@@ -130,18 +130,25 @@ export async function portalGetFloorPlanContent(req: Request, res: Response, nex
 
     const https = await import('https')
     const http = await import('http')
+    const zlib = await import('zlib')
     const fileUrl = fp.fileUrl
     const client = fileUrl.startsWith('https') ? https.default : http.default
 
-    const content = await new Promise<string>((resolve, reject) => {
+    const raw = await new Promise<Buffer>((resolve, reject) => {
       client.get(fileUrl, (proxyRes: any) => {
-        let data = ''
-        proxyRes.setEncoding('utf8')
-        proxyRes.on('data', (chunk: string) => { data += chunk })
-        proxyRes.on('end', () => resolve(data))
+        const chunks: Buffer[] = []
+        proxyRes.on('data', (chunk: Buffer) => { chunks.push(chunk) })
+        proxyRes.on('end', () => resolve(Buffer.concat(chunks)))
         proxyRes.on('error', reject)
       }).on('error', reject)
     })
+
+    const buffer = fp.fileName.endsWith('.gz')
+      ? await new Promise<Buffer>((resolve, reject) => {
+          zlib.default.gunzip(raw, (err, result) => { if (err) reject(err); else resolve(result) })
+        })
+      : raw
+    const content = buffer.toString('utf8')
 
     res.json({ success: true, data: { content, fileName: fp.fileName } })
   } catch (err) {

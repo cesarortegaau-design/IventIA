@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express'
 import https from 'https'
 import http from 'http'
 import crypto from 'crypto'
+import zlib from 'zlib'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { deleteFromCloudinary } from '../lib/cloudinary'
@@ -120,7 +121,9 @@ export async function getFloorPlanContent(req: Request, res: Response, next: Nex
     const fp = await prisma.floorPlan.findFirst({ where: { id: fpId, eventId } })
     if (!fp) throw new AppError(404, 'NOT_FOUND', 'Plano no encontrado')
 
-    const content = await fetchUrlAsText(fp.fileUrl)
+    const raw = await fetchUrlAsBuffer(fp.fileUrl)
+    const buffer = fp.fileName.endsWith('.gz') ? await gunzip(raw) : raw
+    const content = buffer.toString('utf8')
 
     res.json({ success: true, data: { content, fileName: fp.fileName } })
   } catch (err) {
@@ -128,15 +131,23 @@ export async function getFloorPlanContent(req: Request, res: Response, next: Nex
   }
 }
 
-function fetchUrlAsText(url: string): Promise<string> {
+function fetchUrlAsBuffer(url: string): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const client = url.startsWith('https') ? https : http
     client.get(url, (proxyRes) => {
-      let data = ''
-      proxyRes.setEncoding('utf8')
-      proxyRes.on('data', (chunk) => { data += chunk })
-      proxyRes.on('end', () => resolve(data))
+      const chunks: Buffer[] = []
+      proxyRes.on('data', (chunk: Buffer) => { chunks.push(chunk) })
+      proxyRes.on('end', () => resolve(Buffer.concat(chunks)))
       proxyRes.on('error', reject)
     }).on('error', reject)
+  })
+}
+
+function gunzip(buf: Buffer): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    zlib.gunzip(buf, (err, result) => {
+      if (err) reject(err)
+      else resolve(result)
+    })
   })
 }
