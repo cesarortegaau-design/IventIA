@@ -6,6 +6,10 @@ import { auditService } from '../services/audit.service'
 
 const STAND_INCLUDE = {
   client: { select: { id: true, firstName: true, lastName: true, companyName: true } },
+  orders: {
+    select: { id: true, orderNumber: true, status: true, total: true, createdAt: true },
+    orderBy: { createdAt: 'desc' as const },
+  },
 } as const
 
 // GET /events/:eventId/stands — list with geometry for DXF viewer

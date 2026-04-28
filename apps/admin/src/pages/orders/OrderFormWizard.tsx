@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Steps, Form, Select, Button, Table, InputNumber, Input, Space,
@@ -34,6 +34,7 @@ function calcTimeUnitValue(timeUnit: string | null | undefined, startDate: strin
 export default function OrderFormWizard() {
   const { eventId } = useParams<{ eventId: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const [step, setStep] = useState(0)
@@ -101,6 +102,9 @@ export default function OrderFormWizard() {
     const now = dayjs()
     form.setFieldValue('startDate', now)
     form.setFieldValue('endDate', now)
+    const state = location.state as { standId?: string; clientId?: string } | null
+    if (state?.clientId) form.setFieldValue('clientId', state.clientId)
+    if (state?.standId) form.setFieldValue('standId', state.standId)
   }, [event?.priceListId])
 
   const createMutation = useMutation({

@@ -203,6 +203,13 @@ export default function EventDetailPage() {
   })
   const teamClients = (teamClientsData?.data ?? []).filter((c: any) => c.isTeam)
 
+  const { data: allClientsData } = useQuery({
+    queryKey: ['clients-all-for-stands'],
+    queryFn: () => clientsApi.list({ pageSize: 500 }),
+    enabled: !!id,
+  })
+  const allClients: any[] = allClientsData?.data ?? []
+
   const updateEventMutation = useMutation({
     mutationFn: (vals: any) => eventsApi.update(id!, vals),
     onSuccess: () => {
@@ -1145,9 +1152,20 @@ export default function EventDetailPage() {
                       eventId={id!}
                       floorPlan={floorPlans.find((fp: any) => fp.id === selectedFpId)}
                       fetchContent={(fpId) => floorPlansApi.getContent(id!, fpId)}
-                      stands={standsGeo}
+                      stands={standsGeo.map((s: any) => ({
+                        ...s,
+                        clientName: s.client
+                          ? (s.client.companyName || `${s.client.firstName ?? ''} ${s.client.lastName ?? ''}`.trim())
+                          : null,
+                      }))}
+                      clients={allClients}
                       onStandSave={handleStandSave}
                       onStandDelete={handleStandDelete}
+                      onCreateOrder={(standId, clientId) => {
+                        navigate(`/eventos/${id}/ordenes/nueva`, {
+                          state: { standId, clientId },
+                        })
+                      }}
                       height={580}
                     />
                   )}
