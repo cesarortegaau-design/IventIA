@@ -1129,6 +1129,26 @@ export default function EventDetailPage() {
                         >
                           {fp.name}
                         </Button>
+                        <Tooltip title="Descargar DXF">
+                          <Button
+                            size="small"
+                            icon={<DownloadOutlined />}
+                            onClick={async () => {
+                              try {
+                                const res = await floorPlansApi.getContent(id!, fp.id)
+                                const blob = new Blob([res.data.content], { type: 'text/plain' })
+                                const url = URL.createObjectURL(blob)
+                                const a = document.createElement('a')
+                                a.href = url
+                                a.download = fp.fileName
+                                a.click()
+                                URL.revokeObjectURL(url)
+                              } catch {
+                                message.error('Error al descargar el plano')
+                              }
+                            }}
+                          />
+                        </Tooltip>
                         <Popconfirm
                           title="¿Eliminar este plano?"
                           onConfirm={() => deleteFloorPlanMutation.mutate(fp.id)}

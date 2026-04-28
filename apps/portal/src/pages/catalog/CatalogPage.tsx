@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import {
   Button, Drawer, Tag, Typography, Space, InputNumber, Divider,
-  Empty, Spin, Badge, App, Input, Image, Row, Col, DatePicker,
+  Empty, Spin, Badge, App, Input, Image, Row, Col, DatePicker, Select,
 } from 'antd'
 import dayjs, { Dayjs } from 'dayjs'
 import {
@@ -379,19 +379,21 @@ function ProductDetailDrawer({ item, cartQty, onAdd, onRemove, onClose, open }: 
 }
 
 // ── Cart Drawer ────────────────────────────────────────────────────────────────
-function CartDrawer({ open, cart, onClose, onQtyChange, onRemove, onSubmit, submitting, eventId }: {
+function CartDrawer({ open, cart, onClose, onQtyChange, onRemove, onSubmit, submitting, eventId, stands }: {
   open: boolean
   cart: CartItem[]
   onClose: () => void
   onQtyChange: (id: string, qty: number) => void
   onRemove: (id: string) => void
-  onSubmit: (notes: string, startDate?: string, endDate?: string) => void
+  onSubmit: (notes: string, startDate?: string, endDate?: string, standId?: string | null) => void
   submitting: boolean
   eventId: string
+  stands: any[]
 }) {
   const [notes, setNotes] = useState('')
   const [startDate, setStartDate] = useState<Dayjs | null>(null)
   const [endDate, setEndDate] = useState<Dayjs | null>(null)
+  const [standId, setStandId] = useState<string | null>(null)
   const subtotal = cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
   const tax = subtotal * 0.16
 
@@ -430,7 +432,7 @@ function CartDrawer({ open, cart, onClose, onQtyChange, onRemove, onSubmit, subm
           )}
           <button
             disabled={cart.length === 0 || !startDate || !endDate || submitting}
-            onClick={() => onSubmit(notes, startDate!.toISOString(), endDate!.toISOString())}
+            onClick={() => onSubmit(notes, startDate!.toISOString(), endDate!.toISOString(), standId)}
             style={{
               width: '100%', background: (cart.length === 0 || !startDate || !endDate) ? COLORS.offWhite : COLORS.primary,
               color: (cart.length === 0 || !startDate || !endDate) ? COLORS.textTertiary : '#fff',
@@ -543,6 +545,25 @@ function CartDrawer({ open, cart, onClose, onQtyChange, onRemove, onSubmit, subm
             </div>
           </div>
 
+          {/* Stand */}
+          {stands.length > 0 && (
+            <div style={{ paddingTop: 12 }}>
+              <Text style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 6, color: COLORS.textPrimary }}>
+                Stand (opcional)
+              </Text>
+              <Select
+                allowClear
+                showSearch
+                placeholder="Seleccionar stand…"
+                value={standId ?? undefined}
+                onChange={(v) => setStandId(v ?? null)}
+                filterOption={(input, opt) => (opt?.label as string ?? '').toLowerCase().includes(input.toLowerCase())}
+                style={{ width: '100%', borderRadius: 8 }}
+                options={stands.map((s: any) => ({ value: s.id, label: `Stand ${s.code}` }))}
+              />
+            </div>
+          )}
+
           {/* Notes */}
           <div style={{ paddingTop: 12 }}>
             <Text style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 6, color: COLORS.textPrimary }}>
@@ -587,6 +608,7 @@ export default function CatalogPage() {
 
   const catalog: any[] = catalogData?.data?.data ?? []
   const eventName = eventData?.data?.data?.name ?? ''
+  const stands: any[] = eventData?.data?.data?.stands ?? []
 
   // Group types for filter tabs
   const types = useMemo(() => {
@@ -651,12 +673,13 @@ export default function CatalogPage() {
   }
 
   const createMutation = useMutation({
-    mutationFn: ({ notes, startDate, endDate }: { notes: string; startDate?: string; endDate?: string }) =>
+    mutationFn: ({ notes, startDate, endDate, standId }: { notes: string; startDate?: string; endDate?: string; standId?: string | null }) =>
       ordersApi.create(eventId!, {
         items: cart.map(i => ({ priceListItemId: i.priceListItemId, quantity: i.quantity })),
         notes,
         startDate,
         endDate,
+        standId,
       }),
     onSuccess: res => {
       setOrderDone(res.data.data)
@@ -827,9 +850,10 @@ export default function CatalogPage() {
         onClose={() => setCartOpen(false)}
         onQtyChange={setQty}
         onRemove={id => setCart(prev => prev.filter(c => c.priceListItemId !== id))}
-        onSubmit={(notes, startDate, endDate) => createMutation.mutate({ notes, startDate, endDate })}
+        onSubmit={(notes, startDate, endDate, standId) => createMutation.mutate({ notes, startDate, endDate, standId })}
         submitting={createMutation.isPending}
         eventId={eventId!}
+        stands={stands}
       />
     </div>
   )

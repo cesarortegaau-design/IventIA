@@ -160,8 +160,9 @@ export async function portalCreateOrder(req: Request, res: Response, next: NextF
       notes: z.string().optional(),
       startDate: z.string().datetime(),
       endDate: z.string().datetime(),
+      standId: z.string().optional().nullable(),
     })
-    const { items, notes, startDate, endDate } = schema.parse(req.body)
+    const { items, notes, startDate, endDate, standId } = schema.parse(req.body)
 
     const portalUser = await prisma.portalUser.findUnique({
       where: { id: portalUserId },
@@ -253,6 +254,7 @@ export async function portalCreateOrder(req: Request, res: Response, next: NextF
         notes: notes ?? 'Orden creada desde Portal de Expositores',
         startDate: startDate ? new Date(startDate) : undefined,
         endDate: endDate ? new Date(endDate) : undefined,
+        standId: standId ?? undefined,
         createdById: systemUser.id,
         lineItems: {
           create: lineItems.map((li) => ({

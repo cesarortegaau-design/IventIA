@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import {
-  Button, InputNumber, App,
+  Button, InputNumber, App, Select,
   Empty, Spin, Image, Grid, Row, Col, Input, DatePicker,
 } from 'antd'
 import dayjs, { Dayjs } from 'dayjs'
@@ -231,6 +231,7 @@ export default function NewOrderPage() {
   const [notes, setNotes] = useState('')
   const [startDate, setStartDate] = useState<Dayjs | null>(null)
   const [endDate, setEndDate] = useState<Dayjs | null>(null)
+  const [standId, setStandId] = useState<string | null>(null)
   const [orderCreated, setOrderCreated] = useState<any>(null)
 
   const { data: catalogData, isLoading } = useQuery({
@@ -238,7 +239,14 @@ export default function NewOrderPage() {
     queryFn: () => eventsApi.getCatalog(eventId!),
   })
 
+  const { data: eventData } = useQuery({
+    queryKey: ['portal-event', eventId],
+    queryFn: () => eventsApi.get(eventId!),
+    enabled: !!eventId,
+  })
+
   const catalog = catalogData?.data?.data ?? []
+  const stands: any[] = eventData?.data?.data?.stands ?? []
 
   const createOrderMutation = useMutation({
     mutationFn: () => ordersApi.create(eventId!, {
@@ -250,6 +258,7 @@ export default function NewOrderPage() {
       notes,
       startDate: startDate?.toISOString(),
       endDate: endDate?.toISOString(),
+      standId: standId ?? undefined,
     }),
     onSuccess: (res) => {
       setOrderCreated(res.data.data)
@@ -591,6 +600,24 @@ export default function NewOrderPage() {
                   </Col>
                 </Row>
               </div>
+
+              {stands.length > 0 && (
+                <div style={{ marginTop: 20 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <span style={{ fontWeight: 600, color: '#0f172a', fontSize: 14 }}>Stand (opcional)</span>
+                  </div>
+                  <Select
+                    allowClear
+                    showSearch
+                    placeholder="Seleccionar stand…"
+                    value={standId ?? undefined}
+                    onChange={(v) => setStandId(v ?? null)}
+                    filterOption={(input, opt) => (opt?.label as string ?? '').toLowerCase().includes(input.toLowerCase())}
+                    style={{ width: '100%', borderRadius: 10 }}
+                    options={stands.map((s: any) => ({ value: s.id, label: `Stand ${s.code}` }))}
+                  />
+                </div>
+              )}
 
               <div style={{ marginTop: 24 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
