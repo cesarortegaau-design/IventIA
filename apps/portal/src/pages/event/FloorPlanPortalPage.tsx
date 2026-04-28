@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Button, Spin, Alert, Typography, Tag, App } from 'antd'
+import { Button, Spin, Alert, Typography, Tag } from 'antd'
 import { ArrowLeftOutlined } from '@ant-design/icons'
 import { eventsApi } from '../../api/events'
 import DxfViewer from '../../components/DxfViewer'
@@ -23,7 +23,6 @@ const STATUS_LABELS: Record<string, string> = {
 export default function FloorPlanPortalPage() {
   const { eventId } = useParams<{ eventId: string }>()
   const navigate = useNavigate()
-  const { modal } = App.useApp()
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['portal-floor-plan', eventId],
@@ -94,16 +93,14 @@ export default function FloorPlanPortalPage() {
 
       {/* Viewer */}
       {floorPlan && (
-        <App>
-          <DxfViewer
-            eventId={eventId!}
-            floorPlan={floorPlan}
-            fetchContent={(fpId) => eventsApi.getFloorPlanContent(eventId!, fpId)}
-            stands={stands}
-            readonly
-            height={560}
-          />
-        </App>
+        <DxfViewer
+          eventId={eventId!}
+          floorPlan={floorPlan}
+          fetchContent={(fpId) => eventsApi.getFloorPlanContent(eventId!, fpId)}
+          stands={stands}
+          readonly
+          height={560}
+        />
       )}
 
       {/* Stand summary table */}

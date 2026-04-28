@@ -96,6 +96,7 @@ export async function portalGetFloorPlan(req: Request, res: Response, next: Next
       where: { eventId, floorPlanId: floorPlan.id, isActive: true, status: { not: 'BLOCKED' } },
       select: {
         id: true, code: true, status: true, polygon: true, dxfEntityIdx: true,
+        floorPlanId: true,
         widthM: true, depthM: true, heightM: true, locationNotes: true,
         client: { select: { companyName: true, firstName: true, lastName: true } },
       },
