@@ -42,17 +42,22 @@ export async function uploadFloorPlan(req: Request, res: Response, next: NextFun
     }
 
     if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
-      throw new AppError(500, 'CLOUDINARY_NOT_CONFIGURED', 'Cloudinary no está configurado. Agrega CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY y CLOUDINARY_API_SECRET como variables de entorno en Render.')
+      const missing = ['CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET'].filter(k => !process.env[k]).join(', ')
+      console.error(`[floor-plans] Cloudinary env vars missing: ${missing}`)
+      throw new AppError(503, 'CLOUDINARY_NOT_CONFIGURED', `Cloudinary no está configurado en el servidor. Variables faltantes: ${missing}`)
     }
 
     const name = (req.body.name as string)?.trim() || req.file.originalname.replace(/\.[^.]+$/, '')
 
+    console.log(`[floor-plans] Uploading "${req.file.originalname}" (${req.file.size} bytes) to Cloudinary for event ${eventId}`)
     let url: string
     try {
       const result = await uploadToCloudinary(req.file.buffer, 'iventia/floor-plans', 'raw')
       url = result.url
+      console.log(`[floor-plans] Upload OK: ${url}`)
     } catch (cloudErr: any) {
-      throw new AppError(500, 'UPLOAD_FAILED', `Error al subir a Cloudinary: ${cloudErr?.message ?? cloudErr}`)
+      console.error('[floor-plans] Cloudinary upload error:', cloudErr)
+      throw new AppError(502, 'UPLOAD_FAILED', `Error al subir a Cloudinary: ${cloudErr?.message ?? cloudErr}`)
     }
 
     const floorPlan = await prisma.floorPlan.create({

@@ -290,8 +290,9 @@ export default function EventDetailPage() {
       refetchFloorPlans()
       setSelectedFpId(fp.data.id)
       message.success('Plano subido correctamente')
-    } catch {
-      message.error('Error al subir el plano')
+    } catch (err: any) {
+      const detail = err?.response?.data?.error?.message ?? err?.message ?? 'Error al subir el plano'
+      message.error(detail, 8)
     } finally {
       setFpUploading(false)
     }
