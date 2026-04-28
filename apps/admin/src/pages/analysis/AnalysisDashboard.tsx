@@ -1,17 +1,18 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import {
-  Card, Row, Col, Statistic, Input, Button, Spin, Typography, Space, Alert,
-  theme, Grid,
+  Card, Row, Col, Statistic, Input, Button, Spin, Typography, Space,
+  theme, Grid, Tooltip,
 } from 'antd'
 import {
   SendOutlined, RobotOutlined, UserOutlined, LoadingOutlined,
   DollarOutlined, ShoppingCartOutlined, BarChartOutlined, CalendarOutlined,
+  FileWordOutlined, FileExcelOutlined,
 } from '@ant-design/icons'
 import {
   BarChart, Bar, LineChart, Line, AreaChart, Area,
   PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip, Legend, ResponsiveContainer,
 } from 'recharts'
 import { aiApi } from '../../api/ai'
 
@@ -41,15 +42,157 @@ interface ChatMessage {
   chart?: ChartConfig | null
 }
 
+// ─── Export helpers ───────────────────────────────────────────────────────────
+
+async function exportToWord(messages: ChatMessage[]) {
+  const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, AlignmentType, BorderStyle } = await import('docx')
+
+  const date = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })
+
+  const borderNone = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' }
+  const tableBorder = { style: BorderStyle.SINGLE, size: 4, color: 'D1D5DB' }
+
+  const children: InstanceType<typeof Paragraph | typeof Table>[] = [
+    new Paragraph({
+      children: [new TextRun({ text: 'Análisis IA — IventIA', bold: true, size: 36, color: '1a0533' })],
+      heading: HeadingLevel.HEADING_1,
+      spacing: { after: 120 },
+    }),
+    new Paragraph({
+      children: [new TextRun({ text: `Generado el ${date}`, size: 20, color: '64748b' })],
+      alignment: AlignmentType.RIGHT,
+      spacing: { after: 480 },
+    }),
+  ]
+
+  let qNum = 0
+  messages.forEach(msg => {
+    if (msg.role === 'user') {
+      qNum++
+      children.push(
+        new Paragraph({
+          children: [new TextRun({ text: `${qNum}. ${msg.content}`, bold: true, size: 24, color: '1e40af' })],
+          spacing: { before: 360, after: 120 },
+        })
+      )
+    } else if (msg.role === 'assistant' && msg.content) {
+      const lines = msg.content.split('\n')
+      lines.forEach(line => {
+        const trimmed = line.trimStart()
+        const isBullet = trimmed.startsWith('- ') || trimmed.startsWith('• ')
+        children.push(
+          new Paragraph({
+            children: [new TextRun({ text: isBullet ? trimmed.slice(2) : line, size: 22 })],
+            bullet: isBullet ? { level: 0 } : undefined,
+            spacing: { before: isBullet ? 0 : 80, after: 0 },
+          })
+        )
+      })
+
+      // Embed chart data as a formatted table
+      if (msg.chart?.data?.length) {
+        const { chart } = msg
+        const keys = Object.keys(chart.data[0])
+
+        children.push(
+          new Paragraph({
+            children: [new TextRun({ text: chart.title || 'Datos de gráfica', bold: true, size: 22, color: '6B46C1' })],
+            spacing: { before: 240, after: 120 },
+          })
+        )
+
+        const headerRow = new TableRow({
+          children: keys.map(k => new TableCell({
+            children: [new Paragraph({ children: [new TextRun({ text: k, bold: true, size: 20, color: 'FFFFFF' })] })],
+            shading: { fill: '6B46C1' },
+            borders: { top: tableBorder, bottom: tableBorder, left: tableBorder, right: tableBorder },
+          })),
+          tableHeader: true,
+        })
+
+        const dataRows = chart.data.map((row, ri) => new TableRow({
+          children: keys.map(k => new TableCell({
+            children: [new Paragraph({ children: [new TextRun({ text: String(row[k] ?? ''), size: 20 })] })],
+            shading: { fill: ri % 2 === 0 ? 'F3F0FF' : 'FFFFFF' },
+            borders: { top: tableBorder, bottom: tableBorder, left: tableBorder, right: tableBorder },
+          })),
+        }))
+
+        children.push(new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          rows: [headerRow, ...dataRows],
+          borders: { top: tableBorder, bottom: tableBorder, left: tableBorder, right: tableBorder, insideH: tableBorder, insideV: tableBorder },
+        }))
+
+        children.push(new Paragraph({ text: '', spacing: { after: 120 } }))
+      }
+    }
+  })
+
+  const doc = new Document({
+    sections: [{ properties: {}, children }],
+    styles: {
+      default: {
+        document: {
+          run: { font: 'Calibri', size: 22 },
+        },
+      },
+    },
+  })
+
+  const blob = await Packer.toBlob(doc)
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `analisis-ia-${new Date().toISOString().slice(0, 10)}.docx`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function exportChartToExcel(chart: ChartConfig) {
+  import('xlsx').then(XLSX => {
+    const wb = XLSX.utils.book_new()
+
+    // Build rows with friendly header labels
+    const labelMap: Record<string, string> = {}
+    chart.series?.forEach(s => { labelMap[s.key] = s.label })
+
+    const keys = Object.keys(chart.data[0] ?? {})
+    const header = keys.map(k => labelMap[k] ?? k)
+    const rows = chart.data.map(row => keys.map(k => {
+      const v = row[k]
+      return typeof v === 'number' ? v : String(v ?? '')
+    }))
+
+    const wsData = [header, ...rows]
+    const ws = XLSX.utils.aoa_to_sheet(wsData)
+
+    // Column widths
+    ws['!cols'] = keys.map(() => ({ wch: 20 }))
+
+    // Style header row (SheetJS CE doesn't support cell styles, but sets the data cleanly)
+    XLSX.utils.book_append_sheet(wb, ws, (chart.title ?? 'Datos').slice(0, 31))
+
+    // Also add a summary sheet with metadata
+    const metaWs = XLSX.utils.aoa_to_sheet([
+      ['Título', chart.title ?? ''],
+      ['Tipo de gráfica', chart.type],
+      ['Total de filas', chart.data.length],
+      ['Exportado el', new Date().toLocaleString('es-MX')],
+    ])
+    metaWs['!cols'] = [{ wch: 18 }, { wch: 30 }]
+    XLSX.utils.book_append_sheet(wb, metaWs, 'Información')
+
+    XLSX.writeFile(wb, `${(chart.title ?? 'datos').replace(/[^a-zA-Z0-9_-]/g, '_')}-${new Date().toISOString().slice(0, 10)}.xlsx`)
+  })
+}
+
 // ─── Chart Renderer ───────────────────────────────────────────────────────────
 
 function ChartRenderer({ config }: { config: ChartConfig }) {
   const { type, data, xKey, series, title } = config
 
-  const commonProps = {
-    data,
-    margin: { top: 8, right: 16, left: 0, bottom: 8 },
-  }
+  const commonProps = { data, margin: { top: 8, right: 16, left: 0, bottom: 8 } }
 
   if (type === 'pie') {
     const pieData = data as Array<{ name: string; value: number; color: string }>
@@ -59,11 +202,9 @@ function ChartRenderer({ config }: { config: ChartConfig }) {
         <ResponsiveContainer width="100%" height={240}>
           <PieChart>
             <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label>
-              {pieData.map((entry, i) => (
-                <Cell key={i} fill={entry.color ?? '#6B46C1'} />
-              ))}
+              {pieData.map((entry, i) => <Cell key={i} fill={entry.color ?? '#6B46C1'} />)}
             </Pie>
-            <Tooltip />
+            <ReTooltip />
             <Legend />
           </PieChart>
         </ResponsiveContainer>
@@ -71,23 +212,18 @@ function ChartRenderer({ config }: { config: ChartConfig }) {
     )
   }
 
-  if (!xKey || !series || series.length === 0) return null
+  if (!xKey || !series?.length) return null
 
-  const renderBars = () =>
-    series.map(s => <Bar key={s.key} dataKey={s.key} name={s.label} fill={s.color} radius={[4, 4, 0, 0]} />)
-
-  const renderLines = () =>
-    series.map(s => <Line key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={s.color} strokeWidth={2} dot={false} />)
-
-  const renderAreas = () =>
-    series.map(s => <Area key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={s.color} fill={s.color + '33'} strokeWidth={2} />)
+  const renderBars = () => series.map(s => <Bar key={s.key} dataKey={s.key} name={s.label} fill={s.color} radius={[4, 4, 0, 0]} />)
+  const renderLines = () => series.map(s => <Line key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={s.color} strokeWidth={2} dot={false} />)
+  const renderAreas = () => series.map(s => <Area key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={s.color} fill={s.color + '33'} strokeWidth={2} />)
 
   const shared = (
     <>
       <CartesianGrid strokeDasharray="3 3" />
       <XAxis dataKey={xKey} tick={{ fontSize: 11 }} />
       <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`} />
-      <Tooltip formatter={(v: number) => [`$${Number(v).toLocaleString()}`, '']} />
+      <ReTooltip formatter={(v: number) => [`$${Number(v).toLocaleString()}`, '']} />
       <Legend />
     </>
   )
@@ -123,8 +259,6 @@ function parseMessage(text: string): { text: string; chart: ChartConfig | null }
   return { text, chart: null }
 }
 
-// ─── Currency formatter ────────────────────────────────────────────────────────
-
 function fmtMXN(val: number): string {
   return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 0 }).format(val)
 }
@@ -139,107 +273,73 @@ export default function AnalysisDashboard() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: 'assistant',
-      content:
-        'Hola, soy tu asistente de análisis de IventIA. Puedo responder preguntas sobre ingresos, costos, márgenes, eventos y más. También puedo generar gráficas si me lo pides. ¿En qué te ayudo?',
+      content: 'Hola, soy tu asistente de análisis de IventIA. Puedo responder preguntas sobre ingresos, costos, márgenes, eventos y más. También puedo generar gráficas si me lo pides. ¿En qué te ayudo?',
       chart: null,
     },
   ])
   const [inputValue, setInputValue] = useState('')
+  const [exportingWord, setExportingWord] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Dashboard data
   const { data: dashData, isLoading: dashLoading } = useQuery({
     queryKey: ['ai', 'dashboard'],
     queryFn: aiApi.getDashboard,
   })
-
   const dashboard = dashData?.data
 
-  // Chat mutation
   const chatMutation = useMutation({
     mutationFn: ({ message, history }: { message: string; history: ChatMessage[] }) =>
-      aiApi.chat(
-        message,
-        history.map(m => ({ role: m.role, content: m.content })),
-      ),
+      aiApi.chat(message, history.map(m => ({ role: m.role, content: m.content }))),
     onSuccess: (data) => {
       const raw = data?.data?.text ?? 'Sin respuesta del asistente.'
       const parsed = parseMessage(raw)
-      setMessages(prev => [
-        ...prev,
-        { role: 'assistant', content: parsed.text, chart: parsed.chart },
-      ])
+      setMessages(prev => [...prev, { role: 'assistant', content: parsed.text, chart: parsed.chart }])
     },
     onError: () => {
-      setMessages(prev => [
-        ...prev,
-        { role: 'assistant', content: 'Error al conectar con el asistente. Por favor intenta de nuevo.', chart: null },
-      ])
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Error al conectar con el asistente. Por favor intenta de nuevo.', chart: null }])
     },
   })
 
   const sendMessage = () => {
     const msg = inputValue.trim()
     if (!msg || chatMutation.isPending) return
-
-    const newHistory = [...messages, { role: 'user' as const, content: msg, chart: null }]
-    setMessages(newHistory)
+    setMessages(prev => [...prev, { role: 'user', content: msg, chart: null }])
     setInputValue('')
     chatMutation.mutate({ message: msg, history: messages })
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      sendMessage()
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() }
   }
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  const handleExportWord = async () => {
+    setExportingWord(true)
+    try { await exportToWord(messages) } finally { setExportingWord(false) }
+  }
+
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+
+  const hasAssistantMessages = messages.some(m => m.role === 'assistant' && m.content)
 
   // ─── KPI Cards ───────────────────────────────────────────────────────────────
 
   const kpis = dashboard?.kpis
   const kpiCards = [
+    { title: 'Total Ingresos OS', value: kpis?.totalRevenue ?? 0, color: '#22c55e', icon: <DollarOutlined />, formatter: (v: number) => fmtMXN(v) },
+    { title: 'Total Costos OC',   value: kpis?.totalCosts ?? 0,   color: '#ef4444', icon: <ShoppingCartOutlined />, formatter: (v: number) => fmtMXN(v) },
     {
-      title: 'Total Ingresos OS',
-      value: kpis?.totalRevenue ?? 0,
-      prefix: '$',
-      color: '#22c55e',
-      icon: <DollarOutlined />,
-      formatter: (v: number) => fmtMXN(v),
-    },
-    {
-      title: 'Total Costos OC',
-      value: kpis?.totalCosts ?? 0,
-      prefix: '$',
-      color: '#ef4444',
-      icon: <ShoppingCartOutlined />,
-      formatter: (v: number) => fmtMXN(v),
-    },
-    {
-      title: 'Margen Bruto',
-      value: kpis?.grossMargin ?? 0,
+      title: 'Margen Bruto', value: kpis?.grossMargin ?? 0,
       suffix: ` (${(kpis?.marginPct ?? 0).toFixed(1)}%)`,
       color: (kpis?.grossMargin ?? 0) >= 0 ? '#6B46C1' : '#ef4444',
-      icon: <BarChartOutlined />,
-      formatter: (v: number) => fmtMXN(v),
+      icon: <BarChartOutlined />, formatter: (v: number) => fmtMXN(v),
     },
-    {
-      title: 'Eventos Activos',
-      value: kpis?.activeEvents ?? 0,
-      color: '#3b82f6',
-      icon: <CalendarOutlined />,
-    },
+    { title: 'Eventos Activos', value: kpis?.activeEvents ?? 0, color: '#3b82f6', icon: <CalendarOutlined /> },
   ]
 
-  // ─── Layout ───────────────────────────────────────────────────────────────────
+  // ─── Dashboard section ────────────────────────────────────────────────────────
 
   const dashboardSection = (
     <div>
-      {/* KPI Cards */}
       <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
         {kpiCards.map((k, i) => (
           <Col xs={12} sm={12} md={6} key={i}>
@@ -256,12 +356,9 @@ export default function AnalysisDashboard() {
         ))}
       </Row>
 
-      {/* Revenue vs Costs Bar Chart */}
       <Card
         title={<span style={{ fontSize: 14 }}>Ingresos vs Costos por Evento (Top 8)</span>}
-        size="small"
-        style={{ marginBottom: 12 }}
-        loading={dashLoading}
+        size="small" style={{ marginBottom: 12 }} loading={dashLoading}
       >
         {dashboard?.revenueByEvent?.length ? (
           <ResponsiveContainer width="100%" height={240}>
@@ -269,147 +366,102 @@ export default function AnalysisDashboard() {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="event" tick={{ fontSize: 10 }} angle={-30} textAnchor="end" interval={0} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : String(v)} />
-              <Tooltip formatter={(v: number) => [`$${Number(v).toLocaleString()}`, '']} />
+              <ReTooltip formatter={(v: number) => [`$${Number(v).toLocaleString()}`, '']} />
               <Legend />
               <Bar dataKey="ingresos" name="Ingresos" fill="#6B46C1" radius={[4, 4, 0, 0]} />
               <Bar dataKey="costos" name="Costos" fill="#ef4444" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
-        ) : (
-          !dashLoading && <Text type="secondary">Sin datos disponibles</Text>
-        )}
+        ) : (!dashLoading && <Text type="secondary">Sin datos disponibles</Text>)}
       </Card>
 
-      {/* Orders by Status Pie Chart */}
-      <Card
-        title={<span style={{ fontSize: 14 }}>Distribución de OS por Estado</span>}
-        size="small"
-        loading={dashLoading}
-      >
+      <Card title={<span style={{ fontSize: 14 }}>Distribución de OS por Estado</span>} size="small" loading={dashLoading}>
         {dashboard?.ordersByStatus?.length ? (
           <ResponsiveContainer width="100%" height={220}>
             <PieChart>
-              <Pie
-                data={dashboard.ordersByStatus}
-                dataKey="count"
-                nameKey="status"
-                cx="50%"
-                cy="50%"
-                outerRadius={80}
-                label={({ status, count }: any) => `${status}: ${count}`}
-              >
-                {dashboard.ordersByStatus.map((entry: any, i: number) => (
-                  <Cell key={i} fill={entry.color} />
-                ))}
+              <Pie data={dashboard.ordersByStatus} dataKey="count" nameKey="status" cx="50%" cy="50%" outerRadius={80}
+                label={({ status, count }: any) => `${status}: ${count}`}>
+                {dashboard.ordersByStatus.map((entry: any, i: number) => <Cell key={i} fill={entry.color} />)}
               </Pie>
-              <Tooltip />
+              <ReTooltip />
               <Legend />
             </PieChart>
           </ResponsiveContainer>
-        ) : (
-          !dashLoading && <Text type="secondary">Sin datos disponibles</Text>
-        )}
+        ) : (!dashLoading && <Text type="secondary">Sin datos disponibles</Text>)}
       </Card>
     </div>
   )
 
+  // ─── Chat section ─────────────────────────────────────────────────────────────
+
   const chatSection = (
     <Card
       title={
-        <Space>
-          <RobotOutlined style={{ color: '#6B46C1' }} />
-          <span>Asistente IA</span>
-        </Space>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Space>
+            <RobotOutlined style={{ color: '#6B46C1' }} />
+            <span>Asistente IA</span>
+          </Space>
+          <Tooltip title="Exportar conversación a Word">
+            <Button
+              size="small"
+              icon={<FileWordOutlined />}
+              loading={exportingWord}
+              disabled={!hasAssistantMessages}
+              onClick={handleExportWord}
+              style={{ color: '#1e40af', borderColor: '#1e40af' }}
+            >
+              Word
+            </Button>
+          </Tooltip>
+        </div>
       }
       style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
       styles={{ body: { display: 'flex', flexDirection: 'column', flex: 1, padding: 12 } }}
     >
       {/* Message list */}
-      <div
-        style={{
-          flex: 1,
-          overflowY: 'auto',
-          height: isMobile ? 380 : 560,
-          paddingRight: 4,
-          marginBottom: 12,
-        }}
-      >
+      <div style={{ flex: 1, overflowY: 'auto', height: isMobile ? 380 : 540, paddingRight: 4, marginBottom: 12 }}>
         {messages.map((msg, i) => {
           const isUser = msg.role === 'user'
           return (
-            <div
-              key={i}
-              style={{
-                display: 'flex',
-                justifyContent: isUser ? 'flex-end' : 'flex-start',
-                marginBottom: 12,
-              }}
-            >
+            <div key={i} style={{ display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start', marginBottom: 12 }}>
               {!isUser && (
-                <div
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: '50%',
-                    background: '#6B46C1',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginRight: 8,
-                    flexShrink: 0,
-                    alignSelf: 'flex-start',
-                    marginTop: 2,
-                  }}
-                >
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#6B46C1', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 8, flexShrink: 0, alignSelf: 'flex-start', marginTop: 2 }}>
                   <RobotOutlined style={{ color: '#fff', fontSize: 14 }} />
                 </div>
               )}
               <div style={{ maxWidth: '85%' }}>
-                <div
-                  style={{
-                    background: isUser ? '#6B46C1' : token.colorBgContainer,
-                    color: isUser ? '#fff' : token.colorText,
-                    border: isUser ? 'none' : `1px solid ${token.colorBorderSecondary}`,
-                    borderRadius: isUser ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
-                    padding: '8px 12px',
-                    fontSize: 13,
-                    lineHeight: 1.6,
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                  }}
-                >
+                <div style={{
+                  background: isUser ? '#6B46C1' : token.colorBgContainer,
+                  color: isUser ? '#fff' : token.colorText,
+                  border: isUser ? 'none' : `1px solid ${token.colorBorderSecondary}`,
+                  borderRadius: isUser ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
+                  padding: '8px 12px', fontSize: 13, lineHeight: 1.6,
+                  whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                }}>
                   {msg.content}
                 </div>
                 {msg.chart && (
-                  <div
-                    style={{
-                      background: token.colorBgContainer,
-                      border: `1px solid ${token.colorBorderSecondary}`,
-                      borderRadius: 8,
-                      padding: 12,
-                      marginTop: 6,
-                    }}
-                  >
+                  <div style={{ background: token.colorBgContainer, border: `1px solid ${token.colorBorderSecondary}`, borderRadius: 8, padding: 12, marginTop: 6 }}>
                     <ChartRenderer config={msg.chart} />
+                    {/* Excel export button for chart data */}
+                    <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
+                      <Tooltip title="Exportar datos a Excel">
+                        <Button
+                          size="small"
+                          icon={<FileExcelOutlined />}
+                          onClick={() => exportChartToExcel(msg.chart!)}
+                          style={{ color: '#166534', borderColor: '#166534', fontSize: 12 }}
+                        >
+                          Excel
+                        </Button>
+                      </Tooltip>
+                    </div>
                   </div>
                 )}
               </div>
               {isUser && (
-                <div
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: '50%',
-                    background: '#3b82f6',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginLeft: 8,
-                    flexShrink: 0,
-                    alignSelf: 'flex-start',
-                    marginTop: 2,
-                  }}
-                >
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', marginLeft: 8, flexShrink: 0, alignSelf: 'flex-start', marginTop: 2 }}>
                   <UserOutlined style={{ color: '#fff', fontSize: 14 }} />
                 </div>
               )}
@@ -419,33 +471,15 @@ export default function AnalysisDashboard() {
 
         {chatMutation.isPending && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <div
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: '50%',
-                background: '#6B46C1',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
+            <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#6B46C1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <RobotOutlined style={{ color: '#fff', fontSize: 14 }} />
             </div>
-            <div
-              style={{
-                background: token.colorBgContainer,
-                border: `1px solid ${token.colorBorderSecondary}`,
-                borderRadius: '12px 12px 12px 2px',
-                padding: '8px 12px',
-              }}
-            >
+            <div style={{ background: token.colorBgContainer, border: `1px solid ${token.colorBorderSecondary}`, borderRadius: '12px 12px 12px 2px', padding: '8px 12px' }}>
               <Spin indicator={<LoadingOutlined style={{ fontSize: 14 }} spin />} size="small" />
               <Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>Analizando...</Text>
             </div>
           </div>
         )}
-
         <div ref={messagesEndRef} />
       </div>
 
@@ -461,15 +495,12 @@ export default function AnalysisDashboard() {
           disabled={chatMutation.isPending}
         />
         <Button
-          type="primary"
-          icon={<SendOutlined />}
-          onClick={sendMessage}
+          type="primary" icon={<SendOutlined />} onClick={sendMessage}
           loading={chatMutation.isPending}
           style={{ background: '#6B46C1', borderColor: '#6B46C1', alignSelf: 'flex-end' }}
           disabled={!inputValue.trim()}
         />
       </div>
-
       <Text type="secondary" style={{ fontSize: 11, marginTop: 4 }}>
         Puedes pedir gráficas: "muéstrame una gráfica de ingresos por evento"
       </Text>
@@ -482,7 +513,6 @@ export default function AnalysisDashboard() {
         <RobotOutlined style={{ marginRight: 8, color: '#6B46C1' }} />
         Análisis IA
       </Title>
-
       {isMobile ? (
         <div>
           {dashboardSection}
@@ -491,9 +521,7 @@ export default function AnalysisDashboard() {
       ) : (
         <Row gutter={16} style={{ alignItems: 'flex-start' }}>
           <Col span={14}>{dashboardSection}</Col>
-          <Col span={10} style={{ position: 'sticky', top: 80 }}>
-            {chatSection}
-          </Col>
+          <Col span={10} style={{ position: 'sticky', top: 80 }}>{chatSection}</Col>
         </Row>
       )}
     </div>
