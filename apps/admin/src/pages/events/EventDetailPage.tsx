@@ -286,14 +286,36 @@ export default function EventDetailPage() {
   async function handleFloorPlanUpload(file: File) {
     setFpUploading(true)
     try {
-      const fp = await floorPlansApi.upload(id!, file)
+      // 1. Get Cloudinary signed-upload params from backend
+      const signRes = await floorPlansApi.getUploadSignature(id!)
+      const { timestamp, signature, apiKey, cloudName, folder } = signRes.data
+
+      // 2. Upload directly from browser to Cloudinary (no server bottleneck)
+      const form = new FormData()
+      form.append('file', file)
+      form.append('api_key', apiKey)
+      form.append('timestamp', String(timestamp))
+      form.append('signature', signature)
+      form.append('folder', folder)
+
+      const cloudRes = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`,
+        { method: 'POST', body: form },
+      )
+      if (!cloudRes.ok) {
+        const errBody = await cloudRes.json().catch(() => ({}))
+        throw new Error(errBody?.error?.message ?? `Cloudinary error ${cloudRes.status}`)
+      }
+      const cloudData = await cloudRes.json()
+
+      // 3. Save record to backend
+      const fp = await floorPlansApi.createRecord(id!, { fileUrl: cloudData.secure_url, fileName: file.name })
       refetchFloorPlans()
       setSelectedFpId(fp.data.id)
       message.success('Plano subido correctamente')
     } catch (err: any) {
-      const status = err?.response?.status
       const detail = err?.response?.data?.error?.message ?? err?.message ?? 'Error al subir el plano'
-      message.error(status === 413 ? 'El archivo DXF es demasiado grande (máx. 100 MB).' : detail, 8)
+      message.error(detail, 8)
     } finally {
       setFpUploading(false)
     }

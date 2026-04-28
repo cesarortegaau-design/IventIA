@@ -1,9 +1,10 @@
 import { Request, Response, NextFunction } from 'express'
 import https from 'https'
 import http from 'http'
+import crypto from 'crypto'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
-import { uploadToCloudinary, deleteFromCloudinary } from '../lib/cloudinary'
+import { deleteFromCloudinary } from '../lib/cloudinary'
 
 // GET /events/:eventId/floor-plans
 export async function listFloorPlans(req: Request, res: Response, next: NextFunction) {
@@ -25,47 +26,56 @@ export async function listFloorPlans(req: Request, res: Response, next: NextFunc
   }
 }
 
-// POST /events/:eventId/floor-plans
-export async function uploadFloorPlan(req: Request, res: Response, next: NextFunction) {
+// GET /events/:eventId/floor-plans/sign
+// Returns a Cloudinary signed-upload payload so the browser uploads directly (no size bottleneck on the server)
+export async function getFloorPlanUploadSignature(req: Request, res: Response, next: NextFunction) {
   try {
     const { eventId } = req.params
     const tenantId = req.user!.tenantId
-    const userId = req.user!.userId
 
     const event = await prisma.event.findFirst({ where: { id: eventId, tenantId } })
     if (!event) throw new AppError(404, 'NOT_FOUND', 'Evento no encontrado')
-    if (!req.file) throw new AppError(400, 'NO_FILE', 'No se recibió ningún archivo')
 
-    const ext = req.file.originalname.split('.').pop()?.toLowerCase()
-    if (!['dxf'].includes(ext ?? '')) {
-      throw new AppError(400, 'INVALID_FILE', 'Solo se permiten archivos DXF')
+    const apiSecret = process.env.CLOUDINARY_API_SECRET
+    const apiKey    = process.env.CLOUDINARY_API_KEY
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME
+
+    if (!apiSecret || !apiKey || !cloudName) {
+      throw new AppError(503, 'CLOUDINARY_NOT_CONFIGURED', 'Cloudinary no está configurado en el servidor')
     }
 
-    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
-      const missing = ['CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET'].filter(k => !process.env[k]).join(', ')
-      console.error(`[floor-plans] Cloudinary env vars missing: ${missing}`)
-      throw new AppError(503, 'CLOUDINARY_NOT_CONFIGURED', `Cloudinary no está configurado en el servidor. Variables faltantes: ${missing}`)
-    }
+    const timestamp = Math.round(Date.now() / 1000)
+    const folder = 'iventia/floor-plans'
+    // Params must be sorted alphabetically before signing
+    const paramsToSign = `folder=${folder}&timestamp=${timestamp}`
+    const signature = crypto.createHash('sha1').update(paramsToSign + apiSecret).digest('hex')
 
-    const name = (req.body.name as string)?.trim() || req.file.originalname.replace(/\.[^.]+$/, '')
+    res.json({ success: true, data: { timestamp, signature, apiKey, cloudName, folder } })
+  } catch (err) {
+    next(err)
+  }
+}
 
-    console.log(`[floor-plans] Uploading "${req.file.originalname}" (${req.file.size} bytes) to Cloudinary for event ${eventId}`)
-    let url: string
-    try {
-      const result = await uploadToCloudinary(req.file.buffer, 'iventia/floor-plans', 'raw')
-      url = result.url
-      console.log(`[floor-plans] Upload OK: ${url}`)
-    } catch (cloudErr: any) {
-      console.error('[floor-plans] Cloudinary upload error:', cloudErr)
-      throw new AppError(502, 'UPLOAD_FAILED', `Error al subir a Cloudinary: ${cloudErr?.message ?? cloudErr}`)
-    }
+// POST /events/:eventId/floor-plans  (JSON body: { fileUrl, fileName, name? })
+// Called after the browser has uploaded directly to Cloudinary
+export async function createFloorPlanRecord(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { eventId } = req.params
+    const tenantId = req.user!.tenantId
+    const userId   = req.user!.userId
+
+    const event = await prisma.event.findFirst({ where: { id: eventId, tenantId } })
+    if (!event) throw new AppError(404, 'NOT_FOUND', 'Evento no encontrado')
+
+    const { fileUrl, fileName, name } = req.body as { fileUrl?: string; fileName?: string; name?: string }
+    if (!fileUrl || !fileName) throw new AppError(400, 'MISSING_FIELDS', 'fileUrl y fileName son requeridos')
 
     const floorPlan = await prisma.floorPlan.create({
       data: {
         eventId,
-        name,
-        fileUrl: url,
-        fileName: req.file.originalname,
+        name: name?.trim() || fileName.replace(/\.[^.]+$/, ''),
+        fileUrl,
+        fileName,
         uploadedById: userId,
       },
     })

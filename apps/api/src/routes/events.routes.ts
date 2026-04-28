@@ -8,7 +8,7 @@ import { listOrdersForEvent, createOrder } from '../controllers/orders.controlle
 import { listEventSpaces, createEventSpace, updateEventSpace, deleteEventSpace, getEventSpaceAudit } from '../controllers/eventSpaces.controller'
 import { uploadEventDocument, deleteEventDocument } from '../controllers/documents.controller'
 import { importStands, listStands, createStand, updateStand, deleteStand } from '../controllers/stands.controller'
-import { listFloorPlans, uploadFloorPlan, deleteFloorPlan, getFloorPlanContent } from '../controllers/floorPlans.controller'
+import { listFloorPlans, getFloorPlanUploadSignature, createFloorPlanRecord, deleteFloorPlan, getFloorPlanContent } from '../controllers/floorPlans.controller'
 
 const DXF_SIZE_LIMIT = 100 * 1024 * 1024  // 100 MB — complex multi-drawing DXF files can be large
 
@@ -50,9 +50,10 @@ router.put('/:eventId/spaces/:spaceId', requirePrivilege(PRIVILEGES.EVENT_EDIT_Q
 router.delete('/:eventId/spaces/:spaceId', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), deleteEventSpace)
 router.get('/:eventId/spaces/:spaceId/audit', requirePrivilege(PRIVILEGES.EVENT_VIEW), getEventSpaceAudit)
 
-// Floor plans
+// Floor plans — browser uploads directly to Cloudinary, server only signs + records
 router.get('/:eventId/floor-plans', requirePrivilege(PRIVILEGES.EVENT_VIEW), listFloorPlans)
-router.post('/:eventId/floor-plans', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), docUpload.single('file'), multerErrorHandler, uploadFloorPlan)
+router.get('/:eventId/floor-plans/sign', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), getFloorPlanUploadSignature)
+router.post('/:eventId/floor-plans', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), createFloorPlanRecord)
 router.get('/:eventId/floor-plans/:fpId/content', requirePrivilege(PRIVILEGES.EVENT_VIEW), getFloorPlanContent)
 router.delete('/:eventId/floor-plans/:fpId', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), deleteFloorPlan)
 
