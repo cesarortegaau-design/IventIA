@@ -93,6 +93,20 @@ function parseMarkdownTables(content: string): Array<{ type: 'text'; text: strin
 
 // ─── Export helpers ───────────────────────────────────────────────────────────
 
+function downloadXlsx(wb: any, XLSX: any, filename: string) {
+  // Use Blob + anchor — more reliable than XLSX.writeFile in browsers
+  const buf: ArrayBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
 function tableToExcel(table: ParsedTable, titleHint = 'datos') {
   import('xlsx').then(XLSX => {
     const wsData = [table.headers, ...table.rows]
@@ -100,7 +114,7 @@ function tableToExcel(table: ParsedTable, titleHint = 'datos') {
     ws['!cols'] = table.headers.map(() => ({ wch: 22 }))
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, titleHint.slice(0, 31))
-    XLSX.writeFile(wb, `${titleHint.replace(/[^\w-]/g, '_').slice(0, 40)}-${new Date().toISOString().slice(0, 10)}.xlsx`)
+    downloadXlsx(wb, XLSX, `${titleHint.replace(/[^\w-]/g, '_').slice(0, 40)}-${new Date().toISOString().slice(0, 10)}.xlsx`)
   })
 }
 
@@ -108,7 +122,6 @@ function chartToExcel(chart: ChartConfig) {
   import('xlsx').then(XLSX => {
     const data = chart.data
     if (!data.length) return
-    // Build friendly headers using series labels where available
     const labelMap: Record<string, string> = {}
     chart.series?.forEach(s => { labelMap[s.key] = s.label })
     const keys = Object.keys(data[0])
@@ -126,10 +139,8 @@ function chartToExcel(chart: ChartConfig) {
     const ws = XLSX.utils.aoa_to_sheet(wsData)
     ws['!cols'] = headers.map(() => ({ wch: 20 }))
     const wb = XLSX.utils.book_new()
-    const sheetName = (chart.title ?? 'Datos').slice(0, 31)
-    XLSX.utils.book_append_sheet(wb, ws, sheetName)
-    const filename = `${(chart.title ?? 'grafica').replace(/[^\w-]/g, '_').slice(0, 40)}-${new Date().toISOString().slice(0, 10)}.xlsx`
-    XLSX.writeFile(wb, filename)
+    XLSX.utils.book_append_sheet(wb, ws, (chart.title ?? 'Datos').slice(0, 31))
+    downloadXlsx(wb, XLSX, `${(chart.title ?? 'grafica').replace(/[^\w-]/g, '_').slice(0, 40)}-${new Date().toISOString().slice(0, 10)}.xlsx`)
   })
 }
 
@@ -160,7 +171,9 @@ async function exportToWord(messages: ChatMessage[]) {
         spacing: { before: 360, after: 120 },
       }))
     } else if (msg.role === 'assistant' && msg.content) {
-      const segs = parseMarkdownTables(msg.content)
+      // Strip any residual <chart> tags that weren't removed by parseMessage
+      const cleanContent = msg.content.replace(/<chart>[\s\S]*?<\/chart>/g, '').trim()
+      const segs = parseMarkdownTables(cleanContent)
       for (const seg of segs) {
         if (seg.type === 'text') {
           seg.text.split('\n').forEach(line => {
