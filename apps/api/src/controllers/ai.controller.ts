@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express'
 import Anthropic from '@anthropic-ai/sdk'
 import { prisma } from '../config/database'
 import { buildAIContext } from '../services/ai.context.service'
+import { toolSearchEvents, toolCopyEvent, toolCheckSpaceAvailability, toolCreateOrder } from '../services/ai.tools.service'
 
 const STATUS_COLORS: Record<string, string> = {
   QUOTED: '#3b82f6',
@@ -144,20 +145,80 @@ export async function getDashboard(req: Request, res: Response, next: NextFuncti
   }
 }
 
+const AI_TOOLS: Anthropic.Tool[] = [
+  {
+    name: 'search_events',
+    description: 'Busca eventos en el sistema por nombre. Úsalo ANTES de copiar un evento para obtener su ID.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        query: { type: 'string', description: 'Texto a buscar en el nombre del evento' },
+        status: { type: 'string', description: 'Filtrar por estado: QUOTED, CONFIRMED, IN_EXECUTION, CLOSED' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'copy_event',
+    description: 'Copia un evento existente a una nueva fecha. El nuevo evento queda en estado QUOTED. IMPORTANTE: Pide confirmación al usuario ANTES de ejecutar esta acción.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        sourceEventId: { type: 'string', description: 'ID del evento a copiar (obtenido con search_events)' },
+        newStartDate: { type: 'string', description: 'Fecha de inicio del nuevo evento en formato YYYY-MM-DD' },
+        newName: { type: 'string', description: 'Nombre para el nuevo evento. Si no se especifica, conserva el nombre original.' },
+      },
+      required: ['sourceEventId', 'newStartDate'],
+    },
+  },
+  {
+    name: 'check_space_availability',
+    description: 'Verifica si hay conflictos de reservas de espacios en un rango de fechas.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        resourceId: { type: 'string', description: 'ID del recurso/espacio a verificar (opcional)' },
+        startDate: { type: 'string', description: 'Fecha inicio en formato YYYY-MM-DD' },
+        endDate: { type: 'string', description: 'Fecha fin en formato YYYY-MM-DD' },
+      },
+      required: ['startDate', 'endDate'],
+    },
+  },
+  {
+    name: 'create_order',
+    description: 'Crea una nueva Orden de Servicio (OS) en estado QUOTED para un cliente en un evento. IMPORTANTE: Pide confirmación al usuario ANTES de ejecutar.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        eventId: { type: 'string', description: 'ID del evento' },
+        clientId: { type: 'string', description: 'ID del cliente' },
+        notes: { type: 'string', description: 'Notas opcionales para la orden' },
+      },
+      required: ['eventId', 'clientId'],
+    },
+  },
+]
+
+async function executeTool(name: string, input: any, tenantId: string, userId: string): Promise<any> {
+  switch (name) {
+    case 'search_events': return toolSearchEvents(input, tenantId)
+    case 'copy_event': return toolCopyEvent(input, tenantId)
+    case 'check_space_availability': return toolCheckSpaceAvailability(input, tenantId)
+    case 'create_order': return toolCreateOrder(input, tenantId, userId)
+    default: throw new Error(`Tool desconocido: ${name}`)
+  }
+}
+
 export async function chat(req: Request, res: Response, next: NextFunction) {
   try {
     const apiKey = process.env.ANTHROPIC_API_KEY
     if (!apiKey) {
-      res.json({
-        success: true,
-        data: {
-          text: 'El módulo de IA no está configurado. Por favor, configura la variable de entorno ANTHROPIC_API_KEY en el servidor.',
-        },
-      })
+      res.json({ success: true, data: { text: 'El módulo de IA no está configurado. Por favor, configura ANTHROPIC_API_KEY en el servidor.', actions: [] } })
       return
     }
 
     const tenantId = req.user!.tenantId
+    const userId = req.user!.userId
     const { message, history = [] } = req.body as {
       message: string
       history: Array<{ role: 'user' | 'assistant'; content: string }>
@@ -168,15 +229,11 @@ export async function chat(req: Request, res: Response, next: NextFunction) {
       return
     }
 
-    // Build context — catch separately so DB errors surface as chat messages
     let context = ''
     try {
       context = await buildAIContext(tenantId)
     } catch (ctxErr: any) {
-      res.json({
-        success: true,
-        data: { text: `⚠️ Error al obtener datos del sistema: ${ctxErr?.message ?? ctxErr}` },
-      })
+      res.json({ success: true, data: { text: `⚠️ Error al obtener datos del sistema: ${ctxErr?.message ?? ctxErr}`, actions: [] } })
       return
     }
 
@@ -210,29 +267,69 @@ Tipos de gráfica disponibles:
 - "pie": gráfica de pastel. data=[{name,value,color}], sin xKey/series
 - "area": gráfica de área. Mismo formato que bar
 
-El JSON dentro de <chart> debe ser válido y en UNA SOLA LÍNEA.`
+El JSON dentro de <chart> debe ser válido y en UNA SOLA LÍNEA.
+
+HERRAMIENTAS DISPONIBLES:
+Tienes herramientas para ejecutar acciones en el sistema. Úsalas cuando el usuario pida realizar una acción (copiar evento, crear orden, verificar disponibilidad). Para acciones que modifican datos (copy_event, create_order), SIEMPRE pide confirmación explícita al usuario antes de llamar la herramienta. Describe qué vas a hacer y espera un "sí" o "confirma" antes de proceder.`
 
     const anthropic = new Anthropic({ apiKey })
 
+    // Build messages (history only contains text messages from user/assistant turns)
+    const messages: Anthropic.MessageParam[] = [
+      ...history.map(h => ({ role: h.role as 'user' | 'assistant', content: h.content })),
+      { role: 'user' as const, content: message },
+    ]
+
+    const executedActions: Array<{ tool: string; input: any; result: any }> = []
     let text = ''
+
     try {
-      const response = await anthropic.messages.create({
-        model: 'claude-opus-4-6',
-        max_tokens: 2000,
-        system: systemPrompt,
-        messages: [...history, { role: 'user', content: message }],
-      })
-      text = response.content[0].type === 'text' ? response.content[0].text : ''
+      let continueLoop = true
+      while (continueLoop) {
+        const response = await anthropic.messages.create({
+          model: 'claude-opus-4-6',
+          max_tokens: 2000,
+          system: systemPrompt,
+          tools: AI_TOOLS,
+          messages,
+        })
+
+        // Extract text from this turn
+        for (const block of response.content) {
+          if (block.type === 'text') text = block.text
+        }
+
+        if (response.stop_reason === 'tool_use') {
+          messages.push({ role: 'assistant', content: response.content })
+
+          const toolResults: Anthropic.ToolResultBlockParam[] = []
+          for (const block of response.content) {
+            if (block.type !== 'tool_use') continue
+            let result: any
+            try {
+              result = await executeTool(block.name, block.input as any, tenantId, userId)
+              executedActions.push({ tool: block.name, input: block.input, result })
+            } catch (e: any) {
+              result = { error: e.message }
+            }
+            toolResults.push({
+              type: 'tool_result',
+              tool_use_id: block.id,
+              content: JSON.stringify(result),
+            })
+          }
+          messages.push({ role: 'user', content: toolResults })
+        } else {
+          continueLoop = false
+        }
+      }
     } catch (aiErr: any) {
       const detail = aiErr?.message ?? aiErr?.error?.message ?? String(aiErr)
-      res.json({
-        success: true,
-        data: { text: `⚠️ Error al conectar con Claude: ${detail}` },
-      })
+      res.json({ success: true, data: { text: `⚠️ Error al conectar con Claude: ${detail}`, actions: [] } })
       return
     }
 
-    res.json({ success: true, data: { text } })
+    res.json({ success: true, data: { text, actions: executedActions } })
   } catch (err) {
     next(err)
   }

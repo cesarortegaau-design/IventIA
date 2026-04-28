@@ -30,10 +30,16 @@ interface ChartConfig {
   xKey?: string
   series?: ChartSeries[]
 }
+interface ChatAction {
+  tool: string
+  input: any
+  result: any
+}
 interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   chart?: ChartConfig | null
+  actions?: ChatAction[]
 }
 
 // ─── Markdown table parsing ───────────────────────────────────────────────────
@@ -316,6 +322,54 @@ function MessageContent({ content }: { content: string }) {
   )
 }
 
+// ─── Action Card ─────────────────────────────────────────────────────────────
+
+const ACTION_META: Record<string, { icon: string; label: string }> = {
+  search_events: { icon: '🔍', label: 'Búsqueda de eventos' },
+  copy_event: { icon: '📋', label: 'Evento copiado' },
+  check_space_availability: { icon: '📅', label: 'Disponibilidad verificada' },
+  create_order: { icon: '📄', label: 'Orden de servicio creada' },
+}
+
+function ActionCard({ action }: { action: ChatAction }) {
+  const meta = ACTION_META[action.tool] ?? { icon: '⚡', label: action.tool }
+  const hasError = action.result?.error
+  const adminUrl = action.result?.adminUrl
+
+  return (
+    <div style={{
+      marginTop: 8, padding: '8px 12px',
+      background: hasError ? '#fff1f0' : '#f6f0ff',
+      border: `1px solid ${hasError ? '#ffa39e' : '#d3b8f5'}`,
+      borderRadius: 8, fontSize: 13,
+      display: 'flex', alignItems: 'center', gap: 8,
+    }}>
+      <span style={{ fontSize: 16 }}>{meta.icon}</span>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontWeight: 600, color: hasError ? '#cf1322' : '#6B46C1' }}>
+          {hasError ? `Error: ${action.result.error}` : meta.label}
+        </div>
+        {!hasError && action.result?.name && (
+          <div style={{ color: '#555', fontSize: 12 }}>{action.result.name}</div>
+        )}
+        {!hasError && action.result?.orderNumber && (
+          <div style={{ color: '#555', fontSize: 12 }}>{action.result.orderNumber} — {action.result.clientName}</div>
+        )}
+      </div>
+      {adminUrl && !hasError && (
+        <a
+          href={adminUrl}
+          target="_blank"
+          rel="noreferrer"
+          style={{ color: '#6B46C1', fontWeight: 600, fontSize: 12, textDecoration: 'none' }}
+        >
+          Ver →
+        </a>
+      )}
+    </div>
+  )
+}
+
 // ─── Chart Renderer ───────────────────────────────────────────────────────────
 
 function ChartRenderer({ config }: { config: ChartConfig }) {
@@ -410,7 +464,8 @@ export default function AnalysisDashboard() {
     onSuccess: (data) => {
       const raw = data?.data?.text ?? 'Sin respuesta del asistente.'
       const parsed = parseMessage(raw)
-      setMessages(prev => [...prev, { role: 'assistant', content: parsed.text, chart: parsed.chart }])
+      const actions: ChatAction[] = data?.data?.actions ?? []
+      setMessages(prev => [...prev, { role: 'assistant', content: parsed.text, chart: parsed.chart, actions }])
     },
     onError: () => {
       setMessages(prev => [...prev, { role: 'assistant', content: 'Error al conectar con el asistente. Por favor intenta de nuevo.', chart: null }])
@@ -531,6 +586,11 @@ export default function AnalysisDashboard() {
                     ? <span style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</span>
                     : <MessageContent content={msg.content} />
                   }
+                  {!isUser && msg.actions && msg.actions.length > 0 && (
+                    <div style={{ marginTop: 4 }}>
+                      {msg.actions.map((a, idx) => <ActionCard key={idx} action={a} />)}
+                    </div>
+                  )}
                 </div>
                 {msg.chart && (
                   <div style={{ background: token.colorBgContainer, border: `1px solid ${token.colorBorderSecondary}`, borderRadius: 8, padding: 12, marginTop: 6 }}>

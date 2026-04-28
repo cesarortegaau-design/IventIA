@@ -112,6 +112,24 @@ Crea una página admin estándar (Table + Modal + búsqueda) sin necesariamente 
 
 ---
 
+### `/add-ai-action <nombre_tool> [descripción]`
+
+Agrega una nueva acción ejecutable al Asistente IA (tool use de Anthropic).
+
+| Qué modifica | Dónde |
+|---|---|
+| Nueva función `tool<Nombre>()` | `apps/api/src/services/ai.tools.service.ts` |
+| Definición en `AI_TOOLS[]` y `case` en `executeTool()` | `apps/api/src/controllers/ai.controller.ts` |
+| Icono y label (opcional) | `apps/admin/src/pages/analysis/AnalysisDashboard.tsx` → `ACTION_META` |
+
+**Ejemplos:**
+```
+/add-ai-action send_portal_invite send invitation email to exhibitor portal
+/add-ai-action update_event_status change event status with reason
+```
+
+---
+
 ### `/add-report <NombreReporte> [descripción y filtros]`
 
 Crea un reporte en Admin con filtro de fechas, tabla de resultados y exportación CSV.
