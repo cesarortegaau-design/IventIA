@@ -3,7 +3,7 @@ import {
   Spin, Alert, Checkbox, Space, Typography, Tag, Drawer, Form, Input,
   Select, InputNumber, Button, Popconfirm, App, Modal, Tooltip, Table, Badge,
 } from 'antd'
-import { EditOutlined, StopOutlined, PlusOutlined, LinkOutlined } from '@ant-design/icons'
+import { EditOutlined, StopOutlined, PlusOutlined, LinkOutlined, ZoomInOutlined, ZoomOutOutlined, FullscreenExitOutlined } from '@ant-design/icons'
 import Konva from 'konva'
 import { Stage, Layer, Line, Circle, Text, Group } from 'react-konva'
 // @ts-ignore — no official types for dxf-parser
@@ -169,6 +169,9 @@ export default function DxfViewer({
   const [pos, setPos] = useState({ x: 0, y: 0 })
   const baseTransform = useRef({ scale: 1, x: 0, y: 0 })
 
+  const lastTouchDist = useRef<number | null>(null)
+  const [isPinching, setIsPinching] = useState(false)
+
   const [selectedEntityIdx, setSelectedEntityIdx] = useState<number | null>(null)
   const [editingStand, setEditingStand] = useState<Partial<StandSaveData> | null>(null)
   const [editingStandFull, setEditingStandFull] = useState<StandGeo | null>(null)
@@ -227,6 +230,50 @@ export default function DxfViewer({
     const mp = { x: (ptr.x - stage.x()) / old, y: (ptr.y - stage.y()) / old }
     const next = e.evt.deltaY < 0 ? old * scaleBy : old / scaleBy
     setScale(next); setPos({ x: ptr.x - mp.x * next, y: ptr.y - mp.y * next })
+  }, [])
+
+  // ── Zoom buttons ─────────────────────────────────────────────────────────
+  const applyZoom = useCallback((factor: number) => {
+    const stage = stageRef.current; if (!stage) return
+    const old = stage.scaleX()
+    const next = old * factor
+    const cx = stageWidth / 2, cy = height / 2
+    const mp = { x: (cx - stage.x()) / old, y: (cy - stage.y()) / old }
+    setScale(next); setPos({ x: cx - mp.x * next, y: cy - mp.y * next })
+  }, [stageWidth, height])
+
+  // ── Pinch-to-zoom (touch) ─────────────────────────────────────────────────
+  const handleTouchStart = useCallback((e: Konva.KonvaEventObject<TouchEvent>) => {
+    if (e.evt.touches.length === 2) {
+      setIsPinching(true)
+      lastTouchDist.current = null
+    }
+  }, [])
+
+  const handleTouchMove = useCallback((e: Konva.KonvaEventObject<TouchEvent>) => {
+    const touches = e.evt.touches
+    if (touches.length !== 2) return
+    e.evt.preventDefault()
+    const t1 = touches[0], t2 = touches[1]
+    const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY)
+    if (lastTouchDist.current === null) { lastTouchDist.current = dist; return }
+    const stage = stageRef.current; if (!stage) return
+    const factor = dist / lastTouchDist.current
+    lastTouchDist.current = dist
+    const old = stage.scaleX()
+    const next = Math.max(0.05, Math.min(old * factor, 50))
+    const rect = stage.container().getBoundingClientRect()
+    const midX = (t1.clientX + t2.clientX) / 2 - rect.left
+    const midY = (t1.clientY + t2.clientY) / 2 - rect.top
+    const mp = { x: (midX - stage.x()) / old, y: (midY - stage.y()) / old }
+    setScale(next); setPos({ x: midX - mp.x * next, y: midY - mp.y * next })
+  }, [])
+
+  const handleTouchEnd = useCallback((e: Konva.KonvaEventObject<TouchEvent>) => {
+    if (e.evt.touches.length < 2) {
+      lastTouchDist.current = null
+      setIsPinching(false)
+    }
   }, [])
 
   // ── Draw mode ─────────────────────────────────────────────────────────────
@@ -506,11 +553,35 @@ export default function DxfViewer({
           </div>
         )}
         {error && <div style={{ padding: 24 }}><Alert type="error" message={error} /></div>}
+        {/* Zoom controls — always visible, essential on mobile */}
+        {!loading && !error && dxf && (
+          <div style={{ position: 'absolute', bottom: 12, right: 12, zIndex: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <Button
+              icon={<ZoomInOutlined />} size="middle"
+              style={{ width: 36, height: 36, padding: 0, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', borderRadius: 6 }}
+              onClick={() => applyZoom(1.3)}
+            />
+            <Button
+              icon={<ZoomOutOutlined />} size="middle"
+              style={{ width: 36, height: 36, padding: 0, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', borderRadius: 6 }}
+              onClick={() => applyZoom(1 / 1.3)}
+            />
+            <Button
+              icon={<FullscreenExitOutlined />} size="middle"
+              title="Restablecer vista"
+              style={{ width: 36, height: 36, padding: 0, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', borderRadius: 6 }}
+              onClick={() => { setScale(baseTransform.current.scale); setPos({ x: baseTransform.current.x, y: baseTransform.current.y }) }}
+            />
+          </div>
+        )}
         {!loading && !error && dxf && (
           <Stage ref={stageRef} width={stageWidth} height={height}
             scaleX={scale} scaleY={scale} x={pos.x} y={pos.y}
-            draggable={!drawMode} style={{ cursor: drawMode ? 'crosshair' : undefined }}
+            draggable={!drawMode && !isPinching} style={{ cursor: drawMode ? 'crosshair' : undefined }}
             onWheel={handleWheel}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
             onDragEnd={(e) => setPos({ x: e.target.x(), y: e.target.y() })}
             onClick={drawMode ? handleStageClick : undefined}
             onDblClick={drawMode ? handleStageDblClick : undefined}
