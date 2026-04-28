@@ -41,9 +41,19 @@ export async function uploadFloorPlan(req: Request, res: Response, next: NextFun
       throw new AppError(400, 'INVALID_FILE', 'Solo se permiten archivos DXF')
     }
 
+    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+      throw new AppError(500, 'CLOUDINARY_NOT_CONFIGURED', 'Cloudinary no está configurado. Agrega CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY y CLOUDINARY_API_SECRET como variables de entorno en Render.')
+    }
+
     const name = (req.body.name as string)?.trim() || req.file.originalname.replace(/\.[^.]+$/, '')
 
-    const { url } = await uploadToCloudinary(req.file.buffer, 'iventia/floor-plans', 'raw')
+    let url: string
+    try {
+      const result = await uploadToCloudinary(req.file.buffer, 'iventia/floor-plans', 'raw')
+      url = result.url
+    } catch (cloudErr: any) {
+      throw new AppError(500, 'UPLOAD_FAILED', `Error al subir a Cloudinary: ${cloudErr?.message ?? cloudErr}`)
+    }
 
     const floorPlan = await prisma.floorPlan.create({
       data: {
