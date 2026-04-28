@@ -168,7 +168,17 @@ export async function chat(req: Request, res: Response, next: NextFunction) {
       return
     }
 
-    const context = await buildAIContext(tenantId)
+    // Build context — catch separately so DB errors surface as chat messages
+    let context = ''
+    try {
+      context = await buildAIContext(tenantId)
+    } catch (ctxErr: any) {
+      res.json({
+        success: true,
+        data: { text: `⚠️ Error al obtener datos del sistema: ${ctxErr?.message ?? ctxErr}` },
+      })
+      return
+    }
 
     const systemPrompt = `Eres un experto en análisis de costos, rentabilidad y gestión de eventos para IventIA.
 
@@ -204,14 +214,23 @@ El JSON dentro de <chart> debe ser válido y en UNA SOLA LÍNEA.`
 
     const anthropic = new Anthropic({ apiKey })
 
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 2000,
-      system: systemPrompt,
-      messages: [...history, { role: 'user', content: message }],
-    })
-
-    const text = response.content[0].type === 'text' ? response.content[0].text : ''
+    let text = ''
+    try {
+      const response = await anthropic.messages.create({
+        model: 'claude-opus-4-6',
+        max_tokens: 2000,
+        system: systemPrompt,
+        messages: [...history, { role: 'user', content: message }],
+      })
+      text = response.content[0].type === 'text' ? response.content[0].text : ''
+    } catch (aiErr: any) {
+      const detail = aiErr?.message ?? aiErr?.error?.message ?? String(aiErr)
+      res.json({
+        success: true,
+        data: { text: `⚠️ Error al conectar con Claude: ${detail}` },
+      })
+      return
+    }
 
     res.json({ success: true, data: { text } })
   } catch (err) {
