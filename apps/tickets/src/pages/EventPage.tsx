@@ -11,6 +11,7 @@ import {
 } from '@ant-design/icons'
 import { ticketsApi } from '../api/client'
 import { useCart } from '../store/cart'
+import VenueMapViewer from '../components/VenueMapViewer'
 import dayjs from 'dayjs'
 
 const { Title, Text, Paragraph } = Typography
@@ -27,11 +28,17 @@ interface Section {
   id: string
   name: string
   color?: string
+  colorHex?: string
   price: number
   available: number
   capacity: number
+  sold?: number
   mode: 'SECTION' | 'SEAT'
   seats?: Seat[]
+  shapeType?: string
+  shapeData?: any
+  labelX?: number
+  labelY?: number
 }
 
 interface EventDetail {
@@ -43,6 +50,7 @@ interface EventDetail {
   endDate?: string
   venue?: string
   description?: string
+  mapData?: any
   sections: Section[]
 }
 
@@ -172,8 +180,22 @@ export default function EventPage() {
             <Divider />
             <Title level={4} style={{ marginBottom: 20 }}>Selecciona tus boletos</Title>
 
-            <Space direction="vertical" size={16} style={{ width: '100%' }}>
-              {(event.sections || []).map(section => (
+            {event.mapData ? (
+              <VenueMapViewer
+                sections={event.sections || []}
+                mapData={event.mapData}
+                onSectionSelect={(section) => {
+                  if (event.mapData && !slug) return
+                  if (cartSlug && cartSlug !== slug) {
+                    message.warning('Tu carrito pertenece a otro evento.')
+                    return
+                  }
+                  setSlug(slug!)
+                }}
+              />
+            ) : (
+              <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                {(event.sections || []).map(section => (
                 <Card
                   key={section.id}
                   style={{
@@ -266,7 +288,8 @@ export default function EventPage() {
                   )}
                 </Card>
               ))}
-            </Space>
+              </Space>
+            )}
           </Col>
 
           {/* Cart sidebar */}
