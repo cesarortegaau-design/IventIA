@@ -1,0 +1,33 @@
+Para boletos
+EN admin
+Agregar un tipo de recurso tipo boleto que tiene el esquema parecido a mobiliario
+con el campo stock usado para definir cuantos boletos hay disponibles para ese recurso
+
+Agregar una sección de Portal de Boletos en EVento
+Utiliza lo necesario para diseñar un portal profesional y userfriendly con un diseño
+ligero, claro y moderno
+-se define ahí
+	-la lista de precios que usará
+	-la imagen del evento
+	-la descripción del evento
+	- mapa del evento
+	- debe haber 2 tipos de boletaje a seleccionar.
+		- POR SECCIÓN - se asigna uno o varios tipos de boleto por sección con su stock disponible, sus precios
+			aquí se debe poder agregar un mapa del evento mostrando las secciones del venue
+		- Por butaca - se asigna un lugar específico dentro de un mapa del evento que debe
+		ser interactivo para que el usuario asigne su(s) lugar(es) deseados . Para configurar
+		debe haber un esquema que permita diseñar secciones, con filas y numeración de butacas y asignación 
+                de precios, así como herramientas para diseñar el plano del venue y al mismo tiempo
+		el diseño de secciones y sus butacas
+
+
+Crear un portal de eventos para venta de boletos
+	- Debe funcionar como un sitio que tenga un landing page atractivo y profesional, usa como referencia boletia.com
+		- se debe mostrar los eventos activos para venta de boletos definidos desde Admin
+		- en el micrositio de cada evento se debe mostrar el mapa interactivo de evento que permita
+			verificar al usuario los lugares disponibles
+		- un mecanismo para seleccionar los boletos dependiendo si el evento es por sección o por butaca
+		- crear un esquema de logon y login claro y preciso	
+		-diseñar todo esto como un carrito de compras
+		- agregar pago con Stripe
+		-al recibir el pago los boletos reservados dejan de estar a la venta para otros usuarios

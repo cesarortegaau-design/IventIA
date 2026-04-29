@@ -2384,6 +2384,7 @@ model TicketEvent {
   description  String?     @db.Text
   imageUrl     String?     @map("image_url") @db.VarChar(500)
   mapImageUrl  String?     @map("map_image_url") @db.VarChar(500)
+  mapData      Json?       @map("map_data")
   createdAt    DateTime    @default(now()) @map("created_at")
   updatedAt    DateTime    @updatedAt @map("updated_at")
 
@@ -2407,7 +2408,10 @@ model TicketSection {
   capacity      Int      @default(0)
   sold          Int      @default(0)
   price         Decimal  @default(0) @db.Decimal(12, 2)
-  mapPolygon    Json?    @map("map_polygon")
+  shapeType     String?  @map("shape_type") @db.VarChar(50)
+  shapeData     Json?    @map("shape_data")
+  labelX        Int?     @map("label_x")
+  labelY        Int?     @map("label_y")
   sortOrder     Int      @default(0) @map("sort_order")
   createdAt     DateTime @default(now()) @map("created_at")
 

@@ -1,0 +1,359 @@
+● Here's the full infrastructure summary and upgrade roadmap:                                                                                                   
+                                                                                                                                                                
+  ---                                                                                                                                                             IventIA — Current Infrastructure Summary                                                                                                                      
+                                                                                                                                                                  What You're Running Now (All Free Tiers)                                                                                                                      
+                                                                                                                                                                
+  ┌─────────────┬───────────────────────────────┬─────────────────────────────────────────────────────┐                                                         
+  │    Layer    │            Service            │                  Free Tier Limits                   │                                                         
+  ├─────────────┼───────────────────────────────┼─────────────────────────────────────────────────────┤
+  │ API Backend │ Render.com (Docker)           │ Spins down after inactivity, ~512MB RAM, shared CPU │
+  ├─────────────┼───────────────────────────────┼─────────────────────────────────────────────────────┤
+  │ Admin SPA   │ Vercel (Nixpacks)             │ 100GB bandwidth/mo, no SSR                          │
+  ├─────────────┼───────────────────────────────┼─────────────────────────────────────────────────────┤
+  │ Portal SPA  │ Vercel (Nixpacks)             │ Same as above                                       │
+  ├─────────────┼───────────────────────────────┼─────────────────────────────────────────────────────┤
+  │ Database    │ Neon PostgreSQL (Serverless)  │ 0.5 GB storage, 1 compute unit, cold starts         │
+  ├─────────────┼───────────────────────────────┼─────────────────────────────────────────────────────┤
+  │ Cache       │ Redis on localhost (dev only) │ Not running in production at all                    │
+  ├─────────────┼───────────────────────────────┼─────────────────────────────────────────────────────┤
+  │ Images      │ Cloudinary                    │ 12 GB/mo, 25 credits                                │
+  ├─────────────┼───────────────────────────────┼─────────────────────────────────────────────────────┤
+  │ Payments    │ Stripe                        │ Pay-per-transaction (no free limit issue here)      │
+  ├─────────────┼───────────────────────────────┼─────────────────────────────────────────────────────┤
+  │ Email       │ Not configured                │ —                                                   │
+  ├─────────────┼───────────────────────────────┼─────────────────────────────────────────────────────┤
+  │ Monitoring  │ None                          │ —                                                   │
+  ├─────────────┼───────────────────────────────┼─────────────────────────────────────────────────────┤
+  │ CI/CD       │ None                          │ —                                                   │
+  └─────────────┴───────────────────────────────┴─────────────────────────────────────────────────────┘
+
+  Tech Stack (Healthy)
+
+  - API: Node 22, Express 4, Prisma 5, Socket.io 4, TypeScript 5
+  - Frontend: React 18, Vite 5, Ant Design 5, TanStack Query 5, Zustand
+  - DB: PostgreSQL 15 via Neon, 26 migrations, ~116 tables, multi-tenant from schema up
+
+  ---
+  Critical Problems at Current Scale
+
+  The Render free tier is the biggest blocker. It cold-starts after 15 minutes of inactivity — your API takes 30–60s to respond to the first request. For any
+  real user, that's a broken product.
+
+  Neon free tier has a 0.5 GB storage ceiling and cold-starts on the compute side too. With 1,000+ portal users this will collapse quickly.
+
+  Redis is not running in production. BullMQ is installed but unused. Socket.io will work fine in single-instance mode, but job queues, caching, and
+  rate-limiting at scale all need Redis.
+
+  No CI/CD, no monitoring, no error tracking. Any bug in production is invisible until a user reports it.
+
+  ---
+  Recommended Upgrade Path
+
+  Tier 1 — Minimum to be "Professional" (~$50–80/month)
+
+  ┌────────────────┬────────────────────────────────────────────────┬─────────────────────────────────────────────────────┬────────────────┐
+  │      What      │                   Upgrade To                   │                         Why                         │      Cost      │
+  ├────────────────┼────────────────────────────────────────────────┼─────────────────────────────────────────────────────┼────────────────┤
+  │ API hosting    │ Render Starter ($7/mo) or Railway ($5 credit)  │ Eliminates cold starts, persistent container        │ ~$7–20/mo      │
+  ├────────────────┼────────────────────────────────────────────────┼─────────────────────────────────────────────────────┼────────────────┤
+  │ Database       │ Neon Launch ($19/mo) or Supabase Pro ($25/mo)  │ 10 GB storage, autoscaling, daily backups           │ ~$19–25/mo     │
+  ├────────────────┼────────────────────────────────────────────────┼─────────────────────────────────────────────────────┼────────────────┤
+  │ Redis          │ Upstash Redis Free → Pro                       │ Persistent Redis for job queues + Socket.io adapter │ Free to $10/mo │
+  ├────────────────┼────────────────────────────────────────────────┼─────────────────────────────────────────────────────┼────────────────┤
+  │ Error tracking │ Sentry Free (5K errors/mo)                     │ Know when things break before users do              │ Free           │
+  ├────────────────┼────────────────────────────────────────────────┼─────────────────────────────────────────────────────┼────────────────┤
+  │ Email          │ Resend Free (3K/mo) or SendGrid Free (100/day) │ Order confirmations, notifications                  │ Free           │
+  └────────────────┴────────────────────────────────────────────────┴─────────────────────────────────────────────────────┴────────────────┘
+
+  This gets you: no cold starts, 1,000+ portal users stable, backups, error visibility.
+
+  ---
+  Tier 2 — Serious Production (100–200 Admin / 1,000+ Portal Users) (~$150–250/month)
+
+  ┌───────────────┬───────────────────────────────────────────────────────┬────────────────────────────────────────────────────────────────────────────────┐
+  │     Layer     │                    Recommendation                     │                                    Details                                     │
+  ├───────────────┼───────────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────┤
+  │ API           │ Railway or Fly.io (2 vCPU, 1 GB RAM)                  │ Auto-scaling, no cold starts, Docker-native. ~$30–50/mo                        │
+  ├───────────────┼───────────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────┤
+  │ Database      │ Neon Scale or Supabase Pro                            │ Read replicas, connection pooling (PgBouncer), point-in-time recovery          │
+  ├───────────────┼───────────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────┤
+  │ Redis         │ Upstash Pro or Railway Redis                          │ Persistent, HA, needed for Socket.io multi-instance adapter                    │
+  ├───────────────┼───────────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────┤
+  │ CDN /         │ Vercel Pro ($20/mo) or Cloudflare Pages (free)        │ Edge caching, better performance globally                                      │
+  │ Frontend      │                                                       │                                                                                │
+  ├───────────────┼───────────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────┤
+  │ File Storage  │ AWS S3 + CloudFront or Cloudflare R2                  │ Replace local /uploads — Render's disk is ephemeral, files will vanish on      │
+  │               │                                                       │ redeploy                                                                       │
+  ├───────────────┼───────────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────┤
+  │ Monitoring    │ Better Uptime (free) + Sentry (free)                  │ Uptime alerts + real error tracking                                            │
+  ├───────────────┼───────────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────┤
+  │ CI/CD         │ GitHub Actions (free for public, free 2K min/mo       │ Automated tests → deploy on merge                                              │
+  │               │ private)                                              │                                                                                │
+  └───────────────┴───────────────────────────────────────────────────────┴────────────────────────────────────────────────────────────────────────────────┘
+
+  ---
+  Tier 3 — Scale to 5,000+ Users (~$500+/month)
+
+  ┌──────────┬───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │  Layer   │                                                                Recommendation                                                                 │
+  ├──────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ API      │ Multiple instances behind a load balancer; Socket.io needs Redis adapter (@socket.io/redis-adapter) — this is already needed at Tier 2 if you │
+  │          │  run 2 API instances                                                                                                                          │
+  ├──────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ Database │ Dedicated PostgreSQL (AWS RDS, Supabase, or Neon with read replicas)                                                                          │
+  ├──────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ Search   │ Meilisearch or Typesense for client/resource search                                                                                           │
+  ├──────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ APM      │ Datadog or New Relic for full observability                                                                                                   │
+  ├──────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ Auth     │ Consider moving to Auth0 or Clerk if multi-tenant auth complexity grows                                                                       │
+  └──────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+  ---
+  My Top 5 Priorities Right Now
+
+  1. Fix the Render cold start — pay $7/mo for Starter. This is the single biggest UX issue today.
+  2. Upgrade Neon — $19/mo for Launch. Free tier will hit storage limits fast.
+  3. Add Upstash Redis — free tier works. Connect it for rate limiting and future job queues.
+  4. Fix file uploads — local /uploads will be wiped on every Render redeploy. Move to Cloudflare R2 (free 10 GB) or AWS S3 immediately.
+  5. Add Sentry — free tier, 10-minute setup, eliminates blind spots in production.
+
+  The architecture is genuinely solid — multi-tenant from the ground up, proper separation of concerns, good security practices. The gaps are all
+  infrastructure/ops, not code quality. With ~$50–80/month you'd have a professional, reliable product for your target user counts.
+
+● IventIA → Microsoft Azure Migration Analysis                                                                                                                  
+                                                                                                                                                                
+  ---                                                                                                                                                             Why Azure Makes Sense for IventIA                                                                                                                             
+                                                                                                                                                                  A few things stand out from the codebase:                                                                                                                     
+  - Azure Blob Storage is already wired in — AZURE_STORAGE_CONNECTION_STRING and AZURE_STORAGE_CONTAINER=iventia-docs exist in .env.example. The integration is 
+  already partially planned.                                                                                                                                    
+  - Docker-based API deployment maps cleanly to Azure Container Apps or App Service.
+  - Multi-tenant SaaS architecture aligns well with Azure's enterprise ecosystem.
+  - If clients are Mexican enterprises, Azure has a South Central US (San Antonio) region with low latency to Mexico.
+
+  ---
+  Service Mapping: Current → Azure
+
+  ┌─────────────────────┬─────────────────────────────────────────────────┬─────────────────────────────────────────┐
+  │       Current       │                Azure Equivalent                 │                  Notes                  │
+  ├─────────────────────┼─────────────────────────────────────────────────┼─────────────────────────────────────────┤
+  │ Render (API/Docker) │ Azure Container Apps                            │ Best fit — Docker-native, scale-to-zero │
+  ├─────────────────────┼─────────────────────────────────────────────────┼─────────────────────────────────────────┤
+  │ Vercel (Admin SPA)  │ Azure Static Web Apps                           │ Free tier handles 2 apps                │
+  ├─────────────────────┼─────────────────────────────────────────────────┼─────────────────────────────────────────┤
+  │ Vercel (Portal SPA) │ Azure Static Web Apps                           │ Same                                    │
+  ├─────────────────────┼─────────────────────────────────────────────────┼─────────────────────────────────────────┤
+  │ Neon PostgreSQL     │ Azure Database for PostgreSQL - Flexible Server │ Direct replacement                      │
+  ├─────────────────────┼─────────────────────────────────────────────────┼─────────────────────────────────────────┤
+  │ Redis (missing)     │ Azure Cache for Redis                           │                                         │
+  ├─────────────────────┼─────────────────────────────────────────────────┼─────────────────────────────────────────┤
+  │ Local /uploads      │ Azure Blob Storage                              │ Already configured in code              │
+  ├─────────────────────┼─────────────────────────────────────────────────┼─────────────────────────────────────────┤
+  │ Cloudinary          │ Azure Blob Storage + CDN                        │ Or keep Cloudinary                      │
+  ├─────────────────────┼─────────────────────────────────────────────────┼─────────────────────────────────────────┤
+  │ None (monitoring)   │ Azure Application Insights                      │ Native APM                              │
+  ├─────────────────────┼─────────────────────────────────────────────────┼─────────────────────────────────────────┤
+  │ None (CI/CD)        │ GitHub Actions → Azure                          │ Free 2K min/mo                          │
+  ├─────────────────────┼─────────────────────────────────────────────────┼─────────────────────────────────────────┤
+  │ None (secrets)      │ Azure Key Vault                                 │ Replaces manual .env management         │
+  └─────────────────────┴─────────────────────────────────────────────────┴─────────────────────────────────────────┘
+
+  ---
+  Tier 1 — Minimum Professional (~$95–120/month)
+
+  Target: Eliminate cold starts, get stable for initial launch
+
+  ┌───────────────────────────────┬──────────────────────────────────────────────┬──────────────┐
+  │            Service            │                     Tier                     │ Monthly Cost │
+  ├───────────────────────────────┼──────────────────────────────────────────────┼──────────────┤
+  │ Azure Container Apps          │ Consumption plan (0.5 vCPU, 1 GB)            │ ~$25–35      │
+  ├───────────────────────────────┼──────────────────────────────────────────────┼──────────────┤
+  │ Azure Static Web Apps         │ Free (2 apps — Admin + Portal)               │ $0           │
+  ├───────────────────────────────┼──────────────────────────────────────────────┼──────────────┤
+  │ Azure Database for PostgreSQL │ Burstable B2s (2 vCPU, 4 GB RAM, 32 GB disk) │ ~$30         │
+  ├───────────────────────────────┼──────────────────────────────────────────────┼──────────────┤
+  │ Azure Cache for Redis         │ C0 Basic (250 MB)                            │ ~$16         │
+  ├───────────────────────────────┼──────────────────────────────────────────────┼──────────────┤
+  │ Azure Blob Storage            │ LRS, ~50 GB                                  │ ~$3          │
+  ├───────────────────────────────┼──────────────────────────────────────────────┼──────────────┤
+  │ Application Insights          │ First 5 GB/mo free                           │ $0–5         │
+  ├───────────────────────────────┼──────────────────────────────────────────────┼──────────────┤
+  │ Azure Container Registry      │ Basic                                        │ ~$5          │
+  ├───────────────────────────────┼──────────────────────────────────────────────┼──────────────┤
+  │ Total                         │                                              │ ~$79–94/mo   │
+  └───────────────────────────────┴──────────────────────────────────────────────┴──────────────┘
+
+  What you get vs. today: No cold starts, persistent Redis, real file storage, basic monitoring, PostgreSQL backups.
+
+  ---
+  Tier 2 — Production Ready (100–200 Admin / 1,000+ Portal) (~$280–360/month)
+
+  Target: Your stated goal — reliable, scalable, professional
+
+  ┌───────────────────────────────┬─────────────────────────────────────────────────────────┬────────────────┐
+  │            Service            │                          Tier                           │  Monthly Cost  │
+  ├───────────────────────────────┼─────────────────────────────────────────────────────────┼────────────────┤
+  │ Azure Container Apps          │ Dedicated D4 (2 vCPU, 4 GB), min 1 replica              │ ~$80–100       │
+  ├───────────────────────────────┼─────────────────────────────────────────────────────────┼────────────────┤
+  │ Azure Static Web Apps         │ Standard × 2 (Admin + Portal)                           │ ~$18           │
+  ├───────────────────────────────┼─────────────────────────────────────────────────────────┼────────────────┤
+  │ Azure Database for PostgreSQL │ General Purpose D4s_v3 (4 vCPU, 16 GB, 128 GB disk, HA) │ ~$220          │
+  ├───────────────────────────────┼─────────────────────────────────────────────────────────┼────────────────┤
+  │ Azure Cache for Redis         │ C1 Standard (1 GB, HA replica)                          │ ~$55           │
+  ├───────────────────────────────┼─────────────────────────────────────────────────────────┼────────────────┤
+  │ Azure Blob Storage            │ LRS + CDN, ~200 GB                                      │ ~$10           │
+  ├───────────────────────────────┼─────────────────────────────────────────────────────────┼────────────────┤
+  │ Application Insights          │ ~10 GB/mo logs                                          │ ~$12           │
+  ├───────────────────────────────┼─────────────────────────────────────────────────────────┼────────────────┤
+  │ Azure Container Registry      │ Standard                                                │ ~$20           │
+  ├───────────────────────────────┼─────────────────────────────────────────────────────────┼────────────────┤
+  │ Azure Key Vault               │ Secrets + certificates                                  │ ~$5            │
+  ├───────────────────────────────┼─────────────────────────────────────────────────────────┼────────────────┤
+  │ Azure DevOps / GitHub Actions │ CI/CD pipelines                                         │ $0 (free tier) │
+  ├───────────────────────────────┼─────────────────────────────────────────────────────────┼────────────────┤
+  │ Total                         │                                                         │ ~$420/mo       │
+  └───────────────────────────────┴─────────────────────────────────────────────────────────┴────────────────┘
+
+  ▎ Cost reduction levers: PostgreSQL HA roughly doubles its cost. Without HA (acceptable for early production): ~$110 instead of $220 → total drops to
+  ~$310/mo.
+
+  ---
+  Tier 3 — Enterprise Scale (5,000+ users) (~$900–1,400/month)
+
+  ┌──────────────────────────────────────┬──────────────────────────────────────────┬──────────────────┐
+  │               Service                │                   Tier                   │   Monthly Cost   │
+  ├──────────────────────────────────────┼──────────────────────────────────────────┼──────────────────┤
+  │ Azure Kubernetes Service             │ 3-node Standard D4s_v3 pool              │ ~$300–400        │
+  ├──────────────────────────────────────┼──────────────────────────────────────────┼──────────────────┤
+  │ Azure Database for PostgreSQL        │ Business Critical, 4 vCPU, read replicas │ ~$400–500        │
+  ├──────────────────────────────────────┼──────────────────────────────────────────┼──────────────────┤
+  │ Azure Cache for Redis                │ P1 Premium (6 GB, cluster)               │ ~$250            │
+  ├──────────────────────────────────────┼──────────────────────────────────────────┼──────────────────┤
+  │ Azure Front Door                     │ Standard (global CDN + WAF)              │ ~$100            │
+  ├──────────────────────────────────────┼──────────────────────────────────────────┼──────────────────┤
+  │ Azure Blob Storage                   │ 1 TB + CDN                               │ ~$25             │
+  ├──────────────────────────────────────┼──────────────────────────────────────────┼──────────────────┤
+  │ Application Insights + Log Analytics │ Full observability                       │ ~$30–50          │
+  ├──────────────────────────────────────┼──────────────────────────────────────────┼──────────────────┤
+  │ Azure API Management                 │ Developer tier                           │ ~$50             │
+  ├──────────────────────────────────────┼──────────────────────────────────────────┼──────────────────┤
+  │ Total                                │                                          │ ~$1,155–1,325/mo │
+  └──────────────────────────────────────┴──────────────────────────────────────────┴──────────────────┘
+
+  ---
+  Key Architecture Decisions for Azure
+
+  1. Azure Container Apps vs. App Service
+
+  Recommendation: Azure Container Apps
+  - Your API is already dockerized (Dockerfile.api) — zero changes needed
+  - Scale-to-zero in off-hours saves cost
+  - Built-in Dapr support (useful if you ever decompose into microservices)
+  - Ingress + custom domain built-in
+  - App Service is simpler but Container Apps is more future-proof
+
+  2. PostgreSQL HA Decision
+
+  The biggest cost driver at Tier 2 is PostgreSQL HA ($110 → $220). For initial production:
+  - Start without HA — Flexible Server has automatic backups (7–35 days PITR) even without HA
+  - Add HA only when you have paying clients who need 99.99% SLA
+  - Failover with HA: ~60s. Without HA, recovery from backup: ~15–30 min.
+
+  3. Socket.io + Multiple API Instances
+
+  When you scale Container Apps to 2+ replicas, Socket.io breaks without a Redis adapter. The fix is one line:
+
+  // apps/api/src/index.ts
+  import { createAdapter } from "@socket.io/redis-adapter";
+  io.adapter(createAdapter(pubClient, subClient));
+
+  Azure Cache for Redis C1 (already in Tier 2 budget) handles this.
+
+  4. File Uploads — Azure Blob Storage
+
+  The code already has AZURE_STORAGE_CONNECTION_STRING configured. The migration is:
+  - Replace multer disk storage with multer-azure-blob-storage or stream directly to Azure SDK
+  - Serves files via https://<account>.blob.core.windows.net/<container>/ or behind Azure CDN
+  - Eliminates the current risk where /uploads is wiped on every Render redeploy
+
+  5. Secrets Management
+
+  Move all .env values to Azure Key Vault and reference them in Container Apps:
+  secrets:
+    - name: database-url
+      keyVaultUrl: https://iventia-kv.vault.azure.net/secrets/DATABASE-URL
+
+  ---
+  Cost Comparison Summary
+
+  ┌──────────────────┬────────────────┬──────────────┬──────────────────┬───────────────┐
+  │     Scenario     │ Current (Free) │ Azure Tier 1 │   Azure Tier 2   │ Azure Tier 3  │
+  ├──────────────────┼────────────────┼──────────────┼──────────────────┼───────────────┤
+  │ Monthly Cost     │ ~$0            │ ~$95         │ ~$310–420        │ ~$1,100–1,400 │
+  ├──────────────────┼────────────────┼──────────────┼──────────────────┼───────────────┤
+  │ API cold starts  │ Yes (30–60s)   │ No           │ No               │ No            │
+  ├──────────────────┼────────────────┼──────────────┼──────────────────┼───────────────┤
+  │ DB storage limit │ 0.5 GB         │ 32 GB        │ 128 GB           │ Unlimited     │
+  ├──────────────────┼────────────────┼──────────────┼──────────────────┼───────────────┤
+  │ Redis in prod    │ No             │ Yes          │ Yes (HA)         │ Yes (Cluster) │
+  ├──────────────────┼────────────────┼──────────────┼──────────────────┼───────────────┤
+  │ File storage     │ Ephemeral      │ Persistent   │ Persistent + CDN │ Global CDN    │
+  ├──────────────────┼────────────────┼──────────────┼──────────────────┼───────────────┤
+  │ Monitoring       │ None           │ Basic        │ Full APM         │ Enterprise    │
+  ├──────────────────┼────────────────┼──────────────┼──────────────────┼───────────────┤
+  │ Backups          │ None           │ 7-day PITR   │ 35-day PITR      │ Geo-redundant │
+  ├──────────────────┼────────────────┼──────────────┼──────────────────┼───────────────┤
+  │ Admin users      │ ~10            │ 100          │ 200              │ 1,000+        │
+  ├──────────────────┼────────────────┼──────────────┼──────────────────┼───────────────┤
+  │ Portal users     │ ~100           │ 500          │ 1,000+           │ 5,000+        │
+  └──────────────────┴────────────────┴──────────────┴──────────────────┴───────────────┘
+
+  ---
+  Azure Cost Reduction Options
+
+  1. 1-Year Reserved Instances — 30–40% off PostgreSQL and Redis
+    - PostgreSQL D4s_v3: $220 → ~$145/mo
+    - Redis C1: $55 → ~$38/mo
+    - Saves ~$90/mo at Tier 2
+  2. Azure Dev/Test Pricing — If you have a Visual Studio subscription, up to 50% off most services
+  3. Azure Startup Credits — Microsoft for Startups (Founders Hub) gives $150,000 in Azure credits over 2 years if you qualify. Worth applying.
+  4. South Central US region (San Antonio) — Slightly cheaper than East US, better latency to Mexico
+
+  ---
+  Migration Effort Estimate
+
+  ┌─────────────────────────────────────────────────────┬───────────────────┐
+  │                        Task                         │      Effort       │
+  ├─────────────────────────────────────────────────────┼───────────────────┤
+  │ Set up Azure resource group + Container Registry    │ 2 hours           │
+  ├─────────────────────────────────────────────────────┼───────────────────┤
+  │ Deploy API to Container Apps                        │ 1 day             │
+  ├─────────────────────────────────────────────────────┼───────────────────┤
+  │ Deploy Admin + Portal to Static Web Apps            │ 2 hours           │
+  ├─────────────────────────────────────────────────────┼───────────────────┤
+  │ Provision PostgreSQL Flexible Server + migrate data │ 1 day             │
+  ├─────────────────────────────────────────────────────┼───────────────────┤
+  │ Provision Redis + add Socket.io adapter             │ 4 hours           │
+  ├─────────────────────────────────────────────────────┼───────────────────┤
+  │ Move file uploads to Blob Storage                   │ 1–2 days          │
+  ├─────────────────────────────────────────────────────┼───────────────────┤
+  │ Configure Key Vault + update secrets                │ 4 hours           │
+  ├─────────────────────────────────────────────────────┼───────────────────┤
+  │ Set up Application Insights                         │ 2 hours           │
+  ├─────────────────────────────────────────────────────┼───────────────────┤
+  │ GitHub Actions CI/CD pipeline                       │ 1 day             │
+  ├─────────────────────────────────────────────────────┼───────────────────┤
+  │ DNS cutover + testing                               │ 1 day             │
+  ├─────────────────────────────────────────────────────┼───────────────────┤
+  │ Total                                               │ ~6–8 working days │
+  └─────────────────────────────────────────────────────┴───────────────────┘
+
+  ---
+  My Recommendation
+
+  Start at Tier 1 immediately, plan for Tier 2 within 3–6 months.
+
+  The jump from free to Tier 1 (~$95/mo) eliminates all critical reliability issues. Azure Blob Storage is already coded for — that migration alone is worth
+  doing now regardless of tier. Apply for Microsoft for Startups — $150K in credits would cover 2–3 years of Tier 2 operations at no cost.
+
+  The architecture is already Azure-ready. This is not a big-bang rewrite — it's a configuration and deployment migration.

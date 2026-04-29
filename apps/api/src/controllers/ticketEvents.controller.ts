@@ -150,6 +150,71 @@ export async function generateSeats(req: Request, res: Response, next: NextFunct
   } catch (err) { next(err) }
 }
 
+// ── Venue Map ────────────────────────────────────────────────────────────────
+
+export async function getVenueMap(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { eventId } = req.params
+    const tenantId = req.user!.tenantId
+    const te = await prisma.ticketEvent.findFirst({ where: { eventId, tenantId } })
+    if (!te) throw new AppError(404, 'NOT_FOUND', 'Portal de boletos no encontrado')
+
+    const sections = await prisma.ticketSection.findMany({
+      where: { ticketEventId: te.id },
+      select: { id, name, colorHex, shapeType, shapeData, labelX, labelY },
+      orderBy: { sortOrder: 'asc' },
+    })
+    res.json({ success: true, data: { mapData: te.mapData, sections } })
+  } catch (err) { next(err) }
+}
+
+export async function saveVenueMap(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { eventId } = req.params
+    const tenantId = req.user!.tenantId
+    const te = await prisma.ticketEvent.findFirst({ where: { eventId, tenantId } })
+    if (!te) throw new AppError(404, 'NOT_FOUND', 'Portal de boletos no encontrado')
+
+    const { mapData, sections: sectionsUpdate } = req.body
+    if (!Array.isArray(sectionsUpdate)) throw new AppError(400, 'INVALID_INPUT', 'sections debe ser un array')
+
+    // Update ticket event mapData
+    await prisma.ticketEvent.update({
+      where: { id: te.id },
+      data: { mapData: mapData ?? null },
+    })
+
+    // Update sections (shape geometry)
+    for (const sec of sectionsUpdate) {
+      if (sec.id) {
+        await prisma.ticketSection.update({
+          where: { id: sec.id },
+          data: {
+            shapeType: sec.shapeType ?? null,
+            shapeData: sec.shapeData ?? null,
+            labelX: sec.labelX ?? null,
+            labelY: sec.labelY ?? null,
+          },
+        })
+      }
+    }
+
+    // Audit log
+    await prisma.auditLog.create({
+      data: {
+        tenantId,
+        entityType: 'TicketEvent',
+        entityId: te.id,
+        action: 'UPDATE_MAP',
+        changes: { mapData, sections: sectionsUpdate },
+        userId: req.user!.userId,
+      },
+    })
+
+    res.json({ success: true, message: 'Mapa guardado' })
+  } catch (err) { next(err) }
+}
+
 // ── TicketOrders (admin view) ─────────────────────────────────────────────────
 
 export async function listTicketOrders(req: Request, res: Response, next: NextFunction) {

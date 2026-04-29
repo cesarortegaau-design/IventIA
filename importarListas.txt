@@ -1,0 +1,84 @@
+Para recursos
+-Restringir el valor de unidad a
+	kg - kilogramos
+	lt - litros
+	pza - piezas
+	unidad
+	turno
+	m2 - metros cuadrados
+	m - metros
+- agregar campo numérico llamado "Factor"
+	- el valor default de este campo es 1
+
+Para listas de precio
+En los artículos de la lista de precio:
+- Unidad debe venir del recurso y solo es consultable, no editable
+- agregar factor que solo es consultable, no editable y viene del recurso
+- Agregar unidad de tiempo y restringir los valores a 
+	- no aplica
+	- horas
+	- días
+	- horas sin factor
+	- días sin factor
+- Agregar campo Detalle que debe ser para agregar una descripción adicional a cada recurso de la lista de precios
+- agregar estos 3 campos al despliegue de artículos
+
+- Agregar funcionalidad de importar recursos a lista de precios
+	- de la misma manera que en la sección Stands del evento agregar las funcionalidades:
+	- Importar CSV : Solicitar un archivo CSV y validar la estructura que debe ser exactamante igual al despiegue de
+		artículos de la lista de precios, una vez validado que el archivo tiene las columnas exactamente iguales
+		(de no ser así, mandar el mensaje de error y abortar la importación)
+	         - Columnas que se van a importar del archivo:
+			Recurso - debe validar que este recurso se encuentre en el caálogo de recursos
+			P. Anticipado - monto   
+			P. Normal - monto
+			P. Tardío - monto
+			Unidad de Tiempo - debe validar que se exprese un valor permitido:
+					- no aplica
+					- horas
+					- días
+	           - al importar recursos, si la lista de precios tiene recursos estos deben ser eliminados
+
+	- Descargar plantilla (proveer una plantilla en formato CSV descargable que muestre todas las columnas con
+		un recurso de muestra)
+	- Exportar CSV: mismo funcionamiento de EXportar CSV de todas las listas de la solución
+
+- en órdenes de servicio
+	- en el detalle de la orden de servicio (tanto en consulta como en update)
+          agregar una etiqueta  que muestre la unidad de tiempo y el factor que 
+	vienen del catálogo de recursos
+	- agregar campo en el detalle de la orden de servicio llamado Unidad de Tiempo que muestre y no
+		sea editable lo siguiente:
+			- en el caso de de ser la unidad de tiempo en el recurso no aplica, el valor es 1
+			- en el caso de Unidad de Tiempo ser días, 
+			calcular el número de días considerando el lapso entra la fecha hora 
+			inicio y la fecha hora fin de la orden de servicio (si son iguales estos campos el
+			cálculo debe ser 1), este cálculo se complementa multiplicando por el valor de Factor del
+			recurso y reflejado en la columna x Tiempo
+			- en el caso de Unidad de Tiempo ser horas,
+			calcular el número de horas considerando el lapso entra la fecha hora 
+			inicio y la fecha hora fin de la orden de servicio (si son iguales estos campos el
+			cálculo debe ser 1), este cálculo se complementa multiplicando por el valor de Factor del
+			recurso y reflejado en la columna x Tiempo
+
+			- en el caso de Unidad de Tiempo ser días sin factor, 
+			calcular el número de días considerando el lapso entra la fecha hora 
+			inicio y la fecha hora fin de la orden de servicio (si son iguales estos campos el
+			cálculo debe ser 1), reflejado en la columna x Tiempo
+			- en el caso de Unidad de Tiempo ser horas sin factor ,
+			calcular el número de horas considerando el lapso entra la fecha hora 
+			inicio y la fecha hora fin de la orden de servicio (si son iguales estos campos el
+			cálculo debe ser 1) reflejado en la columna x Tiempo
+
+- al momento de calcular la resta de fecha hora fin y fecha hora inicio ya sea en días, días sin factor, horas, horas
+sin factor si el resultado de la resta muestra un decimal, entonces la resta debe redondearse al número
+entero superior 
+
+	- el cálculo del campo Total ahora es : Precio unitario por cantidad por unidad de tiempo
+	- el cálculo del campo Total real ahora es: precio unitario por cantidad real por unidad de tiempo
+- en el detalle de la orden de servicio, tanto en consulta y en edición la columna x Tiempo debe mostrar las         
+  unidades de tiempo que en caso de que la unidad de tiempo sea No Aplica el valor es 1, y en caso de días u horas   
+  debe ser el monto (en días u horas dependiendo del caso) de la resta de la fecha hora fin menos la fecha hora      
+  inicio, si estos son iguales el resultado debe ser 1   
+
+

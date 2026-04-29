@@ -54,4 +54,11 @@ superposiciones se encuentra, ese número ordena la lista cronológicamente por 
 
 - el calendario de reservas debe tener una funcionalidad que al sombrear celdas se puedan crear reservas para un evento existente
 o para un evento nuevo
+
+
+- en la sección de reservas agregar la función de crear orden de servicio sobre una, algunas o todas las reservas del
+evento, debe mostrar las reservas y ofrecer a cada línea de reserva los precios del espacio disponibles en la lista
+de precios para que el usuario seleccione cual utilizar, y que cada reserva con tarifa seleccionada sea un recurso
+en la nueva orden de servicio con la fecha hora inicio y fecha hora fin de la reserva calculando correctamente
+el total
 	

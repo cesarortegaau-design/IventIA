@@ -15,4 +15,8 @@ export const ticketEventsApi = {
     apiClient.post(`/events/${eventId}/tickets/sections/${sectionId}/seats`, data).then(r => r.data),
   listOrders: (eventId: string) =>
     apiClient.get(`/events/${eventId}/tickets/orders`).then(r => r.data),
+  getMap: (eventId: string) =>
+    apiClient.get(`/events/${eventId}/tickets/map`).then(r => r.data),
+  saveMap: (eventId: string, data: any) =>
+    apiClient.put(`/events/${eventId}/tickets/map`, data).then(r => r.data),
 }

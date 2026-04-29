@@ -522,6 +522,13 @@ export default function TicketEventTab({ eventId }: Props) {
             ),
           },
 
+          // ── Mapa del Venue ──────────────────────────────────────────────
+          {
+            key: 'map',
+            label: 'Mapa del Venue',
+            children: <div style={{ minHeight: 600 }}>Mapa del venue — en desarrollo</div>,
+          },
+
           // ── Órdenes ─────────────────────────────────────────────────────
           {
             key: 'orders',

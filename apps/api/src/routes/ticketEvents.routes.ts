@@ -6,6 +6,7 @@ import {
   getTicketEvent, upsertTicketEvent,
   createSection, updateSection, deleteSection,
   generateSeats, listTicketOrders,
+  getVenueMap, saveVenueMap,
 } from '../controllers/ticketEvents.controller'
 
 const router = Router()
@@ -13,6 +14,8 @@ router.use(authenticate)
 
 router.get('/:eventId/tickets', requirePrivilege(PRIVILEGES.EVENT_VIEW), getTicketEvent)
 router.put('/:eventId/tickets', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), upsertTicketEvent)
+router.get('/:eventId/tickets/map', requirePrivilege(PRIVILEGES.EVENT_VIEW), getVenueMap)
+router.put('/:eventId/tickets/map', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), saveVenueMap)
 router.post('/:eventId/tickets/sections', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), createSection)
 router.put('/:eventId/tickets/sections/:sectionId', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), updateSection)
 router.delete('/:eventId/tickets/sections/:sectionId', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), deleteSection)

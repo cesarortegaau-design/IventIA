@@ -1,0 +1,101 @@
+Crear una solución web, que sea manejado como una app para que se lleve el control de un partido de football flag
+por parte de los árbitros y que además tenga una versión para que un usuario pueda monitorear el partido.
+La solución estará basada en IventIA Admin y utilizará la misma base de datos y se llamará I-Flag
+
+la solución utilizará los Eventos tipo deportivo de IventIA Admin
+
+en IventIA Admin 
+en Cliente
+	- agregar una sección llamada Imagen donde
+	- Se pueda agregar el logotipo del cliente
+	- un campo que lo marque como "Equipo", el default es que este campo este vacío
+	-agregar una funcionalidad de Exportación, Importación de clientes de la misma forma que en Stands del Evento
+	- en la sección de relaciones del cliente agregar tipo de relacón "Jugador" a las opciones
+
+en Evento
+	- Crear una sección de portal deportivo
+		-Sección para definir equipo local y equipo visitante, que será mostrando los clientes de Tipo Persona
+			Moral que tengan marcado el campo "Equipo"
+
+La nueva solución I-Flag debe ester diseñada visualmenete para funcionar primordialemente en dispositivos 
+móviles con controls y widgets con ergonomía alta para el usuario que estará dentro del campo de juego y necesita
+tener acciones muy claras y fáciles de ejecutar
+PAra el diseño visual de la UI considera un diseño moderno y profesional, deportivo, quizá como del que usa Google
+para los juegos de la NFL
+el login será a través de los usuarios de IventIA y aquellos que tengan perfil de administrador tendrán acceso
+- Login 
+
+- Antes del inicio del partido
+- Pase de lista de jugadores de ambos equipos
+	- La lista de jugadores de un equipo son las personas relacionadas como "Jugador" al cliente que es equipo
+	- Validar y poner asistencia o inasistencia a todos los miembros del equipo
+	
+
+
+Durante el partido
+
+- Pantalla con diseño deportivo moderno que presente
+	- Siempre muestre el marcador entre los dos equipos
+	- Inicio del partido
+	- Cronómetro- que sea visiblemente relevente y permita fácilmente activarlo o detenerlo
+	- MArcar fácilmente que equipo tiene la ofensiva el down en le que se encuentra la ofensiva (considera
+		las reglas de football flag donde hay primero y línea, primero y goal, 4 downs, etc.
+	- una sección para registrar las anotaciones y castigos y qué jugador la realizó
+	- agregar una auditoría de acciones como la de IventIA Admin
+
+Finalización del partido
+
+- cerrar el partido y publicar el marcador final
+
+También debe existir una versión de esta app que permita ver las mismas capacidades especificadas a modo de
+consulta
+
+al registrar una anotación, agregar selección de jugador que la realiza
+agregar botón de tiempos fuera (2 por equipo cada medio tiempo)
+agregar funcionalidad para ajustar el marcador manualmente
+
+
+- En IventIA Admin agregar a la sección de Imagen del cliente, un campo para determinar el número del jugador
+   y agregar campo número a la plantilla, exportar e importar desde CSV del cliente
+
+
+El cronómetro debe correr de manera ascendente y no descendente, debe empezar en 20 y descender a 0, idealmente
+evalua si es posible que el cronómetro esté en el centro de un círculo donde se vea la barra de avance del tiempo
+
+Debe existir la función de shuffle derecha-izquierda e izquierda- derecha
+en la pantalla principal todo menos las acciones y en la segunda pantalla las acciones
+de tal manera que el usuario pueda mover con su dedo la pantalla que quiere ver
+
+La poseción debe marcarse quien inicia al principio del primer y segundo tiempo, y la solución debe conocer
+con un cambio de poseción a quién le corresponde el balón
+
+Mejora la experiencia de selcción de opciones, al ser una solución que se usará por el árbitro debe ser muy intuitiva
+y usar combos fáciles de operar (sin necesidad de filtrar)
+
+debe haber un control para determinar la primera oportunidad y línea (4 downs para la ofensiva en su propia yarda
+5) y primero y Goal, que se consigue al alcanzar o pasar el medio campo (4 downs nuevos para la ofensiva)
+
+Agregar una función parecida a intercepciones para registrar castigos y sacks
+Además de la auditoría del partido, agregar una sección donde se muestre los jugadores (con foto 
+y número) que hicieron touchdown, que lanzaron touchdown, intercepciones, sacks y castigos
+
+
+ cada medio tiempo cuenta con 20 minutos
+Hay punto extra por 1 o por 2 puntos
+quitar confirmación de siguiente down y agregar regresar down
+en los campos de selección combo de la solución, mejorar la experiencia para que sea mas ergonómica y el texto
+que no sea oscuro si no claro
+llevar el control de poseción de bola de cada equipo más claramente
+al anotar 6  puntos debe agregarse quién lanza el pase y quién recibe el pase o en todo caso quién anotó por carrera
+agregar registro de intercepción con quién la ejecutó y el cambio de poseción automático
+agregar imagen y número siempre que se mencione al jugador
+
+
+el control de asistencia de jugadores es muy lento, cambialo e incluye foto y número
+en la pantalla principal, por favor hacer mas grades los botones de
+Iniciar, Resert, Regresar y Siguiente
+ considerando que se mas facil para identificar para una persona en
+movimiento su uso (sin perder que toda la pantalla principal debe verse completa)
+agregar acción de anular touchdown o punto extra
+la sección de acciones también debe verse completa sin scroll para arriba y abajo
+los tiempos fuera por equipos debe verse en la pantalla principal también

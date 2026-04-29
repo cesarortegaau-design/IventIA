@@ -11,7 +11,13 @@
       "Bash(taskkill //F //IM node.exe)",
       "Bash(npx tsc:*)",
       "Skill(update-config)",
-      "Skill(update-config:*)"
+      "Skill(update-config:*)",
+      "Bash(npx prisma:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(curl -s https://iventia-api.onrender.com/api/v1/auth/login -H \"Content-Type: application/json\" -d '{\"\"\"\"email\"\"\"\":\"\"\"\"admin@exposaantafe.com.mx\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"Admin1234!\"\"\"\"}')",
+      "Bash(git push:*)",
+      "Bash(npx vite:*)"
     ]
   }
 }
