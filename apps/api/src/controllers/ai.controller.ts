@@ -160,17 +160,17 @@ const AI_TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'copy_event',
-    description: 'Copia un evento existente a una nueva fecha. Puede incluir reservas de espacio y órdenes de servicio. El nuevo evento queda en estado QUOTED. IMPORTANTE: Pide confirmación al usuario ANTES de ejecutar, incluyendo si quiere copiar reservas y/o órdenes.',
+    description: 'Copia un evento existente a una nueva fecha. SIEMPRE debes pedir al usuario: 1) el nombre del nuevo evento, 2) si quiere copiar reservas de espacio, 3) si quiere copiar órdenes de servicio. Pide confirmación con todos estos datos ANTES de ejecutar.',
     input_schema: {
       type: 'object' as const,
       properties: {
         sourceEventId: { type: 'string', description: 'ID del evento a copiar (obtenido con search_events)' },
         newStartDate: { type: 'string', description: 'Fecha de inicio del nuevo evento en formato YYYY-MM-DD' },
-        newName: { type: 'string', description: 'Nombre para el nuevo evento. Si no se especifica, conserva el nombre original.' },
-        copySpaces: { type: 'boolean', description: 'Si true, copia también las reservas de espacio (EventSpaces), ajustando las fechas al nuevo inicio.' },
-        copyOrders: { type: 'boolean', description: 'Si true, copia también las órdenes de servicio (OS) con sus partidas, en estado QUOTED.' },
+        newName: { type: 'string', description: 'Nombre del nuevo evento. OBLIGATORIO — siempre pregúntalo al usuario.' },
+        copySpaces: { type: 'boolean', description: 'Si true, copia también las reservas de espacio ajustando fechas.' },
+        copyOrders: { type: 'boolean', description: 'Si true, copia también las órdenes de servicio con sus partidas, en estado QUOTED.' },
       },
-      required: ['sourceEventId', 'newStartDate'],
+      required: ['sourceEventId', 'newStartDate', 'newName'],
     },
   },
   {

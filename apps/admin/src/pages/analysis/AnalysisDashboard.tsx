@@ -363,9 +363,19 @@ function ActionCard({ action }: { action: ChatAction }) {
           href={adminUrl}
           target="_blank"
           rel="noreferrer"
-          style={{ color: '#6B46C1', fontWeight: 600, fontSize: 12, textDecoration: 'none' }}
+          style={{
+            display: 'inline-block',
+            padding: '4px 12px',
+            background: '#6B46C1',
+            color: '#fff',
+            borderRadius: 6,
+            fontWeight: 600,
+            fontSize: 12,
+            textDecoration: 'none',
+            whiteSpace: 'nowrap',
+          }}
         >
-          Ver →
+          Abrir evento →
         </a>
       )}
     </div>
