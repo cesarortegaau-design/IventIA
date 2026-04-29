@@ -23,7 +23,7 @@ const packageComponentSchema = z.object({
 const resourceBaseSchema = z.object({
   code: z.string().min(1).max(50),
   name: z.string().min(1).max(200),
-  type: z.enum(['CONSUMABLE', 'EQUIPMENT', 'SPACE', 'FURNITURE', 'SERVICE', 'DISCOUNT', 'TAX', 'PERSONAL']),
+  type: z.enum(['CONSUMABLE', 'EQUIPMENT', 'SPACE', 'FURNITURE', 'SERVICE', 'DISCOUNT', 'TAX', 'PERSONAL', 'TICKET']),
   description: z.string().optional().nullable(),
   unit: z.string().max(50).optional().nullable(),
   factor: z.coerce.number().positive().default(1).nullable().transform(v => v ?? 1),
@@ -137,7 +137,7 @@ export async function updateResource(req: Request, res: Response, next: NextFunc
   try {
     // Sanitize before any processing — never let empty string reach UUID validation
     const b = { ...req.body, departmentId: req.body.departmentId || null }
-    const ALLOWED_TYPES = ['CONSUMABLE','EQUIPMENT','SPACE','FURNITURE','SERVICE','DISCOUNT','TAX','PERSONAL']
+    const ALLOWED_TYPES = ['CONSUMABLE','EQUIPMENT','SPACE','FURNITURE','SERVICE','DISCOUNT','TAX','PERSONAL','TICKET']
     const data: any = {}
     if (b.code     !== undefined) data.code          = String(b.code)
     if (b.name     !== undefined) data.name          = String(b.name)
