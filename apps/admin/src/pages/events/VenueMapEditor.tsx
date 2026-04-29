@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Form, InputNumber, Modal, Space, Spin, Card, Row, Col, ColorPicker } from 'antd'
+import { App, Button, Form, Input, InputNumber, Modal, Space, Spin, Card, Row, Col, ColorPicker } from 'antd'
 import { DeleteOutlined, SaveOutlined, UndoOutlined, RedoOutlined, ClearOutlined, BgColorsOutlined } from '@ant-design/icons'
 import type { Color } from 'antd/es/color-picker'
 import { ticketEventsApi } from '../../api/ticketEvents'
@@ -392,35 +392,47 @@ export default function VenueMapEditor({ eventId }: VenueMapEditorProps) {
       <div style={{ width: 300, borderLeft: '1px solid #d9d9d9', paddingLeft: 16, overflowY: 'auto', maxHeight: '100%' }}>
         {selected ? (
           <>
-            <h4 style={{ marginTop: 0 }}>{selected.name}</h4>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>Color</label>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <div
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 4,
-                    backgroundColor: selected.colorHex,
-                    border: '1px solid #d9d9d9',
-                  }}
-                />
-                <input
-                  type="color"
-                  value={selected.colorHex}
+            <Form layout="vertical" size="small">
+              <Form.Item label="Nombre de la zona">
+                <Input
+                  value={selected.name}
                   onChange={(e) => {
                     const updated = sections.map(s =>
-                      s.id === selected.id ? { ...s, colorHex: e.target.value } : s
+                      s.id === selected.id ? { ...s, name: e.target.value } : s
                     )
                     setSections(updated)
                   }}
-                  style={{ width: 50, height: 40, cursor: 'pointer', border: '1px solid #d9d9d9', borderRadius: 4 }}
                 />
-              </div>
-            </div>
-            <Form form={form} layout="vertical" size="small">
-              <Form.Item label="Etiqueta X" name="labelX">
+              </Form.Item>
+
+              <Form.Item label="Color de zona">
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <div
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 4,
+                      backgroundColor: selected.colorHex,
+                      border: '1px solid #d9d9d9',
+                    }}
+                  />
+                  <input
+                    type="color"
+                    value={selected.colorHex}
+                    onChange={(e) => {
+                      const updated = sections.map(s =>
+                        s.id === selected.id ? { ...s, colorHex: e.target.value } : s
+                      )
+                      setSections(updated)
+                    }}
+                    style={{ width: 50, height: 40, cursor: 'pointer', border: '1px solid #d9d9d9', borderRadius: 4 }}
+                  />
+                </div>
+              </Form.Item>
+
+              <Form.Item label="Etiqueta X">
                 <InputNumber
+                  value={selected.labelX ?? 0}
                   onChange={(val) => {
                     const updated = sections.map(s =>
                       s.id === selected.id ? { ...s, labelX: val ?? 0 } : s
@@ -429,8 +441,10 @@ export default function VenueMapEditor({ eventId }: VenueMapEditorProps) {
                   }}
                 />
               </Form.Item>
-              <Form.Item label="Etiqueta Y" name="labelY">
+
+              <Form.Item label="Etiqueta Y">
                 <InputNumber
+                  value={selected.labelY ?? 0}
                   onChange={(val) => {
                     const updated = sections.map(s =>
                       s.id === selected.id ? { ...s, labelY: val ?? 0 } : s
