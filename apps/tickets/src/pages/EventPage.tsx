@@ -78,7 +78,6 @@ export default function EventPage() {
     venue: eventData.data.event?.venueLocation,
     description: eventData.data.event?.description,
     mapData: eventData.data.mapData,
-    mode: eventData.data.mode,
     sections: (eventData.data.sections || []).map((s: any) => ({
       id: s.id,
       name: s.name,

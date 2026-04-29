@@ -16,38 +16,9 @@ export async function listPublicTicketEvents(req: Request, res: Response, next: 
   try {
     const events = await prisma.ticketEvent.findMany({
       where: { active: true },
-      select: {
-        id: true,
-        slug: true,
-        mode: true,
-        active: true,
-        mapData: true,
-        event: {
-          select: {
-            id: true,
-            name: true,
-            eventStart: true,
-            eventEnd: true,
-            venueLocation: true,
-            description: true,
-            imageUrl: true,
-          }
-        },
-        sections: {
-          select: {
-            id: true,
-            name: true,
-            colorHex: true,
-            capacity: true,
-            sold: true,
-            price: true,
-            shapeType: true,
-            shapeData: true,
-            labelX: true,
-            labelY: true,
-          },
-          orderBy: { sortOrder: 'asc' }
-        },
+      include: {
+        event: true,
+        sections: { orderBy: { sortOrder: 'asc' } },
       },
       orderBy: { event: { eventStart: 'asc' } },
     })
@@ -61,35 +32,10 @@ export async function getPublicTicketEvent(req: Request, res: Response, next: Ne
     const { slug } = req.params
     const te = await prisma.ticketEvent.findUnique({
       where: { slug },
-      select: {
-        id: true,
-        slug: true,
-        mode: true,
-        active: true,
-        mapData: true,
-        event: {
-          select: {
-            id: true,
-            name: true,
-            eventStart: true,
-            eventEnd: true,
-            venueLocation: true,
-            description: true,
-            imageUrl: true,
-          }
-        },
+      include: {
+        event: true,
         sections: {
-          select: {
-            id: true,
-            name: true,
-            colorHex: true,
-            capacity: true,
-            sold: true,
-            price: true,
-            shapeType: true,
-            shapeData: true,
-            labelX: true,
-            labelY: true,
+          include: {
             seats: {
               where: { status: 'AVAILABLE' },
               orderBy: [{ row: 'asc' }, { number: 'asc' }],

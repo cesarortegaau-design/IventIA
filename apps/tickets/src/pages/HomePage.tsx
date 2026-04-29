@@ -26,17 +26,20 @@ export default function HomePage() {
     queryFn: ticketsApi.listEvents,
   })
 
-  const events: EventSummary[] = (apiResponse?.data || []).map((te: any) => ({
-    id: te.id,
-    slug: te.slug,
-    name: te.event?.name || 'Evento',
-    imageUrl: te.event?.imageUrl,
-    startDate: te.event?.eventStart || '',
-    venue: te.event?.venueLocation,
-    minPrice: te.sections && te.sections.length > 0
+  const events: EventSummary[] = (apiResponse?.data || []).map((te: any) => {
+    const minPrice = te.sections && te.sections.length > 0
       ? Math.min(...te.sections.map((s: any) => Number(s.price) || 0))
-      : undefined,
-  }))
+      : undefined
+    return {
+      id: te.id,
+      slug: te.slug,
+      name: te.event?.name || 'Evento',
+      imageUrl: te.event?.imageUrl,
+      startDate: te.event?.eventStart || '',
+      venue: te.event?.venueLocation,
+      minPrice: minPrice > 0 ? minPrice : undefined,
+    }
+  })
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8f8f8' }}>
