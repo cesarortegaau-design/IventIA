@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express'
 import Anthropic from '@anthropic-ai/sdk'
 import { prisma } from '../config/database'
 import { buildAIContext } from '../services/ai.context.service'
-import { toolSearchEvents, toolCopyEvent, toolCheckSpaceAvailability, toolCreateOrder } from '../services/ai.tools.service'
+import { toolSearchEvents, toolCopyEvent, toolCopyEventSpaces, toolCopyEventOrders, toolCheckSpaceAvailability, toolCreateOrder } from '../services/ai.tools.service'
 
 const STATUS_COLORS: Record<string, string> = {
   QUOTED: '#3b82f6',
@@ -160,15 +160,41 @@ const AI_TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'copy_event',
-    description: 'Copia un evento existente a una nueva fecha. El nuevo evento queda en estado QUOTED. IMPORTANTE: Pide confirmación al usuario ANTES de ejecutar esta acción.',
+    description: 'Copia un evento existente a una nueva fecha. Puede incluir reservas de espacio y órdenes de servicio. El nuevo evento queda en estado QUOTED. IMPORTANTE: Pide confirmación al usuario ANTES de ejecutar, incluyendo si quiere copiar reservas y/o órdenes.',
     input_schema: {
       type: 'object' as const,
       properties: {
         sourceEventId: { type: 'string', description: 'ID del evento a copiar (obtenido con search_events)' },
         newStartDate: { type: 'string', description: 'Fecha de inicio del nuevo evento en formato YYYY-MM-DD' },
         newName: { type: 'string', description: 'Nombre para el nuevo evento. Si no se especifica, conserva el nombre original.' },
+        copySpaces: { type: 'boolean', description: 'Si true, copia también las reservas de espacio (EventSpaces), ajustando las fechas al nuevo inicio.' },
+        copyOrders: { type: 'boolean', description: 'Si true, copia también las órdenes de servicio (OS) con sus partidas, en estado QUOTED.' },
       },
       required: ['sourceEventId', 'newStartDate'],
+    },
+  },
+  {
+    name: 'copy_event_spaces',
+    description: 'Copia las reservas de espacio (EventSpaces) de un evento a otro existente. Las fechas se ajustan automáticamente según la diferencia entre los inicios de ambos eventos. IMPORTANTE: Pide confirmación antes de ejecutar.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        sourceEventId: { type: 'string', description: 'ID del evento origen' },
+        targetEventId: { type: 'string', description: 'ID del evento destino' },
+      },
+      required: ['sourceEventId', 'targetEventId'],
+    },
+  },
+  {
+    name: 'copy_event_orders',
+    description: 'Copia las órdenes de servicio (OS) de un evento a otro existente, incluyendo todas sus partidas. Las órdenes se crean en estado QUOTED. IMPORTANTE: Pide confirmación antes de ejecutar.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        sourceEventId: { type: 'string', description: 'ID del evento origen' },
+        targetEventId: { type: 'string', description: 'ID del evento destino' },
+      },
+      required: ['sourceEventId', 'targetEventId'],
     },
   },
   {
@@ -203,6 +229,8 @@ async function executeTool(name: string, input: any, tenantId: string, userId: s
   switch (name) {
     case 'search_events': return toolSearchEvents(input, tenantId)
     case 'copy_event': return toolCopyEvent(input, tenantId, userId)
+    case 'copy_event_spaces': return toolCopyEventSpaces(input, tenantId)
+    case 'copy_event_orders': return toolCopyEventOrders(input, tenantId, userId)
     case 'check_space_availability': return toolCheckSpaceAvailability(input, tenantId)
     case 'create_order': return toolCreateOrder(input, tenantId, userId)
     default: throw new Error(`Tool desconocido: ${name}`)

@@ -1,4 +1,5 @@
 import { prisma } from '../config/database'
+import { generateOrderNumber } from './order.service'
 
 // ── Tool: search_events ───────────────────────────────────────────────────────
 export async function toolSearchEvents(
@@ -21,9 +22,89 @@ export async function toolSearchEvents(
   }))
 }
 
+// ── Shared helpers ────────────────────────────────────────────────────────────
+
+async function copySpaces(sourceEventId: string, targetEventId: string, offsetMs: number) {
+  const spaces = await prisma.eventSpace.findMany({ where: { eventId: sourceEventId } })
+  if (spaces.length === 0) return 0
+  await prisma.eventSpace.createMany({
+    data: spaces.map(s => ({
+      eventId: targetEventId,
+      resourceId: s.resourceId,
+      phase: s.phase,
+      startTime: new Date(s.startTime.getTime() + offsetMs),
+      endTime: new Date(s.endTime.getTime() + offsetMs),
+      notes: s.notes,
+    })),
+  })
+  return spaces.length
+}
+
+async function copyOrders(sourceEventId: string, targetEventId: string, tenantId: string, userId: string, offsetMs: number) {
+  const orders = await prisma.order.findMany({
+    where: { eventId: sourceEventId, tenantId, status: { not: 'CANCELLED' } },
+    include: { lineItems: true },
+  })
+  let copied = 0
+  for (const src of orders) {
+    const orderNumber = await generateOrderNumber(tenantId)
+    const newOrder = await prisma.order.create({
+      data: {
+        tenantId,
+        eventId: targetEventId,
+        clientId: src.clientId,
+        billingClientId: src.billingClientId,
+        priceListId: src.priceListId,
+        pricingTier: src.pricingTier,
+        orderNumber,
+        status: 'QUOTED',
+        subtotal: src.subtotal,
+        discountPct: src.discountPct,
+        discountAmount: src.discountAmount,
+        taxPct: src.taxPct,
+        taxAmount: src.taxAmount,
+        total: src.total,
+        prospectedTotal: src.prospectedTotal,
+        notes: src.notes,
+        departamento: src.departamento,
+        organizacionId: src.organizacionId,
+        startDate: src.startDate ? new Date(src.startDate.getTime() + offsetMs) : null,
+        endDate: src.endDate ? new Date(src.endDate.getTime() + offsetMs) : null,
+        createdById: userId,
+      },
+    })
+    if (src.lineItems.length > 0) {
+      await prisma.orderLineItem.createMany({
+        data: src.lineItems.map(li => ({
+          orderId: newOrder.id,
+          resourceId: li.resourceId,
+          description: li.description,
+          pricingTier: li.pricingTier,
+          unitPrice: li.unitPrice,
+          quantity: li.quantity,
+          discountPct: li.discountPct,
+          lineTotal: li.lineTotal,
+          timeUnit: li.timeUnit,
+          detail: li.detail,
+          observations: li.observations,
+          sortOrder: li.sortOrder,
+        })),
+      })
+    }
+    copied++
+  }
+  return copied
+}
+
 // ── Tool: copy_event ──────────────────────────────────────────────────────────
 export async function toolCopyEvent(
-  input: { sourceEventId: string; newStartDate: string; newName?: string },
+  input: {
+    sourceEventId: string
+    newStartDate: string
+    newName?: string
+    copySpaces?: boolean
+    copyOrders?: boolean
+  },
   tenantId: string,
   userId: string,
 ) {
@@ -41,7 +122,6 @@ export async function toolCopyEvent(
     ? baseCode.replace(/\d{4}$/, String(newStart.getFullYear()))
     : `${baseCode}-COPY`
 
-  // If generated code already exists, append a suffix to avoid the unique constraint
   const codeExists = await prisma.event.findFirst({ where: { tenantId, code: newCode } })
   const finalCode = codeExists ? `${newCode}-2` : newCode
 
@@ -70,10 +150,75 @@ export async function toolCopyEvent(
     },
   })
 
+  let spacesCount = 0
+  let ordersCount = 0
+
+  if (input.copySpaces) {
+    spacesCount = await copySpaces(src.id, newEvent.id, offsetMs)
+  }
+  if (input.copyOrders) {
+    ordersCount = await copyOrders(src.id, newEvent.id, tenantId, userId, offsetMs)
+  }
+
   return {
     id: newEvent.id, code: newEvent.code, name: newEvent.name, status: newEvent.status,
     eventStart: newEvent.eventStart?.toISOString().slice(0, 10) ?? null,
+    spacesCopiadas: spacesCount,
+    ordenesCopidas: ordersCount,
     adminUrl: `/events/${newEvent.id}`,
+  }
+}
+
+// ── Tool: copy_event_spaces ───────────────────────────────────────────────────
+export async function toolCopyEventSpaces(
+  input: { sourceEventId: string; targetEventId: string },
+  tenantId: string,
+) {
+  const [src, tgt] = await Promise.all([
+    prisma.event.findFirst({ where: { id: input.sourceEventId, tenantId }, select: { id: true, name: true, eventStart: true } }),
+    prisma.event.findFirst({ where: { id: input.targetEventId, tenantId }, select: { id: true, name: true, eventStart: true } }),
+  ])
+  if (!src) throw new Error(`Evento origen no encontrado`)
+  if (!tgt) throw new Error(`Evento destino no encontrado`)
+
+  const offsetMs =
+    src.eventStart && tgt.eventStart
+      ? tgt.eventStart.getTime() - src.eventStart.getTime()
+      : 0
+
+  const count = await copySpaces(src.id, tgt.id, offsetMs)
+  return {
+    copied: count,
+    sourceEvent: src.name,
+    targetEvent: tgt.name,
+    adminUrl: `/events/${tgt.id}`,
+  }
+}
+
+// ── Tool: copy_event_orders ───────────────────────────────────────────────────
+export async function toolCopyEventOrders(
+  input: { sourceEventId: string; targetEventId: string },
+  tenantId: string,
+  userId: string,
+) {
+  const [src, tgt] = await Promise.all([
+    prisma.event.findFirst({ where: { id: input.sourceEventId, tenantId }, select: { id: true, name: true, eventStart: true } }),
+    prisma.event.findFirst({ where: { id: input.targetEventId, tenantId }, select: { id: true, name: true, eventStart: true } }),
+  ])
+  if (!src) throw new Error(`Evento origen no encontrado`)
+  if (!tgt) throw new Error(`Evento destino no encontrado`)
+
+  const offsetMs =
+    src.eventStart && tgt.eventStart
+      ? tgt.eventStart.getTime() - src.eventStart.getTime()
+      : 0
+
+  const count = await copyOrders(src.id, tgt.id, tenantId, userId, offsetMs)
+  return {
+    copied: count,
+    sourceEvent: src.name,
+    targetEvent: tgt.name,
+    adminUrl: `/events/${tgt.id}`,
   }
 }
 
@@ -130,8 +275,7 @@ export async function toolCreateOrder(
   })
   if (!client) throw new Error(`Cliente con id ${input.clientId} no encontrado`)
 
-  const count = await prisma.order.count({ where: { tenantId } })
-  const orderNumber = `OS-${String(count + 1).padStart(5, '0')}`
+  const orderNumber = await generateOrderNumber(tenantId)
 
   const order = await prisma.order.create({
     data: {

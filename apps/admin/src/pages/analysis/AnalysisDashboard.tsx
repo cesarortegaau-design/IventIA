@@ -327,6 +327,8 @@ function MessageContent({ content }: { content: string }) {
 const ACTION_META: Record<string, { icon: string; label: string }> = {
   search_events: { icon: '🔍', label: 'Búsqueda de eventos' },
   copy_event: { icon: '📋', label: 'Evento copiado' },
+  copy_event_spaces: { icon: '🗓️', label: 'Reservas de espacio copiadas' },
+  copy_event_orders: { icon: '📦', label: 'Órdenes de servicio copiadas' },
   check_space_availability: { icon: '📅', label: 'Disponibilidad verificada' },
   create_order: { icon: '📄', label: 'Orden de servicio creada' },
 }
