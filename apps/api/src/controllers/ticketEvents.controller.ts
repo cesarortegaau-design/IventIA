@@ -2,20 +2,6 @@ import { Request, Response, NextFunction } from 'express'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 
-// ── Debug: check ticket tables exist ─────────────────────────────────────────
-export async function checkTicketTables(req: Request, res: Response, next: NextFunction) {
-  try {
-    const result = await prisma.$queryRaw<{ tablename: string }[]>`
-      SELECT tablename FROM pg_tables
-      WHERE schemaname = 'public'
-      AND tablename IN ('ticket_events','ticket_sections','ticket_seats','ticket_orders','ticket_order_items')
-    `
-    res.json({ success: true, tables: result.map(r => r.tablename) })
-  } catch (err: any) {
-    res.json({ success: false, error: err?.message })
-  }
-}
-
 // ── TicketEvent ───────────────────────────────────────────────────────────────
 
 export async function getTicketEvent(req: Request, res: Response, next: NextFunction) {
@@ -101,15 +87,10 @@ export async function createSection(req: Request, res: Response, next: NextFunct
     if (!te) throw new AppError(404, 'NOT_FOUND', 'Portal de boletos no encontrado')
 
     const { name, colorHex, capacity, price, resourceId, mapPolygon, sortOrder } = req.body
-    try {
-      const section = await prisma.ticketSection.create({
-        data: { ticketEventId: te.id, name, colorHex, capacity: capacity ?? 0, price: price ?? 0, resourceId: resourceId || null, mapPolygon: mapPolygon ?? null, sortOrder: sortOrder ?? 0 },
-      })
-      res.status(201).json({ success: true, data: section })
-    } catch (prismaErr: any) {
-      console.error('[createSection] Prisma error:', prismaErr?.message, prismaErr?.code)
-      throw new AppError(500, 'DB_ERROR', prismaErr?.message ?? 'Error creating section')
-    }
+    const section = await prisma.ticketSection.create({
+      data: { ticketEventId: te.id, name, colorHex, capacity: capacity ?? 0, price: price ?? 0, resourceId: resourceId || null, mapPolygon: mapPolygon ?? null, sortOrder: sortOrder ?? 0 },
+    })
+    res.status(201).json({ success: true, data: section })
   } catch (err) { next(err) }
 }
 
