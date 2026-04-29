@@ -176,7 +176,7 @@ export default function TicketEventTab({ eventId }: Props) {
     sectionForm.validateFields().then(vals => {
       const payload = {
         name: vals.name,
-        color: vals.color,
+        colorHex: vals.color,
         capacity: vals.capacity,
         price: vals.price,
         resourceId: vals.resourceId ?? null,
@@ -232,13 +232,13 @@ export default function TicketEventTab({ eventId }: Props) {
       <Space>
         <Text type="secondary">Estado:</Text>
         <Switch
-          checked={!!ticketEvent.isActive}
+          checked={!!ticketEvent.active}
           checkedChildren="Activo"
           unCheckedChildren="Inactivo"
-          onChange={(checked) => upsertMutation.mutate({ isActive: checked })}
+          onChange={(checked) => upsertMutation.mutate({ active: checked })}
           loading={upsertMutation.isPending}
         />
-        {ticketEvent.isActive && <Badge status="processing" color="green" text="Publicado" />}
+        {ticketEvent.active && <Badge status="processing" color="green" text="Publicado" />}
       </Space>
     </div>
   )
