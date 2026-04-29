@@ -87,10 +87,15 @@ export async function createSection(req: Request, res: Response, next: NextFunct
     if (!te) throw new AppError(404, 'NOT_FOUND', 'Portal de boletos no encontrado')
 
     const { name, colorHex, capacity, price, resourceId, mapPolygon, sortOrder } = req.body
-    const section = await prisma.ticketSection.create({
-      data: { ticketEventId: te.id, name, colorHex, capacity: capacity ?? 0, price: price ?? 0, resourceId: resourceId || null, mapPolygon: mapPolygon ?? null, sortOrder: sortOrder ?? 0 },
-    })
-    res.status(201).json({ success: true, data: section })
+    try {
+      const section = await prisma.ticketSection.create({
+        data: { ticketEventId: te.id, name, colorHex, capacity: capacity ?? 0, price: price ?? 0, resourceId: resourceId || null, mapPolygon: mapPolygon ?? null, sortOrder: sortOrder ?? 0 },
+      })
+      res.status(201).json({ success: true, data: section })
+    } catch (prismaErr: any) {
+      console.error('[createSection] Prisma error:', prismaErr?.message, prismaErr?.code)
+      throw new AppError(500, 'DB_ERROR', prismaErr?.message ?? 'Error creating section')
+    }
   } catch (err) { next(err) }
 }
 
