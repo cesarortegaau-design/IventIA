@@ -64,7 +64,6 @@ export default function VenueMapEditor({ eventId }: VenueMapEditorProps) {
   const [drawMode, setDrawMode] = useState<'select' | 'rect' | 'circle' | 'polygon'>('select')
   const [svgWidth, setSvgWidth] = useState(1200)
   const [svgHeight, setSvgHeight] = useState(600)
-  const [form] = Form.useForm()
   const [showTemplates, setShowTemplates] = useState(false)
   const [zoom, setZoom] = useState(1)
   const [resizingId, setResizingId] = useState<string | null>(null)
@@ -104,20 +103,25 @@ export default function VenueMapEditor({ eventId }: VenueMapEditorProps) {
       queryClient.invalidateQueries({ queryKey: ['venue-map', eventId] })
       message.success('Mapa guardado')
     },
-    onError: () => message.error('Error al guardar mapa'),
+    onError: (err: any) => {
+      const errMsg = err?.response?.data?.error?.message ?? err?.message ?? 'Error al guardar mapa'
+      message.error(errMsg)
+      console.error('[VenueMapEditor] Save error:', errMsg)
+    },
   })
 
   const handleSave = () => {
-    saveMutation.mutate({
-      mapData: mapData?.data?.mapData ?? {},
+    const payload = {
+      mapData: mapData?.data?.mapData || { width: svgWidth, height: svgHeight },
       sections: sections.map(s => ({
         id: s.id,
-        shapeType: s.shapeType,
-        shapeData: s.shapeData,
-        labelX: s.labelX,
-        labelY: s.labelY,
+        shapeType: s.shapeType || null,
+        shapeData: s.shapeData || null,
+        labelX: typeof s.labelX === 'number' ? s.labelX : null,
+        labelY: typeof s.labelY === 'number' ? s.labelY : null,
       })),
-    })
+    }
+    saveMutation.mutate(payload)
   }
 
   const updateHistory = (newSections: Shape[]) => {

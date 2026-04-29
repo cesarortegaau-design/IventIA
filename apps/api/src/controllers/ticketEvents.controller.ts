@@ -178,40 +178,55 @@ export async function saveVenueMap(req: Request, res: Response, next: NextFuncti
     const { mapData, sections: sectionsUpdate } = req.body
     if (!Array.isArray(sectionsUpdate)) throw new AppError(400, 'INVALID_INPUT', 'sections debe ser un array')
 
-    // Update ticket event mapData
-    await prisma.ticketEvent.update({
-      where: { id: te.id },
-      data: { mapData: mapData ?? null },
-    })
+    try {
+      // Update ticket event mapData
+      await prisma.ticketEvent.update({
+        where: { id: te.id },
+        data: { mapData: mapData ?? null },
+      })
 
-    // Update sections (shape geometry)
-    for (const sec of sectionsUpdate) {
-      if (sec.id) {
-        await prisma.ticketSection.update({
-          where: { id: sec.id },
+      // Update sections (shape geometry)
+      for (const sec of sectionsUpdate) {
+        if (sec.id) {
+          try {
+            await prisma.ticketSection.update({
+              where: { id: sec.id },
+              data: {
+                shapeType: sec.shapeType ?? null,
+                shapeData: sec.shapeData ? JSON.parse(JSON.stringify(sec.shapeData)) : null,
+                labelX: typeof sec.labelX === 'number' ? Math.floor(sec.labelX) : null,
+                labelY: typeof sec.labelY === 'number' ? Math.floor(sec.labelY) : null,
+              },
+            })
+          } catch (secErr: any) {
+            console.error(`[saveVenueMap] Error updating section ${sec.id}:`, secErr?.message)
+            // Continue with other sections
+          }
+        }
+      }
+
+      // Audit log
+      try {
+        await prisma.auditLog.create({
           data: {
-            shapeType: sec.shapeType ?? null,
-            shapeData: sec.shapeData ?? null,
-            labelX: sec.labelX ?? null,
-            labelY: sec.labelY ?? null,
+            tenantId,
+            entityType: 'TicketEvent',
+            entityId: te.id,
+            action: 'UPDATE_MAP',
+            changes: { mapData, sections: sectionsUpdate },
+            userId: req.user!.userId,
           },
         })
+      } catch (auditErr: any) {
+        console.warn('[saveVenueMap] Audit log failed:', auditErr?.message)
+        // Non-blocking error
       }
+
+      res.json({ success: true, message: 'Mapa guardado' })
+    } catch (dbErr: any) {
+      console.error('[saveVenueMap] DB error:', dbErr?.message, dbErr?.code)
+      throw new AppError(500, 'DB_ERROR', `Error: ${dbErr?.message ?? 'Unknown database error'}`)
     }
-
-    // Audit log
-    await prisma.auditLog.create({
-      data: {
-        tenantId,
-        entityType: 'TicketEvent',
-        entityId: te.id,
-        action: 'UPDATE_MAP',
-        changes: { mapData, sections: sectionsUpdate },
-        userId: req.user!.userId,
-      },
-    })
-
-    res.json({ success: true, message: 'Mapa guardado' })
   } catch (err) { next(err) }
 }
 
