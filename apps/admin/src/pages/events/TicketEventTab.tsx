@@ -9,6 +9,7 @@ import dayjs from 'dayjs'
 import { ticketEventsApi } from '../../api/ticketEvents'
 import { priceListsApi } from '../../api/priceLists'
 import { resourcesApi } from '../../api/resources'
+import VenueMapEditor from './VenueMapEditor'
 
 const { Text } = Typography
 
@@ -526,7 +527,7 @@ export default function TicketEventTab({ eventId }: Props) {
           {
             key: 'map',
             label: 'Mapa del Venue',
-            children: <div style={{ minHeight: 600 }}>Mapa del venue — en desarrollo</div>,
+            children: <VenueMapEditor eventId={eventId} />,
           },
 
           // ── Órdenes ─────────────────────────────────────────────────────
