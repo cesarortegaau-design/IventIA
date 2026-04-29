@@ -87,15 +87,14 @@ export async function createSection(req: Request, res: Response, next: NextFunct
     if (!te) throw new AppError(404, 'NOT_FOUND', 'Portal de boletos no encontrado')
 
     const { name, colorHex, capacity, price, resourceId, mapPolygon, sortOrder } = req.body
-    console.log('[createSection] body:', JSON.stringify({ name, colorHex, capacity, price, resourceId, mapPolygon, sortOrder }))
-    console.log('[createSection] ticketEventId:', te.id)
+    const safeResourceId = resourceId != null && String(resourceId).trim() !== '' ? String(resourceId).trim() : null
     try {
       const section = await prisma.ticketSection.create({
-        data: { ticketEventId: te.id, name, colorHex: colorHex || '#6B46C1', capacity: Number(capacity ?? 0), price: Number(price ?? 0), resourceId: resourceId || null, mapPolygon: mapPolygon ?? null, sortOrder: Number(sortOrder ?? 0) },
+        data: { ticketEventId: te.id, name, colorHex: colorHex || '#6B46C1', capacity: Number(capacity ?? 0), price: Number(price ?? 0), resourceId: safeResourceId, mapPolygon: mapPolygon ?? null, sortOrder: Number(sortOrder ?? 0) },
       })
       res.status(201).json({ success: true, data: section })
     } catch (prismaErr: any) {
-      throw new AppError(500, 'DB_ERROR', `${prismaErr?.code ?? ''}: ${prismaErr?.message ?? 'DB error'}`)
+      throw new AppError(500, 'DB_ERROR', `body=${JSON.stringify({ name, colorHex, capacity, price, resourceId, safeResourceId })} err=${prismaErr?.code}: ${prismaErr?.message}`)
     }
   } catch (err) { next(err) }
 }
