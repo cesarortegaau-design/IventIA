@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Form, InputNumber, Modal, Space, Spin } from 'antd'
-import { DeleteOutlined, SaveOutlined, UndoOutlined, RedoOutlined, ClearOutlined } from '@ant-design/icons'
+import { App, Button, Form, InputNumber, Modal, Space, Spin, Card, Row, Col, ColorPicker } from 'antd'
+import { DeleteOutlined, SaveOutlined, UndoOutlined, RedoOutlined, ClearOutlined, BgColorsOutlined } from '@ant-design/icons'
+import type { Color } from 'antd/es/color-picker'
 import { ticketEventsApi } from '../../api/ticketEvents'
 
 interface Shape {
@@ -18,10 +19,41 @@ interface VenueMapEditorProps {
   eventId: string
 }
 
-const TEMPLATES = {
-  stadium: { name: 'Estadio', width: 1200, height: 600 },
-  theater: { name: 'Auditorio', width: 800, height: 500 },
-  festival: { name: 'Festival', width: 1200, height: 800 },
+const TEMPLATES: Record<string, { name: string; width: number; height: number; shapes: Omit<Shape, 'id'>[] }> = {
+  stadium: {
+    name: 'Estadio',
+    width: 1200,
+    height: 600,
+    shapes: [
+      { name: 'Platea Baja', colorHex: '#6B46C1', shapeType: 'rect', shapeData: { x: 100, y: 100, w: 350, h: 150 }, labelX: 275, labelY: 175 },
+      { name: 'Platea Alta', colorHex: '#7C3AED', shapeType: 'rect', shapeData: { x: 100, y: 300, w: 350, h: 150 }, labelX: 275, labelY: 375 },
+      { name: 'Tribuna Derecha', colorHex: '#EC4899', shapeType: 'rect', shapeData: { x: 500, y: 100, w: 150, h: 350 }, labelX: 575, labelY: 275 },
+      { name: 'Tribuna Izquierda', colorHex: '#F59E0B', shapeType: 'rect', shapeData: { x: 750, y: 100, w: 150, h: 350 }, labelX: 825, labelY: 275 },
+      { name: 'VIP', colorHex: '#10B981', shapeType: 'circle', shapeData: { cx: 950, cy: 300, r: 80 }, labelX: 950, labelY: 300 },
+    ],
+  },
+  theater: {
+    name: 'Auditorio',
+    width: 800,
+    height: 500,
+    shapes: [
+      { name: 'Orquesta', colorHex: '#6B46C1', shapeType: 'rect', shapeData: { x: 50, y: 100, w: 300, h: 200 }, labelX: 200, labelY: 200 },
+      { name: 'Balcón', colorHex: '#7C3AED', shapeType: 'rect', shapeData: { x: 400, y: 100, w: 300, h: 200 }, labelX: 550, labelY: 200 },
+      { name: 'Escenario', colorHex: '#F59E0B', shapeType: 'rect', shapeData: { x: 150, y: 330, w: 500, h: 100 }, labelX: 400, labelY: 380 },
+    ],
+  },
+  festival: {
+    name: 'Festival',
+    width: 1200,
+    height: 800,
+    shapes: [
+      { name: 'Escenario Principal', colorHex: '#FF6B6B', shapeType: 'rect', shapeData: { x: 50, y: 50, w: 1100, h: 150 }, labelX: 600, labelY: 125 },
+      { name: 'Pit Frente', colorHex: '#6B46C1', shapeType: 'rect', shapeData: { x: 50, y: 250, w: 1100, h: 300 }, labelX: 600, labelY: 400 },
+      { name: 'VIP Front Row', colorHex: '#10B981', shapeType: 'rect', shapeData: { x: 50, y: 600, w: 350, h: 150 }, labelX: 225, labelY: 675 },
+      { name: 'VIP Side', colorHex: '#EC4899', shapeType: 'rect', shapeData: { x: 450, y: 600, w: 300, h: 150 }, labelX: 600, labelY: 675 },
+      { name: 'General', colorHex: '#F59E0B', shapeType: 'rect', shapeData: { x: 800, y: 600, w: 350, h: 150 }, labelX: 975, labelY: 675 },
+    ],
+  },
 }
 
 export default function VenueMapEditor({ eventId }: VenueMapEditorProps) {
@@ -34,6 +66,8 @@ export default function VenueMapEditor({ eventId }: VenueMapEditorProps) {
   const [svgWidth, setSvgWidth] = useState(1200)
   const [svgHeight, setSvgHeight] = useState(600)
   const [form] = Form.useForm()
+  const [selectedColor, setSelectedColor] = useState<string>('#6B46C1')
+  const [showTemplates, setShowTemplates] = useState(false)
 
   // Drawing state
   const [isDrawing, setIsDrawing] = useState(false)
@@ -247,6 +281,19 @@ export default function VenueMapEditor({ eventId }: VenueMapEditorProps) {
     })
   }
 
+  const handleLoadTemplate = (templateKey: string) => {
+    const template = TEMPLATES[templateKey]
+    setSvgWidth(template.width)
+    setSvgHeight(template.height)
+    const newShapes = template.shapes.map((s, idx) => ({
+      ...s,
+      id: Math.random().toString(36).substr(2, 9),
+    }))
+    updateHistory(newShapes)
+    setShowTemplates(false)
+    message.success(`Plantilla "${template.name}" cargada`)
+  }
+
   if (isLoading) return <Spin />
 
   return (
@@ -270,6 +317,9 @@ export default function VenueMapEditor({ eventId }: VenueMapEditorProps) {
               <Button size="small" icon={<UndoOutlined />} onClick={handleUndo} disabled={historyIndex === 0} />
               <Button size="small" icon={<RedoOutlined />} onClick={handleRedo} disabled={historyIndex === history.length - 1} />
             </Button.Group>
+            <Button size="small" onClick={() => setShowTemplates(true)}>
+              Plantillas
+            </Button>
             <Button size="small" danger icon={<ClearOutlined />} onClick={handleClear}>
               Limpiar
             </Button>
@@ -343,6 +393,31 @@ export default function VenueMapEditor({ eventId }: VenueMapEditorProps) {
         {selected ? (
           <>
             <h4 style={{ marginTop: 0 }}>{selected.name}</h4>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>Color</label>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <div
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 4,
+                    backgroundColor: selected.colorHex,
+                    border: '1px solid #d9d9d9',
+                  }}
+                />
+                <input
+                  type="color"
+                  value={selected.colorHex}
+                  onChange={(e) => {
+                    const updated = sections.map(s =>
+                      s.id === selected.id ? { ...s, colorHex: e.target.value } : s
+                    )
+                    setSections(updated)
+                  }}
+                  style={{ width: 50, height: 40, cursor: 'pointer', border: '1px solid #d9d9d9', borderRadius: 4 }}
+                />
+              </div>
+            </div>
             <Form form={form} layout="vertical" size="small">
               <Form.Item label="Etiqueta X" name="labelX">
                 <InputNumber
@@ -384,6 +459,35 @@ export default function VenueMapEditor({ eventId }: VenueMapEditorProps) {
           </Button>
         </div>
       </div>
+
+      {/* Templates Modal */}
+      <Modal
+        title="Plantillas de Venue"
+        open={showTemplates}
+        onCancel={() => setShowTemplates(false)}
+        footer={null}
+        width={600}
+      >
+        <Row gutter={[16, 16]}>
+          {Object.entries(TEMPLATES).map(([key, template]) => (
+            <Col xs={24} sm={12} key={key}>
+              <Card
+                hoverable
+                onClick={() => handleLoadTemplate(key)}
+                style={{ cursor: 'pointer', textAlign: 'center' }}
+              >
+                <div style={{ fontSize: 48, marginBottom: 8 }}>
+                  {key === 'stadium' && '🏟️'}
+                  {key === 'theater' && '🎭'}
+                  {key === 'festival' && '🎪'}
+                </div>
+                <div style={{ fontWeight: 500 }}>{template.name}</div>
+                <div style={{ fontSize: 12, color: '#999' }}>{template.shapes.length} zonas</div>
+              </Card>
+            </Col>
+          ))}
+        </Row>
+      </Modal>
     </div>
   )
 }
