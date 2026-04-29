@@ -8,6 +8,7 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, AppstoreOutlined } from '@a
 import dayjs from 'dayjs'
 import { ticketEventsApi } from '../../api/ticketEvents'
 import { priceListsApi } from '../../api/priceLists'
+import { resourcesApi } from '../../api/resources'
 
 const { Text } = Typography
 
@@ -57,6 +58,12 @@ export default function TicketEventTab({ eventId }: Props) {
     queryFn: () => priceListsApi.list(),
   })
   const priceLists: any[] = priceListsData?.data ?? []
+
+  const { data: ticketResourcesData } = useQuery({
+    queryKey: ['resources', 'TICKET'],
+    queryFn: () => resourcesApi.list({ type: 'TICKET', isActive: true }),
+  })
+  const ticketResources: any[] = ticketResourcesData?.data ?? []
 
   const { data: ordersData } = useQuery({
     queryKey: ['ticket-orders', eventId],
@@ -451,7 +458,14 @@ export default function TicketEventTab({ eventId }: Props) {
                       />
                     </Form.Item>
                     <Form.Item name="resourceId" label="Recurso asociado (opcional)">
-                      <Input placeholder="ID del recurso tipo TICKET..." />
+                      <Select
+                        allowClear
+                        placeholder="Seleccionar recurso tipo Boleto..."
+                        options={ticketResources.map((r: any) => ({
+                          value: r.id,
+                          label: `${r.name}${r.code ? ` (${r.code})` : ''}`,
+                        }))}
+                      />
                     </Form.Item>
                   </Form>
                 </Modal>
