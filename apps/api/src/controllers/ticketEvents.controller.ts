@@ -38,12 +38,41 @@ export async function upsertTicketEvent(req: Request, res: Response, next: NextF
       if (existing) throw new AppError(409, 'SLUG_TAKEN', 'El slug ya está en uso')
     }
 
-    const te = await prisma.ticketEvent.upsert({
-      where: { eventId },
-      create: { tenantId, eventId, mode, priceListId, slug, active: active ?? false, description, imageUrl, mapImageUrl },
-      update: { mode, priceListId, slug, active, description, imageUrl, mapImageUrl },
-      include: { sections: { orderBy: { sortOrder: 'asc' } } },
-    })
+    // Build update payload with only defined fields
+    const updateData: Record<string, any> = {}
+    if (mode !== undefined) updateData.mode = mode
+    if (priceListId !== undefined) updateData.priceListId = priceListId
+    if (slug !== undefined) updateData.slug = slug
+    if (active !== undefined) updateData.active = active
+    if (description !== undefined) updateData.description = description
+    if (imageUrl !== undefined) updateData.imageUrl = imageUrl
+    if (mapImageUrl !== undefined) updateData.mapImageUrl = mapImageUrl
+
+    const existing = await prisma.ticketEvent.findUnique({ where: { eventId } })
+
+    let te
+    if (existing) {
+      te = await prisma.ticketEvent.update({
+        where: { eventId },
+        data: updateData,
+        include: { sections: { orderBy: { sortOrder: 'asc' } } },
+      })
+    } else {
+      te = await prisma.ticketEvent.create({
+        data: {
+          tenantId,
+          eventId,
+          mode: mode ?? 'SECTION',
+          priceListId: priceListId ?? null,
+          slug: slug ?? '',
+          active: active ?? false,
+          description: description ?? null,
+          imageUrl: imageUrl ?? null,
+          mapImageUrl: mapImageUrl ?? null,
+        },
+        include: { sections: { orderBy: { sortOrder: 'asc' } } },
+      })
+    }
     res.json({ success: true, data: te })
   } catch (err) { next(err) }
 }
