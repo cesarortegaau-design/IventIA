@@ -186,7 +186,6 @@ export default function TicketEventTab({ eventId }: Props) {
         colorHex: vals.color,
         capacity: vals.capacity,
         price: vals.price,
-        resourceId: vals.resourceId || null,
       }
       if (editingSection) {
         updateSectionMutation.mutate({ sectionId: editingSection.id, data: payload })
@@ -455,16 +454,6 @@ export default function TicketEventTab({ eventId }: Props) {
                         prefix="$"
                         style={{ width: '100%' }}
                         formatter={(v) => String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                      />
-                    </Form.Item>
-                    <Form.Item name="resourceId" label="Recurso asociado (opcional)">
-                      <Select
-                        allowClear
-                        placeholder="Seleccionar recurso tipo Boleto..."
-                        options={ticketResources.map((r: any) => ({
-                          value: r.id,
-                          label: `${r.name}${r.code ? ` (${r.code})` : ''}`,
-                        }))}
                       />
                     </Form.Item>
                   </Form>
