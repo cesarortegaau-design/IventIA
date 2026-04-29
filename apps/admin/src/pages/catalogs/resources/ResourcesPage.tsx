@@ -14,10 +14,12 @@ const { Title, Text } = Typography
 const TYPE_LABELS: Record<string, string> = {
   CONSUMABLE: 'Consumible', EQUIPMENT: 'Equipo', SPACE: 'Espacio',
   FURNITURE: 'Mobiliario', SERVICE: 'Servicio', DISCOUNT: 'Descuento', TAX: 'Impuesto', PERSONAL: 'Personal',
+  TICKET: 'Boleto',
 }
 const TYPE_COLORS: Record<string, string> = {
   CONSUMABLE: 'orange', EQUIPMENT: 'blue', SPACE: 'green',
   FURNITURE: 'purple', SERVICE: 'cyan', DISCOUNT: 'red', TAX: 'gold', PERSONAL: 'magenta',
+  TICKET: 'volcano',
 }
 
 const UNIT_OPTIONS = [
