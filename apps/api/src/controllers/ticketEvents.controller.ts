@@ -88,7 +88,7 @@ export async function createSection(req: Request, res: Response, next: NextFunct
 
     const { name, colorHex, capacity, price, resourceId, mapPolygon, sortOrder } = req.body
     const section = await prisma.ticketSection.create({
-      data: { ticketEventId: te.id, name, colorHex, capacity: capacity ?? 0, price: price ?? 0, resourceId, mapPolygon, sortOrder: sortOrder ?? 0 },
+      data: { ticketEventId: te.id, name, colorHex, capacity: capacity ?? 0, price: price ?? 0, resourceId: resourceId || null, mapPolygon: mapPolygon ?? null, sortOrder: sortOrder ?? 0 },
     })
     res.status(201).json({ success: true, data: section })
   } catch (err) { next(err) }
@@ -104,7 +104,7 @@ export async function updateSection(req: Request, res: Response, next: NextFunct
     const { name, colorHex, capacity, price, resourceId, mapPolygon, sortOrder } = req.body
     const section = await prisma.ticketSection.update({
       where: { id: sectionId },
-      data: { name, colorHex, capacity, price, resourceId, mapPolygon, sortOrder },
+      data: { name, colorHex, capacity, price, resourceId: resourceId || null, mapPolygon: mapPolygon ?? null, sortOrder },
     })
     res.json({ success: true, data: section })
   } catch (err) { next(err) }

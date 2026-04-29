@@ -157,7 +157,7 @@ export default function TicketEventTab({ eventId }: Props) {
         color: section.color ?? '#6366f1',
         capacity: section.capacity,
         price: section.price,
-        resourceId: section.resourceId ?? undefined,
+        resourceId: section.resourceId || undefined,
       })
     } else {
       sectionForm.resetFields()
@@ -179,7 +179,7 @@ export default function TicketEventTab({ eventId }: Props) {
         colorHex: vals.color,
         capacity: vals.capacity,
         price: vals.price,
-        resourceId: vals.resourceId ?? null,
+        resourceId: vals.resourceId || null,
       }
       if (editingSection) {
         updateSectionMutation.mutate({ sectionId: editingSection.id, data: payload })
