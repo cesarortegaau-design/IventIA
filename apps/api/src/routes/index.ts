@@ -29,6 +29,8 @@ import supplierPortalRoutes from './supplier-portal.routes'
 import supplierPortalCodesRoutes from './supplier-portal-codes.routes'
 import iflagRoutes from './iflag.routes'
 import aiRoutes from './ai.routes'
+import ticketEventsRoutes from './ticketEvents.routes'
+import ticketsPublicRoutes from './tickets.public.routes'
 
 const router = Router()
 
@@ -62,5 +64,7 @@ router.use('/supplier-portal', supplierPortalRoutes)
 router.use('/suppliers/:supplierId/portal-codes', supplierPortalCodesRoutes)
 router.use('/iflag', iflagRoutes)
 router.use('/ai', aiRoutes)
+router.use('/events', ticketEventsRoutes)
+router.use('/public/tickets', ticketsPublicRoutes)
 
 export default router

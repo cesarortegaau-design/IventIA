@@ -1,0 +1,238 @@
+import { Request, Response, NextFunction } from 'express'
+import Stripe from 'stripe'
+import { prisma } from '../config/database'
+import { AppError } from '../middleware/errorHandler'
+
+const RESERVATION_MINUTES = 15
+
+function getStripe() {
+  const key = process.env.STRIPE_SECRET_KEY
+  if (!key) throw new AppError(503, 'STRIPE_NOT_CONFIGURED', 'Stripe no configurado')
+  return new Stripe(key)
+}
+
+// GET /public/tickets/events — lista eventos con venta activa
+export async function listPublicTicketEvents(req: Request, res: Response, next: NextFunction) {
+  try {
+    const events = await prisma.ticketEvent.findMany({
+      where: { active: true },
+      include: {
+        event: { select: { id: true, name: true, eventStart: true, eventEnd: true, venueLocation: true } },
+        sections: { select: { id: true, name: true, colorHex: true, capacity: true, sold: true, price: true }, orderBy: { sortOrder: 'asc' } },
+      },
+      orderBy: { event: { eventStart: 'asc' } },
+    })
+    res.json({ success: true, data: events })
+  } catch (err) { next(err) }
+}
+
+// GET /public/tickets/events/:slug — detalle de un evento
+export async function getPublicTicketEvent(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { slug } = req.params
+    const te = await prisma.ticketEvent.findUnique({
+      where: { slug },
+      include: {
+        event: { select: { id: true, name: true, eventStart: true, eventEnd: true, venueLocation: true, description: true } },
+        sections: {
+          orderBy: { sortOrder: 'asc' },
+          include: {
+            seats: {
+              where: { status: 'AVAILABLE' },
+              orderBy: [{ row: 'asc' }, { number: 'asc' }],
+            },
+          },
+        },
+      },
+    })
+    if (!te || !te.active) throw new AppError(404, 'NOT_FOUND', 'Evento no encontrado')
+    res.json({ success: true, data: te })
+  } catch (err) { next(err) }
+}
+
+// POST /public/tickets/orders — crear orden + Stripe Checkout
+export async function createPublicOrder(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { slug, buyerEmail, buyerName, buyerPhone, items } = req.body as {
+      slug: string
+      buyerEmail: string
+      buyerName: string
+      buyerPhone?: string
+      items: Array<{ sectionId: string; seatId?: string; quantity: number }>
+    }
+
+    if (!slug || !buyerEmail || !buyerName || !items?.length) {
+      throw new AppError(400, 'MISSING_FIELDS', 'slug, buyerEmail, buyerName e items son requeridos')
+    }
+
+    const te = await prisma.ticketEvent.findUnique({
+      where: { slug },
+      include: { sections: true },
+    })
+    if (!te || !te.active) throw new AppError(404, 'NOT_FOUND', 'Evento no encontrado')
+
+    // Validate items and compute totals
+    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = []
+    let total = 0
+    const validatedItems: Array<{ sectionId: string; seatId?: string; quantity: number; unitPrice: number }> = []
+
+    for (const item of items) {
+      const section = te.sections.find(s => s.id === item.sectionId)
+      if (!section) throw new AppError(400, 'INVALID_SECTION', `Sección ${item.sectionId} no encontrada`)
+      const available = section.capacity - section.sold
+      if (item.quantity > available) throw new AppError(409, 'INSUFFICIENT_STOCK', `Solo quedan ${available} boletos disponibles en ${section.name}`)
+
+      const unitPrice = Number(section.price)
+      const lineTotal = unitPrice * item.quantity
+      total += lineTotal
+
+      validatedItems.push({ sectionId: item.sectionId, seatId: item.seatId, quantity: item.quantity, unitPrice })
+
+      lineItems.push({
+        price_data: {
+          currency: 'mxn',
+          product_data: { name: section.name },
+          unit_amount: Math.round(unitPrice * 100),
+        },
+        quantity: item.quantity,
+      })
+    }
+
+    const expiresAt = new Date(Date.now() + RESERVATION_MINUTES * 60 * 1000)
+
+    // Create PENDING order
+    const order = await prisma.ticketOrder.create({
+      data: {
+        tenantId: te.tenantId,
+        ticketEventId: te.id,
+        buyerEmail,
+        buyerName,
+        buyerPhone,
+        status: 'PENDING',
+        total,
+        expiresAt,
+        items: {
+          create: validatedItems.map(i => ({
+            sectionId: i.sectionId,
+            seatId: i.seatId,
+            quantity: i.quantity,
+            unitPrice: i.unitPrice,
+            lineTotal: i.unitPrice * i.quantity,
+          })),
+        },
+      },
+    })
+
+    // Reserve seats if SEAT mode
+    if (te.mode === 'SEAT') {
+      const seatIds = validatedItems.filter(i => i.seatId).map(i => i.seatId!)
+      if (seatIds.length > 0) {
+        await prisma.ticketSeat.updateMany({ where: { id: { in: seatIds } }, data: { status: 'RESERVED' } })
+      }
+    }
+
+    // Stripe Checkout
+    const stripe = getStripe()
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: lineItems,
+      mode: 'payment',
+      customer_email: buyerEmail,
+      metadata: { ticketOrderId: order.id },
+      success_url: `${process.env.TICKETS_APP_URL ?? 'http://localhost:5175'}/pago/exito?token=${order.token}`,
+      cancel_url: `${process.env.TICKETS_APP_URL ?? 'http://localhost:5175'}/pago/cancelado`,
+      expires_at: Math.floor(expiresAt.getTime() / 1000),
+    })
+
+    // Save stripe session id
+    await prisma.ticketOrder.update({ where: { id: order.id }, data: { stripeSessionId: session.id } })
+
+    res.json({ success: true, data: { checkoutUrl: session.url, token: order.token } })
+  } catch (err) { next(err) }
+}
+
+// POST /public/tickets/webhook — Stripe webhook
+export async function stripeWebhook(req: Request, res: Response, next: NextFunction) {
+  try {
+    const sig = req.headers['stripe-signature'] as string
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
+    if (!webhookSecret) throw new AppError(503, 'WEBHOOK_NOT_CONFIGURED', 'Webhook secret no configurado')
+
+    const stripe = getStripe()
+    let event: Stripe.Event
+    try {
+      event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret)
+    } catch {
+      res.status(400).json({ error: 'Invalid signature' })
+      return
+    }
+
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object as Stripe.Checkout.Session
+      const ticketOrderId = session.metadata?.ticketOrderId
+      if (!ticketOrderId) { res.json({ received: true }); return }
+
+      const order = await prisma.ticketOrder.findUnique({
+        where: { id: ticketOrderId },
+        include: { items: true },
+      })
+      if (!order || order.status === 'PAID') { res.json({ received: true }); return }
+
+      await prisma.$transaction(async (tx) => {
+        // Mark order as PAID
+        await tx.ticketOrder.update({
+          where: { id: ticketOrderId },
+          data: { status: 'PAID', stripePaymentId: session.payment_intent as string },
+        })
+        // Increment sold count per section
+        for (const item of order.items) {
+          await tx.ticketSection.update({
+            where: { id: item.sectionId },
+            data: { sold: { increment: item.quantity } },
+          })
+        }
+        // Mark seats as SOLD if SEAT mode
+        const seatIds = order.items.filter(i => i.seatId).map(i => i.seatId!)
+        if (seatIds.length > 0) {
+          await tx.ticketSeat.updateMany({ where: { id: { in: seatIds } }, data: { status: 'SOLD' } })
+        }
+      })
+    }
+
+    if (event.type === 'checkout.session.expired') {
+      const session = event.data.object as Stripe.Checkout.Session
+      const ticketOrderId = session.metadata?.ticketOrderId
+      if (ticketOrderId) {
+        const order = await prisma.ticketOrder.findUnique({ where: { id: ticketOrderId }, include: { items: true } })
+        if (order && order.status === 'PENDING') {
+          await prisma.ticketOrder.update({ where: { id: ticketOrderId }, data: { status: 'CANCELLED' } })
+          // Release reserved seats
+          const seatIds = order.items.filter(i => i.seatId).map(i => i.seatId!)
+          if (seatIds.length > 0) {
+            await prisma.ticketSeat.updateMany({ where: { id: { in: seatIds } }, data: { status: 'AVAILABLE' } })
+          }
+        }
+      }
+    }
+
+    res.json({ received: true })
+  } catch (err) { next(err) }
+}
+
+// GET /public/tickets/orders/:token — consultar orden por token
+export async function getPublicOrder(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { token } = req.params
+    const order = await prisma.ticketOrder.findUnique({
+      where: { token },
+      include: {
+        ticketEvent: {
+          include: { event: { select: { name: true, eventStart: true, venueLocation: true } } },
+        },
+        items: { include: { section: true, seat: true } },
+      },
+    })
+    if (!order) throw new AppError(404, 'NOT_FOUND', 'Orden no encontrada')
+    res.json({ success: true, data: order })
+  } catch (err) { next(err) }
+}

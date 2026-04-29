@@ -24,6 +24,7 @@ import { templatesApi } from '../../api/templates'
 import DxfViewer, { StandSaveData } from '../../components/DxfViewer'
 import { floorPlansApi } from '../../api/floorPlans'
 import { standsApi } from '../../api/stands'
+import TicketEventTab from './TicketEventTab'
 
 const { Title, Text } = Typography
 
@@ -1236,6 +1237,11 @@ export default function EventDetailPage() {
                   )}
                 </div>
               ),
+            },
+            {
+              key: 'tickets',
+              label: 'Boletos',
+              children: <TicketEventTab eventId={id!} />,
             },
             {
               key: 'audit',

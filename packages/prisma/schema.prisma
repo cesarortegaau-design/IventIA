@@ -20,6 +20,7 @@ enum ResourceType {
   DISCOUNT
   TAX
   PERSONAL
+  TICKET
 }
 
 enum DepartmentType {
@@ -319,6 +320,10 @@ model Tenant {
   footballGames FootballGame[]
   gameEvents    GameEvent[]
 
+  // Ticket System
+  ticketEvents  TicketEvent[]
+  ticketOrders  TicketOrder[]
+
   @@map("tenants")
 }
 
@@ -518,6 +523,7 @@ model Resource {
   purchaseOrderItems PurchaseOrderLineItem[] @relation("PurchaseOrderLineItems")
   inventory          ResourceInventory[]
   movements          InventoryMovement[]
+  ticketSections     TicketSection[]
 
   @@unique([tenantId, code])
   @@index([tenantId, type, isActive])
@@ -560,10 +566,11 @@ model PriceList {
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
-  tenant Tenant          @relation(fields: [tenantId], references: [id])
-  items  PriceListItem[]
-  events Event[]
-  orders Order[]
+  tenant       Tenant          @relation(fields: [tenantId], references: [id])
+  items        PriceListItem[]
+  events       Event[]
+  orders       Order[]
+  ticketEvents TicketEvent[]
 
   @@index([tenantId, isActive])
   @@map("price_lists")
@@ -801,6 +808,7 @@ model Event {
   portalUserEvents    PortalUserEvent[]
   conversations       Conversation[]
   footballGames       FootballGame[]
+  ticketEvent         TicketEvent?
 
   @@unique([tenantId, code])
   @@index([tenantId, status])
@@ -2349,4 +2357,124 @@ model GameEvent {
   @@index([gameId])
   @@index([tenantId])
   @@map("game_events")
+}
+
+// ─── Ticket System ────────────────────────────────────────────────────────────
+
+enum TicketMode {
+  SECTION
+  SEAT
+}
+
+enum TicketOrderStatus {
+  PENDING
+  PAID
+  CANCELLED
+  REFUNDED
+}
+
+model TicketEvent {
+  id           String      @id @default(uuid())
+  tenantId     String      @map("tenant_id")
+  eventId      String      @unique @map("event_id")
+  mode         TicketMode  @default(SECTION)
+  priceListId  String?     @map("price_list_id")
+  slug         String      @unique @db.VarChar(100)
+  active       Boolean     @default(false)
+  description  String?     @db.Text
+  imageUrl     String?     @map("image_url") @db.VarChar(500)
+  mapImageUrl  String?     @map("map_image_url") @db.VarChar(500)
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  tenant    Tenant      @relation(fields: [tenantId], references: [id])
+  event     Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  priceList PriceList?  @relation(fields: [priceListId], references: [id])
+  sections  TicketSection[]
+  orders    TicketOrder[]
+
+  @@index([tenantId])
+  @@index([slug])
+  @@map("ticket_events")
+}
+
+model TicketSection {
+  id            String   @id @default(uuid())
+  ticketEventId String   @map("ticket_event_id")
+  resourceId    String?  @map("resource_id")
+  name          String   @db.VarChar(200)
+  colorHex      String   @default("#6B46C1") @map("color_hex") @db.VarChar(7)
+  capacity      Int      @default(0)
+  sold          Int      @default(0)
+  price         Decimal  @default(0) @db.Decimal(12, 2)
+  mapPolygon    Json?    @map("map_polygon")
+  sortOrder     Int      @default(0) @map("sort_order")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  ticketEvent TicketEvent    @relation(fields: [ticketEventId], references: [id], onDelete: Cascade)
+  resource    Resource?      @relation(fields: [resourceId], references: [id])
+  seats       TicketSeat[]
+  orderItems  TicketOrderItem[]
+
+  @@index([ticketEventId])
+  @@map("ticket_sections")
+}
+
+model TicketSeat {
+  id        String   @id @default(uuid())
+  sectionId String   @map("section_id")
+  row       String   @db.VarChar(10)
+  number    Int
+  status    String   @default("AVAILABLE") @db.VarChar(20)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  section    TicketSection    @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  orderItems TicketOrderItem[]
+
+  @@unique([sectionId, row, number])
+  @@index([sectionId])
+  @@map("ticket_seats")
+}
+
+model TicketOrder {
+  id              String            @id @default(uuid())
+  tenantId        String            @map("tenant_id")
+  ticketEventId   String            @map("ticket_event_id")
+  buyerEmail      String            @map("buyer_email") @db.VarChar(300)
+  buyerName       String            @map("buyer_name") @db.VarChar(300)
+  buyerPhone      String?           @map("buyer_phone") @db.VarChar(50)
+  stripeSessionId String?           @map("stripe_session_id") @db.VarChar(300)
+  stripePaymentId String?           @map("stripe_payment_id") @db.VarChar(300)
+  status          TicketOrderStatus @default(PENDING)
+  total           Decimal           @default(0) @db.Decimal(12, 2)
+  token           String            @unique @default(uuid())
+  expiresAt       DateTime?         @map("expires_at")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  tenant      Tenant            @relation(fields: [tenantId], references: [id])
+  ticketEvent TicketEvent       @relation(fields: [ticketEventId], references: [id])
+  items       TicketOrderItem[]
+
+  @@index([tenantId, status])
+  @@index([stripeSessionId])
+  @@index([token])
+  @@map("ticket_orders")
+}
+
+model TicketOrderItem {
+  id            String  @id @default(uuid())
+  ticketOrderId String  @map("ticket_order_id")
+  sectionId     String  @map("section_id")
+  seatId        String? @map("seat_id")
+  quantity      Int     @default(1)
+  unitPrice     Decimal @map("unit_price") @db.Decimal(12, 2)
+  lineTotal     Decimal @map("line_total") @db.Decimal(12, 2)
+
+  ticketOrder TicketOrder   @relation(fields: [ticketOrderId], references: [id], onDelete: Cascade)
+  section     TicketSection @relation(fields: [sectionId], references: [id])
+  seat        TicketSeat?   @relation(fields: [seatId], references: [id])
+
+  @@index([ticketOrderId])
+  @@map("ticket_order_items")
 }
