@@ -16,9 +16,38 @@ export async function listPublicTicketEvents(req: Request, res: Response, next: 
   try {
     const events = await prisma.ticketEvent.findMany({
       where: { active: true },
-      include: {
-        event: { select: { id: true, name: true, eventStart: true, eventEnd: true, venueLocation: true } },
-        sections: { select: { id: true, name: true, colorHex: true, capacity: true, sold: true, price: true }, orderBy: { sortOrder: 'asc' } },
+      select: {
+        id: true,
+        slug: true,
+        mode: true,
+        active: true,
+        mapData: true,
+        event: {
+          select: {
+            id: true,
+            name: true,
+            eventStart: true,
+            eventEnd: true,
+            venueLocation: true,
+            description: true,
+            imageUrl: true,
+          }
+        },
+        sections: {
+          select: {
+            id: true,
+            name: true,
+            colorHex: true,
+            capacity: true,
+            sold: true,
+            price: true,
+            shapeType: true,
+            shapeData: true,
+            labelX: true,
+            labelY: true,
+          },
+          orderBy: { sortOrder: 'asc' }
+        },
       },
       orderBy: { event: { eventStart: 'asc' } },
     })
@@ -32,16 +61,41 @@ export async function getPublicTicketEvent(req: Request, res: Response, next: Ne
     const { slug } = req.params
     const te = await prisma.ticketEvent.findUnique({
       where: { slug },
-      include: {
-        event: { select: { id: true, name: true, eventStart: true, eventEnd: true, venueLocation: true, description: true } },
+      select: {
+        id: true,
+        slug: true,
+        mode: true,
+        active: true,
+        mapData: true,
+        event: {
+          select: {
+            id: true,
+            name: true,
+            eventStart: true,
+            eventEnd: true,
+            venueLocation: true,
+            description: true,
+            imageUrl: true,
+          }
+        },
         sections: {
-          orderBy: { sortOrder: 'asc' },
-          include: {
+          select: {
+            id: true,
+            name: true,
+            colorHex: true,
+            capacity: true,
+            sold: true,
+            price: true,
+            shapeType: true,
+            shapeData: true,
+            labelX: true,
+            labelY: true,
             seats: {
               where: { status: 'AVAILABLE' },
               orderBy: [{ row: 'asc' }, { number: 'asc' }],
             },
           },
+          orderBy: { sortOrder: 'asc' },
         },
       },
     })

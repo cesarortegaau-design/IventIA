@@ -61,11 +61,41 @@ export default function EventPage() {
   const navigate = useNavigate()
   const { items, addItem, setSlug, slug: cartSlug, total } = useCart()
 
-  const { data: event, isLoading, error } = useQuery<EventDetail>({
+  const { data: eventData, isLoading, error } = useQuery({
     queryKey: ['public-event', slug],
     queryFn: () => ticketsApi.getEvent(slug!),
     enabled: !!slug,
   })
+
+  // Map API response to EventDetail interface
+  const event: EventDetail | null = eventData?.data ? {
+    id: eventData.data.id,
+    slug: eventData.data.slug,
+    name: eventData.data.event?.name || 'Evento',
+    imageUrl: eventData.data.event?.imageUrl,
+    startDate: eventData.data.event?.eventStart || '',
+    endDate: eventData.data.event?.eventEnd,
+    venue: eventData.data.event?.venueLocation,
+    description: eventData.data.event?.description,
+    mapData: eventData.data.mapData,
+    mode: eventData.data.mode,
+    sections: (eventData.data.sections || []).map((s: any) => ({
+      id: s.id,
+      name: s.name,
+      colorHex: s.colorHex,
+      color: s.colorHex,
+      price: Number(s.price) || 0,
+      available: (s.capacity || 0) - (s.sold || 0),
+      capacity: s.capacity || 0,
+      sold: s.sold || 0,
+      mode: eventData.data.mode,
+      seats: s.seats,
+      shapeType: s.shapeType,
+      shapeData: s.shapeData,
+      labelX: s.labelX,
+      labelY: s.labelY,
+    })),
+  } : null
 
   const [quantities, setQuantities] = useState<Record<string, number>>({})
   const [selectedSeats, setSelectedSeats] = useState<Record<string, Set<string>>>({})

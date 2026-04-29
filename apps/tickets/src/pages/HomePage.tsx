@@ -21,10 +21,22 @@ const PLACEHOLDER = 'https://via.placeholder.com/400x200/6B46C1/ffffff?text=Even
 
 export default function HomePage() {
   const navigate = useNavigate()
-  const { data: events = [], isLoading } = useQuery<EventSummary[]>({
+  const { data: apiResponse, isLoading } = useQuery({
     queryKey: ['public-events'],
     queryFn: ticketsApi.listEvents,
   })
+
+  const events: EventSummary[] = (apiResponse?.data || []).map((te: any) => ({
+    id: te.id,
+    slug: te.slug,
+    name: te.event?.name || 'Evento',
+    imageUrl: te.event?.imageUrl,
+    startDate: te.event?.eventStart || '',
+    venue: te.event?.venueLocation,
+    minPrice: te.sections && te.sections.length > 0
+      ? Math.min(...te.sections.map((s: any) => Number(s.price) || 0))
+      : undefined,
+  }))
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8f8f8' }}>
