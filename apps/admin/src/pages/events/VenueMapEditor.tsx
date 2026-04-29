@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Form, Input, InputNumber, Modal, Space, Spin, Card, Row, Col, ColorPicker } from 'antd'
-import { DeleteOutlined, SaveOutlined, UndoOutlined, RedoOutlined, ClearOutlined, BgColorsOutlined } from '@ant-design/icons'
-import type { Color } from 'antd/es/color-picker'
+import { App, Button, Form, Input, InputNumber, Modal, Space, Spin, Card, Row, Col, Slider } from 'antd'
+import { DeleteOutlined, SaveOutlined, UndoOutlined, RedoOutlined, ClearOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons'
 import { ticketEventsApi } from '../../api/ticketEvents'
 
 interface Shape {
@@ -66,8 +65,10 @@ export default function VenueMapEditor({ eventId }: VenueMapEditorProps) {
   const [svgWidth, setSvgWidth] = useState(1200)
   const [svgHeight, setSvgHeight] = useState(600)
   const [form] = Form.useForm()
-  const [selectedColor, setSelectedColor] = useState<string>('#6B46C1')
   const [showTemplates, setShowTemplates] = useState(false)
+  const [zoom, setZoom] = useState(1)
+  const [resizingId, setResizingId] = useState<string | null>(null)
+  const [resizeHandle, setResizeHandle] = useState<'nw' | 'ne' | 'sw' | 'se' | null>(null)
 
   // Drawing state
   const [isDrawing, setIsDrawing] = useState(false)
@@ -209,9 +210,34 @@ export default function VenueMapEditor({ eventId }: VenueMapEditorProps) {
   }
 
   const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const coords = getSVGCoords(e)
+
+    if (resizingId && resizeHandle) {
+      const updated = sections.map(s => {
+        if (s.id !== resizingId) return s
+        if (s.shapeType !== 'rect' || !s.shapeData) return s
+
+        const { x, y, w, h } = s.shapeData
+        let newX = x, newY = y, newW = w, newH = h
+
+        if (resizeHandle.includes('n')) newY = Math.min(coords.y, y + h - 20)
+        if (resizeHandle.includes('s')) newH = Math.max(20, coords.y - y)
+        if (resizeHandle.includes('w')) newX = Math.min(coords.x, x + w - 20)
+        if (resizeHandle.includes('e')) newW = Math.max(20, coords.x - x)
+
+        return {
+          ...s,
+          shapeData: { x: newX, y: newY, w: newW, h: newH },
+          labelX: newX + newW / 2,
+          labelY: newY + newH / 2,
+        }
+      })
+      setSections(updated)
+      return
+    }
+
     if (!draggingId) return
 
-    const coords = getSVGCoords(e)
     const updated = sections.map(s => {
       if (s.id !== draggingId) return s
 
@@ -231,16 +257,18 @@ export default function VenueMapEditor({ eventId }: VenueMapEditorProps) {
   }
 
   const handleMouseUpGlobal = () => {
-    if (draggingId) {
+    if (draggingId || resizingId) {
       updateHistory(sections)
       setDraggingId(null)
+      setResizingId(null)
+      setResizeHandle(null)
     }
   }
 
   useEffect(() => {
     window.addEventListener('mouseup', handleMouseUpGlobal)
     return () => window.removeEventListener('mouseup', handleMouseUpGlobal)
-  }, [draggingId, sections])
+  }, [draggingId, resizingId, sections])
 
   const handleSelectShape = (id: string) => {
     setSelectedId(id)
@@ -317,6 +345,11 @@ export default function VenueMapEditor({ eventId }: VenueMapEditorProps) {
               <Button size="small" icon={<UndoOutlined />} onClick={handleUndo} disabled={historyIndex === 0} />
               <Button size="small" icon={<RedoOutlined />} onClick={handleRedo} disabled={historyIndex === history.length - 1} />
             </Button.Group>
+            <Button.Group>
+              <Button size="small" icon={<ZoomInOutlined />} onClick={() => setZoom(Math.min(2, zoom + 0.1))} />
+              <span style={{ padding: '4px 8px', fontSize: 12 }}>{Math.round(zoom * 100)}%</span>
+              <Button size="small" icon={<ZoomOutOutlined />} onClick={() => setZoom(Math.max(0.5, zoom - 0.1))} />
+            </Button.Group>
             <Button size="small" onClick={() => setShowTemplates(true)}>
               Plantillas
             </Button>
@@ -327,8 +360,9 @@ export default function VenueMapEditor({ eventId }: VenueMapEditorProps) {
         </div>
         <svg
           ref={svgRef}
-          width={svgWidth}
-          height={svgHeight}
+          width={svgWidth * zoom}
+          height={svgHeight * zoom}
+          viewBox={`0 0 ${svgWidth} ${svgHeight}`}
           style={{
             border: '1px solid #d9d9d9',
             borderRadius: 4,
@@ -382,6 +416,35 @@ export default function VenueMapEditor({ eventId }: VenueMapEditorProps) {
                 >
                   {sec.name}
                 </text>
+
+                {/* Resize handles for rectangles */}
+                {isSelected && sec.shapeType === 'rect' && sec.shapeData && (
+                  <>
+                    {['nw', 'ne', 'sw', 'se'].map(handle => {
+                      const { x, y, w, h } = sec.shapeData
+                      let cx = x, cy = y
+                      if (handle.includes('e')) cx = x + w
+                      if (handle.includes('s')) cy = y + h
+                      const cursor = `${handle}-resize`
+                      return (
+                        <circle
+                          key={handle}
+                          cx={cx}
+                          cy={cy}
+                          r="6"
+                          fill="#fff"
+                          stroke="#000"
+                          strokeWidth="2"
+                          onMouseDown={() => {
+                            setResizingId(sec.id)
+                            setResizeHandle(handle as any)
+                          }}
+                          style={{ cursor }}
+                        />
+                      )
+                    })}
+                  </>
+                )}
               </g>
             )
           })}
