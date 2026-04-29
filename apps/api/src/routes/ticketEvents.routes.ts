@@ -5,12 +5,13 @@ import { PRIVILEGES } from '@iventia/shared'
 import {
   getTicketEvent, upsertTicketEvent,
   createSection, updateSection, deleteSection,
-  generateSeats, listTicketOrders,
+  generateSeats, listTicketOrders, checkTicketTables,
 } from '../controllers/ticketEvents.controller'
 
 const router = Router()
 router.use(authenticate)
 
+router.get('/tickets/check-tables', checkTicketTables)
 router.get('/:eventId/tickets', requirePrivilege(PRIVILEGES.EVENT_VIEW), getTicketEvent)
 router.put('/:eventId/tickets', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), upsertTicketEvent)
 router.post('/:eventId/tickets/sections', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), createSection)

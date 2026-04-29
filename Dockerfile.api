@@ -11,9 +11,11 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json .npmrc ./
 COPY packages/ ./packages/
 COPY apps/api/ ./apps/api/
 
-# Install all deps — postinstall runs prisma generate automatically.
-# Do NOT use --ignore-scripts: esbuild needs its postinstall to download its binary.
+# Install all deps
 RUN pnpm install --frozen-lockfile
+
+# Explicitly regenerate Prisma client so it always matches the current schema
+RUN cd packages/prisma && npx prisma generate
 
 # Build API (esbuild bundles @iventia/shared inline, keeps npm packages external)
 RUN pnpm --filter @iventia/api build
@@ -28,4 +30,4 @@ RUN mkdir -p /app/uploads/resources /app/uploads/chat
 
 EXPOSE 3001
 
-CMD ["sh", "-c", "node_modules/.bin/prisma migrate deploy --schema /app/packages/prisma/schema.prisma && node /app/apps/api/dist/index.js"]
+CMD ["sh", "-c", "node_modules/.bin/prisma migrate deploy --schema /app/packages/prisma/schema.prisma 2>&1 && node /app/apps/api/dist/index.js"]

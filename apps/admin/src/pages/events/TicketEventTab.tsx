@@ -72,7 +72,7 @@ export default function TicketEventTab({ eventId }: Props) {
       queryClient.invalidateQueries({ queryKey: ['ticket-event', eventId] })
       message.success('Configuración guardada')
     },
-    onError: (err: any) => message.error(err?.response?.data?.message ?? err?.message ?? 'Error al guardar la configuración'),
+    onError: (err: any) => message.error(err?.response?.data?.error?.message ?? err?.response?.data?.message ?? err?.message ?? 'Error al guardar la configuración'),
   })
 
   const createSectionMutation = useMutation({
@@ -84,7 +84,7 @@ export default function TicketEventTab({ eventId }: Props) {
       setEditingSection(null)
       message.success('Sección creada')
     },
-    onError: (err: any) => message.error(err?.response?.data?.message ?? err?.message ?? 'Error al crear sección'),
+    onError: (err: any) => message.error(err?.response?.data?.error?.message ?? err?.response?.data?.message ?? err?.message ?? 'Error al crear sección'),
   })
 
   const updateSectionMutation = useMutation({
@@ -97,7 +97,7 @@ export default function TicketEventTab({ eventId }: Props) {
       setEditingSection(null)
       message.success('Sección actualizada')
     },
-    onError: (err: any) => message.error(err?.response?.data?.message ?? err?.message ?? 'Error al actualizar sección'),
+    onError: (err: any) => message.error(err?.response?.data?.error?.message ?? err?.response?.data?.message ?? err?.message ?? 'Error al actualizar sección'),
   })
 
   const deleteSectionMutation = useMutation({

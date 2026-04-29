@@ -2,6 +2,20 @@ import { Request, Response, NextFunction } from 'express'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 
+// ── Debug: check ticket tables exist ─────────────────────────────────────────
+export async function checkTicketTables(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await prisma.$queryRaw<{ tablename: string }[]>`
+      SELECT tablename FROM pg_tables
+      WHERE schemaname = 'public'
+      AND tablename IN ('ticket_events','ticket_sections','ticket_seats','ticket_orders','ticket_order_items')
+    `
+    res.json({ success: true, tables: result.map(r => r.tablename) })
+  } catch (err: any) {
+    res.json({ success: false, error: err?.message })
+  }
+}
+
 // ── TicketEvent ───────────────────────────────────────────────────────────────
 
 export async function getTicketEvent(req: Request, res: Response, next: NextFunction) {
