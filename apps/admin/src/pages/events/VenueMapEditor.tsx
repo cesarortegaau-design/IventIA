@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Form, Input, InputNumber, Modal, Space, Spin, Card, Row, Col, Slider } from 'antd'
-import { DeleteOutlined, SaveOutlined, UndoOutlined, RedoOutlined, ClearOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons'
+import { App, Button, Form, Input, InputNumber, Modal, Space, Spin, Card, Row, Col, List, Divider } from 'antd'
+import { DeleteOutlined, SaveOutlined, UndoOutlined, RedoOutlined, ClearOutlined, ZoomInOutlined, ZoomOutOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons'
 import { ticketEventsApi } from '../../api/ticketEvents'
 
 interface Shape {
@@ -322,6 +322,59 @@ export default function VenueMapEditor({ eventId }: VenueMapEditorProps) {
     message.success(`Plantilla "${template.name}" cargada`)
   }
 
+  const handleExportMap = () => {
+    const data = {
+      width: svgWidth,
+      height: svgHeight,
+      sections: sections.map(s => ({
+        id: s.id,
+        name: s.name,
+        colorHex: s.colorHex,
+        shapeType: s.shapeType,
+        shapeData: s.shapeData,
+        labelX: s.labelX,
+        labelY: s.labelY,
+      })),
+    }
+    const json = JSON.stringify(data, null, 2)
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `mapa-venue-${new Date().toISOString().split('T')[0]}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+    message.success('Mapa exportado')
+  }
+
+  const handleImportMap = () => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json'
+    input.onchange = (e: any) => {
+      const file = e.target.files[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = (ev: any) => {
+        try {
+          const data = JSON.parse(ev.target.result)
+          setSvgWidth(data.width ?? 1200)
+          setSvgHeight(data.height ?? 600)
+          const importedShapes = (data.sections ?? []).map((s: any) => ({
+            ...s,
+            id: s.id || Math.random().toString(36).substr(2, 9),
+          }))
+          updateHistory(importedShapes)
+          message.success('Mapa importado')
+        } catch (err) {
+          message.error('Error al importar JSON')
+        }
+      }
+      reader.readAsText(file)
+    }
+    input.click()
+  }
+
   if (isLoading) return <Spin />
 
   return (
@@ -452,7 +505,7 @@ export default function VenueMapEditor({ eventId }: VenueMapEditorProps) {
       </div>
 
       {/* Inspector Panel */}
-      <div style={{ width: 300, borderLeft: '1px solid #d9d9d9', paddingLeft: 16, overflowY: 'auto', maxHeight: '100%' }}>
+      <div style={{ width: 320, borderLeft: '1px solid #d9d9d9', paddingLeft: 16, overflowY: 'auto', maxHeight: '100%', display: 'flex', flexDirection: 'column' }}>
         {selected ? (
           <>
             <Form layout="vertical" size="small">
@@ -502,6 +555,7 @@ export default function VenueMapEditor({ eventId }: VenueMapEditorProps) {
                     )
                     setSections(updated)
                   }}
+                  style={{ width: '100%' }}
                 />
               </Form.Item>
 
@@ -514,27 +568,83 @@ export default function VenueMapEditor({ eventId }: VenueMapEditorProps) {
                     )
                     setSections(updated)
                   }}
+                  style={{ width: '100%' }}
                 />
               </Form.Item>
             </Form>
             <Button danger block icon={<DeleteOutlined />} size="small" onClick={handleDeleteShape}>
               Eliminar zona
             </Button>
+            <Divider style={{ margin: '12px 0' }} />
           </>
         ) : (
-          <p style={{ color: '#999', fontSize: 12 }}>Dibuja una forma o selecciona una zona para editar</p>
+          <>
+            <p style={{ color: '#999', fontSize: 12, marginBottom: 12 }}>Dibuja una forma o selecciona una zona para editar</p>
+            <Divider style={{ margin: '12px 0' }} />
+          </>
         )}
-        <div style={{ marginTop: 24 }}>
-          <Button
-            type="primary"
-            block
-            icon={<SaveOutlined />}
-            onClick={handleSave}
-            loading={saveMutation.isPending}
-          >
-            Guardar Mapa
+
+        {/* Zones list */}
+        {sections.length > 0 && (
+          <>
+            <h4 style={{ marginTop: 0, marginBottom: 12 }}>Zonas ({sections.length})</h4>
+            <List
+              size="small"
+              dataSource={sections}
+              style={{ flex: 1, overflow: 'auto', marginBottom: 12 }}
+              renderItem={(zone) => (
+                <List.Item
+                  key={zone.id}
+                  onClick={() => handleSelectShape(zone.id)}
+                  style={{
+                    cursor: 'pointer',
+                    padding: 8,
+                    marginBottom: 4,
+                    borderRadius: 4,
+                    backgroundColor: selectedId === zone.id ? '#f0f0f0' : '#fafafa',
+                    border: selectedId === zone.id ? '1px solid #6B46C1' : '1px solid #e8e8e8',
+                  }}
+                >
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', width: '100%' }}>
+                    <div
+                      style={{
+                        width: 16,
+                        height: 16,
+                        borderRadius: 3,
+                        backgroundColor: zone.colorHex,
+                        border: '1px solid #d9d9d9',
+                        flexShrink: 0,
+                      }}
+                    />
+                    <div style={{ flex: 1, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {zone.name}
+                    </div>
+                  </div>
+                </List.Item>
+              )}
+            />
+          </>
+        )}
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Button size="small" icon={<DownloadOutlined />} onClick={handleExportMap} style={{ flex: 1 }}>
+            Exportar
+          </Button>
+          <Button size="small" icon={<UploadOutlined />} onClick={handleImportMap} style={{ flex: 1 }}>
+            Importar
           </Button>
         </div>
+
+        <Button
+          type="primary"
+          block
+          icon={<SaveOutlined />}
+          onClick={handleSave}
+          loading={saveMutation.isPending}
+          style={{ marginTop: 12 }}
+        >
+          Guardar Mapa
+        </Button>
       </div>
 
       {/* Templates Modal */}
