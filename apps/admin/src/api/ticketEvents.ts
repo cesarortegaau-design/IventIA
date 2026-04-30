@@ -19,4 +19,11 @@ export const ticketEventsApi = {
     apiClient.get(`/events/${eventId}/tickets/map`).then(r => r.data),
   saveMap: (eventId: string, data: any) =>
     apiClient.put(`/events/${eventId}/tickets/map`, data).then(r => r.data),
+  uploadImage: (eventId: string, field: 'imageUrl' | 'mapImageUrl', file: File) => {
+    const fd = new FormData()
+    fd.append('image', file)
+    return apiClient.post(`/events/${eventId}/tickets/upload/${field}`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data)
+  },
 }

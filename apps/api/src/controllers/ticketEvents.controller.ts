@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
+import { uploadToCloudinary } from '../lib/cloudinary'
 
 // ── TicketEvent ───────────────────────────────────────────────────────────────
 
@@ -74,6 +75,34 @@ export async function upsertTicketEvent(req: Request, res: Response, next: NextF
       })
     }
     res.json({ success: true, data: te })
+  } catch (err) { next(err) }
+}
+
+// ── Image Upload ─────────────────────────────────────────────────────────────
+
+export async function uploadTicketEventImage(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { eventId } = req.params
+    const tenantId = req.user!.tenantId
+    const field = req.params.field as 'imageUrl' | 'mapImageUrl'
+    if (!['imageUrl', 'mapImageUrl'].includes(field)) throw new AppError(400, 'INVALID_FIELD', 'Campo inválido')
+
+    const event = await prisma.event.findFirst({ where: { id: eventId, tenantId } })
+    if (!event) throw new AppError(404, 'NOT_FOUND', 'Evento no encontrado')
+
+    const te = await prisma.ticketEvent.findUnique({ where: { eventId } })
+    if (!te) throw new AppError(404, 'NOT_FOUND', 'Portal de boletos no encontrado')
+
+    if (!req.file) throw new AppError(400, 'NO_FILE', 'No se envió archivo')
+
+    const { url } = await uploadToCloudinary(req.file.buffer, 'iventia/ticket-events', 'image')
+
+    await prisma.ticketEvent.update({
+      where: { id: te.id },
+      data: { [field]: url },
+    })
+
+    res.json({ success: true, data: { url } })
   } catch (err) { next(err) }
 }
 

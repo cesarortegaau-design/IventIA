@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   App, Button, Form, Input, InputNumber, Modal, Popconfirm, Radio,
-  Select, Space, Switch, Table, Tag, Tabs, Typography, Empty, Badge,
+  Select, Space, Switch, Table, Tag, Tabs, Typography, Empty, Badge, Upload,
 } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined, AppstoreOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, DeleteOutlined, AppstoreOutlined, UploadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { ticketEventsApi } from '../../api/ticketEvents'
 import { priceListsApi } from '../../api/priceLists'
@@ -74,6 +74,17 @@ export default function TicketEventTab({ eventId }: Props) {
   const orders: any[] = ordersData?.data ?? []
 
   // ── Mutations ────────────────────────────────────────────────────────────
+  const uploadImageMut = useMutation({
+    mutationFn: ({ field, file }: { field: 'imageUrl' | 'mapImageUrl'; file: File }) =>
+      ticketEventsApi.uploadImage(eventId, field, file),
+    onSuccess: (res, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['ticket-event', eventId] })
+      configForm.setFieldValue(vars.field, res.data.url)
+      message.success('Imagen subida')
+    },
+    onError: () => message.error('Error al subir imagen'),
+  })
+
   const upsertMutation = useMutation({
     mutationFn: (data: any) => ticketEventsApi.upsert(eventId, data),
     onSuccess: () => {
@@ -305,12 +316,68 @@ export default function TicketEventTab({ eventId }: Props) {
                     />
                   </Form.Item>
 
-                  <Form.Item name="imageUrl" label="Imagen del evento (URL)">
-                    <Input placeholder="https://..." />
+                  <Form.Item name="imageUrl" label="Imagen del evento">
+                    <Space direction="vertical" style={{ width: '100%' }}>
+                      {configForm.getFieldValue('imageUrl') && (
+                        <img
+                          src={configForm.getFieldValue('imageUrl')}
+                          alt="Evento"
+                          style={{ maxWidth: '100%', maxHeight: 160, borderRadius: 8, objectFit: 'cover' }}
+                        />
+                      )}
+                      <Space>
+                        <Upload
+                          showUploadList={false}
+                          accept="image/*"
+                          beforeUpload={(file) => {
+                            uploadImageMut.mutate({ field: 'imageUrl', file: file as any })
+                            return false
+                          }}
+                        >
+                          <Button icon={<UploadOutlined />} loading={uploadImageMut.isPending}>
+                            Subir imagen
+                          </Button>
+                        </Upload>
+                        <Input
+                          placeholder="o pega una URL..."
+                          value={configForm.getFieldValue('imageUrl') || ''}
+                          onChange={(e) => configForm.setFieldValue('imageUrl', e.target.value)}
+                          style={{ width: 280 }}
+                        />
+                      </Space>
+                    </Space>
                   </Form.Item>
 
-                  <Form.Item name="mapImageUrl" label="Imagen del mapa del venue (URL)">
-                    <Input placeholder="https://..." />
+                  <Form.Item name="mapImageUrl" label="Imagen del mapa del venue">
+                    <Space direction="vertical" style={{ width: '100%' }}>
+                      {configForm.getFieldValue('mapImageUrl') && (
+                        <img
+                          src={configForm.getFieldValue('mapImageUrl')}
+                          alt="Mapa"
+                          style={{ maxWidth: '100%', maxHeight: 160, borderRadius: 8, objectFit: 'cover' }}
+                        />
+                      )}
+                      <Space>
+                        <Upload
+                          showUploadList={false}
+                          accept="image/*"
+                          beforeUpload={(file) => {
+                            uploadImageMut.mutate({ field: 'mapImageUrl', file: file as any })
+                            return false
+                          }}
+                        >
+                          <Button icon={<UploadOutlined />} loading={uploadImageMut.isPending}>
+                            Subir imagen
+                          </Button>
+                        </Upload>
+                        <Input
+                          placeholder="o pega una URL..."
+                          value={configForm.getFieldValue('mapImageUrl') || ''}
+                          onChange={(e) => configForm.setFieldValue('mapImageUrl', e.target.value)}
+                          style={{ width: 280 }}
+                        />
+                      </Space>
+                    </Space>
                   </Form.Item>
 
                   <Form.Item name="description" label="Descripción pública">
