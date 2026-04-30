@@ -316,67 +316,57 @@ export default function TicketEventTab({ eventId }: Props) {
                     />
                   </Form.Item>
 
-                  <Form.Item name="imageUrl" label="Imagen del evento">
+                  <Form.Item label="Imagen del evento">
                     <Space direction="vertical" style={{ width: '100%' }}>
-                      {configForm.getFieldValue('imageUrl') && (
+                      <Form.Item name="imageUrl" noStyle>
+                        <Input placeholder="URL de la imagen..." />
+                      </Form.Item>
+                      {ticketEvent?.imageUrl && (
                         <img
-                          src={configForm.getFieldValue('imageUrl')}
+                          src={ticketEvent.imageUrl}
                           alt="Evento"
                           style={{ maxWidth: '100%', maxHeight: 160, borderRadius: 8, objectFit: 'cover' }}
                         />
                       )}
-                      <Space>
-                        <Upload
-                          showUploadList={false}
-                          accept="image/*"
-                          beforeUpload={(file) => {
-                            uploadImageMut.mutate({ field: 'imageUrl', file: file as any })
-                            return false
-                          }}
-                        >
-                          <Button icon={<UploadOutlined />} loading={uploadImageMut.isPending}>
-                            Subir imagen
-                          </Button>
-                        </Upload>
-                        <Input
-                          placeholder="o pega una URL..."
-                          value={configForm.getFieldValue('imageUrl') || ''}
-                          onChange={(e) => configForm.setFieldValue('imageUrl', e.target.value)}
-                          style={{ width: 280 }}
-                        />
-                      </Space>
+                      <Upload
+                        showUploadList={false}
+                        accept="image/*"
+                        beforeUpload={(file) => {
+                          uploadImageMut.mutate({ field: 'imageUrl', file: file as any })
+                          return false
+                        }}
+                      >
+                        <Button icon={<UploadOutlined />} loading={uploadImageMut.isPending}>
+                          Subir imagen
+                        </Button>
+                      </Upload>
                     </Space>
                   </Form.Item>
 
-                  <Form.Item name="mapImageUrl" label="Imagen del mapa del venue">
+                  <Form.Item label="Imagen del mapa del venue">
                     <Space direction="vertical" style={{ width: '100%' }}>
-                      {configForm.getFieldValue('mapImageUrl') && (
+                      <Form.Item name="mapImageUrl" noStyle>
+                        <Input placeholder="URL de la imagen..." />
+                      </Form.Item>
+                      {ticketEvent?.mapImageUrl && (
                         <img
-                          src={configForm.getFieldValue('mapImageUrl')}
+                          src={ticketEvent.mapImageUrl}
                           alt="Mapa"
                           style={{ maxWidth: '100%', maxHeight: 160, borderRadius: 8, objectFit: 'cover' }}
                         />
                       )}
-                      <Space>
-                        <Upload
-                          showUploadList={false}
-                          accept="image/*"
-                          beforeUpload={(file) => {
-                            uploadImageMut.mutate({ field: 'mapImageUrl', file: file as any })
-                            return false
-                          }}
-                        >
-                          <Button icon={<UploadOutlined />} loading={uploadImageMut.isPending}>
-                            Subir imagen
-                          </Button>
-                        </Upload>
-                        <Input
-                          placeholder="o pega una URL..."
-                          value={configForm.getFieldValue('mapImageUrl') || ''}
-                          onChange={(e) => configForm.setFieldValue('mapImageUrl', e.target.value)}
-                          style={{ width: 280 }}
-                        />
-                      </Space>
+                      <Upload
+                        showUploadList={false}
+                        accept="image/*"
+                        beforeUpload={(file) => {
+                          uploadImageMut.mutate({ field: 'mapImageUrl', file: file as any })
+                          return false
+                        }}
+                      >
+                        <Button icon={<UploadOutlined />} loading={uploadImageMut.isPending}>
+                          Subir imagen
+                        </Button>
+                      </Upload>
                     </Space>
                   </Form.Item>
 
