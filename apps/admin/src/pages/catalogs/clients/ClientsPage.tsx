@@ -1,15 +1,20 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Table, Button, Card, Input, Space, Tag, Modal, Form, Typography,
-  Row, Col, App, Select, Tabs, Switch, Upload,
+  Row, Col, App, Select, Tabs, Switch, Upload, Avatar,
 } from 'antd'
-import { PlusOutlined, EditOutlined, PoweroffOutlined, EyeOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons'
+import {
+  PlusOutlined, EditOutlined, PoweroffOutlined, EyeOutlined,
+  DownloadOutlined, UploadOutlined, SearchOutlined, TeamOutlined,
+  DollarOutlined, ClearOutlined,
+} from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { clientsApi } from '../../../api/clients'
 import { exportToCsv } from '../../../utils/exportCsv'
 
-const { Title } = Typography
+const { Title, Text } = Typography
+const PURPLE = '#6B46C1'
 
 export default function ClientsPage() {
   const [form] = Form.useForm()
@@ -92,35 +97,55 @@ export default function ClientsPage() {
     setModalOpen(true)
   }
 
+  const clients = data?.data ?? []
+  const activeCount = clients.filter((c: any) => c.isActive).length
+  const inactiveCount = clients.filter((c: any) => !c.isActive).length
+
+  const COLORS = ['#dbeafe/#1e40af', '#fef3c7/#92400e', '#fee2e2/#991b1b', '#dcfce7/#166534', '#e0e7ff/#3730a3', '#fce7f3/#9f1239', '#f3e8ff/#6b21a8', '#fef9c3/#854d0e']
+
   const columns = [
     {
-      title: 'Tipo', dataIndex: 'personType', key: 'type', width: 90,
+      title: 'Cliente', key: 'name',
+      render: (_: any, r: any) => {
+        const name = r.companyName || `${r.firstName ?? ''} ${r.lastName ?? ''}`.trim()
+        const initials = name.split(' ').map((s: string) => s[0]).slice(0, 2).join('').toUpperCase()
+        const idx = (r.id?.charCodeAt(0) || 0) % COLORS.length
+        const [bg, fg] = COLORS[idx].split('/')
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Avatar size={32} style={{ background: bg, color: fg, fontSize: 12, fontWeight: 600 }}>{initials}</Avatar>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 13 }}>{name}</div>
+              {r.rfc && <div style={{ fontSize: 11, color: 'rgba(0,0,0,0.45)', fontFamily: 'monospace' }}>{r.rfc}</div>}
+            </div>
+          </div>
+        )
+      },
+    },
+    {
+      title: 'Tipo', dataIndex: 'personType', width: 90,
       render: (v: string) => <Tag color={v === 'MORAL' ? 'blue' : 'green'}>{v === 'MORAL' ? 'Moral' : 'Física'}</Tag>,
     },
     {
-      title: 'Nombre / Razón Social', key: 'name',
+      title: 'Contacto', key: 'contact',
       render: (_: any, r: any) => (
-        <Space>
-          {r.logoUrl && <img src={r.logoUrl} height={20} style={{ objectFit: 'contain', borderRadius: 2 }} alt="" />}
-          {r.companyName || `${r.firstName} ${r.lastName}`}
-          {r.isTeam && <Tag color="gold" style={{ marginLeft: 4 }}>Equipo</Tag>}
-        </Space>
+        <div>
+          {r.email && <div style={{ fontSize: 13 }}>{r.email}</div>}
+          {r.phone && <div style={{ fontSize: 11, color: 'rgba(0,0,0,0.45)' }}>{r.phone}</div>}
+        </div>
       ),
     },
-    { title: 'RFC / TAX ID', dataIndex: 'rfc', key: 'rfc' },
-    { title: 'Email', dataIndex: 'email', key: 'email' },
-    { title: 'Teléfono', dataIndex: 'phone', key: 'phone' },
     {
-      title: 'Activo', dataIndex: 'isActive', key: 'active', width: 80,
-      render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? 'Activo' : 'Inactivo'}</Tag>,
+      title: 'Estado', dataIndex: 'isActive', width: 100,
+      render: (v: boolean) => <Tag color={v ? 'green' : 'default'}>{v ? 'Activo' : 'Inactivo'}</Tag>,
     },
     {
       title: '', key: 'actions', width: 110,
       render: (_: any, r: any) => (
         <Space size={4}>
-          <Button size="small" icon={<EyeOutlined />} onClick={() => navigate(`/catalogos/clientes/${r.id}`)} />
-          <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)} />
-          <Button size="small" icon={<PoweroffOutlined />} onClick={() => toggleMutation.mutate(r.id)} />
+          <Button size="small" type="text" icon={<EyeOutlined />} onClick={() => navigate(`/catalogos/clientes/${r.id}`)} />
+          <Button size="small" type="text" icon={<EditOutlined />} onClick={() => openEdit(r)} />
+          <Button size="small" type="text" icon={<PoweroffOutlined />} onClick={() => toggleMutation.mutate(r.id)} />
         </Space>
       ),
     },
@@ -128,62 +153,73 @@ export default function ClientsPage() {
 
   return (
     <div>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 16, gap: 8 }}>
-        <Title level={4} style={{ margin: 0 }}>Catálogo de Clientes</Title>
-        <Space wrap>
-          <Button icon={<DownloadOutlined />} onClick={downloadTemplate}>
-            Plantilla CSV
-          </Button>
-          <Upload
-            beforeUpload={parseCsvFile}
-            showUploadList={false}
-            accept=".csv"
-          >
-            <Button icon={<UploadOutlined />}>Importar CSV</Button>
+      {/* Page header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div>
+          <Title level={4} style={{ margin: 0 }}>Clientes</Title>
+          <Text type="secondary" style={{ fontSize: 13 }}>Empresas y contactos para los que se producen eventos</Text>
+        </div>
+        <Space>
+          <Upload beforeUpload={parseCsvFile} showUploadList={false} accept=".csv">
+            <Button icon={<UploadOutlined />}>Importar</Button>
           </Upload>
-          <Button
-            icon={<DownloadOutlined />}
-            onClick={() => exportToCsv('clientes', (data?.data ?? []).map((r: any) => ({
-              tipo: r.personType === 'MORAL' ? 'Moral' : 'Física',
-              nombre: r.companyName || `${r.firstName} ${r.lastName}`,
-              rfc: r.rfc ?? '',
-              email: r.email ?? '',
-              telefono: r.phone ?? '',
-              numero: r.playerNumber ?? '',
-              equipo: r.isTeam ? '1' : '0',
-            })), [
-              { header: 'tipo', key: 'tipo' },
-              { header: 'nombre', key: 'nombre' },
-              { header: 'rfc', key: 'rfc' },
-              { header: 'email', key: 'email' },
-              { header: 'telefono', key: 'telefono' },
-              { header: 'numero', key: 'numero' },
-              { header: 'equipo', key: 'equipo' },
-            ])}
-          >
-            Exportar CSV
-          </Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true) }}>
-            Agregar Cliente
+            Nuevo cliente
           </Button>
         </Space>
+      </div>
+
+      {/* Stats cards */}
+      <Row gutter={[12, 12]} style={{ marginBottom: 20 }}>
+        {[
+          { title: 'Total clientes', value: data?.meta?.total ?? clients.length, color: '#1a3a5c' },
+          { title: 'Activos', value: activeCount, color: '#16a34a' },
+          { title: 'Inactivos', value: inactiveCount, color: '#64748b' },
+        ].map(card => (
+          <Col xs={24} sm={8} key={card.title}>
+            <Card bodyStyle={{ padding: 16 }} style={{ borderRadius: 10 }}>
+              <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.5)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{card.title}</div>
+              <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: card.color }}>{card.value}</div>
+            </Card>
+          </Col>
+        ))}
       </Row>
 
-      <Card>
-        <Input.Search
-          placeholder="Buscar por nombre, RFC, email..."
-          onSearch={setSearch}
-          allowClear
-          style={{ width: '100%', maxWidth: 400, marginBottom: 16 }}
-        />
+      {/* Filters */}
+      <Card bodyStyle={{ padding: '12px 16px' }} style={{ marginBottom: 16, borderRadius: 10 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          <Input
+            prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
+            placeholder="Buscar cliente, RFC, contacto…"
+            style={{ width: 280 }}
+            onPressEnter={(e) => setSearch((e.target as HTMLInputElement).value)}
+            allowClear
+            onClear={() => setSearch('')}
+          />
+          <Button icon={<DownloadOutlined />} onClick={() => exportToCsv('clientes', clients.map((r: any) => ({
+            tipo: r.personType === 'MORAL' ? 'Moral' : 'Física',
+            nombre: r.companyName || `${r.firstName} ${r.lastName}`,
+            rfc: r.rfc ?? '', email: r.email ?? '', telefono: r.phone ?? '',
+          })), [
+            { header: 'Tipo', key: 'tipo' }, { header: 'Nombre', key: 'nombre' },
+            { header: 'RFC', key: 'rfc' }, { header: 'Email', key: 'email' },
+            { header: 'Teléfono', key: 'telefono' },
+          ])}>
+            Exportar
+          </Button>
+        </div>
+      </Card>
+
+      {/* Table */}
+      <Card bodyStyle={{ padding: 0 }} style={{ borderRadius: 10 }}>
         <Table
-          dataSource={data?.data ?? []}
+          dataSource={clients}
           columns={columns}
           rowKey="id"
           loading={isLoading}
           size="small"
-          pagination={{ pageSize: 20, total: data?.meta?.total }}
-          scroll={{ x: 'max-content' }}
+          pagination={{ pageSize: 20, total: data?.meta?.total, showTotal: t => `${t} clientes` }}
+          scroll={{ x: 700 }}
         />
       </Card>
 

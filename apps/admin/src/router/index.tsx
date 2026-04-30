@@ -7,6 +7,7 @@ import EventDetailPage from '../pages/events/EventDetailPage'
 import EventFormPage from '../pages/events/EventFormPage'
 import OrderDetailPage from '../pages/orders/OrderDetailPage'
 import OrderFormWizard from '../pages/orders/OrderFormWizard'
+import OrdersListPage from '../pages/orders/OrdersListPage'
 import ResourcesPage from '../pages/catalogs/resources/ResourcesPage'
 import ClientsPage from '../pages/catalogs/clients/ClientsPage'
 import PriceListsPage from '../pages/catalogs/priceLists/PriceListsPage'
@@ -61,6 +62,7 @@ export function AppRouter() {
         <Route path="eventos/:id" element={<EventDetailPage />} />
         <Route path="eventos/:id/editar" element={<EventFormPage />} />
         <Route path="eventos/:eventId/ordenes/nueva" element={<OrderFormWizard />} />
+        <Route path="ordenes" element={<OrdersListPage />} />
         <Route path="ordenes/:id" element={<OrderDetailPage />} />
         <Route path="catalogos/recursos" element={<ResourcesPage />} />
         <Route path="catalogos/clientes" element={<ClientsPage />} />

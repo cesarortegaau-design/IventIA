@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Table, Button, Card, Space, Tag, Modal, Form, Input, Select, Row, Col, App, Typography, Tabs, InputNumber, DatePicker, Popconfirm, Badge, Divider } from 'antd'
-import { PlusOutlined, EditOutlined, KeyOutlined, StopOutlined } from '@ant-design/icons'
+import { Table, Button, Card, Space, Tag, Modal, Form, Input, Select, Row, Col, App, Typography, Tabs, InputNumber, DatePicker, Popconfirm, Badge, Divider, Avatar } from 'antd'
+import { PlusOutlined, EditOutlined, KeyOutlined, StopOutlined, SearchOutlined, EyeOutlined, StarFilled } from '@ant-design/icons'
 import { suppliersApi } from '../../../api/suppliers'
 import dayjs from 'dayjs'
 
-const { Title } = Typography
+const { Title, Text } = Typography
+const PURPLE = '#6B46C1'
 
 const SUPPLIER_TYPES = [
   { value: 'DISTRIBUTOR', label: 'Distribuidor' },
@@ -107,43 +108,99 @@ export default function SuppliersPage() {
     setModalOpen(true)
   }
 
+  const suppliers = suppliersData?.data ?? []
+  const COLORS = ['#fef3c7/#92400e', '#dbeafe/#1e40af', '#fce7f3/#9f1239', '#f3e8ff/#6b21a8', '#dcfce7/#166534', '#fee2e2/#991b1b']
+
   const columns = [
-    { title: 'Código', dataIndex: 'code', width: 100 },
-    { title: 'Nombre', dataIndex: 'name' },
-    { title: 'Tipo', dataIndex: 'type', render: (v: string) => {
-      const type = SUPPLIER_TYPES.find(t => t.value === v)
-      return <Tag>{type?.label}</Tag>
-    } },
-    { title: 'Email', dataIndex: 'email' },
-    { title: 'Teléfono', dataIndex: 'phone' },
-    { title: 'Estado', dataIndex: 'status', render: (v: string) => {
-      const status = SUPPLIER_STATUSES.find(s => s.value === v)
-      const color = v === 'ACTIVE' ? 'green' : v === 'INACTIVE' ? 'orange' : 'red'
-      return <Tag color={color}>{status?.label}</Tag>
-    } },
     {
-      title: '',
-      key: 'actions',
-      width: 80,
+      title: 'Proveedor', key: 'name',
+      render: (_: any, r: any) => {
+        const initials = (r.name || '').split(' ').map((s: string) => s[0]).slice(0, 2).join('').toUpperCase()
+        const idx = (r.id?.charCodeAt(0) || 0) % COLORS.length
+        const [bg, fg] = COLORS[idx].split('/')
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Avatar size={32} style={{ background: bg, color: fg, fontSize: 12, fontWeight: 600 }}>{initials}</Avatar>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 13 }}>{r.name}</div>
+              <div style={{ fontSize: 11, color: 'rgba(0,0,0,0.45)', fontFamily: 'monospace' }}>{r.rfc || r.code}</div>
+            </div>
+          </div>
+        )
+      },
+    },
+    {
+      title: 'Categoría', dataIndex: 'type', width: 120,
+      render: (v: string) => {
+        const type = SUPPLIER_TYPES.find(t => t.value === v)
+        return <Tag color="purple">{type?.label ?? v}</Tag>
+      },
+    },
+    {
+      title: 'Contacto', key: 'contact',
       render: (_: any, r: any) => (
-        <Space>
-          <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)} title="Editar" />
-        </Space>
+        <div>
+          {r.email && <div style={{ fontSize: 13 }}>{r.email}</div>}
+          {r.phone && <div style={{ fontSize: 11, color: 'rgba(0,0,0,0.45)' }}>{r.phone}</div>}
+        </div>
+      ),
+    },
+    {
+      title: 'Estado', dataIndex: 'status', width: 110,
+      render: (v: string) => {
+        const color = v === 'ACTIVE' ? 'green' : v === 'INACTIVE' ? 'default' : 'red'
+        const label = SUPPLIER_STATUSES.find(s => s.value === v)?.label ?? v
+        return <Tag color={color}>{label}</Tag>
+      },
+    },
+    {
+      title: '', key: 'actions', width: 50,
+      render: (_: any, r: any) => (
+        <Button size="small" type="text" icon={<EditOutlined />} onClick={() => openEdit(r)} />
       ),
     },
   ]
 
   return (
     <div>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>Proveedores</Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); form.resetFields(); setActiveModalTab('info'); setModalOpen(true) }}>
-          Nuevo Proveedor
-        </Button>
-      </Row>
-      <Card>
+      {/* Page header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div>
+          <Title level={4} style={{ margin: 0 }}>Proveedores</Title>
+          <Text type="secondary" style={{ fontSize: 13 }}>Empresas que suministran recursos, servicios y personal</Text>
+        </div>
+        <Space>
+          <Button icon={<PlusOutlined />}>Importar</Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); form.resetFields(); setActiveModalTab('info'); setModalOpen(true) }}>
+            Nuevo proveedor
+          </Button>
+        </Space>
+      </div>
+
+      {/* Filters + Table */}
+      <Card bodyStyle={{ padding: '12px 16px 0' }} style={{ borderRadius: 10 }}>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+          <Input
+            prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
+            placeholder="Buscar proveedor…"
+            style={{ width: 260 }}
+            allowClear
+          />
+          <Select
+            placeholder="Categoría"
+            allowClear
+            options={SUPPLIER_TYPES}
+            style={{ minWidth: 150 }}
+          />
+          <Select
+            placeholder="Estado"
+            allowClear
+            options={SUPPLIER_STATUSES}
+            style={{ minWidth: 130 }}
+          />
+        </div>
         <Table
-          dataSource={suppliersData?.data ?? []}
+          dataSource={suppliers}
           columns={columns}
           rowKey="id"
           loading={isLoading}
@@ -153,6 +210,7 @@ export default function SuppliersPage() {
             pageSize,
             total: suppliersData?.meta?.total,
             onChange: (p, ps) => { setPage(p); setPageSize(ps) },
+            showTotal: t => `${t} proveedores`,
           }}
         />
       </Card>

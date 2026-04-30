@@ -418,59 +418,58 @@ export default function ResourcesPage() {
 
   return (
     <div>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>Catálogo de Recursos</Title>
+      {/* Page header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div>
+          <Title level={4} style={{ margin: 0 }}>Catálogo de Recursos</Title>
+          <Text type="secondary" style={{ fontSize: 13 }}>
+            Productos, servicios, personal y transporte cotizables · <Tag>{data?.meta?.total ?? 0} totales</Tag>
+          </Text>
+        </div>
         <Space>
           <Button
             icon={<DownloadOutlined />}
             onClick={() => exportToCsv('recursos', (data?.data ?? []).map((r: any) => ({
-              codigo: r.code,
-              nombre: r.name,
-              tipo: TYPE_LABELS[r.type] ?? r.type,
-              departamento: r.department?.name ?? '',
-              unidad: r.unit ?? '',
-              portal: r.portalVisible ? 'Visible' : 'Oculto',
-              activo: r.isActive ? 'Activo' : 'Inactivo',
+              codigo: r.code, nombre: r.name, tipo: TYPE_LABELS[r.type] ?? r.type,
+              departamento: r.department?.name ?? '', unidad: r.unit ?? '',
+              portal: r.portalVisible ? 'Visible' : 'Oculto', activo: r.isActive ? 'Activo' : 'Inactivo',
             })), [
-              { header: 'Código', key: 'codigo' },
-              { header: 'Nombre', key: 'nombre' },
-              { header: 'Tipo', key: 'tipo' },
-              { header: 'Departamento', key: 'departamento' },
-              { header: 'Unidad', key: 'unidad' },
-              { header: 'Portal', key: 'portal' },
-              { header: 'Activo', key: 'activo' },
+              { header: 'Código', key: 'codigo' }, { header: 'Nombre', key: 'nombre' },
+              { header: 'Tipo', key: 'tipo' }, { header: 'Departamento', key: 'departamento' },
+              { header: 'Unidad', key: 'unidad' }, { header: 'Portal', key: 'portal' }, { header: 'Activo', key: 'activo' },
             ])}
           >
-            Exportar CSV
+            Exportar
           </Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>Agregar Recurso</Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>Nuevo recurso</Button>
         </Space>
-      </Row>
+      </div>
 
-      <Card>
-        <Tabs
-          items={tabs}
-          onChange={(key) => setFilters(f => ({ ...f, type: key }))}
-          style={{ marginBottom: 8 }}
-          tabBarExtraContent={
-            <Space>
-              <Input.Search placeholder="Buscar..." onSearch={v => setFilters(f => ({ ...f, search: v }))} allowClear style={{ width: 200 }} />
-              <Select
-                value={filters.active}
-                onChange={v => setFilters(f => ({ ...f, active: v }))}
-                options={[{ value: 'true', label: 'Activos' }, { value: 'false', label: 'Inactivos' }, { value: '', label: 'Todos' }]}
-                style={{ width: 100 }}
-              />
-            </Space>
-          }
-        />
+      {/* Tabs + Filters + Table */}
+      <Card bodyStyle={{ padding: 0 }} style={{ borderRadius: 10 }}>
+        <div style={{ padding: '12px 16px 0' }}>
+          <Tabs
+            items={tabs}
+            onChange={(key) => setFilters(f => ({ ...f, type: key }))}
+            style={{ marginBottom: 0 }}
+          />
+        </div>
+        <div style={{ padding: '12px 16px', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', borderBottom: '1px solid #f0f0f0' }}>
+          <Input.Search placeholder="Buscar por nombre, código…" onSearch={v => setFilters(f => ({ ...f, search: v }))} allowClear style={{ width: 280 }} />
+          <Select
+            value={filters.active}
+            onChange={v => setFilters(f => ({ ...f, active: v }))}
+            options={[{ value: 'true', label: 'Activos' }, { value: 'false', label: 'Inactivos' }, { value: '', label: 'Todos' }]}
+            style={{ width: 120 }}
+          />
+        </div>
         <Table
           dataSource={data?.data ?? []}
           columns={columns}
           rowKey="id"
           loading={isLoading}
           size="small"
-          pagination={{ pageSize: 20, total: data?.meta?.total }}
+          pagination={{ pageSize: 20, total: data?.meta?.total, showTotal: t => `${t} recursos`, style: { padding: '0 16px' } }}
           scroll={{ x: 'max-content' }}
         />
       </Card>
