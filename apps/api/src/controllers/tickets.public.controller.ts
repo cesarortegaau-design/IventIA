@@ -53,13 +53,12 @@ export async function getPublicTicketEvent(req: Request, res: Response, next: Ne
 // POST /public/tickets/orders — crear orden + Stripe Checkout
 export async function createPublicOrder(req: Request, res: Response, next: NextFunction) {
   try {
-    const { slug, buyerEmail, buyerName, buyerPhone, items } = req.body as {
-      slug: string
-      buyerEmail: string
-      buyerName: string
-      buyerPhone?: string
-      items: Array<{ sectionId: string; seatId?: string; quantity: number }>
-    }
+    const body = req.body as any
+    const slug: string = body.slug
+    const buyerEmail: string = body.buyerEmail ?? body.buyer?.email
+    const buyerName: string = body.buyerName ?? body.buyer?.name
+    const buyerPhone: string | undefined = body.buyerPhone ?? body.buyer?.phone
+    const items: Array<{ sectionId: string; seatId?: string; quantity: number }> = body.items
 
     if (!slug || !buyerEmail || !buyerName || !items?.length) {
       throw new AppError(400, 'MISSING_FIELDS', 'slug, buyerEmail, buyerName e items son requeridos')
