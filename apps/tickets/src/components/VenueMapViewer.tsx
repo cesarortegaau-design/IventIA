@@ -130,17 +130,18 @@ export default function VenueMapViewer({ sections, mapData, onSectionSelect }: V
   }
 
   // Render map viewer with SVG
-  const svgWidth = 1200
-  const svgHeight = 600
+  const svgWidth = mapData?.width ?? 1200
+  const svgHeight = mapData?.height ?? 600
 
   return (
     <div style={{ display: 'flex', gap: 24 }}>
       {/* Map Canvas */}
       <div style={{ flex: 1 }}>
         <svg
-          width={svgWidth}
-          height={svgHeight}
+          viewBox={`0 0 ${svgWidth} ${svgHeight}`}
           style={{
+            width: '100%',
+            maxHeight: 500,
             border: '1px solid #d9d9d9',
             borderRadius: 4,
             backgroundColor: '#fafafa',

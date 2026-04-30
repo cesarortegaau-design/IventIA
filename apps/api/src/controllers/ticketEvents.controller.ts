@@ -161,7 +161,7 @@ export async function getVenueMap(req: Request, res: Response, next: NextFunctio
 
     const sections = await prisma.ticketSection.findMany({
       where: { ticketEventId: te.id },
-      select: { id, name, colorHex, shapeType, shapeData, labelX, labelY },
+      select: { id: true, name: true, colorHex: true, shapeType: true, shapeData: true, labelX: true, labelY: true },
       orderBy: { sortOrder: 'asc' },
     })
     res.json({ success: true, data: { mapData: te.mapData, sections } })
