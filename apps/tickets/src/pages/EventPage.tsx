@@ -54,7 +54,7 @@ interface EventDetail {
   sections: Section[]
 }
 
-const PLACEHOLDER = 'https://via.placeholder.com/1200x400/6B46C1/ffffff?text=Evento'
+const PLACEHOLDER = 'https://placehold.co/1200x400/6B46C1/ffffff?text=Evento'
 
 export default function EventPage() {
   const { slug } = useParams<{ slug: string }>()
