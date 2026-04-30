@@ -72,7 +72,7 @@ export default function EventPage() {
     id: eventData.data.id,
     slug: eventData.data.slug,
     name: eventData.data.event?.name || 'Evento',
-    imageUrl: eventData.data.event?.imageUrl,
+    imageUrl: eventData.data.imageUrl || eventData.data.event?.imageUrl,
     startDate: eventData.data.event?.eventStart || '',
     endDate: eventData.data.event?.eventEnd,
     venue: eventData.data.event?.venueLocation,

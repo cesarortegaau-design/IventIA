@@ -34,7 +34,7 @@ export default function HomePage() {
       id: te.id,
       slug: te.slug,
       name: te.event?.name || 'Evento',
-      imageUrl: te.event?.imageUrl,
+      imageUrl: te.imageUrl || te.event?.imageUrl,
       startDate: te.event?.eventStart || '',
       venue: te.event?.venueLocation,
       minPrice: minPrice > 0 ? minPrice : undefined,
