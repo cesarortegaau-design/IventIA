@@ -76,7 +76,9 @@ export default function CartPage() {
     try {
       const payload = {
         slug,
-        buyer: values,
+        buyerName: values.name,
+        buyerEmail: values.email,
+        buyerPhone: values.phone,
         items: items.map(i => ({
           sectionId: i.sectionId,
           seatId: i.seatId,
