@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Button, Card, Empty, InputNumber, Space } from 'antd'
 import { ShoppingCartOutlined } from '@ant-design/icons'
-import { useCartStore } from '../store/cart'
+import { useCart } from '../store/cart'
 
 interface Section {
   id: string
@@ -25,7 +25,7 @@ interface VenueMapViewerProps {
 export default function VenueMapViewer({ sections, mapData, onSectionSelect }: VenueMapViewerProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [quantity, setQuantity] = useState(1)
-  const { addItem } = useCartStore()
+  const { addItem, setSlug, slug: cartSlug } = useCart()
 
   const selected = sections.find(s => s.id === selectedId)
   const availableCapacity = (selected?.capacity ?? 0) - (selected?.sold ?? 0)
