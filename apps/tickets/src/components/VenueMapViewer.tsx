@@ -50,8 +50,11 @@ export default function VenueMapViewer({ sections, mapData, onSectionSelect }: V
     }
   }
 
-  // If no map data, render fallback list
-  if (!mapData) {
+  // Check if any section has shapes configured
+  const hasShapes = sections.some(s => s.shapeType && s.shapeData)
+
+  // If no map data or no shapes configured, render fallback list
+  if (!mapData || !hasShapes) {
     return (
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
         {sections.map(sec => {
