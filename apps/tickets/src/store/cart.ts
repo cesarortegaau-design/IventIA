@@ -23,7 +23,7 @@ interface CartState {
 export const useCart = create<CartState>((set, get) => ({
   slug: null,
   items: [],
-  setSlug: (slug) => set({ slug, items: [] }),
+  setSlug: (slug) => set(s => s.slug === slug ? {} : { slug, items: [] }),
   addItem: (item) => set(s => {
     const exists = s.items.find(i => i.sectionId === item.sectionId && i.seatId === item.seatId)
     if (exists) return { items: s.items.map(i => i.sectionId === item.sectionId && i.seatId === item.seatId ? { ...i, quantity: item.quantity } : i) }

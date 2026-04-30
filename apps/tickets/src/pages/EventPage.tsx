@@ -213,13 +213,13 @@ export default function EventPage() {
               <VenueMapViewer
                 sections={event.sections}
                 mapData={event.mapData}
-                onSectionSelect={(section) => {
-                  if (event.mapData && !slug) return
+                onSectionSelect={() => {
+                  if (!slug) return
                   if (cartSlug && cartSlug !== slug) {
                     message.warning('Tu carrito pertenece a otro evento.')
                     return
                   }
-                  setSlug(slug!)
+                  setSlug(slug)
                 }}
               />
             ) : (

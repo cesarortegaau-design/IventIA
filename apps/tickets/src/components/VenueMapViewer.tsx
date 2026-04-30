@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, Card, Empty, InputNumber, Space } from 'antd'
+import { Button, Card, Empty, InputNumber, Space, message } from 'antd'
 import { ShoppingCartOutlined } from '@ant-design/icons'
 import { useCart } from '../store/cart'
 
@@ -38,6 +38,7 @@ export default function VenueMapViewer({ sections, mapData, onSectionSelect }: V
         quantity,
         unitPrice: selected.price,
       })
+      message.success(`${quantity} boleto(s) de "${selected.name}" agregados`)
       setQuantity(1)
     }
   }
@@ -56,39 +57,75 @@ export default function VenueMapViewer({ sections, mapData, onSectionSelect }: V
   // If no map data or no shapes configured, render fallback list
   if (!mapData || !hasShapes) {
     return (
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+      <Space direction="vertical" size={16} style={{ width: '100%' }}>
         {sections.map(sec => {
-          const avail = sec.capacity - sec.sold
+          const avail = sec.capacity - (sec.sold ?? 0)
+          const isSelected = sec.id === selectedId
           return (
             <Card
               key={sec.id}
               hoverable
               onClick={() => handleSelectSection(sec.id)}
               style={{
-                borderColor: sec.id === selectedId ? '#6B46C1' : undefined,
-                borderWidth: sec.id === selectedId ? 2 : 1,
+                borderColor: isSelected ? '#6B46C1' : undefined,
+                borderWidth: isSelected ? 2 : 1,
+                borderRadius: 12,
               }}
             >
-              <div style={{ marginBottom: 8 }}>
-                <div
-                  style={{
-                    width: 30,
-                    height: 30,
-                    borderRadius: 4,
-                    backgroundColor: sec.colorHex,
-                    marginBottom: 8,
-                  }}
-                />
-                <h4 style={{ margin: 0 }}>{sec.name}</h4>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div
+                    style={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: '50%',
+                      backgroundColor: sec.colorHex,
+                      flexShrink: 0,
+                    }}
+                  />
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: 16 }}>{sec.name}</h4>
+                    <div style={{ fontSize: 13, color: '#666' }}>
+                      {avail > 0 ? `${avail} de ${sec.capacity} disponibles` : 'Agotado'}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ fontWeight: 'bold', fontSize: 18, color: '#6B46C1' }}>
+                  ${Number(sec.price).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                </div>
               </div>
-              <div style={{ fontSize: 12, color: '#666' }}>
-                <div>${Number(sec.price).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
-                <div>{avail > 0 ? `${avail} disponibles` : 'Agotado'}</div>
-              </div>
+
+              {isSelected && avail > 0 && (
+                <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <InputNumber
+                    min={1}
+                    max={avail}
+                    value={quantity}
+                    onChange={(val) => setQuantity(val ?? 1)}
+                    style={{ width: 80 }}
+                  />
+                  <Button
+                    type="primary"
+                    icon={<ShoppingCartOutlined />}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleAddToCart()
+                    }}
+                  >
+                    Agregar al carrito
+                  </Button>
+                </div>
+              )}
+
+              {isSelected && avail <= 0 && (
+                <div style={{ marginTop: 16 }}>
+                  <Button disabled block>Agotado</Button>
+                </div>
+              )}
             </Card>
           )
         })}
-      </div>
+      </Space>
     )
   }
 
