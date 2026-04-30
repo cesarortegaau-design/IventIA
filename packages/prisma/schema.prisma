@@ -593,6 +593,7 @@ model PriceListItem {
   priceList PriceList @relation(fields: [priceListId], references: [id], onDelete: Cascade)
   resource  Resource  @relation(fields: [resourceId], references: [id])
 
+  @@unique([priceListId, resourceId])
   @@map("price_list_items")
 }
 
