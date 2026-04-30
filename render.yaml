@@ -14,7 +14,7 @@ services:
       - key: JWT_SECRET
         sync: false
       - key: CORS_ORIGIN
-        value: https://ivent-admin.vercel.app,https://iventia-admin.vercel.app,https://iventia-portal.vercel.app,https://ivent-ia-arte-capital.vercel.app,https://ivent-ia-tickets.vercel.app
+        value: https://ivent-admin.vercel.app,https://iventia-admin.vercel.app,https://iventia-portal.vercel.app,https://ivent-ia-portal.vercel.app,https://ivent-ia-arte-capital.vercel.app,https://ivent-ia-tickets.vercel.app
       - key: JWT_EXPIRES_IN
         value: 15m
       - key: JWT_REFRESH_EXPIRES_IN
