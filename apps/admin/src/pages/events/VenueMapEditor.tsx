@@ -87,9 +87,26 @@ export default function VenueMapEditor({ eventId }: VenueMapEditorProps) {
   })
 
   useEffect(() => {
-    if (mapData?.data?.sections) {
-      setSections(mapData.data.sections)
-      setHistory([mapData.data.sections])
+    if (mapData?.data) {
+      if (mapData.data.mapData?.width) setSvgWidth(mapData.data.mapData.width)
+      if (mapData.data.mapData?.height) setSvgHeight(mapData.data.mapData.height)
+      // Auto-assign default rect positions to sections without shapes
+      const loaded: Shape[] = (mapData.data.sections || []).map((s: Shape, idx: number) => {
+        if (s.shapeType && s.shapeData) return s
+        const col = idx % 3
+        const row = Math.floor(idx / 3)
+        const x = 50 + col * 350
+        const y = 50 + row * 200
+        return {
+          ...s,
+          shapeType: 'rect',
+          shapeData: { x, y, w: 300, h: 150 },
+          labelX: x + 150,
+          labelY: y + 75,
+        }
+      })
+      setSections(loaded)
+      setHistory([loaded])
       setHistoryIndex(0)
     }
   }, [mapData])
@@ -112,7 +129,7 @@ export default function VenueMapEditor({ eventId }: VenueMapEditorProps) {
 
   const handleSave = () => {
     const payload = {
-      mapData: mapData?.data?.mapData || { width: svgWidth, height: svgHeight },
+      mapData: { width: svgWidth, height: svgHeight },
       sections: sections.map(s => ({
         id: s.id,
         shapeType: s.shapeType || null,
@@ -152,8 +169,8 @@ export default function VenueMapEditor({ eventId }: VenueMapEditorProps) {
     if (!svgRef.current) return { x: 0, y: 0 }
     const rect = svgRef.current.getBoundingClientRect()
     return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
+      x: (e.clientX - rect.left) / zoom,
+      y: (e.clientY - rect.top) / zoom,
     }
   }
 
@@ -169,17 +186,25 @@ export default function VenueMapEditor({ eventId }: VenueMapEditorProps) {
     if (!isDrawing || drawMode === 'select') return
 
     const coords = getSVGCoords(e)
-    const newShape: Shape = {
-      id: Math.random().toString(36).substr(2, 9),
-      name: `Zona ${sections.length + 1}`,
-      colorHex: '#6B46C1',
-      shapeType: drawMode,
-      labelX: (startPos.x + coords.x) / 2,
-      labelY: (startPos.y + coords.y) / 2,
+
+    // Drawing reshapes the currently selected section (or the first one without a custom shape)
+    let targetId = selectedId
+    if (!targetId) {
+      const unpositioned = sections.find(s => !s.shapeData)
+      if (unpositioned) targetId = unpositioned.id
+    }
+    if (!targetId) {
+      message.info('Selecciona una sección de la lista para redibujar su forma')
+      setIsDrawing(false)
+      return
     }
 
+    let shapeData: any
+    const labelX = (startPos.x + coords.x) / 2
+    const labelY = (startPos.y + coords.y) / 2
+
     if (drawMode === 'rect') {
-      newShape.shapeData = {
+      shapeData = {
         x: Math.min(startPos.x, coords.x),
         y: Math.min(startPos.y, coords.y),
         w: Math.abs(coords.x - startPos.x),
@@ -189,12 +214,15 @@ export default function VenueMapEditor({ eventId }: VenueMapEditorProps) {
       const dx = coords.x - startPos.x
       const dy = coords.y - startPos.y
       const r = Math.sqrt(dx * dx + dy * dy)
-      newShape.shapeData = { cx: startPos.x, cy: startPos.y, r }
+      shapeData = { cx: startPos.x, cy: startPos.y, r }
     }
 
-    updateHistory([...sections, newShape])
+    const updated = sections.map(s =>
+      s.id === targetId ? { ...s, shapeType: drawMode, shapeData, labelX, labelY } : s
+    )
+    updateHistory(updated)
     setIsDrawing(false)
-    setSelectedId(newShape.id)
+    setSelectedId(targetId)
   }
 
   const handleShapeMouseDown = (id: string, e: React.MouseEvent) => {
@@ -276,24 +304,19 @@ export default function VenueMapEditor({ eventId }: VenueMapEditorProps) {
 
   const handleSelectShape = (id: string) => {
     setSelectedId(id)
-    const shape = sections.find(s => s.id === id)
-    if (shape) {
-      form.setFieldsValue({
-        labelX: shape.labelX ?? 0,
-        labelY: shape.labelY ?? 0,
-      })
-    }
   }
 
   const handleDeleteShape = () => {
     if (!selectedId) return
     Modal.confirm({
-      title: 'Eliminar zona',
-      content: '¿Eliminar esta zona del mapa?',
+      title: 'Quitar forma',
+      content: '¿Quitar la forma de esta sección del mapa? La sección seguirá existiendo.',
       okText: 'Sí',
       cancelText: 'No',
       onOk: () => {
-        const updated = sections.filter(s => s.id !== selectedId)
+        const updated = sections.map(s =>
+          s.id === selectedId ? { ...s, shapeType: undefined, shapeData: undefined, labelX: undefined, labelY: undefined } : s
+        )
         updateHistory(updated)
         setSelectedId(null)
       },
@@ -303,11 +326,12 @@ export default function VenueMapEditor({ eventId }: VenueMapEditorProps) {
   const handleClear = () => {
     Modal.confirm({
       title: 'Limpiar mapa',
-      content: '¿Eliminar todas las zonas? Esta acción no se puede deshacer.',
+      content: '¿Quitar todas las formas del mapa? Las secciones seguirán existiendo.',
       okText: 'Sí',
       cancelText: 'No',
       onOk: () => {
-        updateHistory([])
+        const cleared = sections.map(s => ({ ...s, shapeType: undefined, shapeData: undefined, labelX: undefined, labelY: undefined }))
+        updateHistory(cleared)
         setSelectedId(null)
       },
     })
@@ -317,13 +341,23 @@ export default function VenueMapEditor({ eventId }: VenueMapEditorProps) {
     const template = TEMPLATES[templateKey]
     setSvgWidth(template.width)
     setSvgHeight(template.height)
-    const newShapes = template.shapes.map((s, idx) => ({
-      ...s,
-      id: Math.random().toString(36).substr(2, 9),
-    }))
+    // Map template shapes onto existing DB sections (keep real IDs)
+    const dbSections = mapData?.data?.sections || []
+    const newShapes: Shape[] = dbSections.map((sec: Shape, idx: number) => {
+      const tpl = template.shapes[idx]
+      if (tpl) {
+        return { ...sec, shapeType: tpl.shapeType, shapeData: tpl.shapeData, labelX: tpl.labelX, labelY: tpl.labelY }
+      }
+      // More sections than template shapes — auto-position the rest
+      const col = idx % 3
+      const row = Math.floor(idx / 3)
+      const x = 50 + col * 350
+      const y = 50 + row * 200
+      return { ...sec, shapeType: 'rect', shapeData: { x, y, w: 300, h: 150 }, labelX: x + 150, labelY: y + 75 }
+    })
     updateHistory(newShapes)
     setShowTemplates(false)
-    message.success(`Plantilla "${template.name}" cargada`)
+    message.success(`Plantilla "${template.name}" aplicada a ${newShapes.length} secciones`)
   }
 
   const handleExportMap = () => {
