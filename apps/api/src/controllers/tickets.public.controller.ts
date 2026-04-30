@@ -3,7 +3,7 @@ import Stripe from 'stripe'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 
-const RESERVATION_MINUTES = 15
+const RESERVATION_MINUTES = 30
 
 function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY
