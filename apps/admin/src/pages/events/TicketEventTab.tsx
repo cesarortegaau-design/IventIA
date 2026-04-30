@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   App, Button, Form, Input, InputNumber, Modal, Popconfirm, Radio,
-  Select, Space, Switch, Table, Tag, Tabs, Typography, Empty, Badge, Upload,
+  Select, Space, Switch, Table, Tag, Tabs, Typography, Empty, Badge,
 } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, AppstoreOutlined, UploadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
@@ -316,59 +316,50 @@ export default function TicketEventTab({ eventId }: Props) {
                     />
                   </Form.Item>
 
-                  <Form.Item label="Imagen del evento">
-                    <Space direction="vertical" style={{ width: '100%' }}>
-                      <Form.Item name="imageUrl" noStyle>
-                        <Input placeholder="URL de la imagen..." />
-                      </Form.Item>
-                      {ticketEvent?.imageUrl && (
-                        <img
-                          src={ticketEvent.imageUrl}
-                          alt="Evento"
-                          style={{ maxWidth: '100%', maxHeight: 160, borderRadius: 8, objectFit: 'cover' }}
-                        />
-                      )}
-                      <Upload
-                        showUploadList={false}
-                        accept="image/*"
-                        beforeUpload={(file) => {
-                          uploadImageMut.mutate({ field: 'imageUrl', file: file as any })
-                          return false
-                        }}
-                      >
-                        <Button icon={<UploadOutlined />} loading={uploadImageMut.isPending}>
-                          Subir imagen
-                        </Button>
-                      </Upload>
-                    </Space>
-                  </Form.Item>
+                  <Form.Item name="imageUrl" hidden><Input /></Form.Item>
+                  <Form.Item name="mapImageUrl" hidden><Input /></Form.Item>
 
-                  <Form.Item label="Imagen del mapa del venue">
-                    <Space direction="vertical" style={{ width: '100%' }}>
-                      <Form.Item name="mapImageUrl" noStyle>
-                        <Input placeholder="URL de la imagen..." />
-                      </Form.Item>
-                      {ticketEvent?.mapImageUrl && (
-                        <img
-                          src={ticketEvent.mapImageUrl}
-                          alt="Mapa"
-                          style={{ maxWidth: '100%', maxHeight: 160, borderRadius: 8, objectFit: 'cover' }}
-                        />
-                      )}
-                      <Upload
-                        showUploadList={false}
-                        accept="image/*"
-                        beforeUpload={(file) => {
-                          uploadImageMut.mutate({ field: 'mapImageUrl', file: file as any })
-                          return false
-                        }}
-                      >
-                        <Button icon={<UploadOutlined />} loading={uploadImageMut.isPending}>
-                          Subir imagen
-                        </Button>
-                      </Upload>
-                    </Space>
-                  </Form.Item>
+                  <div style={{ marginBottom: 24 }}>
+                    <div style={{ marginBottom: 4, fontWeight: 500 }}>Imagen del evento</div>
+                    {ticketEvent?.imageUrl && (
+                      <img src={ticketEvent.imageUrl} alt="Evento" style={{ maxWidth: '100%', maxHeight: 160, borderRadius: 8, objectFit: 'cover', marginBottom: 8, display: 'block' }} />
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) uploadImageMut.mutate({ field: 'imageUrl', file })
+                        e.target.value = ''
+                      }}
+                      style={{ display: 'none' }}
+                      id="ticket-event-image-upload"
+                    />
+                    <Button icon={<UploadOutlined />} loading={uploadImageMut.isPending} onClick={() => document.getElementById('ticket-event-image-upload')?.click()}>
+                      Subir imagen
+                    </Button>
+                  </div>
+
+                  <div style={{ marginBottom: 24 }}>
+                    <div style={{ marginBottom: 4, fontWeight: 500 }}>Imagen del mapa del venue</div>
+                    {ticketEvent?.mapImageUrl && (
+                      <img src={ticketEvent.mapImageUrl} alt="Mapa" style={{ maxWidth: '100%', maxHeight: 160, borderRadius: 8, objectFit: 'cover', marginBottom: 8, display: 'block' }} />
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) uploadImageMut.mutate({ field: 'mapImageUrl', file })
+                        e.target.value = ''
+                      }}
+                      style={{ display: 'none' }}
+                      id="ticket-event-map-upload"
+                    />
+                    <Button icon={<UploadOutlined />} loading={uploadImageMut.isPending} onClick={() => document.getElementById('ticket-event-map-upload')?.click()}>
+                      Subir imagen
+                    </Button>
+                  </div>
 
                   <Form.Item name="description" label="Descripción pública">
                     <Input.TextArea rows={4} placeholder="Descripción visible para los compradores..." />
