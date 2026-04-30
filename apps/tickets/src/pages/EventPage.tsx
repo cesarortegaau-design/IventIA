@@ -209,9 +209,9 @@ export default function EventPage() {
             <Divider />
             <Title level={4} style={{ marginBottom: 20 }}>Selecciona tus boletos</Title>
 
-            {event.mapData ? (
+            {event.sections && event.sections.length > 0 ? (
               <VenueMapViewer
-                sections={event.sections || []}
+                sections={event.sections}
                 mapData={event.mapData}
                 onSectionSelect={(section) => {
                   if (event.mapData && !slug) return
