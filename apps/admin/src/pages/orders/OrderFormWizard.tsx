@@ -280,11 +280,14 @@ export default function OrderFormWizard() {
     setLineItems(prev => prev.filter(li => li.instanceId !== instanceId))
   }
 
+  const startDate = form.getFieldValue('startDate')
+  const endDate = form.getFieldValue('endDate')
+
   const lineColumns = [
     {
-      title: 'Descripción',
+      title: 'Recurso',
       dataIndex: 'description',
-      key: 'desc',
+      key: 'recurso',
       width: 160,
       render: (text: string, record: any) => (
         <span>
@@ -296,57 +299,103 @@ export default function OrderFormWizard() {
         </span>
       ),
     },
-    { title: 'P. Normal', dataIndex: 'normalPrice', width: 110, render: (v: number) => `$${v.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` },
-    { title: 'Unidad', key: 'unit', width: 80, render: (_: any, r: any) => r.unit || '—' },
-    { title: 'Detalle', key: 'detail', width: 140, render: (_: any, r: any) => r.detail || '—' },
     {
-      title: 'Cantidad', dataIndex: 'quantity', key: 'qty', width: 90,
-      render: (v: number, r: any) => (
-        <InputNumber min={0.001} value={v} onChange={val => updateLineItem(r.instanceId, 'quantity', val)} style={{ width: 80 }} />
-      ),
+      title: 'Fecha Solicitado',
+      key: 'fechaSolicitado',
+      width: 130,
+      align: 'center' as const,
+      render: () => startDate ? dayjs(startDate).format('DD/MM/YYYY') : '—',
     },
     {
-      title: 'Desc. %', dataIndex: 'discountPct', key: 'disc', width: 80,
-      render: (v: number, r: any) => (
-        <InputNumber min={0} max={100} value={v} onChange={val => updateLineItem(r.instanceId, 'discountPct', val)} style={{ width: 70 }} />
-      ),
-    },
-    { title: 'Ud. Tiempo', key: 'tu', width: 90, render: (_: any, r: any) => r.timeUnit || 'no aplica' },
-    { title: 'Factor', key: 'factor', width: 70, render: (_: any, r: any) => r.factor ?? 1 },
-    {
-      title: '× Tiempo', key: 'tuv', width: 80,
-      render: (_: any, r: any) => calcTimeUnitValue(r.timeUnit, form.getFieldValue('startDate')?.toISOString(), form.getFieldValue('endDate')?.toISOString()),
+      title: 'Fecha Entrega',
+      key: 'fechaEntrega',
+      width: 130,
+      align: 'center' as const,
+      render: () => endDate ? dayjs(endDate).format('DD/MM/YYYY') : '—',
     },
     {
-      title: 'Total', key: 'total', width: 120,
-      render: (_: any, r: any) => {
-        const tuv = calcTimeUnitValue(r.timeUnit, form.getFieldValue('startDate')?.toISOString(), form.getFieldValue('endDate')?.toISOString())
-        const efFactor = r.timeUnit?.endsWith('sin factor') ? 1 : (r.factor ?? 1)
-        const total = (r.quantity || 0) * (r.normalPrice || 0) * tuv * efFactor * (1 - (r.discountPct || 0) / 100)
-        return `$${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
-      },
+      title: 'P. de Lista',
+      dataIndex: 'normalPrice',
+      key: 'pLista',
+      width: 110,
+      align: 'right' as const,
+      render: (v: number) => `$${v.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
     },
     {
-      title: 'Observaciones', dataIndex: 'observations', key: 'obs', width: 160,
-      render: (v: string, r: any) => (
-        <Input value={v} onChange={e => updateLineItem(r.instanceId, 'observations', e.target.value)} />
-      ),
-    },
-    {
-      title: 'F. Entrega', dataIndex: 'deliveryDate', key: 'delivery', width: 170,
-      render: (v: any, r: any) => (
-        <DatePicker
-          showTime
-          format="DD/MM/YYYY HH:mm"
-          value={v ? dayjs(v) : null}
-          onChange={val => updateLineItem(r.instanceId, 'deliveryDate', val?.toISOString() ?? null)}
-          style={{ width: 160 }}
-          placeholder="Fecha entrega"
+      title: 'P. Prospectado',
+      key: 'pProspectado',
+      width: 120,
+      align: 'right' as const,
+      render: (_: any, r: any) => (
+        <InputNumber
+          min={0}
+          value={r.normalPrice}
+          onChange={val => updateLineItem(r.instanceId, 'normalPrice', val)}
+          style={{ width: 110 }}
+          formatter={v => `$${Number(v || 0).toLocaleString('es-MX', { maximumFractionDigits: 0 })}`}
+          parser={v => Number(String(v).replace(/[^\d.-]/g, ''))}
         />
       ),
     },
     {
-      title: '', key: 'del', width: 48,
+      title: 'Cant. Prospectada',
+      dataIndex: 'quantity',
+      key: 'cantProspectada',
+      width: 120,
+      align: 'center' as const,
+      render: (v: number, r: any) => (
+        <InputNumber min={0.001} value={v} onChange={val => updateLineItem(r.instanceId, 'quantity', val)} style={{ width: 110 }} />
+      ),
+    },
+    {
+      title: 'P. Real',
+      key: 'pReal',
+      width: 110,
+      align: 'right' as const,
+      render: (_: any, r: any) => (
+        <InputNumber
+          min={0}
+          value={r.normalPrice}
+          onChange={val => updateLineItem(r.instanceId, 'normalPrice', val)}
+          style={{ width: 100 }}
+          formatter={v => `$${Number(v || 0).toLocaleString('es-MX', { maximumFractionDigits: 0 })}`}
+          parser={v => Number(String(v).replace(/[^\d.-]/g, ''))}
+        />
+      ),
+    },
+    {
+      title: 'Cant. Real',
+      key: 'cantReal',
+      width: 110,
+      align: 'center' as const,
+      render: (_: any, r: any) => (
+        <InputNumber min={0.001} value={r.quantity} onChange={val => updateLineItem(r.instanceId, 'quantity', val)} style={{ width: 100 }} />
+      ),
+    },
+    {
+      title: 'P. Total Prospectado',
+      key: 'pTotalProspectado',
+      width: 140,
+      align: 'right' as const,
+      render: (_: any, r: any) => {
+        const total = (r.quantity || 0) * (r.normalPrice || 0)
+        return `$${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
+      },
+    },
+    {
+      title: 'P. Total Real',
+      key: 'pTotalReal',
+      width: 140,
+      align: 'right' as const,
+      render: (_: any, r: any) => {
+        const total = (r.quantity || 0) * (r.normalPrice || 0)
+        return `$${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
+      },
+    },
+    {
+      title: '',
+      key: 'del',
+      width: 48,
       render: (_: any, r: any) => (
         <Button danger size="small" icon={<DeleteOutlined />} onClick={() => removeLineItem(r.instanceId)} />
       ),

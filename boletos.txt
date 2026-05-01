@@ -25,7 +25,7 @@ Crear un portal de eventos para venta de boletos
 	- Debe funcionar como un sitio que tenga un landing page atractivo y profesional, usa como referencia boletia.com
 		- se debe mostrar los eventos activos para venta de boletos definidos desde Admin
 		- en el micrositio de cada evento se debe mostrar el mapa interactivo de evento que permita
-			verificar al usuario los lugares disponibles
+			verificar al usua	rio los lugares disponibles
 		- un mecanismo para seleccionar los boletos dependiendo si el evento es por sección o por butaca
 		- crear un esquema de logon y login claro y preciso	
 		-diseñar todo esto como un carrito de compras
