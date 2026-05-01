@@ -85,12 +85,13 @@ export default function CartPage() {
           quantity: i.quantity,
         })),
       }
-      const data = await ticketsApi.createOrder(payload)
+      const res = await ticketsApi.createOrder(payload)
+      const { checkoutUrl, token: orderToken } = res.data ?? res
       clear()
-      if (data.checkoutUrl) {
-        window.location.href = data.checkoutUrl
+      if (checkoutUrl) {
+        window.location.href = checkoutUrl
       } else {
-        navigate(`/mi-orden/${data.token}`)
+        navigate(`/mi-orden/${orderToken}`)
       }
     } catch {
       message.error('Error al crear la orden. Intenta de nuevo.')

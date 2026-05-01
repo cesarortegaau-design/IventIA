@@ -75,7 +75,29 @@ export default function OrderPage() {
 
   const { data: order, isLoading, error } = useQuery<OrderDetail>({
     queryKey: ['public-order', token],
-    queryFn: () => ticketsApi.getOrder(token!),
+    queryFn: async () => {
+      const res = await ticketsApi.getOrder(token!)
+      const raw = res.data ?? res
+      return {
+        token: raw.token,
+        status: raw.status,
+        createdAt: raw.createdAt,
+        total: Number(raw.total),
+        buyer: { name: raw.buyerName, email: raw.buyerEmail, phone: raw.buyerPhone },
+        event: {
+          name: raw.ticketEvent?.event?.name ?? '',
+          startDate: raw.ticketEvent?.event?.eventStart ?? '',
+          venue: raw.ticketEvent?.event?.venueLocation,
+        },
+        items: (raw.items ?? []).map((i: any) => ({
+          id: i.id,
+          sectionName: i.section?.name ?? '',
+          seatLabel: i.seat?.label,
+          quantity: i.quantity,
+          unitPrice: Number(i.unitPrice),
+        })),
+      }
+    },
     enabled: !!token,
   })
 
