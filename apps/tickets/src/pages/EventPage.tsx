@@ -76,7 +76,7 @@ export default function EventPage() {
     startDate: eventData.data.event?.eventStart || '',
     endDate: eventData.data.event?.eventEnd,
     venue: eventData.data.event?.venueLocation,
-    description: eventData.data.event?.description,
+    description: eventData.data.description || eventData.data.event?.description,
     mapData: eventData.data.mapData,
     sections: (eventData.data.sections || []).map((s: any) => ({
       id: s.id,
