@@ -1,14 +1,15 @@
 import { useState, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Table, Tag, Typography, Row, Col, Select, DatePicker,
   Input, Button, Space, Statistic, Tabs, Empty, Spin, Avatar, Tooltip,
+  Modal, Popconfirm, message, Divider, Drawer,
 } from 'antd'
 import {
   PlusOutlined, DownloadOutlined, SearchOutlined,
   FileTextOutlined, DollarOutlined, CheckCircleOutlined,
-  ClockCircleOutlined, ClearOutlined, EyeOutlined,
-  PercentageOutlined,
+  ClockCircleOutlined, ClearOutlined, EyeOutlined, EditOutlined, DeleteOutlined,
+  PercentageOutlined, CalendarOutlined, UserOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useNavigate } from 'react-router-dom'
@@ -36,6 +37,7 @@ function fmt(n: number) {
 
 export default function OrdersListPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   const [statusFilter, setStatusFilter] = useState<string | undefined>()
   const [eventId, setEventId] = useState<string | undefined>()
@@ -87,6 +89,22 @@ export default function OrdersListPage() {
   }
   const hasFilters = !!(eventId || statusFilter || dateRange || search)
 
+  // Get selected event for context header
+  const selectedEvent = eventId ? events.find((e: any) => e.id === eventId) : null
+
+  const deleteOrderMut = useMutation({
+    mutationFn: (orderId: string) => ordersApi.delete(orderId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders-report'] })
+      message.success('Orden eliminada')
+    },
+    onError: () => message.error('Error al eliminar la orden'),
+  })
+
+  const handleDelete = (orderId: string) => {
+    deleteOrderMut.mutate(orderId)
+  }
+
   const handleExport = () => {
     exportToCsv(
       `ordenes-servicio-${dayjs().format('YYYY-MM-DD')}`,
@@ -94,21 +112,25 @@ export default function OrdersListPage() {
         numero: o.orderNumber,
         evento: o.event?.name ?? '',
         cliente: o.client?.companyName ?? `${o.client?.firstName ?? ''} ${o.client?.lastName ?? ''}`.trim(),
+        actividad: o.notes ?? o.departamento ?? '',
         estatus: STATUS_MAP[o.status]?.label ?? o.status,
+        fechaInicial: o.startDate ? dayjs(o.startDate).format('DD/MM/YYYY') : '—',
+        fechaFinal: o.endDate ? dayjs(o.endDate).format('DD/MM/YYYY') : '—',
         total: Number(o.total).toFixed(2),
         pagado: Number(o.paidAmount).toFixed(2),
         saldo: (Number(o.total) - Number(o.paidAmount)).toFixed(2),
-        fecha: dayjs(o.createdAt).format('DD/MM/YYYY'),
       })),
       [
         { header: 'Número', key: 'numero' },
         { header: 'Evento', key: 'evento' },
         { header: 'Cliente', key: 'cliente' },
+        { header: 'Actividad', key: 'actividad' },
         { header: 'Estatus', key: 'estatus' },
+        { header: 'Fecha Inicial', key: 'fechaInicial' },
+        { header: 'Fecha Final', key: 'fechaFinal' },
         { header: 'Total', key: 'total' },
         { header: 'Pagado', key: 'pagado' },
         { header: 'Saldo', key: 'saldo' },
-        { header: 'Fecha', key: 'fecha' },
       ]
     )
   }
@@ -119,7 +141,7 @@ export default function OrdersListPage() {
 
   const columns = [
     {
-      title: 'Código',
+      title: 'Número',
       dataIndex: 'orderNumber',
       width: 130,
       render: (v: string, r: any) => (
@@ -155,52 +177,98 @@ export default function OrdersListPage() {
       },
     },
     {
-      title: 'Fecha',
-      dataIndex: 'createdAt',
-      width: 100,
-      render: (v: string) => <Text style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>{dayjs(v).format('DD/MM/YY')}</Text>,
+      title: 'Actividad',
+      key: 'activity',
+      width: 160,
+      render: (_: any, r: any) => (
+        <Text style={{ fontSize: 13 }}>{r.notes || r.departamento || '—'}</Text>
+      ),
     },
     {
-      title: 'Items',
-      key: 'items',
-      width: 65,
-      align: 'center' as const,
-      render: (_: any, r: any) => r._count?.lineItems ?? 0,
-    },
-    {
-      title: 'Total',
-      dataIndex: 'total',
-      width: 120,
-      align: 'right' as const,
-      render: (v: number) => <Text strong style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(Number(v))}</Text>,
-    },
-    {
-      title: 'Pagado',
-      dataIndex: 'paidAmount',
+      title: 'Fecha Inicial',
+      dataIndex: 'startDate',
       width: 110,
-      align: 'right' as const,
-      render: (v: number) => <Text style={{ color: '#52c41a', fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>{fmt(Number(v))}</Text>,
+      render: (v: string) => (
+        <Text style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+          {v ? dayjs(v).format('DD/MM/YY') : '—'}
+        </Text>
+      ),
+    },
+    {
+      title: 'Fecha Final',
+      dataIndex: 'endDate',
+      width: 110,
+      render: (v: string) => (
+        <Text style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+          {v ? dayjs(v).format('DD/MM/YY') : '—'}
+        </Text>
+      ),
     },
     {
       title: 'Estado',
       dataIndex: 'status',
-      width: 120,
+      width: 110,
       render: (v: string) => {
         const s = STATUS_MAP[v]
         return <Tag color={s?.color}>{s?.label ?? v}</Tag>
       },
     },
     {
+      title: 'Total',
+      dataIndex: 'total',
+      width: 110,
+      align: 'right' as const,
+      render: (v: number) => <Text strong style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(Number(v))}</Text>,
+    },
+    {
+      title: 'Pagado',
+      dataIndex: 'paidAmount',
+      width: 100,
+      align: 'right' as const,
+      render: (v: number) => <Text style={{ color: '#52c41a', fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>{fmt(Number(v))}</Text>,
+    },
+    {
       title: '',
       key: 'actions',
-      width: 50,
+      width: 80,
+      fixed: 'right' as const,
       render: (_: any, r: any) => (
-        <Button
-          type="text"
-          size="small"
-          icon={<EyeOutlined />}
-          onClick={() => navigate(`/ordenes/${r.id}`)}
-        />
+        <Space size={4}>
+          <Tooltip title="Ver">
+            <Button
+              type="text"
+              size="small"
+              icon={<EyeOutlined />}
+              onClick={() => navigate(`/ordenes/${r.id}`)}
+            />
+          </Tooltip>
+          <Tooltip title="Editar">
+            <Button
+              type="text"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => navigate(`/ordenes/${r.id}`)}
+              disabled={r.status === 'INVOICED' || r.status === 'CANCELLED'}
+            />
+          </Tooltip>
+          <Tooltip title="Eliminar">
+            <Popconfirm
+              title="Eliminar orden"
+              description="¿Estás seguro de que deseas eliminar esta orden?"
+              okText="Sí"
+              cancelText="No"
+              onConfirm={() => handleDelete(r.id)}
+            >
+              <Button
+                type="text"
+                size="small"
+                icon={<DeleteOutlined />}
+                danger
+                disabled={r.status === 'CONFIRMED' || r.status === 'EXECUTED' || r.status === 'INVOICED'}
+              />
+            </Popconfirm>
+          </Tooltip>
+        </Space>
       ),
     },
   ]
@@ -215,6 +283,36 @@ export default function OrdersListPage() {
 
   return (
     <div>
+      {/* Context Header - Show when event is selected */}
+      {selectedEvent && (
+        <Card style={{ marginBottom: 16, borderRadius: 10, background: '#f8f5ff' }} bodyStyle={{ padding: 16 }}>
+          <Row gutter={24}>
+            <Col xs={24} sm={12} lg={6}>
+              <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.5)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>Evento</div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>{selectedEvent.name}</div>
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.5)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>Cliente</div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>
+                {filteredOrders[0]?.client?.companyName || `${filteredOrders[0]?.client?.firstName ?? ''} ${filteredOrders[0]?.client?.lastName ?? ''}`.trim() || '—'}
+              </div>
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.5)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>Fecha Inicial</div>
+              <div style={{ fontSize: 14, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                {selectedEvent.eventStart ? dayjs(selectedEvent.eventStart).format('DD/MM/YYYY HH:mm') : '—'}
+              </div>
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.5)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>Fecha Final</div>
+              <div style={{ fontSize: 14, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                {selectedEvent.eventEnd ? dayjs(selectedEvent.eventEnd).format('DD/MM/YYYY HH:mm') : '—'}
+              </div>
+            </Col>
+          </Row>
+        </Card>
+      )}
+
       {/* Page header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <div>
@@ -313,7 +411,7 @@ export default function OrdersListPage() {
             columns={columns}
             rowKey="id"
             size="small"
-            scroll={{ x: 900 }}
+            scroll={{ x: 1400 }}
             pagination={{
               pageSize: 20,
               showSizeChanger: true,

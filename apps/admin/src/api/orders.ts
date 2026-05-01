@@ -25,4 +25,6 @@ export const ordersApi = {
   },
   deleteDocument: (id: string, docId: string) =>
     apiClient.delete(`/orders/${id}/documents/${docId}`).then(r => r.data),
+  delete: (id: string) =>
+    apiClient.delete(`/orders/${id}`).then(r => r.data),
 }
