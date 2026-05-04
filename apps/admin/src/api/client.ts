@@ -16,6 +16,9 @@ apiClient.interceptors.request.use((config) => {
   return config
 })
 
+// Single in-flight refresh promise shared across all concurrent 401 retries
+let refreshPromise: Promise<string> | null = null
+
 apiClient.interceptors.response.use(
   (res) => res,
   async (error) => {
@@ -23,11 +26,19 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401 && !original._retry) {
       original._retry = true
       try {
-        const refreshToken = useAuthStore.getState().refreshToken
-        const { data } = await axios.post(`${baseURL.replace('/api/v1', '')}/api/v1/auth/refresh`, { refreshToken })
-        const store = useAuthStore.getState()
-        store.setAuth(store.user!, data.data.accessToken, refreshToken!)
-        original.headers.Authorization = `Bearer ${data.data.accessToken}`
+        if (!refreshPromise) {
+          const refreshToken = useAuthStore.getState().refreshToken
+          refreshPromise = axios
+            .post(`${baseURL.replace('/api/v1', '')}/api/v1/auth/refresh`, { refreshToken })
+            .then(({ data }) => {
+              const store = useAuthStore.getState()
+              store.setAuth(store.user!, data.data.accessToken, store.refreshToken!)
+              return data.data.accessToken as string
+            })
+            .finally(() => { refreshPromise = null })
+        }
+        const newToken = await refreshPromise
+        original.headers.Authorization = `Bearer ${newToken}`
         return apiClient(original)
       } catch {
         useAuthStore.getState().clearAuth()
