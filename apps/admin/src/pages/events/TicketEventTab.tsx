@@ -481,6 +481,7 @@ export default function TicketEventTab({ eventId }: Props) {
                   confirmLoading={createSectionMutation.isPending || updateSectionMutation.isPending}
                   okText="Guardar"
                   width={480}
+                  forceRender
                 >
                   <Form form={sectionForm} layout="vertical" style={{ marginTop: 16 }}>
                     <Form.Item name="name" label="Nombre" rules={[{ required: true }]}>
@@ -517,6 +518,7 @@ export default function TicketEventTab({ eventId }: Props) {
                   confirmLoading={generateSeatsMutation.isPending}
                   okText="Generar"
                   width={560}
+                  forceRender
                 >
                   <Form
                     form={seatsForm}

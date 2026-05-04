@@ -329,7 +329,7 @@ export default function OrdersReportPage() {
           <Col xs={24} sm={12} lg={6} key={card.title}>
             <Card
               style={{ borderRadius: 12, border: 'none', boxShadow: '0 2px 12px rgba(0,0,0,0.07)' }}
-              bodyStyle={{ padding: '20px 24px' }}
+              styles={{ body: { padding: '20px 24px' } }}
             >
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                 <Statistic
@@ -355,7 +355,7 @@ export default function OrdersReportPage() {
       {orders.length > 0 && (
         <Card
           style={{ marginBottom: 20, borderRadius: 12, border: '1px solid #e8f0fe', boxShadow: '0 1px 6px rgba(26,58,92,0.06)' }}
-          bodyStyle={{ padding: '16px 24px' }}
+          styles={{ body: { padding: '16px 24px' } }}
         >
           <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap', alignItems: 'center' }}>
             <Text style={{ color: '#64748b', fontSize: 12 }}>
@@ -384,7 +384,7 @@ export default function OrdersReportPage() {
       {/* ── Filters ─────────────────────────────────────────────────────────── */}
       <Card
         style={{ marginBottom: 16, borderRadius: 12, border: '1px solid #e8f0fe' }}
-        bodyStyle={{ padding: '16px 20px' }}
+        styles={{ body: { padding: '16px 20px' } }}
       >
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div>
@@ -444,7 +444,7 @@ export default function OrdersReportPage() {
       {/* ── Table ───────────────────────────────────────────────────────────── */}
       <Card
         style={{ borderRadius: 12, border: '1px solid #e8f0fe', boxShadow: '0 2px 12px rgba(26,58,92,0.05)' }}
-        bodyStyle={{ padding: 0 }}
+        styles={{ body: { padding: 0 } }}
       >
         {isLoading ? (
           <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>

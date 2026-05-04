@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Form, Input, Select, DatePicker, Card, Button, Row, Col, Tabs, Space, App, Typography } from 'antd'
@@ -8,6 +9,8 @@ import { priceListsApi } from '../../api/priceLists'
 import { clientsApi } from '../../api/clients'
 
 const { Title } = Typography
+
+const FIVE_MIN = 5 * 60 * 1000
 
 export default function EventFormPage() {
   const { id } = useParams<{ id: string }>()
@@ -21,30 +24,37 @@ export default function EventFormPage() {
     queryKey: ['event', id],
     queryFn: () => eventsApi.get(id!),
     enabled: isEdit,
+    initialData: () => queryClient.getQueryData(['event', id]) as any,
+    staleTime: FIVE_MIN,
   })
 
   const { data: priceLists } = useQuery({
     queryKey: ['price-lists'],
     queryFn: () => priceListsApi.list(),
+    staleTime: FIVE_MIN,
   })
 
   const { data: clients } = useQuery({
     queryKey: ['clients', { pageSize: 200 }],
     queryFn: () => clientsApi.list({ pageSize: 200 }),
+    staleTime: FIVE_MIN,
   })
 
   const event = eventData?.data
-  if (isEdit && event && !form.isFieldsTouched()) {
-    form.setFieldsValue({
-      ...event,
-      setupStart: event.setupStart ? dayjs(event.setupStart) : null,
-      setupEnd: event.setupEnd ? dayjs(event.setupEnd) : null,
-      eventStart: event.eventStart ? dayjs(event.eventStart) : null,
-      eventEnd: event.eventEnd ? dayjs(event.eventEnd) : null,
-      teardownStart: event.teardownStart ? dayjs(event.teardownStart) : null,
-      teardownEnd: event.teardownEnd ? dayjs(event.teardownEnd) : null,
-    })
-  }
+
+  useEffect(() => {
+    if (isEdit && event) {
+      form.setFieldsValue({
+        ...event,
+        setupStart: event.setupStart ? dayjs(event.setupStart) : null,
+        setupEnd: event.setupEnd ? dayjs(event.setupEnd) : null,
+        eventStart: event.eventStart ? dayjs(event.eventStart) : null,
+        eventEnd: event.eventEnd ? dayjs(event.eventEnd) : null,
+        teardownStart: event.teardownStart ? dayjs(event.teardownStart) : null,
+        teardownEnd: event.teardownEnd ? dayjs(event.teardownEnd) : null,
+      })
+    }
+  }, [event?.id])
 
   const saveMutation = useMutation({
     mutationFn: (values: any) => {
@@ -61,6 +71,7 @@ export default function EventFormPage() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['events'] })
+      queryClient.invalidateQueries({ queryKey: ['event', data.data.id] })
       message.success(isEdit ? 'Evento actualizado' : 'Evento creado')
       navigate(`/eventos/${data.data.id}`)
     },
@@ -197,6 +208,18 @@ export default function EventFormPage() {
                       </Col>
                     </Row>
 
+                    <Row gutter={16}>
+                      <Col xs={16}>
+                        <Form.Item name="venue" label="Venue / Lugar">
+                          <Input placeholder="Nombre del recinto" />
+                        </Form.Item>
+                      </Col>
+                      <Col xs={8}>
+                        <Form.Item name="expectedAttendance" label="Asistentes esperados">
+                          <Input type="number" min={0} placeholder="0" />
+                        </Form.Item>
+                      </Col>
+                    </Row>
                     <Form.Item name="notes" label="Notas">
                       <Input.TextArea rows={3} />
                     </Form.Item>

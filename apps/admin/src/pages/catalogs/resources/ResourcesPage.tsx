@@ -1,35 +1,45 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Table, Button, Card, Input, Select, Space, Tag, Modal, Form, Typography,
-  Row, Col, App, Switch, Tabs, InputNumber, Upload, Image, Popconfirm, Spin
+  Table, Button, Card, Select, Space, Tag, Modal, Form, Typography,
+  Row, Col, App, Switch, Tabs, InputNumber, Upload, Image, Popconfirm, Input,
 } from 'antd'
-import { PlusOutlined, EditOutlined, PoweroffOutlined, UploadOutlined, DeleteOutlined, DownloadOutlined } from '@ant-design/icons'
+import {
+  PlusOutlined, EditOutlined, PoweroffOutlined, UploadOutlined,
+  DeleteOutlined, DownloadOutlined,
+} from '@ant-design/icons'
 import { resourcesApi } from '../../../api/resources'
 import { exportToCsv } from '../../../utils/exportCsv'
 import { PackageComponentsManager } from './PackageComponentsManager'
+import { PageHeader, FilterBar } from '../../../components/ui'
+import { formatPercent } from '../../../utils/format'
 
-const { Title, Text } = Typography
+const { Text } = Typography
 
 const TYPE_LABELS: Record<string, string> = {
   CONSUMABLE: 'Consumible', EQUIPMENT: 'Equipo', SPACE: 'Espacio',
-  FURNITURE: 'Mobiliario', SERVICE: 'Servicio', DISCOUNT: 'Descuento', TAX: 'Impuesto', PERSONAL: 'Personal',
-  TICKET: 'Boleto',
+  FURNITURE: 'Mobiliario', SERVICE: 'Servicio', DISCOUNT: 'Descuento',
+  TAX: 'Impuesto', PERSONAL: 'Personal', TICKET: 'Boleto',
 }
 const TYPE_COLORS: Record<string, string> = {
   CONSUMABLE: 'orange', EQUIPMENT: 'blue', SPACE: 'green',
-  FURNITURE: 'purple', SERVICE: 'cyan', DISCOUNT: 'red', TAX: 'gold', PERSONAL: 'magenta',
-  TICKET: 'volcano',
+  FURNITURE: 'purple', SERVICE: 'cyan', DISCOUNT: 'red',
+  TAX: 'gold', PERSONAL: 'magenta', TICKET: 'volcano',
+}
+const TYPE_EMOJI: Record<string, string> = {
+  CONSUMABLE: '📦', EQUIPMENT: '🔧', SPACE: '🏛️',
+  FURNITURE: '🪑', SERVICE: '⚙️', DISCOUNT: '🏷️',
+  TAX: '📋', PERSONAL: '👤', TICKET: '🎫',
 }
 
 const UNIT_OPTIONS = [
-  { value: 'kg',     label: 'kg - kilogramos' },
-  { value: 'lt',     label: 'lt - litros' },
-  { value: 'pza',    label: 'pza - piezas' },
+  { value: 'kg', label: 'kg - kilogramos' },
+  { value: 'lt', label: 'lt - litros' },
+  { value: 'pza', label: 'pza - piezas' },
   { value: 'unidad', label: 'unidad' },
-  { value: 'turno',  label: 'turno' },
-  { value: 'm2',     label: 'm2 - metros cuadrados' },
-  { value: 'm',      label: 'm - metros' },
+  { value: 'turno', label: 'turno' },
+  { value: 'm2', label: 'm2 - metros cuadrados' },
+  { value: 'm', label: 'm - metros' },
 ]
 
 const apiUrl = import.meta.env.VITE_API_URL || ''
@@ -108,6 +118,7 @@ export default function ResourcesPage() {
   const [form] = Form.useForm()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
+
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingRecord, setEditingRecord] = useState<any>(null)
@@ -116,15 +127,34 @@ export default function ResourcesPage() {
   const [isPackage, setIsPackage] = useState(false)
   const [packageComponents, setPackageComponents] = useState<any[]>([])
 
+  // Sidebar category selection: '' = all, or a type key
+  const [sidebarType, setSidebarType] = useState('')
+
   const { data, isLoading } = useQuery({
     queryKey: ['resources', filters],
-    queryFn: () => resourcesApi.list({ ...filters, pageSize: 100 }),
+    queryFn: () => resourcesApi.list({ ...filters, pageSize: 500 }),
   })
 
   const { data: departments } = useQuery({
     queryKey: ['departments'],
     queryFn: () => resourcesApi.listDepartments(),
   })
+
+  // Derive counts per type for sidebar
+  const allResources: any[] = data?.data ?? []
+  const typeCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    allResources.forEach((r: any) => {
+      counts[r.type] = (counts[r.type] || 0) + 1
+    })
+    return counts
+  }, [allResources])
+
+  // Filter by sidebar selection (applied client-side on top of server filters)
+  const displayResources = useMemo(() => {
+    if (!sidebarType) return allResources
+    return allResources.filter((r: any) => r.type === sidebarType)
+  }, [allResources, sidebarType])
 
   const saveMutation = useMutation({
     mutationFn: (values: any) => {
@@ -140,24 +170,19 @@ export default function ResourcesPage() {
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['resources'] })
       if (!editingId) {
-        // After create, switch to edit mode so images can be uploaded
         setEditingId(res.data.id)
         setEditingRecord(res.data)
         setSelectedType(res.data.type)
         setIsPackage(res.data.isPackage)
         message.success('Recurso creado. Ahora puedes agregar imágenes.')
       } else {
-        // After update, refresh the record to get latest state
         setSelectedType(res.data.type)
         setIsPackage(res.data.isPackage)
         setEditingRecord(res.data)
-        // Recargar componentes si es paquete
         if (res.data.isPackage) {
           resourcesApi.getPackageComponents(editingId).then((compRes) => {
             setPackageComponents(compRes.data.components ?? [])
-          }).catch(() => {
-            setPackageComponents([])
-          })
+          }).catch(() => setPackageComponents([]))
         } else {
           setPackageComponents([])
         }
@@ -179,28 +204,19 @@ export default function ResourcesPage() {
   })
 
   function openCreate() {
-    setEditingId(null)
-    setEditingRecord(null)
-    setSelectedType('')
-    setIsPackage(false)
-    setPackageComponents([])
-    form.resetFields()
-    setModalOpen(true)
+    setEditingId(null); setEditingRecord(null); setSelectedType('')
+    setIsPackage(false); setPackageComponents([])
+    form.resetFields(); setModalOpen(true)
   }
 
   function openEdit(record: any) {
-    setEditingId(record.id)
-    setEditingRecord(record)
-    setSelectedType(record.type)
-    setIsPackage(record.isPackage)
+    setEditingId(record.id); setEditingRecord(record)
+    setSelectedType(record.type); setIsPackage(record.isPackage)
     form.setFieldsValue(record)
-    // Cargar componentes si es paquete
     if (record.isPackage) {
-      resourcesApi.getPackageComponents(record.id).then((res) => {
-        setPackageComponents(res.data.components ?? [])
-      }).catch(() => {
-        setPackageComponents([])
-      })
+      resourcesApi.getPackageComponents(record.id)
+        .then(res => setPackageComponents(res.data.components ?? []))
+        .catch(() => setPackageComponents([]))
     } else {
       setPackageComponents([])
     }
@@ -210,68 +226,110 @@ export default function ResourcesPage() {
   function refreshEditingRecord() {
     if (!editingId) return
     resourcesApi.get(editingId).then((res) => {
-      setEditingRecord(res.data)
-      setSelectedType(res.data.type)
-      setIsPackage(res.data.isPackage)
+      setEditingRecord(res.data); setSelectedType(res.data.type); setIsPackage(res.data.isPackage)
       queryClient.invalidateQueries({ queryKey: ['resources'] })
-
-      // Cargar componentes si es paquete
       if (res.data.isPackage) {
-        resourcesApi.getPackageComponents(editingId).then((compRes) => {
-          setPackageComponents(compRes.data.components ?? [])
-        }).catch(() => {
-          setPackageComponents([])
-        })
+        resourcesApi.getPackageComponents(editingId)
+          .then(compRes => setPackageComponents(compRes.data.components ?? []))
+          .catch(() => setPackageComponents([]))
       } else {
         setPackageComponents([])
       }
     })
   }
 
+  // Margin helper
+  function calcMargin(r: any): { value: number | null; display: string; tone: 'success' | 'warning' | 'error' | 'muted' } {
+    const cost = Number(r.cost ?? r.costPrice ?? 0)
+    const price = Number(r.defaultPrice ?? r.basePrice ?? 0)
+    if (!cost || !price || r.type === 'SERVICE') return { value: null, display: '—', tone: 'muted' }
+    const pct = ((price - cost) / price) * 100
+    return {
+      value: pct,
+      display: formatPercent(pct),
+      tone: pct >= 30 ? 'success' : pct >= 20 ? 'warning' : 'error',
+    }
+  }
+
+  const marginColor = { success: '#16a34a', warning: '#f59e0b', error: '#ef4444', muted: 'rgba(0,0,0,0.35)' }
+
   const columns = [
     {
-      title: '', key: 'img', width: 52,
+      title: '', key: 'img', width: 48,
       render: (_: any, r: any) => r.imageMain
-        ? <Image src={imgSrc(r.imageMain)} width={40} height={40} style={{ objectFit: 'cover', borderRadius: 4 }} preview={false} />
-        : <div style={{ width: 40, height: 40, background: '#f5f5f5', borderRadius: 4 }} />,
-    },
-    { title: 'Código', dataIndex: 'code', key: 'code', width: 100 },
-    { title: 'Nombre', dataIndex: 'name', key: 'name' },
-    {
-      title: 'Tipo', dataIndex: 'type', key: 'type',
-      render: (v: string) => <Tag color={TYPE_COLORS[v]}>{TYPE_LABELS[v]}</Tag>,
-    },
-    { title: 'Departamento', render: (_: any, r: any) => r.department?.name },
-    {
-      title: '¿Paquete?', dataIndex: 'isPackage', key: 'isPackage', width: 80,
-      render: (v: boolean) => v ? <Tag color="blue">Paquete</Tag> : '-',
-    },
-    { title: 'Unidad', dataIndex: 'unit', key: 'unit' },
-    { title: 'Factor', dataIndex: 'factor', key: 'factor', render: (v: any) => v != null ? Number(v) : 1 },
-    {
-      title: 'Portal', dataIndex: 'portalVisible', key: 'portal',
-      render: (v: boolean) => <Tag color={v ? 'green' : 'default'}>{v ? 'Visible' : 'Oculto'}</Tag>,
+        ? <Image src={imgSrc(r.imageMain)} width={32} height={32} style={{ objectFit: 'cover', borderRadius: 4 }} preview={false} />
+        : <div style={{ width: 32, height: 32, background: '#f5f5f5', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
+            {TYPE_EMOJI[r.type] ?? '📄'}
+          </div>,
     },
     {
-      title: 'Activo', dataIndex: 'isActive', key: 'active',
-      render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? 'Activo' : 'Inactivo'}</Tag>,
+      title: 'Código',
+      dataIndex: 'code',
+      width: 100,
+      render: (v: string) => <span style={{ fontFamily: 'monospace', fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>{v}</span>,
     },
     {
-      title: 'Acciones', key: 'actions',
+      title: 'Nombre',
+      dataIndex: 'name',
+      render: (v: string, r: any) => (
+        <div>
+          <div style={{ fontWeight: 500, fontSize: 13 }}>
+            {r.isPackage && <span style={{ marginRight: 4 }}>📦</span>}
+            {v}
+          </div>
+          <div style={{ fontSize: 11, color: 'rgba(0,0,0,0.45)' }}>
+            {[r.unit, r.department?.name].filter(Boolean).join(' · ')}
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: 'Tipo',
+      dataIndex: 'type',
+      width: 110,
+      render: (v: string) => <Tag color={TYPE_COLORS[v]} style={{ fontSize: 11 }}>{TYPE_LABELS[v]}</Tag>,
+    },
+    {
+      title: 'Stock',
+      dataIndex: 'stock',
+      width: 70,
+      align: 'center' as const,
+      render: (v: number | null, r: any) => {
+        if (r.type === 'SERVICE') return <Text type="secondary" style={{ fontSize: 12 }}>—</Text>
+        return <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>{v ?? 0}</span>
+      },
+    },
+    {
+      title: 'Margen',
+      key: 'margin',
+      width: 80,
+      align: 'center' as const,
+      render: (_: any, r: any) => {
+        const m = calcMargin(r)
+        return <span style={{ fontSize: 12, fontWeight: 500, color: marginColor[m.tone] }}>{m.display}</span>
+      },
+    },
+    {
+      title: 'Estado',
+      dataIndex: 'isActive',
+      width: 90,
+      render: (v: boolean) => <Tag color={v ? 'success' : 'default'}>{v ? 'Activo' : 'Inactivo'}</Tag>,
+    },
+    {
+      title: '',
+      key: 'actions',
+      width: 72,
+      fixed: 'right' as const,
       render: (_: any, r: any) => (
-        <Space>
-          <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)} />
-          <Button size="small" icon={<PoweroffOutlined />} onClick={() => toggleMutation.mutate(r.id)} />
+        <Space size={4}>
+          <Button size="small" type="text" icon={<EditOutlined />} onClick={() => openEdit(r)} />
+          <Button size="small" type="text" icon={<PoweroffOutlined />} onClick={() => toggleMutation.mutate(r.id)} />
         </Space>
       ),
     },
   ]
 
-  const tabs = ['Todos', ...Object.keys(TYPE_LABELS)].map(t => ({
-    key: t === 'Todos' ? '' : t,
-    label: t === 'Todos' ? 'Todos' : TYPE_LABELS[t],
-  }))
-
+  // Modal tabs (unchanged logic, just render)
   const modalTabs = [
     {
       key: '1', label: 'Datos Generales',
@@ -279,33 +337,19 @@ export default function ResourcesPage() {
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item name="type" label="Tipo de Recurso" rules={[{ required: true }]}>
-              <Select
-                options={Object.entries(TYPE_LABELS).map(([value, label]) => ({ value, label }))}
-                onChange={setSelectedType}
-              />
+              <Select options={Object.entries(TYPE_LABELS).map(([value, label]) => ({ value, label }))} onChange={setSelectedType} />
             </Form.Item>
           </Col>
           <Col span={12}>
-            <Form.Item name="code" label="Código" rules={[{ required: true }]}>
-              <Input />
-            </Form.Item>
+            <Form.Item name="code" label="Código" rules={[{ required: true }]}><Input /></Form.Item>
           </Col>
           <Col span={12}>
-            <Form.Item name="name" label="Nombre" rules={[{ required: true }]}>
-              <Input />
-            </Form.Item>
+            <Form.Item name="name" label="Nombre" rules={[{ required: true }]}><Input /></Form.Item>
           </Col>
           <Col span={12}>
             <Form.Item name="departmentId" label="Departamento">
-              <Select
-                allowClear
-                placeholder="Seleccionar departamento"
-                showSearch
-                optionFilterProp="label"
-                options={(departments || [])
-                  .filter((d: any) => d.isActive)
-                  .map((d: any) => ({ value: d.id, label: d.name }))}
-              />
+              <Select allowClear placeholder="Seleccionar departamento" showSearch optionFilterProp="label"
+                options={(departments || []).filter((d: any) => d.isActive).map((d: any) => ({ value: d.id, label: d.name }))} />
             </Form.Item>
           </Col>
           <Col span={8}>
@@ -319,9 +363,7 @@ export default function ResourcesPage() {
             </Form.Item>
           </Col>
           <Col span={12}>
-            <Form.Item name="portalVisible" label="Visible en Portal" valuePropName="checked">
-              <Switch />
-            </Form.Item>
+            <Form.Item name="portalVisible" label="Visible en Portal" valuePropName="checked"><Switch /></Form.Item>
           </Col>
           <Col span={12}>
             <Form.Item name="isPackage" label="¿Es Paquete?" valuePropName="checked">
@@ -330,15 +372,11 @@ export default function ResourcesPage() {
           </Col>
           {isPackage && (
             <Col span={12}>
-              <Form.Item name="isSubstitute" label="¿Componentes Sustitutos?" valuePropName="checked">
-                <Switch />
-              </Form.Item>
+              <Form.Item name="isSubstitute" label="¿Componentes Sustitutos?" valuePropName="checked"><Switch /></Form.Item>
             </Col>
           )}
           <Col span={24}>
-            <Form.Item name="description" label="Notas">
-              <Input.TextArea rows={2} />
-            </Form.Item>
+            <Form.Item name="description" label="Notas"><Input.TextArea rows={2} /></Form.Item>
           </Col>
         </Row>
       ),
@@ -347,26 +385,17 @@ export default function ResourcesPage() {
       key: '2', label: 'Inventario',
       children: (
         <Row gutter={16}>
-          <Col span={8}>
-            <Form.Item name="stock" label="Stock"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item>
-          </Col>
-          <Col span={16}>
-            <Form.Item name="stockLocation" label="Ubicación de Stock"><Input /></Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item name="recoveryTime" label="Tiempo de Recuperación (hrs)"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item name="areaSqm" label="Metros Cuadrados"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item name="capacity" label="Capacidad"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item>
-          </Col>
+          <Col span={8}><Form.Item name="stock" label="Stock"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+          <Col span={16}><Form.Item name="stockLocation" label="Ubicación de Stock"><Input /></Form.Item></Col>
+          <Col span={8}><Form.Item name="recoveryTime" label="Tiempo de Recuperación (hrs)"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+          <Col span={8}><Form.Item name="areaSqm" label="Metros Cuadrados"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+          <Col span={8}><Form.Item name="capacity" label="Capacidad"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+          <Col span={12}><Form.Item name="checkStock" label="Checar Stock" valuePropName="checked"><Switch /></Form.Item></Col>
           <Col span={12}>
-            <Form.Item name="checkStock" label="Checar Stock" valuePropName="checked"><Switch /></Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item name="checkDuplicate" label="Verificar duplicado en Orden" valuePropName="checked" tooltip="Si está activo, no se podrá agregar este recurso más de una vez en una Orden de Servicio"><Switch /></Form.Item>
+            <Form.Item name="checkDuplicate" label="Verificar duplicado en Orden" valuePropName="checked"
+              tooltip="Si está activo, no se podrá agregar este recurso más de una vez en una OS">
+              <Switch />
+            </Form.Item>
           </Col>
         </Row>
       ),
@@ -384,14 +413,7 @@ export default function ResourcesPage() {
       children: editingId && editingRecord ? (
         <div>
           {IMAGE_SLOTS.map(({ slot, label, field }) => (
-            <ResourceImageSlot
-              key={slot}
-              resourceId={editingId}
-              slot={slot}
-              label={label}
-              currentUrl={editingRecord[field] ?? null}
-              onDone={refreshEditingRecord}
-            />
+            <ResourceImageSlot key={slot} resourceId={editingId} slot={slot} label={label} currentUrl={editingRecord[field] ?? null} onDone={refreshEditingRecord} />
           ))}
         </div>
       ) : (
@@ -409,7 +431,7 @@ export default function ResourcesPage() {
               isSubstitute={editingRecord.isSubstitute}
               components={packageComponents}
               onComponentsChange={setPackageComponents}
-              allResources={data?.data ?? []}
+              allResources={allResources}
             />
           ),
         }]
@@ -417,74 +439,145 @@ export default function ResourcesPage() {
   ]
 
   return (
-    <div>
-      {/* Page header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <div>
-          <Title level={4} style={{ margin: 0 }}>Catálogo de Recursos</Title>
-          <Text type="secondary" style={{ fontSize: 13 }}>
-            Productos, servicios, personal y transporte cotizables · <Tag>{data?.meta?.total ?? 0} totales</Tag>
-          </Text>
-        </div>
-        <Space>
-          <Button
-            icon={<DownloadOutlined />}
-            onClick={() => exportToCsv('recursos', (data?.data ?? []).map((r: any) => ({
-              codigo: r.code, nombre: r.name, tipo: TYPE_LABELS[r.type] ?? r.type,
-              departamento: r.department?.name ?? '', unidad: r.unit ?? '',
-              portal: r.portalVisible ? 'Visible' : 'Oculto', activo: r.isActive ? 'Activo' : 'Inactivo',
-            })), [
-              { header: 'Código', key: 'codigo' }, { header: 'Nombre', key: 'nombre' },
-              { header: 'Tipo', key: 'tipo' }, { header: 'Departamento', key: 'departamento' },
-              { header: 'Unidad', key: 'unidad' }, { header: 'Portal', key: 'portal' }, { header: 'Activo', key: 'activo' },
-            ])}
+    <div style={{ minHeight: '100vh', background: '#fafafa' }}>
+      <PageHeader
+        title="Catálogo de Recursos"
+        meta={`Productos, servicios y personal cotizables · ${data?.meta?.total ?? 0} totales`}
+        actions={
+          <>
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={() => exportToCsv('recursos', allResources.map((r: any) => ({
+                codigo: r.code, nombre: r.name, tipo: TYPE_LABELS[r.type] ?? r.type,
+                departamento: r.department?.name ?? '', unidad: r.unit ?? '',
+                portal: r.portalVisible ? 'Visible' : 'Oculto', activo: r.isActive ? 'Activo' : 'Inactivo',
+              })), [
+                { header: 'Código', key: 'codigo' }, { header: 'Nombre', key: 'nombre' },
+                { header: 'Tipo', key: 'tipo' }, { header: 'Departamento', key: 'departamento' },
+                { header: 'Unidad', key: 'unidad' }, { header: 'Portal', key: 'portal' }, { header: 'Activo', key: 'activo' },
+              ])}
+            >
+              Exportar
+            </Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+              Nuevo recurso
+            </Button>
+          </>
+        }
+      />
+
+      {/* Split layout */}
+      <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: 0, minHeight: 'calc(100vh - 120px)' }}>
+        {/* ── Left: Category sidebar ── */}
+        <div style={{ borderRight: '1px solid #f0f0f0', background: '#fff', padding: 16 }}>
+          <div style={{ fontSize: 11, color: 'rgba(0,0,0,0.45)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>
+            Tipo de recurso
+          </div>
+
+          {/* "Todas" option */}
+          <div
+            onClick={() => { setSidebarType(''); setFilters(f => ({ ...f, type: '' })) }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '6px 10px',
+              borderRadius: 6,
+              cursor: 'pointer',
+              marginBottom: 2,
+              background: sidebarType === '' ? '#f4eeff' : 'transparent',
+              color: sidebarType === '' ? '#6B46C1' : 'rgba(0,0,0,0.88)',
+              fontWeight: sidebarType === '' ? 600 : 400,
+            }}
           >
-            Exportar
-          </Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>Nuevo recurso</Button>
-        </Space>
+            <span style={{ fontSize: 13 }}>Todos los recursos</span>
+            <Tag style={{ fontSize: 11, lineHeight: '16px', padding: '0 5px', border: 'none', background: sidebarType === '' ? '#e9d5ff' : '#f5f5f5' }}>
+              {allResources.length}
+            </Tag>
+          </div>
+
+          {/* Type options */}
+          {Object.entries(TYPE_LABELS).map(([typeKey, typeLabel]) => {
+            const count = typeCounts[typeKey] ?? 0
+            const active = sidebarType === typeKey
+            return (
+              <div
+                key={typeKey}
+                onClick={() => { setSidebarType(typeKey); setFilters(f => ({ ...f, type: typeKey })) }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '6px 10px',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  marginBottom: 2,
+                  background: active ? '#f4eeff' : 'transparent',
+                  color: active ? '#6B46C1' : 'rgba(0,0,0,0.75)',
+                  fontWeight: active ? 600 : 400,
+                  opacity: count === 0 ? 0.45 : 1,
+                }}
+              >
+                <span style={{ fontSize: 14 }}>{TYPE_EMOJI[typeKey]}</span>
+                <span style={{ fontSize: 13, flex: 1 }}>{typeLabel}</span>
+                <Tag
+                  style={{
+                    fontSize: 11, lineHeight: '16px', padding: '0 5px', border: 'none',
+                    background: active ? '#e9d5ff' : '#f5f5f5',
+                    color: active ? '#6B46C1' : 'rgba(0,0,0,0.55)',
+                  }}
+                >
+                  {count}
+                </Tag>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* ── Right: filter + table ── */}
+        <div>
+          <FilterBar
+            search={filters.search}
+            onSearch={(v) => setFilters(f => ({ ...f, search: v }))}
+            placeholder="Buscar por nombre, código…"
+          >
+            <Select
+              value={filters.active}
+              onChange={v => setFilters(f => ({ ...f, active: v }))}
+              options={[
+                { value: 'true', label: 'Activos' },
+                { value: 'false', label: 'Inactivos' },
+                { value: '', label: 'Todos' },
+              ]}
+              style={{ width: 120 }}
+            />
+          </FilterBar>
+
+          <Table
+            dataSource={displayResources}
+            columns={columns}
+            rowKey="id"
+            loading={isLoading}
+            size="middle"
+            scroll={{ x: 900 }}
+            pagination={{
+              pageSize: 25,
+              showSizeChanger: true,
+              total: displayResources.length,
+              showTotal: t => `${t} recursos`,
+              style: { padding: '12px 24px' },
+            }}
+          />
+        </div>
       </div>
 
-      {/* Tabs + Filters + Table */}
-      <Card bodyStyle={{ padding: 0 }} style={{ borderRadius: 10 }}>
-        <div style={{ padding: '12px 16px 0' }}>
-          <Tabs
-            items={tabs}
-            onChange={(key) => setFilters(f => ({ ...f, type: key }))}
-            style={{ marginBottom: 0 }}
-          />
-        </div>
-        <div style={{ padding: '12px 16px', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', borderBottom: '1px solid #f0f0f0' }}>
-          <Input.Search placeholder="Buscar por nombre, código…" onSearch={v => setFilters(f => ({ ...f, search: v }))} allowClear style={{ width: 280 }} />
-          <Select
-            value={filters.active}
-            onChange={v => setFilters(f => ({ ...f, active: v }))}
-            options={[{ value: 'true', label: 'Activos' }, { value: 'false', label: 'Inactivos' }, { value: '', label: 'Todos' }]}
-            style={{ width: 120 }}
-          />
-        </div>
-        <Table
-          dataSource={data?.data ?? []}
-          columns={columns}
-          rowKey="id"
-          loading={isLoading}
-          size="small"
-          pagination={{ pageSize: 20, total: data?.meta?.total, showTotal: t => `${t} recursos`, style: { padding: '0 16px' } }}
-          scroll={{ x: 'max-content' }}
-        />
-      </Card>
-
+      {/* ── Modal (logic unchanged) ── */}
       <Modal
         title={editingId ? 'Editar Recurso' : 'Agregar Recurso'}
         open={modalOpen}
         onCancel={() => {
-          setModalOpen(false)
-          form.resetFields()
-          setEditingId(null)
-          setEditingRecord(null)
-          setSelectedType('')
-          setIsPackage(false)
-          setPackageComponents([])
+          setModalOpen(false); form.resetFields(); setEditingId(null)
+          setEditingRecord(null); setSelectedType(''); setIsPackage(false); setPackageComponents([])
         }}
         onOk={() => form.submit()}
         width={700}

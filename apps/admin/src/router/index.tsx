@@ -36,6 +36,7 @@ import ProductionPage from '../pages/production/ProductionPage'
 import PortalUsersPage from '../pages/catalogs/portalUsers/PortalUsersPage'
 import ProfilesPage from '../pages/catalogs/profiles/ProfilesPage'
 import OrganizationsPage from '../pages/catalogs/organizations/OrganizationsPage'
+import UsersAndProfilesPage from '../pages/catalogs/users/UsersAndProfilesPage'
 import AnalysisDashboard from '../pages/analysis/AnalysisDashboard'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -69,8 +70,8 @@ export function AppRouter() {
         <Route path="catalogos/clientes/:clientId" element={<ClientDetailPage />} />
         <Route path="crm" element={<CrmDashboard />} />
         <Route path="catalogos/listas-precio" element={<PriceListsPage />} />
-        <Route path="catalogos/departamentos" element={<DepartmentsPage />} />
-        <Route path="catalogos/usuarios" element={<UsersPage />} />
+        <Route path="catalogos/departamentos" element={<Navigate to="/catalogos/organizaciones" replace />} />
+        <Route path="catalogos/usuarios" element={<Navigate to="/catalogos/usuarios-perfiles?tab=internos" replace />} />
         <Route path="dashboard/contabilidad" element={<AccountingDashboard />} />
         <Route path="dashboard/operaciones" element={<OperationsDashboard />} />
         <Route path="chat" element={<ChatPage />} />
@@ -88,8 +89,9 @@ export function AppRouter() {
         <Route path="almacen/inventario" element={<InventoryPage />} />
         <Route path="almacen/recepcion" element={<ReceiptPage />} />
         <Route path="produccion" element={<ProductionPage />} />
-        <Route path="catalogos/perfiles" element={<ProfilesPage />} />
-        <Route path="catalogos/usuarios-portal" element={<PortalUsersPage />} />
+        <Route path="catalogos/perfiles" element={<Navigate to="/catalogos/usuarios-perfiles?tab=perfiles" replace />} />
+        <Route path="catalogos/usuarios-portal" element={<Navigate to="/catalogos/usuarios-perfiles?tab=portal" replace />} />
+        <Route path="catalogos/usuarios-perfiles" element={<UsersAndProfilesPage />} />
         <Route path="catalogos/organizaciones" element={<OrganizationsPage />} />
         <Route path="analisis" element={<AnalysisDashboard />} />
       </Route>

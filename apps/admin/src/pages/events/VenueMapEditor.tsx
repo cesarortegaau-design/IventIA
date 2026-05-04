@@ -432,15 +432,15 @@ export default function VenueMapEditor({ eventId }: VenueMapEditorProps) {
                 Círculo
               </Button>
             </Space>
-            <Button.Group>
-              <Button size="small" icon={<UndoOutlined />} onClick={handleUndo} disabled={historyIndex === 0} />
-              <Button size="small" icon={<RedoOutlined />} onClick={handleRedo} disabled={historyIndex === history.length - 1} />
-            </Button.Group>
-            <Button.Group>
-              <Button size="small" icon={<ZoomInOutlined />} onClick={() => setZoom(Math.min(2, zoom + 0.1))} />
+            <Space.Compact size="small">
+              <Button icon={<UndoOutlined />} onClick={handleUndo} disabled={historyIndex === 0} />
+              <Button icon={<RedoOutlined />} onClick={handleRedo} disabled={historyIndex === history.length - 1} />
+            </Space.Compact>
+            <Space.Compact size="small">
+              <Button icon={<ZoomInOutlined />} onClick={() => setZoom(Math.min(2, zoom + 0.1))} />
               <span style={{ padding: '4px 8px', fontSize: 12 }}>{Math.round(zoom * 100)}%</span>
-              <Button size="small" icon={<ZoomOutOutlined />} onClick={() => setZoom(Math.max(0.5, zoom - 0.1))} />
-            </Button.Group>
+              <Button icon={<ZoomOutOutlined />} onClick={() => setZoom(Math.max(0.5, zoom - 0.1))} />
+            </Space.Compact>
             <Button size="small" onClick={() => setShowTemplates(true)}>
               Plantillas
             </Button>

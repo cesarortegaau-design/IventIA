@@ -1,22 +1,17 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Table, Button, Card, Tag, Row, Col, Typography, Select, Input,
-  Space, Tabs, Empty, Spin, Progress,
+  Table, Button, Tag, Row, Col, Select, Tabs, Empty, Skeleton, Progress, Typography,
 } from 'antd'
-import {
-  PlusOutlined, EyeOutlined, SearchOutlined,
-  DollarOutlined, ClockCircleOutlined, ClearOutlined,
-  FileTextOutlined, TruckOutlined,
-} from '@ant-design/icons'
-import { useNavigate } from 'react-router-dom'
+import { PlusOutlined, EyeOutlined } from '@ant-design/icons'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import dayjs from 'dayjs'
 import { purchaseOrdersApi } from '../../../api/purchaseOrders'
 import { suppliersApi } from '../../../api/suppliers'
+import { PageHeader, FilterBar, StatCard } from '../../../components/ui'
+import { formatMoney } from '../../../utils/format'
 
-const { Title, Text } = Typography
-
-const PURPLE = '#6B46C1'
+const { Text } = Typography
 
 const PO_STATUS: Record<string, { label: string; color: string }> = {
   DRAFT:              { label: 'Borrador',         color: 'default' },
@@ -27,17 +22,20 @@ const PO_STATUS: Record<string, { label: string; color: string }> = {
   CANCELLED:          { label: 'Anulada',          color: 'red' },
 }
 
-function fmt(n: number) {
-  return `$${n.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
 export default function PurchaseOrdersPage() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(20)
-  const [statusFilter, setStatusFilter] = useState<string | undefined>()
+  const [pageSize, setPageSize] = useState(25)
+  const [statusFilter, setStatusFilter] = useState<string | undefined>(searchParams.get('status') ?? undefined)
   const [supplierId, setSupplierId] = useState<string | undefined>()
   const [search, setSearch] = useState('')
+
+  function syncParams(updates: Record<string, string | undefined>) {
+    const next = new URLSearchParams(searchParams)
+    Object.entries(updates).forEach(([k, v]) => { if (v) next.set(k, v); else next.delete(k) })
+    setSearchParams(next, { replace: true })
+  }
 
   const { data: posData, isLoading } = useQuery({
     queryKey: ['purchaseOrders', page, pageSize, statusFilter, supplierId],
@@ -56,7 +54,6 @@ export default function PurchaseOrdersPage() {
   const allPOs: any[] = posData?.data ?? []
   const meta = posData?.meta
 
-  // Stats from current data
   const stats = useMemo(() => {
     let totalAmount = 0
     let pendingDelivery = 0
@@ -71,20 +68,24 @@ export default function PurchaseOrdersPage() {
     return { totalAmount, pendingDelivery, activeCount }
   }, [allPOs])
 
-  // Status counts
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = {}
     allPOs.forEach((po: any) => { counts[po.status] = (counts[po.status] || 0) + 1 })
     return counts
   }, [allPOs])
 
-  const clearFilters = () => { setStatusFilter(undefined); setSupplierId(undefined); setSearch('') }
   const hasFilters = !!(statusFilter || supplierId || search)
+  function clearFilters() { setStatusFilter(undefined); setSupplierId(undefined); setSearch(''); setPage(1); setSearchParams(new URLSearchParams(), { replace: true }) }
 
-  const supplierOptions = (suppliersData?.data ?? []).map((s: any) => ({
-    value: s.id,
-    label: s.name,
-  }))
+  const supplierOptions = (suppliersData?.data ?? []).map((s: any) => ({ value: s.id, label: s.name }))
+
+  const tabItems = [
+    { key: 'all', label: `Todas (${meta?.total ?? allPOs.length})` },
+    ...Object.entries(PO_STATUS).map(([key, { label }]) => ({
+      key,
+      label: `${label} (${statusCounts[key] || 0})`,
+    })),
+  ]
 
   const columns = [
     {
@@ -92,7 +93,11 @@ export default function PurchaseOrdersPage() {
       dataIndex: 'orderNumber',
       width: 130,
       render: (v: string, r: any) => (
-        <Button type="link" style={{ padding: 0, fontWeight: 600, color: PURPLE, fontVariantNumeric: 'tabular-nums' }} onClick={() => navigate(`/catalogos/ordenes-compra/${r.id}`)}>
+        <Button
+          type="link"
+          style={{ padding: 0, fontWeight: 600, color: '#6B46C1', fontVariantNumeric: 'tabular-nums' }}
+          onClick={() => navigate(`/catalogos/ordenes-compra/${r.id}`)}
+        >
           {v}
         </Button>
       ),
@@ -106,7 +111,12 @@ export default function PurchaseOrdersPage() {
     {
       title: 'Origen OS',
       render: (_: any, r: any) => r.originOrder ? (
-        <Button type="link" size="small" style={{ padding: 0, color: PURPLE }} onClick={() => navigate(`/ordenes/${r.originOrder.id}`)}>
+        <Button
+          type="link"
+          size="small"
+          style={{ padding: 0, color: '#6B46C1' }}
+          onClick={() => navigate(`/ordenes/${r.originOrder.id}`)}
+        >
           {r.originOrder.orderNumber}
         </Button>
       ) : <Text type="secondary">—</Text>,
@@ -115,26 +125,38 @@ export default function PurchaseOrdersPage() {
       title: 'Emisión',
       dataIndex: 'createdAt',
       width: 100,
-      render: (v: string) => <Text style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>{dayjs(v).format('DD/MM/YY')}</Text>,
+      render: (v: string) => (
+        <span style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>{dayjs(v).format('DD/MM/YY')}</span>
+      ),
     },
     {
       title: 'Entrega',
       dataIndex: 'requiredDeliveryDate',
       width: 100,
-      render: (v: string) => v ? <Text style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>{dayjs(v).format('DD/MM/YY')}</Text> : <Text type="secondary">—</Text>,
+      render: (v: string) => v
+        ? <span style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>{dayjs(v).format('DD/MM/YY')}</span>
+        : <Text type="secondary">—</Text>,
     },
     {
       title: 'Recepción',
       key: 'reception',
-      width: 140,
+      width: 160,
       render: (_: any, r: any) => {
         const items = r.lineItems?.length || r._count?.lineItems || 0
         const received = r.lineItems?.filter((li: any) => parseFloat(li.receivedQty) >= parseFloat(li.quantity)).length || 0
-        const pct = items > 0 ? (received / items) * 100 : 0
+        const pct = items > 0 ? Math.round((received / items) * 100) : 0
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Progress percent={pct} size="small" showInfo={false} strokeColor={pct === 100 ? '#16a34a' : '#f59e0b'} style={{ flex: 1 }} />
-            <Text style={{ fontSize: 11, color: 'rgba(0,0,0,0.55)', fontVariantNumeric: 'tabular-nums', minWidth: 32 }}>{received}/{items}</Text>
+            <Progress
+              percent={pct}
+              size="small"
+              showInfo={false}
+              strokeColor={pct === 100 ? '#16a34a' : '#f59e0b'}
+              style={{ flex: 1 }}
+            />
+            <Text style={{ fontSize: 11, color: 'rgba(0,0,0,0.55)', fontVariantNumeric: 'tabular-nums', minWidth: 32 }}>
+              {received}/{items}
+            </Text>
           </div>
         )
       },
@@ -144,7 +166,11 @@ export default function PurchaseOrdersPage() {
       dataIndex: 'total',
       width: 120,
       align: 'right' as const,
-      render: (v: string) => <Text strong style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(parseFloat(v))}</Text>,
+      render: (v: string) => (
+        <Text strong style={{ fontVariantNumeric: 'tabular-nums' }}>
+          {formatMoney(parseFloat(v), 'MXN')}
+        </Text>
+      ),
     },
     {
       title: 'Estado',
@@ -159,110 +185,118 @@ export default function PurchaseOrdersPage() {
       title: '',
       key: 'actions',
       width: 50,
+      fixed: 'right' as const,
       render: (_: any, r: any) => (
-        <Button type="text" size="small" icon={<EyeOutlined />} onClick={() => navigate(`/catalogos/ordenes-compra/${r.id}`)} />
+        <Button
+          type="text"
+          size="small"
+          icon={<EyeOutlined />}
+          onClick={() => navigate(`/catalogos/ordenes-compra/${r.id}`)}
+        />
       ),
     },
   ]
 
-  const tabItems = [
-    { key: 'all', label: `Todas (${meta?.total ?? allPOs.length})` },
-    ...Object.entries(PO_STATUS).map(([key, { label }]) => ({
-      key,
-      label: `${label} (${statusCounts[key] || 0})`,
-    })),
-  ]
-
   return (
     <div>
-      {/* Page header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <div>
-          <Title level={4} style={{ margin: 0 }}>Órdenes de Compra</Title>
-          <Text type="secondary" style={{ fontSize: 13 }}>
-            Compras a proveedores derivadas de OS · <Tag>{meta?.total ?? allPOs.length} totales</Tag>
-          </Text>
-        </div>
-        <Space>
-          <Button icon={<FileTextOutlined />}>Importar</Button>
+      <PageHeader
+        title="Órdenes de Compra"
+        meta={`Compras a proveedores derivadas de OS · ${meta?.total ?? allPOs.length} totales`}
+        actions={
           <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/catalogos/ordenes-compra/nueva')}>
             Nueva OC
           </Button>
-        </Space>
-      </div>
-
-      {/* Stats cards */}
-      <Row gutter={[12, 12]} style={{ marginBottom: 20 }}>
-        {[
-          { title: 'Comprometido', value: fmt(stats.totalAmount), color: '#1a3a5c' },
-          { title: 'Pendiente de recibir', value: fmt(stats.pendingDelivery), color: '#f59e0b' },
-          { title: 'OC activas', value: stats.activeCount, color: PURPLE },
-          { title: 'Total OC', value: meta?.total ?? allPOs.length, color: '#0ea5e9' },
-        ].map(card => (
-          <Col xs={24} sm={12} lg={6} key={card.title}>
-            <Card bodyStyle={{ padding: 16 }} style={{ borderRadius: 10 }}>
-              <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.5)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{card.title}</div>
-              <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, fontVariantNumeric: 'tabular-nums', color: card.color }}>{card.value}</div>
-            </Card>
-          </Col>
-        ))}
-      </Row>
-
-      {/* Status tabs */}
-      <Tabs
-        activeKey={statusFilter || 'all'}
-        onChange={k => { setStatusFilter(k === 'all' ? undefined : k); setPage(1) }}
-        items={tabItems}
-        style={{ marginBottom: 4 }}
+        }
+        tabs={
+          <Tabs
+            activeKey={statusFilter || 'all'}
+            onChange={(k) => {
+              const next = k === 'all' ? undefined : k
+              setStatusFilter(next)
+              setPage(1)
+              syncParams({ status: next })
+            }}
+            items={tabItems}
+            style={{ marginBottom: -1 }}
+          />
+        }
       />
 
+      {/* KPI cards */}
+      <div style={{ padding: '20px 24px 4px', background: '#fafafa' }}>
+        <Row gutter={[12, 12]}>
+          <Col xs={24} sm={12} lg={6}>
+            <StatCard label="Comprometido" value={formatMoney(stats.totalAmount, 'MXN')} tone="default" hint="Total en OC" />
+          </Col>
+          <Col xs={24} sm={12} lg={6}>
+            <StatCard label="Pendiente de recibir" value={formatMoney(stats.pendingDelivery, 'MXN')} tone="warning" hint="Confirmadas + parciales" />
+          </Col>
+          <Col xs={24} sm={12} lg={6}>
+            <StatCard label="OC activas" value={stats.activeCount} tone="primary" hint="Confirmadas y en recepción" />
+          </Col>
+          <Col xs={24} sm={12} lg={6}>
+            <StatCard label="Total OC" value={meta?.total ?? allPOs.length} tone="info" />
+          </Col>
+        </Row>
+      </div>
+
       {/* Filters */}
-      <Card bodyStyle={{ padding: '12px 16px' }} style={{ marginBottom: 16, borderRadius: 10 }}>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-          <Input
-            prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
-            placeholder="Buscar OC, proveedor, OS…"
-            style={{ width: 260 }}
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            allowClear
-          />
-          <Select
-            placeholder="Proveedor"
-            allowClear
-            value={supplierId}
-            onChange={v => { setSupplierId(v); setPage(1) }}
-            showSearch
-            filterOption={(input, opt) => String(opt?.label ?? '').toLowerCase().includes(input.toLowerCase())}
-            options={supplierOptions}
-            style={{ minWidth: 200 }}
-          />
-          {hasFilters && (
-            <Button icon={<ClearOutlined />} type="text" style={{ color: PURPLE }} onClick={clearFilters}>
+      <FilterBar
+        search={search}
+        onSearch={(v) => { setSearch(v); setPage(1) }}
+        placeholder="Buscar OC, proveedor…"
+        right={
+          hasFilters ? (
+            <Button type="link" style={{ color: '#6B46C1', paddingLeft: 0 }} onClick={clearFilters}>
               Limpiar filtros
             </Button>
-          )}
-        </div>
-      </Card>
+          ) : undefined
+        }
+      >
+        <Select
+          placeholder="Proveedor"
+          allowClear
+          value={supplierId}
+          onChange={(v) => { setSupplierId(v); setPage(1) }}
+          showSearch
+          filterOption={(input, opt) => String(opt?.label ?? '').toLowerCase().includes(input.toLowerCase())}
+          options={supplierOptions}
+          style={{ minWidth: 200 }}
+        />
+      </FilterBar>
 
       {/* Table */}
-      <Card bodyStyle={{ padding: 0 }} style={{ borderRadius: 10 }}>
-        <Table
-          dataSource={allPOs}
-          columns={columns}
-          rowKey="id"
-          loading={isLoading}
-          size="small"
-          scroll={{ x: 900 }}
-          pagination={{
-            current: page,
-            pageSize,
-            total: meta?.total,
-            onChange: (p, ps) => { setPage(p); setPageSize(ps) },
-            showTotal: t => `${t} órdenes`,
-          }}
-        />
-      </Card>
+      <div style={{ background: '#fff' }}>
+        {isLoading ? (
+          <div style={{ padding: 24 }}>
+            <Skeleton active paragraph={{ rows: 8 }} />
+          </div>
+        ) : allPOs.length === 0 ? (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={hasFilters ? 'Sin resultados para los filtros aplicados' : 'No hay órdenes de compra aún'}
+            style={{ padding: 64 }}
+          >
+            {hasFilters && <Button onClick={clearFilters}>Limpiar filtros</Button>}
+          </Empty>
+        ) : (
+          <Table
+            dataSource={allPOs}
+            columns={columns}
+            rowKey="id"
+            size="middle"
+            scroll={{ x: 1000 }}
+            pagination={{
+              current: page,
+              pageSize,
+              total: meta?.total,
+              showSizeChanger: true,
+              onChange: (p, ps) => { setPage(p); setPageSize(ps) },
+              showTotal: t => `${t} órdenes`,
+            }}
+          />
+        )}
+      </div>
     </div>
   )
 }

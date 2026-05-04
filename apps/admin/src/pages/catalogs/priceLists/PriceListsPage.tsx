@@ -2,20 +2,25 @@ import { useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Table, Button, Card, Space, Tag, Modal, Form, Input, DatePicker,
-  InputNumber, Typography, Row, Col, App, Select
+  InputNumber, Typography, Row, Col, App, Select, Empty, Avatar, Divider,
 } from 'antd'
-import { PlusOutlined, EditOutlined, EyeOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons'
+import {
+  PlusOutlined, EditOutlined, DownloadOutlined, UploadOutlined,
+  OrderedListOutlined, MoreOutlined,
+} from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { priceListsApi } from '../../../api/priceLists'
 import { resourcesApi } from '../../../api/resources'
 import { exportToCsv } from '../../../utils/exportCsv'
+import { PageHeader } from '../../../components/ui'
+import { formatMoney, getInitials, getAvatarColors } from '../../../utils/format'
 
-const { Title } = Typography
+const { Text } = Typography
 
 const TIME_UNIT_OPTIONS = [
-  { value: 'no aplica',       label: 'no aplica' },
-  { value: 'horas',           label: 'horas' },
-  { value: 'días',            label: 'días' },
+  { value: 'no aplica',        label: 'no aplica' },
+  { value: 'horas',            label: 'horas' },
+  { value: 'días',             label: 'días' },
   { value: 'horas sin factor', label: 'horas sin factor' },
   { value: 'días sin factor',  label: 'días sin factor' },
 ]
@@ -67,7 +72,8 @@ export default function PriceListsPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [itemModalOpen, setItemModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [viewingId, setViewingId] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)   // sidebar selection
+  const [viewingId, setViewingId] = useState<string | null>(null)     // items modal
   const [selectedResourceId, setSelectedResourceId] = useState<string | null>(null)
   const [packageQty, setPackageQty] = useState<number>(1)
   const [importPreview, setImportPreview] = useState<any[] | null>(null)
@@ -203,55 +209,251 @@ export default function PriceListsPage() {
     ])
   }
 
+  const allLists: any[] = data?.data ?? []
+  const selectedList = allLists.find((l: any) => l.id === selectedId)
+
   const columns = [
-    { title: 'Nombre', dataIndex: 'name', key: 'name' },
-    { title: 'Precio Anticipado hasta', dataIndex: 'earlyCutoff', render: (v: string) => v ? dayjs(v).format('DD/MM/YYYY') : '—' },
-    { title: 'Precio Normal hasta', dataIndex: 'normalCutoff', render: (v: string) => v ? dayjs(v).format('DD/MM/YYYY') : '—' },
-    { title: 'Descuento %', dataIndex: 'discountPct', render: (v: number) => `${v}%` },
-    { title: 'Artículos', render: (_: any, r: any) => r._count?.items ?? 0 },
     {
-      title: 'Activo', dataIndex: 'isActive',
-      render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? 'Activo' : 'Inactivo'}</Tag>,
+      title: 'Lista',
+      render: (_: any, r: any) => (
+        <div>
+          <Text strong style={{ fontSize: 13 }}>{r.name}</Text>
+          <div style={{ fontSize: 11, color: 'rgba(0,0,0,0.45)', marginTop: 1 }}>
+            {r._count?.items ?? 0} artículos · {r.discountPct ?? 0}% desc. máx.
+          </div>
+        </div>
+      ),
     },
     {
-      title: '', key: 'actions',
+      title: 'Moneda',
+      dataIndex: 'currency',
+      width: 80,
+      render: (v: string) => <Tag>{v || 'MXN'}</Tag>,
+    },
+    {
+      title: 'Items',
+      width: 70,
       render: (_: any, r: any) => (
-        <Space>
-          <Button size="small" icon={<EyeOutlined />} onClick={() => setViewingId(r.id)}>Ver artículos</Button>
-          <Button size="small" icon={<EditOutlined />} onClick={() => { setEditingId(r.id); form.setFieldsValue({ ...r, earlyCutoff: r.earlyCutoff ? dayjs(r.earlyCutoff) : null, normalCutoff: r.normalCutoff ? dayjs(r.normalCutoff) : null }); setModalOpen(true) }} />
-        </Space>
+        <Text style={{ fontVariantNumeric: 'tabular-nums' }}>{r._count?.items ?? 0}</Text>
+      ),
+    },
+    {
+      title: 'Vigencia',
+      width: 200,
+      render: (_: any, r: any) => (
+        <span style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+          {r.earlyCutoff ? dayjs(r.earlyCutoff).format('DD/MM/YY') : '—'}
+          {' → '}
+          {r.normalCutoff ? dayjs(r.normalCutoff).format('DD/MM/YY') : '—'}
+        </span>
+      ),
+    },
+    {
+      title: 'Estado',
+      dataIndex: 'isActive',
+      width: 90,
+      render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? 'Activa' : 'Inactiva'}</Tag>,
+    },
+    {
+      title: '',
+      key: 'actions',
+      width: 50,
+      render: (_: any, r: any) => (
+        <Button
+          type="text"
+          size="small"
+          icon={<MoreOutlined />}
+          onClick={(e) => {
+            e.stopPropagation()
+            setEditingId(r.id)
+            form.setFieldsValue({
+              ...r,
+              earlyCutoff: r.earlyCutoff ? dayjs(r.earlyCutoff) : null,
+              normalCutoff: r.normalCutoff ? dayjs(r.normalCutoff) : null,
+            })
+            setModalOpen(true)
+          }}
+        />
       ),
     },
   ]
 
   return (
     <div>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>Listas de Precio</Title>
-        <Space>
-          <Button
-            icon={<DownloadOutlined />}
-            onClick={() => exportToCsv('listas-de-precio', (data?.data ?? []).map((r: any) => ({
-              nombre: r.name,
-              activo: r.isActive ? 'Activo' : 'Inactivo',
-            })), [
-              { header: 'Nombre', key: 'nombre' },
-              { header: 'Activo', key: 'activo' },
-            ])}
-          >
-            Exportar CSV
-          </Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true) }}>
-            Nueva Lista
-          </Button>
-        </Space>
-      </Row>
+      <PageHeader
+        title="Listas de Precio"
+        meta={`Tarifas para clientes · ${allLists.length} listas`}
+        actions={
+          <Space>
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={() => exportToCsv('listas-de-precio', allLists.map((r: any) => ({
+                nombre: r.name,
+                activo: r.isActive ? 'Activo' : 'Inactivo',
+              })), [
+                { header: 'Nombre', key: 'nombre' },
+                { header: 'Activo', key: 'activo' },
+              ])}
+            >
+              Exportar
+            </Button>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true) }}
+            >
+              Nueva Lista
+            </Button>
+          </Space>
+        }
+      />
 
-      <Card>
-        <Table dataSource={data?.data ?? []} columns={columns} rowKey="id" loading={isLoading} size="small" />
-      </Card>
+      {/* Split layout */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 0, minHeight: 'calc(100vh - 120px)', background: '#f5f5f5' }}>
+        {/* Left — table */}
+        <div style={{ background: '#fff', borderRight: '1px solid #f0f0f0' }}>
+          <Table
+            dataSource={allLists}
+            columns={columns}
+            rowKey="id"
+            loading={isLoading}
+            size="middle"
+            pagination={false}
+            onRow={(r) => ({
+              onClick: () => setSelectedId(r.id === selectedId ? null : r.id),
+              style: {
+                cursor: 'pointer',
+                background: r.id === selectedId ? '#f4eeff' : undefined,
+              },
+            })}
+          />
+        </div>
 
-      {/* Price list detail modal */}
+        {/* Right — detail panel */}
+        <div style={{ padding: 20 }}>
+          {!selectedList ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300 }}>
+              <Empty description="Selecciona una lista para ver su detalle" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            </div>
+          ) : (
+            <Card size="small" styles={{ body: { padding: 0 } }}>
+              {/* Header */}
+              <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid #f0f0f0' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                  <div style={{
+                    width: 44, height: 44, borderRadius: 10,
+                    background: '#f4eeff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 22, flexShrink: 0,
+                  }}>
+                    💰
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <Text strong style={{ fontSize: 15, display: 'block' }}>{selectedList.name}</Text>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {selectedList._count?.items ?? 0} artículos
+                    </Text>
+                  </div>
+                  <Button
+                    size="small"
+                    icon={<EditOutlined />}
+                    onClick={() => {
+                      setEditingId(selectedList.id)
+                      form.setFieldsValue({
+                        ...selectedList,
+                        earlyCutoff: selectedList.earlyCutoff ? dayjs(selectedList.earlyCutoff) : null,
+                        normalCutoff: selectedList.normalCutoff ? dayjs(selectedList.normalCutoff) : null,
+                      })
+                      setModalOpen(true)
+                    }}
+                  >
+                    Editar
+                  </Button>
+                </div>
+              </div>
+
+              {/* Stats 2×2 */}
+              <div style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                {[
+                  {
+                    label: 'Precio Anticipado hasta',
+                    value: selectedList.earlyCutoff ? dayjs(selectedList.earlyCutoff).format('DD/MM/YYYY') : '—',
+                  },
+                  {
+                    label: 'Precio Normal hasta',
+                    value: selectedList.normalCutoff ? dayjs(selectedList.normalCutoff).format('DD/MM/YYYY') : '—',
+                  },
+                  {
+                    label: 'Items',
+                    value: String(selectedList._count?.items ?? 0),
+                  },
+                  {
+                    label: 'Descuento base',
+                    value: `${selectedList.discountPct ?? 0}%`,
+                  },
+                ].map((stat) => (
+                  <div key={stat.label} style={{ background: '#fafafa', borderRadius: 8, padding: '10px 12px' }}>
+                    <div style={{ fontSize: 11, color: 'rgba(0,0,0,0.45)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      {stat.label}
+                    </div>
+                    <div style={{ fontSize: 16, fontWeight: 700, marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>
+                      {stat.value}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <Divider style={{ margin: 0 }} />
+
+              {/* Actions */}
+              <div style={{ padding: '12px 20px', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <Button
+                  size="small"
+                  icon={<OrderedListOutlined />}
+                  onClick={() => { setViewingId(selectedList.id) }}
+                >
+                  Ver artículos
+                </Button>
+                <Button
+                  size="small"
+                  icon={<UploadOutlined />}
+                  onClick={() => { setViewingId(selectedList.id); fileInputRef.current?.click() }}
+                >
+                  Importar CSV
+                </Button>
+                <Button
+                  size="small"
+                  icon={<DownloadOutlined />}
+                  onClick={downloadTemplate}
+                >
+                  Plantilla
+                </Button>
+              </div>
+
+              {/* Price rules summary */}
+              <Divider style={{ margin: 0 }} />
+              <div style={{ padding: '12px 20px 16px' }}>
+                <Text style={{ fontSize: 12, fontWeight: 600, color: 'rgba(0,0,0,0.65)', display: 'block', marginBottom: 8 }}>
+                  Reglas de precio
+                </Text>
+                <ul style={{ paddingLeft: 16, margin: 0, fontSize: 12, color: 'rgba(0,0,0,0.55)', lineHeight: '22px' }}>
+                  <li>
+                    Anticipado: hasta {selectedList.earlyCutoff ? dayjs(selectedList.earlyCutoff).format('DD/MM/YYYY') : 'sin fecha'}
+                  </li>
+                  <li>
+                    Normal: hasta {selectedList.normalCutoff ? dayjs(selectedList.normalCutoff).format('DD/MM/YYYY') : 'sin fecha'}
+                  </li>
+                  <li>Tardío: después del precio normal</li>
+                  {(selectedList.discountPct ?? 0) > 0 && (
+                    <li>Descuento máximo autorizado: {selectedList.discountPct}%</li>
+                  )}
+                </ul>
+              </div>
+            </Card>
+          )}
+        </div>
+      </div>
+
+      {/* Items modal */}
       <Modal
         title={`Artículos — ${detailData?.data?.name}`}
         open={!!viewingId}
@@ -282,16 +484,18 @@ export default function PriceListsPage() {
             { title: 'Factor', render: (_: any, r: any) => r.resource?.factor != null ? Number(r.resource.factor) : 1 },
             { title: 'Unidad de Tiempo', dataIndex: 'timeUnit', render: (v: string) => v || 'no aplica' },
             { title: 'Detalle', dataIndex: 'detail', render: (v: string) => v || '—' },
-            { title: 'P. Anticipado', dataIndex: 'earlyPrice', render: (v: number) => `$${Number(v).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` },
-            { title: 'P. Normal', dataIndex: 'normalPrice', render: (v: number) => `$${Number(v).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` },
-            { title: 'P. Tardío', dataIndex: 'latePrice', render: (v: number) => `$${Number(v).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` },
+            { title: 'P. Anticipado', dataIndex: 'earlyPrice', render: (v: number) => formatMoney(Number(v), 'MXN') },
+            { title: 'P. Normal', dataIndex: 'normalPrice', render: (v: number) => formatMoney(Number(v), 'MXN') },
+            { title: 'P. Tardío', dataIndex: 'latePrice', render: (v: number) => formatMoney(Number(v), 'MXN') },
           ]}
           expandable={{
             expandedRowRender: (r: any) => {
               if (!r.resource?.isPackage || !r.resource?.packageComponents?.length) return null
               return (
                 <div style={{ padding: '12px 0' }}>
-                  <strong style={{ fontSize: '12px', marginBottom: '8px', display: 'block' }}>📦 Componentes requeridos por {r.resource?.unit || 'paquete'}</strong>
+                  <strong style={{ fontSize: '12px', marginBottom: '8px', display: 'block' }}>
+                    📦 Componentes requeridos por {r.resource?.unit || 'paquete'}
+                  </strong>
                   <Table
                     dataSource={r.resource.packageComponents}
                     rowKey="componentResourceId"
@@ -347,6 +551,7 @@ export default function PriceListsPage() {
         onCancel={() => setModalOpen(false)}
         onOk={() => form.submit()}
         confirmLoading={saveMutation.isPending}
+        forceRender
       >
         <Form form={form} layout="vertical" onFinish={saveMutation.mutate}>
           <Form.Item name="name" label="Nombre" rules={[{ required: true }]}><Input /></Form.Item>
@@ -380,6 +585,7 @@ export default function PriceListsPage() {
         onOk={() => itemForm.submit()}
         confirmLoading={addItemMutation.isPending}
         width={800}
+        forceRender
       >
         <Form form={itemForm} layout="vertical" onFinish={addItemMutation.mutate}>
           <Form.Item name="resourceId" label="Recurso" rules={[{ required: true }]}>

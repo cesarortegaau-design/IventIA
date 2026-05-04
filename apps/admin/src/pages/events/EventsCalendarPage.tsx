@@ -341,7 +341,7 @@ export default function EventsCalendarPage() {
         <Title level={4} style={{ margin: 0 }}>Calendario de Eventos</Title>
         <Space wrap>
           {/* View toggle */}
-          <Button.Group>
+          <Space.Compact>
             {(['week', 'month', 'list'] as const).map(v => (
               <Button
                 key={v}
@@ -353,7 +353,7 @@ export default function EventsCalendarPage() {
                 {v === 'week' ? 'Semana' : v === 'month' ? 'Mes' : 'Lista'}
               </Button>
             ))}
-          </Button.Group>
+          </Space.Compact>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/eventos/nuevo')}>
             Nuevo Evento
           </Button>
@@ -361,7 +361,7 @@ export default function EventsCalendarPage() {
       </Row>
 
       {/* ── Filters + navigation ── */}
-      <Card style={{ marginBottom: 16 }} bodyStyle={{ padding: '12px 16px' }}>
+      <Card style={{ marginBottom: 16 }} styles={{ body: { padding: '12px 16px' } }}>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
           <Input.Search
             placeholder="Buscar evento..."
@@ -410,7 +410,7 @@ export default function EventsCalendarPage() {
 
       {/* ── Calendar ── */}
       {view !== 'list' ? (
-        <Card bodyStyle={{ padding: 0 }} loading={isLoading} style={{ borderRadius: 12, overflow: 'hidden' }}>
+        <Card styles={{ body: { padding: 0 } }} loading={isLoading} style={{ borderRadius: 12, overflow: 'hidden' }}>
           {view === 'week' ? (
             <WeekView weekStart={weekStart} events={events} navigate={navigate} />
           ) : (

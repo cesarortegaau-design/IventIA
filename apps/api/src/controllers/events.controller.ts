@@ -86,9 +86,8 @@ export async function getEvent(req: Request, res: Response, next: NextFunction) 
       include: {
         primaryClient: true,
         priceList: true,
-        spaces: { include: { resource: true } },
-        stands: { include: { client: true, _count: { select: { orders: true } } } },
         documents: true,
+        ticketEvent: { include: { sections: true } },
         orders: {
           where: ordersWhere,
           include: {
@@ -96,6 +95,7 @@ export async function getEvent(req: Request, res: Response, next: NextFunction) 
             stand: { select: { id: true, code: true } },
             organizacion: { select: { id: true, clave: true, descripcion: true } },
             contract: { select: { id: true, contractNumber: true, description: true, status: true, totalAmount: true, paidAmount: true, client: { select: { id: true, companyName: true, firstName: true, lastName: true } } } },
+            assignedTo: { select: { id: true, firstName: true, lastName: true } },
           },
           orderBy: { createdAt: 'desc' },
         },

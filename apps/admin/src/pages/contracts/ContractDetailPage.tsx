@@ -525,6 +525,7 @@ export default function ContractDetailPage() {
         onCancel={() => setEditModalOpen(false)}
         onOk={() => editForm.submit()}
         confirmLoading={updateMutation.isPending}
+        forceRender
       >
         <Form form={editForm} layout="vertical" onFinish={handleEditSubmit}>
           <Form.Item name="description" label="Descripción" rules={[{ required: true }]}>
@@ -592,6 +593,7 @@ export default function ContractDetailPage() {
         onCancel={() => { setSpModalOpen(false); setEditingSpId(null) }}
         onOk={() => spForm.submit()}
         confirmLoading={addSpMutation.isPending || updateSpMutation.isPending}
+        forceRender
       >
         <Form form={spForm} layout="vertical" onFinish={handleSpSubmit}>
           <Form.Item name="label" label="Concepto" rules={[{ required: true, message: 'Requerido' }]}>
@@ -644,6 +646,7 @@ export default function ContractDetailPage() {
         onCancel={() => setPaymentModalOpen(false)}
         onOk={() => paymentForm.submit()}
         confirmLoading={addPaymentMutation.isPending}
+        forceRender
       >
         <Form form={paymentForm} layout="vertical" onFinish={handlePaymentSubmit}>
           <Form.Item name="method" label="Método de Pago" rules={[{ required: true, message: 'Requerido' }]}>

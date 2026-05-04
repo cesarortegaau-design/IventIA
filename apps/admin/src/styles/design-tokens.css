@@ -1,0 +1,18 @@
+:root {
+  --iv-primary: #6B46C1;
+  --iv-primary-bg: #f4eeff;
+  --iv-primary-border: #d3adf7;
+  --iv-success: #16a34a;
+  --iv-warning: #f59e0b;
+  --iv-error: #ef4444;
+  --iv-info: #0ea5e9;
+  --iv-text: rgba(0,0,0,0.88);
+  --iv-text-secondary: rgba(0,0,0,0.65);
+  --iv-text-muted: rgba(0,0,0,0.45);
+  --iv-border: #f0f0f0;
+  --iv-bg-subtle: #fafafa;
+}
+
+.iv-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-feature-settings: 'tnum'; }
+.iv-num { font-variant-numeric: tabular-nums; }
+.iv-uppercase-label { font-size: 11px; color: var(--iv-text-muted); text-transform: uppercase; letter-spacing: 0.04em; }

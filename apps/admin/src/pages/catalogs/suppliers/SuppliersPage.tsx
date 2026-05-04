@@ -1,25 +1,37 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Table, Button, Card, Space, Tag, Modal, Form, Input, Select, Row, Col, App, Typography, Tabs, InputNumber, DatePicker, Popconfirm, Badge, Divider, Avatar } from 'antd'
-import { PlusOutlined, EditOutlined, KeyOutlined, StopOutlined, SearchOutlined, EyeOutlined, StarFilled } from '@ant-design/icons'
+import {
+  Table, Button, Tag, Modal, Form, Input, Select, Row, Col, App, Typography,
+  Tabs, InputNumber, DatePicker, Popconfirm, Badge, Divider, Avatar,
+  Space, Skeleton, Empty,
+} from 'antd'
+import {
+  PlusOutlined, EditOutlined, KeyOutlined, StopOutlined, MoreOutlined,
+  StarFilled,
+} from '@ant-design/icons'
 import { suppliersApi } from '../../../api/suppliers'
 import dayjs from 'dayjs'
+import { PageHeader, FilterBar, StatCard } from '../../../components/ui'
+import { getInitials, getAvatarColors } from '../../../utils/format'
 
-const { Title, Text } = Typography
-const PURPLE = '#6B46C1'
+const { Text } = Typography
 
 const SUPPLIER_TYPES = [
-  { value: 'DISTRIBUTOR', label: 'Distribuidor' },
+  { value: 'DISTRIBUTOR',  label: 'Distribuidor' },
   { value: 'MANUFACTURER', label: 'Fabricante' },
-  { value: 'WHOLESALER', label: 'Mayorista' },
-  { value: 'SERVICES', label: 'Servicios' },
+  { value: 'WHOLESALER',   label: 'Mayorista' },
+  { value: 'SERVICES',     label: 'Servicios' },
 ]
 
 const SUPPLIER_STATUSES = [
-  { value: 'ACTIVE', label: 'Activo' },
+  { value: 'ACTIVE',   label: 'Activo' },
   { value: 'INACTIVE', label: 'Inactivo' },
-  { value: 'BLOCKED', label: 'Bloqueado' },
+  { value: 'BLOCKED',  label: 'Bloqueado' },
 ]
+
+const STATUS_COLORS: Record<string, string> = {
+  ACTIVE: 'green', INACTIVE: 'default', BLOCKED: 'red',
+}
 
 export default function SuppliersPage() {
   const [form] = Form.useForm()
@@ -29,8 +41,16 @@ export default function SuppliersPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(20)
+  const [pageSize, setPageSize] = useState(25)
   const [activeModalTab, setActiveModalTab] = useState('info')
+  const [search, setSearch] = useState('')
+  const [typeFilter, setTypeFilter] = useState<string | undefined>()
+  const [statusFilter, setStatusFilter] = useState<string | undefined>()
+
+  const { data: suppliersData, isLoading } = useQuery({
+    queryKey: ['suppliers', page, pageSize],
+    queryFn: () => suppliersApi.list({ page, pageSize }).then(r => r.data),
+  })
 
   const { data: codesData, isLoading: loadingCodes } = useQuery({
     queryKey: ['supplier-portal-codes', editingId],
@@ -58,11 +78,6 @@ export default function SuppliersPage() {
       queryClient.invalidateQueries({ queryKey: ['supplier-portal-codes', editingId] })
       message.success('Código revocado')
     },
-  })
-
-  const { data: suppliersData, isLoading } = useQuery({
-    queryKey: ['suppliers', page, pageSize],
-    queryFn: () => suppliersApi.list({ page, pageSize }).then(r => r.data),
   })
 
   const saveMutation = useMutation({
@@ -108,112 +123,211 @@ export default function SuppliersPage() {
     setModalOpen(true)
   }
 
-  const suppliers = suppliersData?.data ?? []
-  const COLORS = ['#fef3c7/#92400e', '#dbeafe/#1e40af', '#fce7f3/#9f1239', '#f3e8ff/#6b21a8', '#dcfce7/#166534', '#fee2e2/#991b1b']
+  const allSuppliers: any[] = suppliersData?.data ?? []
+
+  const stats = useMemo(() => {
+    const active = allSuppliers.filter((s: any) => s.status === 'ACTIVE').length
+    const inactive = allSuppliers.filter((s: any) => s.status === 'INACTIVE').length
+    const blocked = allSuppliers.filter((s: any) => s.status === 'BLOCKED').length
+    return { active, inactive, blocked }
+  }, [allSuppliers])
+
+  const filtered = useMemo(() => {
+    return allSuppliers.filter((s: any) => {
+      if (typeFilter && s.type !== typeFilter) return false
+      if (statusFilter && s.status !== statusFilter) return false
+      if (search) {
+        const q = search.toLowerCase()
+        const name = (s.name ?? '').toLowerCase()
+        const rfc = (s.rfc ?? '').toLowerCase()
+        const code = (s.code ?? '').toLowerCase()
+        if (!name.includes(q) && !rfc.includes(q) && !code.includes(q)) return false
+      }
+      return true
+    })
+  }, [allSuppliers, typeFilter, statusFilter, search])
+
+  const hasFilters = !!(typeFilter || statusFilter || search)
 
   const columns = [
     {
-      title: 'Proveedor', key: 'name',
+      title: 'Proveedor',
       render: (_: any, r: any) => {
-        const initials = (r.name || '').split(' ').map((s: string) => s[0]).slice(0, 2).join('').toUpperCase()
-        const idx = (r.id?.charCodeAt(0) || 0) % COLORS.length
-        const [bg, fg] = COLORS[idx].split('/')
+        const { bg, fg } = getAvatarColors(r.name ?? '')
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Avatar size={32} style={{ background: bg, color: fg, fontSize: 12, fontWeight: 600 }}>{initials}</Avatar>
+            <Avatar size={32} style={{ background: bg, color: fg, fontSize: 12, fontWeight: 600, flexShrink: 0 }}>
+              {getInitials(r.name ?? '')}
+            </Avatar>
             <div>
-              <div style={{ fontWeight: 600, fontSize: 13 }}>{r.name}</div>
-              <div style={{ fontSize: 11, color: 'rgba(0,0,0,0.45)', fontFamily: 'monospace' }}>{r.rfc || r.code}</div>
+              <Text style={{ fontWeight: 600, fontSize: 13, display: 'block' }}>{r.name}</Text>
+              {(r.rfc || r.code) && (
+                <Text code style={{ fontSize: 11 }}>{r.rfc || r.code}</Text>
+              )}
             </div>
           </div>
         )
       },
     },
     {
-      title: 'Categoría', dataIndex: 'type', width: 120,
+      title: 'Categoría',
+      dataIndex: 'type',
+      width: 130,
       render: (v: string) => {
         const type = SUPPLIER_TYPES.find(t => t.value === v)
-        return <Tag color="purple">{type?.label ?? v}</Tag>
+        return <Tag color="purple">{type?.label ?? v ?? '—'}</Tag>
       },
     },
     {
-      title: 'Contacto', key: 'contact',
+      title: 'Contacto',
       render: (_: any, r: any) => (
         <div>
-          {r.email && <div style={{ fontSize: 13 }}>{r.email}</div>}
-          {r.phone && <div style={{ fontSize: 11, color: 'rgba(0,0,0,0.45)' }}>{r.phone}</div>}
+          {r.email && <Text style={{ fontSize: 13, display: 'block' }}>{r.email}</Text>}
+          {r.phone && <Text type="secondary" style={{ fontSize: 11 }}>{r.phone}</Text>}
+          {!r.email && !r.phone && <Text type="secondary">—</Text>}
         </div>
       ),
     },
     {
-      title: 'Estado', dataIndex: 'status', width: 110,
+      title: 'OC',
+      width: 60,
+      render: (_: any, r: any) => (
+        <Text style={{ fontVariantNumeric: 'tabular-nums' }}>
+          {r._count?.purchaseOrders ?? '—'}
+        </Text>
+      ),
+    },
+    {
+      title: 'Rating',
+      width: 90,
+      render: (_: any, r: any) => r.rating != null ? (
+        <span style={{ color: '#f59e0b', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+          <StarFilled style={{ fontSize: 12, marginRight: 3 }} />
+          {Number(r.rating).toFixed(1)}
+        </span>
+      ) : <Text type="secondary">—</Text>,
+    },
+    {
+      title: 'Estado',
+      dataIndex: 'status',
+      width: 100,
       render: (v: string) => {
-        const color = v === 'ACTIVE' ? 'green' : v === 'INACTIVE' ? 'default' : 'red'
         const label = SUPPLIER_STATUSES.find(s => s.value === v)?.label ?? v
-        return <Tag color={color}>{label}</Tag>
+        return <Tag color={STATUS_COLORS[v] ?? 'default'}>{label}</Tag>
       },
     },
     {
-      title: '', key: 'actions', width: 50,
+      title: '',
+      key: 'actions',
+      width: 50,
+      fixed: 'right' as const,
       render: (_: any, r: any) => (
-        <Button size="small" type="text" icon={<EditOutlined />} onClick={() => openEdit(r)} />
+        <Button size="small" type="text" icon={<MoreOutlined />} onClick={() => openEdit(r)} />
       ),
     },
   ]
 
   return (
     <div>
-      {/* Page header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <div>
-          <Title level={4} style={{ margin: 0 }}>Proveedores</Title>
-          <Text type="secondary" style={{ fontSize: 13 }}>Empresas que suministran recursos, servicios y personal</Text>
-        </div>
-        <Space>
-          <Button icon={<PlusOutlined />}>Importar</Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); form.resetFields(); setActiveModalTab('info'); setModalOpen(true) }}>
+      <PageHeader
+        title="Proveedores"
+        meta={`Empresas que suministran recursos y servicios · ${suppliersData?.meta?.total ?? allSuppliers.length} totales`}
+        actions={
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => { setEditingId(null); form.resetFields(); setActiveModalTab('info'); setModalOpen(true) }}
+          >
             Nuevo proveedor
           </Button>
-        </Space>
+        }
+      />
+
+      {/* KPI cards */}
+      <div style={{ padding: '20px 24px 4px', background: '#fafafa' }}>
+        <Row gutter={[12, 12]}>
+          <Col xs={24} sm={12} lg={6}>
+            <StatCard label="Total proveedores" value={suppliersData?.meta?.total ?? allSuppliers.length} tone="default" />
+          </Col>
+          <Col xs={24} sm={12} lg={6}>
+            <StatCard label="Activos" value={stats.active} tone="primary" />
+          </Col>
+          <Col xs={24} sm={12} lg={6}>
+            <StatCard label="Inactivos" value={stats.inactive} tone="default" />
+          </Col>
+          <Col xs={24} sm={12} lg={6}>
+            <StatCard label="Bloqueados" value={stats.blocked} tone="warning" />
+          </Col>
+        </Row>
       </div>
 
-      {/* Filters + Table */}
-      <Card bodyStyle={{ padding: '12px 16px 0' }} style={{ borderRadius: 10 }}>
-        <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-          <Input
-            prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
-            placeholder="Buscar proveedor…"
-            style={{ width: 260 }}
-            allowClear
-          />
-          <Select
-            placeholder="Categoría"
-            allowClear
-            options={SUPPLIER_TYPES}
-            style={{ minWidth: 150 }}
-          />
-          <Select
-            placeholder="Estado"
-            allowClear
-            options={SUPPLIER_STATUSES}
-            style={{ minWidth: 130 }}
-          />
-        </div>
-        <Table
-          dataSource={suppliers}
-          columns={columns}
-          rowKey="id"
-          loading={isLoading}
-          size="small"
-          pagination={{
-            current: page,
-            pageSize,
-            total: suppliersData?.meta?.total,
-            onChange: (p, ps) => { setPage(p); setPageSize(ps) },
-            showTotal: t => `${t} proveedores`,
-          }}
+      {/* Filters */}
+      <FilterBar
+        search={search}
+        onSearch={(v) => { setSearch(v); setPage(1) }}
+        placeholder="Buscar proveedor, RFC…"
+        right={
+          hasFilters ? (
+            <Button
+              type="link"
+              style={{ color: '#6B46C1', paddingLeft: 0 }}
+              onClick={() => { setTypeFilter(undefined); setStatusFilter(undefined); setSearch(''); setPage(1) }}
+            >
+              Limpiar filtros
+            </Button>
+          ) : undefined
+        }
+      >
+        <Select
+          placeholder="Categoría"
+          allowClear
+          value={typeFilter}
+          onChange={(v) => { setTypeFilter(v); setPage(1) }}
+          options={SUPPLIER_TYPES}
+          style={{ width: 150 }}
         />
-      </Card>
+        <Select
+          placeholder="Estado"
+          allowClear
+          value={statusFilter}
+          onChange={(v) => { setStatusFilter(v); setPage(1) }}
+          options={SUPPLIER_STATUSES}
+          style={{ width: 130 }}
+        />
+      </FilterBar>
+
+      {/* Table */}
+      <div style={{ background: '#fff' }}>
+        {isLoading ? (
+          <div style={{ padding: 24 }}><Skeleton active paragraph={{ rows: 8 }} /></div>
+        ) : filtered.length === 0 ? (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={hasFilters ? 'Sin resultados para los filtros aplicados' : 'No hay proveedores aún'}
+            style={{ padding: 64 }}
+          >
+            {hasFilters && <Button onClick={() => { setTypeFilter(undefined); setStatusFilter(undefined); setSearch('') }}>Limpiar filtros</Button>}
+          </Empty>
+        ) : (
+          <Table
+            dataSource={filtered}
+            columns={columns}
+            rowKey="id"
+            size="middle"
+            scroll={{ x: 900 }}
+            pagination={{
+              current: page,
+              pageSize,
+              total: suppliersData?.meta?.total,
+              showSizeChanger: true,
+              onChange: (p, ps) => { setPage(p); setPageSize(ps) },
+              showTotal: t => `${t} proveedores`,
+            }}
+          />
+        )}
+      </div>
+
+      {/* Create/Edit modal */}
       <Modal
         title={editingId ? 'Editar Proveedor' : 'Nuevo Proveedor'}
         open={modalOpen}
@@ -222,7 +336,7 @@ export default function SuppliersPage() {
         footer={activeModalTab === 'portal' ? null : undefined}
         width={820}
         confirmLoading={saveMutation.isPending}
-        destroyOnClose
+        forceRender
       >
         <Tabs
           activeKey={activeModalTab}
@@ -234,107 +348,107 @@ export default function SuppliersPage() {
               children: (
                 <Form form={form} layout="vertical" onFinish={saveMutation.mutate}>
                   <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item name="name" label="Nombre" rules={[{ required: true }]}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="type" label="Tipo" rules={[{ required: true }]}>
-                <Select options={SUPPLIER_TYPES} />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="email" label="Email">
-                <Input type="email" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="phone" label="Teléfono">
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="whatsapp" label="WhatsApp">
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="website" label="Sitio Web">
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={24}>
-              <Form.Item name="description" label="Descripción">
-                <Input.TextArea rows={2} />
-              </Form.Item>
-            </Col>
-            <Col span={24}>
-              <Form.Item name="legalName" label="Razón Social">
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="rfc" label="RFC">
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="taxId" label="Número de Contribuyente">
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="fiscalRegime" label="Régimen Fiscal">
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="currencyCode" label="Divisa" initialValue="MXN">
-                <Select options={[
-                  { value: 'MXN', label: 'MXN' },
-                  { value: 'USD', label: 'USD' },
-                  { value: 'EUR', label: 'EUR' },
-                ]} />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="street" label="Calle">
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="city" label="Ciudad">
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="state" label="Estado">
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="zip" label="Código Postal">
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="paymentTerms" label="Términos de Pago">
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="averageDeliveryDays" label="Días de Entrega Promedio" type="number">
-                <Input type="number" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="status" label="Estado" initialValue="ACTIVE" rules={[{ required: true }]}>
-                <Select options={SUPPLIER_STATUSES} />
-              </Form.Item>
-            </Col>
-          </Row>
-        </Form>
+                    <Col span={12}>
+                      <Form.Item name="name" label="Nombre" rules={[{ required: true }]}>
+                        <Input />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name="type" label="Tipo" rules={[{ required: true }]}>
+                        <Select options={SUPPLIER_TYPES} />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name="email" label="Email">
+                        <Input type="email" />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name="phone" label="Teléfono">
+                        <Input />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name="whatsapp" label="WhatsApp">
+                        <Input />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name="website" label="Sitio Web">
+                        <Input />
+                      </Form.Item>
+                    </Col>
+                    <Col span={24}>
+                      <Form.Item name="description" label="Descripción">
+                        <Input.TextArea rows={2} />
+                      </Form.Item>
+                    </Col>
+                    <Col span={24}>
+                      <Form.Item name="legalName" label="Razón Social">
+                        <Input />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name="rfc" label="RFC">
+                        <Input />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name="taxId" label="Número de Contribuyente">
+                        <Input />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name="fiscalRegime" label="Régimen Fiscal">
+                        <Input />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name="currencyCode" label="Divisa" initialValue="MXN">
+                        <Select options={[
+                          { value: 'MXN', label: 'MXN' },
+                          { value: 'USD', label: 'USD' },
+                          { value: 'EUR', label: 'EUR' },
+                        ]} />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name="street" label="Calle">
+                        <Input />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name="city" label="Ciudad">
+                        <Input />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name="state" label="Estado">
+                        <Input />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name="zip" label="Código Postal">
+                        <Input />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name="paymentTerms" label="Términos de Pago">
+                        <Input />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name="averageDeliveryDays" label="Días de Entrega Promedio">
+                        <Input type="number" />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name="status" label="Estado" initialValue="ACTIVE" rules={[{ required: true }]}>
+                        <Select options={SUPPLIER_STATUSES} />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+                </Form>
               ),
             },
             ...(editingId ? [{

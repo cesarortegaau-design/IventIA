@@ -218,7 +218,7 @@ export default function PortalUsersPage() {
         </Space>
       </div>
 
-      <Card style={{ marginBottom: 16 }} bodyStyle={{ padding: '12px 16px' }}>
+      <Card style={{ marginBottom: 16 }} styles={{ body: { padding: '12px 16px' } }}>
         <Space wrap>
           <Input
             placeholder="Buscar por nombre o email..."
@@ -240,7 +240,7 @@ export default function PortalUsersPage() {
         </Space>
       </Card>
 
-      <Card bodyStyle={{ padding: 0 }}>
+      <Card styles={{ body: { padding: 0 } }}>
         <Table
           dataSource={filtered}
           columns={columns}
@@ -382,6 +382,7 @@ export default function PortalUsersPage() {
         onCancel={() => { setResetPwdOpen(false); resetPwdForm.resetFields() }}
         onOk={() => resetPwdForm.submit()}
         confirmLoading={resetPwdMutation.isPending}
+        forceRender
       >
         <Form
           form={resetPwdForm}
@@ -414,6 +415,7 @@ export default function PortalUsersPage() {
         onCancel={() => { setAddClientOpen(false); addClientForm.resetFields() }}
         onOk={() => addClientForm.submit()}
         confirmLoading={addClientMutation.isPending}
+        forceRender
       >
         <Form
           form={addClientForm}

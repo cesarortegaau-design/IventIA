@@ -3,9 +3,14 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Descriptions, Table, Tag, Button, Space, Timeline, Form, Tabs,
-  Input, InputNumber, Select, DatePicker, Modal, App, Typography, Row, Col, Statistic, Upload, List, Avatar, Popconfirm
+  Input, InputNumber, Select, DatePicker, Modal, App, Typography, Row, Col,
+  Statistic, Upload, List, Avatar, Popconfirm,
 } from 'antd'
-import { ArrowLeftOutlined, DollarOutlined, FilePdfOutlined, DownloadOutlined, FileOutlined, UploadOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons'
+import {
+  ArrowLeftOutlined, DollarOutlined, FilePdfOutlined, DownloadOutlined,
+  FileOutlined, UploadOutlined, DeleteOutlined, EditOutlined,
+  ShoppingCartOutlined, WarningFilled, CheckCircleFilled,
+} from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { ordersApi } from '../../api/orders'
 import { clientsApi } from '../../api/clients'
@@ -20,6 +25,8 @@ import AuditDrawer from '../../components/AuditDrawer'
 import CreatePurchaseOrderModal from '../../components/CreatePurchaseOrderModal'
 import GenerateDocumentModal from '../../components/GenerateDocumentModal'
 import { templatesApi } from '../../api/templates'
+import { PageHeader, StatusTag } from '../../components/ui'
+import { formatMoney } from '../../utils/format'
 
 const { Title, Text } = Typography
 
@@ -75,6 +82,7 @@ export default function OrderDetailPage() {
   const { message, modal } = App.useApp()
   const [paymentForm] = Form.useForm()
   const [editForm] = Form.useForm()
+  const [activeTab, setActiveTab] = useState('items')
   const [paymentModalOpen, setPaymentModalOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [editLineItems, setEditLineItems] = useState<any[]>([])
@@ -90,6 +98,7 @@ export default function OrderDetailPage() {
   const [creditNoteModalOpen, setCreditNoteModalOpen] = useState(false)
   const [creditNoteItems, setCreditNoteItems] = useState<any[]>([])
   const [creditNoteNotes, setCreditNoteNotes] = useState('')
+
   const deleteDocMutation = useMutation({
     mutationFn: (docId: string) => ordersApi.deleteDocument(id!, docId),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['order', id] }); message.success('Documento eliminado') },
@@ -122,7 +131,7 @@ export default function OrderDetailPage() {
       a.download = `${order.orderNumber}.pdf`
       a.click()
       URL.revokeObjectURL(url)
-    } catch (e) {
+    } catch {
       message.error('Error al generar el PDF')
     } finally {
       setPdfLoading(false)
@@ -346,11 +355,9 @@ export default function OrderDetailPage() {
     setEditModalOpen(true)
   }
 
-  // Parse substitution selections from observations
   function getSubstitutionSelections(observations: string) {
     const selections: Record<string, string> = {}
     if (!observations) return selections
-
     const regex = /\[SUSTITUCIÓN\]\s+([^:]+):\s+([^|]+)/g
     let match
     while ((match = regex.exec(observations)) !== null) {
@@ -372,7 +379,6 @@ export default function OrderDetailPage() {
       message.warning('Este recurso no permite repetición en la Orden de Servicio')
       return
     }
-
     const newItem = {
       instanceId: `${item.resourceId}-${Date.now()}-${Math.random()}`,
       resourceId: item.resourceId,
@@ -392,9 +398,7 @@ export default function OrderDetailPage() {
       isPackage: item.resource.isPackage ?? false,
       packageComponents: item.resource.packageComponents ?? [],
     }
-
     const substitutionPackages = getNestedSubstitutionPackages(newItem.packageComponents)
-
     if (substitutionPackages.length > 0) {
       setLoadingSubstitutions(true)
       try {
@@ -441,7 +445,6 @@ export default function OrderDetailPage() {
     setEditLineItems(prev => prev.map(li => {
       if (li.instanceId !== instanceId) return li
       const updated = { ...li, [field]: value }
-      // Recalculate actual line total when actual quantity or discount changes
       if (field === 'actualQuantity' || field === 'actualDiscountPct') {
         const qty = field === 'actualQuantity' ? (value ?? li.actualQuantity) : li.actualQuantity
         const disc = field === 'actualDiscountPct' ? (value ?? li.actualDiscountPct) : li.actualDiscountPct
@@ -461,43 +464,33 @@ export default function OrderDetailPage() {
       title: 'Descripción',
       dataIndex: 'description',
       key: 'description',
-      render: (text: string, record: any) => (
-        <>
-          {record.resource?.isPackage && '📦 '}
-          {text}
-        </>
-      ),
+      render: (text: string, record: any) => {
+        const res = record.resource
+        const needsStockCheck = res?.checkStock
+        const qty = Number(record.quantity)
+        const stock = Number(res?.stock ?? 0)
+        const stockOk = qty <= stock
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {res?.isPackage && <span>📦</span>}
+            <span>{text}</span>
+            {needsStockCheck && (
+              <Tooltip title={stockOk ? `Stock OK (${stock} disponibles)` : `Stock insuficiente (${stock} disponibles, ${qty} requeridos)`}>
+                {stockOk
+                  ? <CheckCircleFilled style={{ color: '#16a34a', fontSize: 13 }} />
+                  : <WarningFilled style={{ color: '#f59e0b', fontSize: 13 }} />
+                }
+              </Tooltip>
+            )}
+          </div>
+        )
+      },
     },
-    {
-      title: 'Departamento',
-      key: 'department',
-      render: (_: any, record: any) => record.resource?.department?.name ?? '—',
-    },
-    {
-      title: 'Unidad',
-      key: 'unit',
-      render: (_: any, record: any) => record.resource?.unit ?? '—',
-    },
-    {
-      title: 'Detalle',
-      key: 'detail',
-      render: (_: any, record: any) => record.detail || '—',
-    },
-    {
-      title: 'Ud. Tiempo',
-      key: 'timeUnit',
-      render: (_: any, record: any) => record.timeUnit || 'no aplica',
-    },
-    {
-      title: 'Factor',
-      key: 'factor',
-      render: (_: any, record: any) => record.resource?.factor != null ? Number(record.resource.factor) : 1,
-    },
-    {
-      title: '× Tiempo',
-      key: 'timeUnitValue',
-      render: (_: any, record: any) => calcTimeUnitValue(record.timeUnit, order.startDate, order.endDate),
-    },
+    { title: 'Unidad', key: 'unit', render: (_: any, record: any) => record.resource?.unit ?? '—' },
+    { title: 'Detalle', key: 'detail', render: (_: any, record: any) => record.detail || '—' },
+    { title: 'Ud. Tiempo', key: 'timeUnit', render: (_: any, record: any) => record.timeUnit || 'no aplica' },
+    { title: 'Factor', key: 'factor', render: (_: any, record: any) => record.resource?.factor != null ? Number(record.resource.factor) : 1 },
+    { title: '× Tiempo', key: 'timeUnitValue', render: (_: any, record: any) => calcTimeUnitValue(record.timeUnit, order.startDate, order.endDate) },
     { title: 'Precio Unit.', dataIndex: 'unitPrice', key: 'unitPrice', render: (v: number) => `$${Number(v).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` },
     { title: 'Cantidad', dataIndex: 'quantity', key: 'quantity', render: (v: number) => Number(v) },
     { title: 'Descuento', dataIndex: 'discountPct', key: 'discountPct', render: (v: number) => `${v}%` },
@@ -512,8 +505,8 @@ export default function OrderDetailPage() {
     { title: 'Observaciones', dataIndex: 'observations', key: 'observations' },
     { title: 'F. Entrega', dataIndex: 'deliveryDate', key: 'deliveryDate', render: (v: any) => v ? dayjs(v).format('DD/MM/YYYY HH:mm') : '—' },
     ...(isConfirmedOrLater ? [
-      { title: '✓ Cant. Real', dataIndex: 'actualQuantity', key: 'actualQuantity', render: (v: any) => <span style={{ backgroundColor: '#e6f4ff', padding: '2px 6px', borderRadius: '3px', fontWeight: 500, color: '#0050b3' }}>{v != null ? Number(v) : '—'}</span>, onCell: () => ({ style: { backgroundColor: '#f0f5ff' } }) },
-      { title: '✓ Desc. Real', dataIndex: 'actualDiscountPct', key: 'actualDiscountPct', render: (v: any) => <span style={{ backgroundColor: '#e6f4ff', padding: '2px 6px', borderRadius: '3px', fontWeight: 500, color: '#0050b3' }}>{v != null ? `${v}%` : '—'}</span>, onCell: () => ({ style: { backgroundColor: '#f0f5ff' } }) },
+      { title: '✓ Cant. Real', dataIndex: 'actualQuantity', key: 'actualQuantity', render: (v: any) => <span style={{ backgroundColor: '#e6f4ff', padding: '2px 6px', borderRadius: 3, fontWeight: 500, color: '#0050b3' }}>{v != null ? Number(v) : '—'}</span>, onCell: () => ({ style: { backgroundColor: '#f0f5ff' } }) },
+      { title: '✓ Desc. Real', dataIndex: 'actualDiscountPct', key: 'actualDiscountPct', render: (v: any) => <span style={{ backgroundColor: '#e6f4ff', padding: '2px 6px', borderRadius: 3, fontWeight: 500, color: '#0050b3' }}>{v != null ? `${v}%` : '—'}</span>, onCell: () => ({ style: { backgroundColor: '#f0f5ff' } }) },
       {
         title: '✓ Total Real', key: 'actualLineTotal',
         render: (_: any, record: any) => {
@@ -521,11 +514,11 @@ export default function OrderDetailPage() {
           const total = record.actualQuantity != null
             ? Number(record.unitPrice) * Number(record.actualQuantity) * tuv * effectiveFactor(record.timeUnit, Number(record.resource?.factor ?? 1)) * (1 - Number(record.actualDiscountPct ?? record.discountPct) / 100)
             : null
-          return <span style={{ backgroundColor: '#e6f4ff', padding: '2px 6px', borderRadius: '3px', fontWeight: 500, color: '#0050b3' }}>{total != null ? `$${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—'}</span>
+          return <span style={{ backgroundColor: '#e6f4ff', padding: '2px 6px', borderRadius: 3, fontWeight: 500, color: '#0050b3' }}>{total != null ? `$${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—'}</span>
         },
         onCell: () => ({ style: { backgroundColor: '#f0f5ff' } }),
       },
-      { title: '✓ Obs. Real', dataIndex: 'actualObservations', key: 'actualObservations', render: (v: any) => <span style={{ backgroundColor: '#e6f4ff', padding: '2px 6px', borderRadius: '3px', fontWeight: 500, color: '#0050b3' }}>{v ?? '—'}</span>, onCell: () => ({ style: { backgroundColor: '#f0f5ff' } }) },
+      { title: '✓ Obs. Real', dataIndex: 'actualObservations', key: 'actualObservations', render: (v: any) => <span style={{ backgroundColor: '#e6f4ff', padding: '2px 6px', borderRadius: 3, fontWeight: 500, color: '#0050b3' }}>{v ?? '—'}</span>, onCell: () => ({ style: { backgroundColor: '#f0f5ff' } }) },
     ] : []),
   ]
 
@@ -536,39 +529,45 @@ export default function OrderDetailPage() {
     { title: 'Referencia', dataIndex: 'reference' },
   ]
 
-  return (
-    <div>
-      <Space style={{ marginBottom: 16 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>
-          {order.event?.name}
-        </Button>
-      </Space>
+  const clientName = order.client?.companyName || `${order.client?.firstName} ${order.client?.lastName}`
+  const saldo = Number(order.total) - Number(order.paidAmount)
 
-      <Card
+  // ───── RENDER ─────
+  return (
+    <div style={{ minHeight: '100vh', background: '#fafafa' }}>
+      {/* Page header */}
+      <PageHeader
         title={
-          <Space>
-            <Title level={4} style={{ margin: 0 }}>{order.orderNumber}</Title>
+          <Space size={8} align="center">
+            <Button
+              type="text"
+              icon={<ArrowLeftOutlined />}
+              onClick={() => navigate(-1)}
+              style={{ marginRight: 4 }}
+            />
+            {order.orderNumber}
             <Tag color={STATUS_COLORS[order.status]}>{STATUS_LABELS[order.status]}</Tag>
-            <Tag color={PAYMENT_STATUS_COLORS[order.paymentStatus]}>{PAYMENT_STATUS_LABELS[order.paymentStatus] || 'Pendiente'}</Tag>
+            <Tag color={PAYMENT_STATUS_COLORS[order.paymentStatus]}>
+              {PAYMENT_STATUS_LABELS[order.paymentStatus] || 'Pendiente'}
+            </Tag>
             <Tag>{TIER_LABELS[order.pricingTier]}</Tag>
             {order.isCreditNote && <Tag color="red">Nota de Crédito</Tag>}
           </Space>
         }
-        extra={
-          <Space wrap>
-            <Button
-              icon={<FilePdfOutlined />}
-              loading={pdfLoading}
-              onClick={downloadPdf}
-              style={{ borderColor: '#1a3a5c', color: '#1a3a5c' }}
-            >
-              Descargar PDF
+        meta={
+          <span>
+            Evento <strong>{order.event?.name ?? '—'}</strong>
+            {' · '}Cliente <strong>{clientName}</strong>
+            {order.endDate && <> · Entrega <strong>{dayjs(order.endDate).format('DD/MM/YYYY')}</strong></>}
+          </span>
+        }
+        actions={
+          <>
+            <Button icon={<FilePdfOutlined />} loading={pdfLoading} onClick={downloadPdf}>
+              PDF
             </Button>
-            <Button
-              icon={<FileOutlined />}
-              onClick={() => setGenerateDocOpen(true)}
-            >
-              Generar Word
+            <Button icon={<FileOutlined />} onClick={() => setGenerateDocOpen(true)}>
+              Word
             </Button>
             <AuditDrawer
               entityType="Order"
@@ -608,251 +607,430 @@ export default function OrderDetailPage() {
                 Crear Nota de Crédito
               </Button>
             )}
-          </Space>
+          </>
         }
-      >
-        <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-          <Col xs={12} sm={6}><Statistic title="Subtotal" prefix="$" value={Number(order.subtotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })} /></Col>
-          <Col xs={12} sm={6}><Statistic title="Descuento" prefix="$" value={Number(order.discountAmount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} /></Col>
-          <Col xs={12} sm={6}><Statistic title="IVA" prefix="$" value={Number(order.taxAmount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} /></Col>
-          <Col xs={12} sm={6}><Statistic title="Total" prefix="$" valueStyle={{ color: '#6B46C1', fontWeight: 'bold' }} value={Number(order.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })} /></Col>
-        </Row>
-
-        <Descriptions bordered column={{ xs: 1, sm: 2, lg: 3 }} style={{ marginBottom: 16 }}>
-          <Descriptions.Item label="Cliente">
-            {order.client?.companyName || `${order.client?.firstName} ${order.client?.lastName}`}
-          </Descriptions.Item>
-          <Descriptions.Item label="Cliente Facturación">
-            {order.billingClient?.companyName || order.billingClient?.rfc || '—'}
-          </Descriptions.Item>
-          <Descriptions.Item label="Stand">{order.stand?.code || '—'}</Descriptions.Item>
-          <Descriptions.Item label="Organización">
-            {order.organizacion ? order.organizacion.descripcion : '—'}
-          </Descriptions.Item>
-          <Descriptions.Item label="Lista de Precios">{order.priceList?.name}</Descriptions.Item>
-          <Descriptions.Item label="Fecha Hora Inicio">
-            {order.startDate ? new Date(order.startDate).toLocaleString('es-MX') : '—'}
-          </Descriptions.Item>
-          <Descriptions.Item label="Fecha Hora Fin">
-            {order.endDate ? new Date(order.endDate).toLocaleString('es-MX') : '—'}
-          </Descriptions.Item>
-          <Descriptions.Item label="Pagado">
-            ${Number(order.paidAmount).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-          </Descriptions.Item>
-          <Descriptions.Item label="Saldo">
-            ${(Number(order.total) - Number(order.paidAmount)).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-          </Descriptions.Item>
-          {order.originalOrder && (
-            <Descriptions.Item label="Orden Original">
-              <Button type="link" size="small" style={{ padding: 0 }} onClick={() => navigate(`/ordenes/${order.originalOrder.id}`)}>
-                {order.originalOrder.orderNumber}
-              </Button>
-            </Descriptions.Item>
-          )}
-          {order.creditNotes?.length > 0 && (
-            <Descriptions.Item label="Notas de Crédito">
-              <Space>
-                {order.creditNotes.map((cn: any) => (
-                  <Button key={cn.id} type="link" size="small" style={{ padding: 0 }} onClick={() => navigate(`/ordenes/${cn.id}`)}>
-                    {cn.orderNumber} (${Number(cn.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })})
-                  </Button>
-                ))}
-              </Space>
-            </Descriptions.Item>
-          )}
-        </Descriptions>
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <Title level={5} style={{ margin: 0 }}>Productos y Servicios</Title>
-          <Button
-            icon={<DownloadOutlined />}
-            size="small"
-            onClick={() => exportToCsv(`orden-${order.orderNumber}-partidas`, (order.lineItems ?? []).map((li: any) => ({
-              descripcion: li.description,
-              precioUnit: Number(li.unitPrice).toFixed(2),
-              cantidad: Number(li.quantity),
-              descuento: `${li.discountPct}%`,
-              total: Number(li.lineTotal).toFixed(2),
-            })), [
-              { header: 'Descripción', key: 'descripcion' },
-              { header: 'Precio Unit.', key: 'precioUnit' },
-              { header: 'Cantidad', key: 'cantidad' },
-              { header: 'Descuento', key: 'descuento' },
-              { header: 'Total', key: 'total' },
-            ])}
-          >
-            Exportar CSV
-          </Button>
-        </div>
-        <Table
-          dataSource={order.lineItems}
-          columns={lineColumns}
-          rowKey="id"
-          pagination={false}
-          size="small"
-          scroll={{ x: 'max-content' }}
-          style={{ marginBottom: 24 }}
-          expandable={{
-            expandedRowRender: (r: any) => {
-              if (!r.resource?.isPackage || !r.resource?.packageComponents?.length) return null
-
-              const substitutionSelections = getSubstitutionSelections(r.observations)
-
-              return (
-                <div style={{ padding: '12px 0' }}>
-                  <strong style={{ fontSize: '12px', marginBottom: '8px', display: 'block' }}>📦 Componentes requeridos × {Number(r.quantity).toFixed(3)}</strong>
-                  <Table
-                    dataSource={r.resource.packageComponents}
-                    rowKey="componentResourceId"
-                    size="small"
-                    pagination={false}
-                    columns={[
-                      {
-                        title: 'Código',
-                        key: 'code',
-                        width: 70,
-                        render: (_: any, comp: any) => comp.componentResource.code,
-                      },
-                      {
-                        title: 'Nombre',
-                        key: 'name',
-                        render: (_: any, comp: any) => (
-                          <span>
-                            {comp.componentResource.name}
-                            {comp.componentResource.isSubstitute && (
-                              <span style={{ marginLeft: '8px', color: '#1890ff', fontSize: '12px', fontWeight: 'bold' }}>
-                                (Sustitución)
-                              </span>
-                            )}
-                          </span>
-                        ),
-                      },
-                      {
-                        title: 'Qty × Artículo',
-                        key: 'qtyPer',
-                        width: 110,
-                        align: 'right' as const,
-                        render: (_: any, comp: any) => Number(comp.quantity).toFixed(3),
-                      },
-                      {
-                        title: 'Total Requerido',
-                        key: 'qtyTotal',
-                        width: 120,
-                        align: 'right' as const,
-                        render: (_: any, comp: any) => (Number(comp.quantity) * r.quantity).toFixed(3),
-                      },
-                      {
-                        title: 'Unidad',
-                        key: 'unit',
-                        width: 80,
-                        render: (_: any, comp: any) => comp.componentResource.unit || '—',
-                      },
-                      {
-                        title: 'Seleccionado',
-                        key: 'selected',
-                        width: 150,
-                        render: (_: any, comp: any) => {
-                          // Only show selection for components that are substitution packages
-                          if (!comp.componentResource.isSubstitute) {
-                            return null
-                          }
-
-                          // Look up by the substitution package's name (the key in selections dict)
-                          const selectedValue = substitutionSelections[comp.componentResource.name]
-                          if (selectedValue) {
-                            return <Tag color="green">✓ {selectedValue}</Tag>
-                          }
-                          return <span style={{ color: '#999' }}>—</span>
-                        },
-                      },
-                    ]}
-                  />
-                  <div style={{ marginTop: '8px', fontSize: '11px', color: '#999' }}>
-                    * "Qty × Artículo": cantidad de cada componente por artículo<br/>
-                    * "Total Requerido": cantidad total para {Number(r.quantity).toFixed(3)} unidades<br/>
-                    * "Seleccionado": muestra el recurso específico elegido para paquetes de sustitución
-                  </div>
-                </div>
-              )
-            },
-          }}
-        />
-
-        <Title level={5}>Pagos ({order.payments?.length ?? 0})</Title>
-        <Table
-          dataSource={order.payments}
-          columns={paymentColumns}
-          rowKey="id"
-          pagination={false}
-          size="small"
-          scroll={{ x: 'max-content' }}
-          style={{ marginBottom: 24 }}
-        />
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <Title level={5} style={{ margin: 0 }}>Documentos ({order.documents?.length ?? 0})</Title>
-          <Upload beforeUpload={handleDocUpload} showUploadList={false}>
-            <Button size="small" icon={<UploadOutlined />} loading={docUploading}>Subir</Button>
-          </Upload>
-        </div>
-        {(order.documents ?? []).length > 0 && (
-          <List
-            size="small"
-            dataSource={order.documents}
-            style={{ marginBottom: 24 }}
-            renderItem={(doc: any) => (
-              <List.Item
-                actions={[
-                  doc.blobKey && (
-                    <Button key="dl" size="small" icon={<DownloadOutlined />} onClick={() => doc.blobKey.startsWith('http') ? window.open(doc.blobKey, '_blank') : templatesApi.download(doc.blobKey, doc.fileName)} />
-                  ),
-                  <Popconfirm key="del" title="¿Eliminar documento?" onConfirm={() => deleteDocMutation.mutate(doc.id)}>
-                    <Button size="small" danger icon={<DeleteOutlined />} loading={deleteDocMutation.isPending} />
-                  </Popconfirm>,
-                ].filter(Boolean)}
-              >
-                <List.Item.Meta
-                  avatar={<Avatar size="small" icon={<FileOutlined />} />}
-                  title={doc.fileName}
-                  description={<Text type="secondary" style={{ fontSize: 12 }}>{doc.documentType}</Text>}
-                />
-              </List.Item>
-            )}
+        tabs={
+          <Tabs
+            activeKey={activeTab}
+            onChange={setActiveTab}
+            style={{ marginBottom: -1 }}
+            items={[
+              { key: 'items', label: `Items (${order.lineItems?.length ?? 0})` },
+              { key: 'financiero', label: 'Financiero' },
+              { key: 'documentos', label: `Documentos (${order.documents?.length ?? 0})` },
+              { key: 'oc', label: `Órdenes de Compra (${order.purchaseOrders?.length ?? 0})` },
+              { key: 'historial', label: 'Historial' },
+            ]}
           />
-        )}
-        {(order.documents ?? []).length === 0 && (
-          <Text type="secondary" style={{ display: 'block', marginBottom: 24 }}>Sin documentos adjuntos</Text>
-        )}
+        }
+      />
 
-        <Title level={5}>Historial de Estatus</Title>
-        <Timeline
-          items={order.statusHistory?.map((h: any) => ({
-            color: STATUS_COLORS[h.toStatus] || 'blue',
-            children: (
-              <div>
-                <Text strong>{STATUS_LABELS[h.toStatus]}</Text>
-                {h.fromStatus && <Text type="secondary"> (desde {STATUS_LABELS[h.fromStatus]})</Text>}
-                <br />
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {h.changedBy?.firstName} {h.changedBy?.lastName} — {dayjs(h.createdAt).format('DD/MM/YYYY HH:mm')}
-                </Text>
-                {h.notes && <div><Text type="secondary" style={{ fontSize: 12 }}>{h.notes}</Text></div>}
+      {/* Content */}
+      <div style={{ padding: 24 }}>
+        {/* ── TAB: Items ── */}
+        {activeTab === 'items' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* ── Financial summary strip ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 1, background: '#e9d5ff', borderRadius: 8, overflow: 'hidden', border: '1px solid #d8b4fe' }}>
+            {[
+              { label: 'Subtotal', value: formatMoney(Number(order.subtotal), 'MXN') },
+              { label: `Descuento (${Number(order.discountPct)}%)`, value: formatMoney(Number(order.discountAmount), 'MXN') },
+              { label: `IVA (${Number(order.taxPct)}%)`, value: formatMoney(Number(order.taxAmount), 'MXN') },
+              { label: 'Total', value: formatMoney(Number(order.total), 'MXN'), accent: true },
+              { label: 'Pagado', value: formatMoney(Number(order.paidAmount), 'MXN'), green: true },
+              { label: 'Saldo', value: formatMoney(saldo, 'MXN'), warn: saldo > 0 },
+            ].map(({ label, value, accent, green, warn }) => (
+              <div key={label} style={{ background: '#fff', padding: '10px 14px', textAlign: 'center' }}>
+                <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 2 }}>{label}</div>
+                <div style={{ fontSize: 14, fontWeight: accent ? 700 : 600, fontVariantNumeric: 'tabular-nums', color: accent ? '#6B46C1' : green ? '#16a34a' : warn ? '#f59e0b' : '#111827' }}>
+                  {value}
+                </div>
               </div>
-            ),
-          }))}
-        />
-      </Card>
+            ))}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20, alignItems: 'start' }}>
+            {/* Main: items grouped by department */}
+            <div>
+              {(() => {
+                const lineItems: any[] = order.lineItems ?? []
+                const groups: Record<string, any[]> = {}
+                lineItems.forEach((li: any) => {
+                  const dept = li.resource?.department?.name ?? 'Sin Departamento'
+                  if (!groups[dept]) groups[dept] = []
+                  groups[dept].push(li)
+                })
+                const groupEntries = Object.entries(groups)
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <Space>
+                        <span style={{ fontWeight: 600, fontSize: 14 }}>Productos y Servicios</span>
+                        <Tag>{lineItems.length} partidas</Tag>
+                        <Tag color="purple">{groupEntries.length} depto{groupEntries.length !== 1 ? 's' : ''}</Tag>
+                      </Space>
+                      <Button
+                        icon={<DownloadOutlined />}
+                        size="small"
+                        onClick={() => exportToCsv(
+                          `orden-${order.orderNumber}-partidas`,
+                          lineItems.map((li: any) => ({
+                            descripcion: li.description,
+                            precioUnit: Number(li.unitPrice).toFixed(2),
+                            cantidad: Number(li.quantity),
+                            descuento: `${li.discountPct}%`,
+                            total: Number(li.lineTotal).toFixed(2),
+                          })),
+                          [
+                            { header: 'Descripción', key: 'descripcion' },
+                            { header: 'Precio Unit.', key: 'precioUnit' },
+                            { header: 'Cantidad', key: 'cantidad' },
+                            { header: 'Descuento', key: 'descuento' },
+                            { header: 'Total', key: 'total' },
+                          ]
+                        )}
+                      >
+                        CSV
+                      </Button>
+                    </div>
+                    {groupEntries.map(([dept, items]) => (
+                      <Card
+                        key={dept}
+                        size="small"
+                        headStyle={{ background: '#f4eeff', borderBottom: '1px solid #e9d5ff', padding: '6px 12px' }}
+                        title={
+                          <Space>
+                            <span style={{ fontWeight: 600, fontSize: 13, color: '#6B46C1' }}>{dept}</span>
+                            <Tag color="purple" style={{ fontSize: 11 }}>{items.length}</Tag>
+                            <Text type="secondary" style={{ fontSize: 12 }}>
+                              {formatMoney(items.reduce((s: number, li: any) => s + Number(li.lineTotal), 0), 'MXN')}
+                            </Text>
+                          </Space>
+                        }
+                        styles={{ body: { padding: 0 } }}
+                      >
+                        <Table
+                          dataSource={items}
+                          columns={lineColumns}
+                          rowKey="id"
+                          pagination={false}
+                          size="small"
+                          scroll={{ x: 'max-content' }}
+                          expandable={{
+                            expandedRowRender: (r: any) => {
+                      if (!r.resource?.isPackage || !r.resource?.packageComponents?.length) return null
+                      const subs = getSubstitutionSelections(r.observations)
+                      return (
+                        <div style={{ padding: '12px 0' }}>
+                          <strong style={{ fontSize: 12, marginBottom: 8, display: 'block' }}>
+                            📦 Componentes requeridos × {Number(r.quantity).toFixed(3)}
+                          </strong>
+                          <Table
+                            dataSource={r.resource.packageComponents}
+                            rowKey="componentResourceId"
+                            size="small"
+                            pagination={false}
+                            columns={[
+                              { title: 'Código', key: 'code', width: 70, render: (_: any, comp: any) => comp.componentResource.code },
+                              {
+                                title: 'Nombre', key: 'name',
+                                render: (_: any, comp: any) => (
+                                  <span>
+                                    {comp.componentResource.name}
+                                    {comp.componentResource.isSubstitute && <span style={{ marginLeft: 8, color: '#1890ff', fontSize: 12, fontWeight: 'bold' }}>(Sustitución)</span>}
+                                  </span>
+                                ),
+                              },
+                              { title: 'Qty × Artículo', key: 'qtyPer', width: 110, align: 'right' as const, render: (_: any, comp: any) => Number(comp.quantity).toFixed(3) },
+                              { title: 'Total Requerido', key: 'qtyTotal', width: 120, align: 'right' as const, render: (_: any, comp: any) => (Number(comp.quantity) * r.quantity).toFixed(3) },
+                              { title: 'Unidad', key: 'unit', width: 80, render: (_: any, comp: any) => comp.componentResource.unit || '—' },
+                              {
+                                title: 'Seleccionado', key: 'selected', width: 150,
+                                render: (_: any, comp: any) => {
+                                  if (!comp.componentResource.isSubstitute) return null
+                                  const val = subs[comp.componentResource.name]
+                                  return val ? <Tag color="green">✓ {val}</Tag> : <span style={{ color: '#999' }}>—</span>
+                                },
+                              },
+                            ]}
+                          />
+                        </div>
+                      )
+                    },
+                  }}
+                />
+                      </Card>
+                    ))}
+                  </div>
+                )
+              })()}
+            </div>
 
-      <Card title="Auditoría" style={{ marginBottom: 24 }}>
-        <AuditTimeline data={auditData?.data ?? []} loading={auditLoading} />
-      </Card>
+            {/* Sidebar */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* 2x2 mini-stats */}
+              {(() => {
+                const lineItems: any[] = order.lineItems ?? []
+                const depts = new Set(lineItems.map((li: any) => li.resource?.department?.name).filter(Boolean))
+                const suppliers = new Set((order.purchaseOrders ?? []).map((po: any) => po.supplier?.id).filter(Boolean))
+                const ocCount = order.purchaseOrders?.length ?? 0
+                return (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    {[
+                      { label: 'Items', value: lineItems.length },
+                      { label: 'Deptos.', value: depts.size },
+                      { label: 'Proveedores', value: suppliers.size },
+                      { label: 'OC asociadas', value: ocCount },
+                    ].map(({ label, value }) => (
+                      <div key={label} style={{ background: '#fafafa', border: '1px solid #f0f0f0', borderRadius: 6, padding: '10px 12px', textAlign: 'center' }}>
+                        <div style={{ fontSize: 20, fontWeight: 700, color: '#6B46C1', fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+                        <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{label}</div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
 
+              {/* Event info */}
+              <Card size="small" title="Evento">
+                <Descriptions column={1} size="small" colon={false}>
+                  <Descriptions.Item label="Nombre">{order.event?.name ?? '—'}</Descriptions.Item>
+                  <Descriptions.Item label="Lista de precios">{order.priceList?.name ?? '—'}</Descriptions.Item>
+                  {order.stand && <Descriptions.Item label="Stand">{order.stand.code}</Descriptions.Item>}
+                  {order.organizacion && <Descriptions.Item label="Org.">{order.organizacion.descripcion}</Descriptions.Item>}
+                  {order.startDate && (
+                    <Descriptions.Item label="Inicio">
+                      {dayjs(order.startDate).format('DD/MM/YYYY HH:mm')}
+                    </Descriptions.Item>
+                  )}
+                  {order.endDate && (
+                    <Descriptions.Item label="Fin">
+                      {dayjs(order.endDate).format('DD/MM/YYYY HH:mm')}
+                    </Descriptions.Item>
+                  )}
+                </Descriptions>
+                {order.event?.id && (
+                  <Button
+                    type="link"
+                    size="small"
+                    style={{ padding: 0, marginTop: 4 }}
+                    onClick={() => navigate(`/eventos/${order.event.id}`)}
+                  >
+                    Ver evento completo →
+                  </Button>
+                )}
+              </Card>
+
+              {/* Client */}
+              <Card size="small" title="Cliente">
+                <Text strong>{clientName}</Text>
+                {order.billingClient && (
+                  <div style={{ marginTop: 4 }}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>Facturación: </Text>
+                    <Text style={{ fontSize: 12 }}>{order.billingClient.companyName || order.billingClient.rfc}</Text>
+                  </div>
+                )}
+              </Card>
+
+              {/* Notes */}
+              {order.notes && (
+                <Card size="small" title="Notas internas">
+                  <Text type="secondary" style={{ fontSize: 13 }}>{order.notes}</Text>
+                </Card>
+              )}
+
+              {/* Credit note links */}
+              {(order.originalOrder || order.creditNotes?.length > 0) && (
+                <Card size="small" title="Referencias">
+                  {order.originalOrder && (
+                    <div>
+                      <Text type="secondary" style={{ fontSize: 12 }}>Orden original: </Text>
+                      <Button type="link" size="small" style={{ padding: 0, fontSize: 12 }} onClick={() => navigate(`/ordenes/${order.originalOrder.id}`)}>
+                        {order.originalOrder.orderNumber}
+                      </Button>
+                    </div>
+                  )}
+                  {order.creditNotes?.map((cn: any) => (
+                    <div key={cn.id}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>NC: </Text>
+                      <Button type="link" size="small" style={{ padding: 0, fontSize: 12 }} onClick={() => navigate(`/ordenes/${cn.id}`)}>
+                        {cn.orderNumber} ({formatMoney(Number(cn.total), 'MXN')})
+                      </Button>
+                    </div>
+                  ))}
+                </Card>
+              )}
+            </div>
+          </div>
+          </div>
+        )}
+
+        {/* ── TAB: Financiero ── */}
+        {activeTab === 'financiero' && (
+          <div>
+            <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+              <Col xs={12} sm={6}><Statistic title="Subtotal" prefix="$" value={Number(order.subtotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })} /></Col>
+              <Col xs={12} sm={6}><Statistic title="Descuento" prefix="$" value={Number(order.discountAmount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} /></Col>
+              <Col xs={12} sm={6}><Statistic title="IVA" prefix="$" value={Number(order.taxAmount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} /></Col>
+              <Col xs={12} sm={6}><Statistic title="Total" prefix="$" valueStyle={{ color: '#6B46C1', fontWeight: 'bold' }} value={Number(order.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })} /></Col>
+            </Row>
+            <Card
+              title={`Pagos (${order.payments?.length ?? 0})`}
+              extra={
+                canPay && (
+                  <Button icon={<DollarOutlined />} size="small" onClick={() => setPaymentModalOpen(true)}>
+                    Registrar Pago
+                  </Button>
+                )
+              }
+            >
+              <Table
+                dataSource={order.payments}
+                columns={paymentColumns}
+                rowKey="id"
+                pagination={false}
+                size="small"
+                scroll={{ x: 'max-content' }}
+              />
+            </Card>
+          </div>
+        )}
+
+        {/* ── TAB: Documentos ── */}
+        {activeTab === 'documentos' && (
+          <Card
+            title={`Documentos (${order.documents?.length ?? 0})`}
+            extra={
+              <Upload beforeUpload={handleDocUpload} showUploadList={false}>
+                <Button size="small" icon={<UploadOutlined />} loading={docUploading}>Subir</Button>
+              </Upload>
+            }
+          >
+            {(order.documents ?? []).length > 0 ? (
+              <List
+                size="small"
+                dataSource={order.documents}
+                renderItem={(doc: any) => (
+                  <List.Item
+                    actions={[
+                      doc.blobKey && (
+                        <Button key="dl" size="small" icon={<DownloadOutlined />} onClick={() => doc.blobKey.startsWith('http') ? window.open(doc.blobKey, '_blank') : templatesApi.download(doc.blobKey, doc.fileName)} />
+                      ),
+                      <Popconfirm key="del" title="¿Eliminar documento?" onConfirm={() => deleteDocMutation.mutate(doc.id)}>
+                        <Button size="small" danger icon={<DeleteOutlined />} loading={deleteDocMutation.isPending} />
+                      </Popconfirm>,
+                    ].filter(Boolean)}
+                  >
+                    <List.Item.Meta
+                      avatar={<Avatar size="small" icon={<FileOutlined />} />}
+                      title={doc.fileName}
+                      description={<Text type="secondary" style={{ fontSize: 12 }}>{doc.documentType}</Text>}
+                    />
+                  </List.Item>
+                )}
+              />
+            ) : (
+              <Text type="secondary">Sin documentos adjuntos</Text>
+            )}
+          </Card>
+        )}
+
+        {/* ── TAB: Órdenes de Compra ── */}
+        {activeTab === 'oc' && (
+          <Card
+            title={
+              <Space>
+                <ShoppingCartOutlined />
+                <span>Órdenes de Compra</span>
+                <Tag>{order.purchaseOrders?.length ?? 0}</Tag>
+              </Space>
+            }
+            extra={
+              order.status === 'CONFIRMED' && (
+                <Button size="small" type="primary" onClick={() => setCreatePOModalOpen(true)}>
+                  Nueva OC
+                </Button>
+              )
+            }
+            styles={{ body: { padding: 0 } }}
+          >
+            {(order.purchaseOrders ?? []).length === 0 ? (
+              <div style={{ padding: 48, textAlign: 'center', color: '#64748b' }}>
+                Sin órdenes de compra asociadas a esta orden de servicio.
+              </div>
+            ) : (
+              <Table
+                dataSource={order.purchaseOrders}
+                rowKey="id"
+                size="small"
+                pagination={false}
+                columns={[
+                  {
+                    title: 'Número',
+                    dataIndex: 'orderNumber',
+                    render: (v: string, r: any) => (
+                      <Button type="link" style={{ padding: 0, color: '#6B46C1', fontWeight: 600 }} onClick={() => navigate(`/catalogos/ordenes-compra/${r.id}`)}>
+                        {v}
+                      </Button>
+                    ),
+                  },
+                  {
+                    title: 'Proveedor',
+                    key: 'supplier',
+                    render: (_: any, r: any) => r.supplier?.name ?? '—',
+                  },
+                  {
+                    title: 'Estado',
+                    dataIndex: 'status',
+                    render: (v: string) => <Tag>{v}</Tag>,
+                  },
+                  {
+                    title: 'Total',
+                    dataIndex: 'total',
+                    align: 'right' as const,
+                    render: (v: number) => <Text style={{ fontVariantNumeric: 'tabular-nums' }}>{formatMoney(Number(v), 'MXN')}</Text>,
+                  },
+                ]}
+              />
+            )}
+          </Card>
+        )}
+
+        {/* ── TAB: Historial ── */}
+        {activeTab === 'historial' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+            <Card title="Historial de Estado">
+              <Timeline
+                items={order.statusHistory?.map((h: any) => ({
+                  color: STATUS_COLORS[h.toStatus] || 'blue',
+                  children: (
+                    <div>
+                      <Text strong>{STATUS_LABELS[h.toStatus]}</Text>
+                      {h.fromStatus && <Text type="secondary"> (desde {STATUS_LABELS[h.fromStatus]})</Text>}
+                      <br />
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {h.changedBy?.firstName} {h.changedBy?.lastName} — {dayjs(h.createdAt).format('DD/MM/YYYY HH:mm')}
+                      </Text>
+                      {h.notes && <div><Text type="secondary" style={{ fontSize: 12 }}>{h.notes}</Text></div>}
+                    </div>
+                  ),
+                }))}
+              />
+            </Card>
+            <Card title="Auditoría">
+              <AuditTimeline data={auditData?.data ?? []} loading={auditLoading} />
+            </Card>
+          </div>
+        )}
+      </div>
+
+      {/* ─── MODALS (sin cambios funcionales) ─── */}
       <Modal
         title="Registrar Pago"
         open={paymentModalOpen}
         onCancel={() => setPaymentModalOpen(false)}
         onOk={() => paymentForm.submit()}
         confirmLoading={paymentMutation.isPending}
+        forceRender
       >
         <Form form={paymentForm} layout="vertical" onFinish={paymentMutation.mutate}>
           <Form.Item name="method" label="Método de Pago" rules={[{ required: true }]}>
@@ -865,12 +1043,7 @@ export default function OrderDetailPage() {
             ]} />
           </Form.Item>
           <Form.Item name="amount" label="Monto" rules={[{ required: true }]}>
-            <InputNumber
-              prefix="$"
-              style={{ width: '100%' }}
-              formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-              min={0}
-            />
+            <InputNumber prefix="$" style={{ width: '100%' }} formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} min={0} />
           </Form.Item>
           <Form.Item name="paymentDate" label="Fecha" rules={[{ required: true }]} initialValue={dayjs()}>
             <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
@@ -895,33 +1068,19 @@ export default function OrderDetailPage() {
         confirmLoading={updateMutation.isPending || actualValuesMutation.isPending}
         width={1000}
         okText={canEditActual ? 'Guardar Valores Reales' : 'Guardar'}
+        forceRender
       >
         <Form form={editForm} layout="vertical" onFinish={updateMutation.mutate} onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }}>
           {canEdit && (
             <Row gutter={16}>
               <Col span={12}>
                 <Form.Item name="clientId" label="Cliente" rules={[{ required: true }]}>
-                  <Select
-                    showSearch
-                    filterOption={(i, o) => String(o?.label ?? '').toLowerCase().includes(i.toLowerCase())}
-                    options={(clientsData?.data ?? []).map((c: any) => ({
-                      value: c.id,
-                      label: c.companyName || `${c.firstName} ${c.lastName}`,
-                    }))}
-                  />
+                  <Select showSearch filterOption={(i, o) => String(o?.label ?? '').toLowerCase().includes(i.toLowerCase())} options={(clientsData?.data ?? []).map((c: any) => ({ value: c.id, label: c.companyName || `${c.firstName} ${c.lastName}` }))} />
                 </Form.Item>
               </Col>
               <Col span={12}>
                 <Form.Item name="billingClientId" label="Cliente Facturación">
-                  <Select
-                    allowClear
-                    showSearch
-                    filterOption={(i, o) => String(o?.label ?? '').toLowerCase().includes(i.toLowerCase())}
-                    options={(clientsData?.data ?? []).map((c: any) => ({
-                      value: c.id,
-                      label: c.companyName || `${c.firstName} ${c.lastName}`,
-                    }))}
-                  />
+                  <Select allowClear showSearch filterOption={(i, o) => String(o?.label ?? '').toLowerCase().includes(i.toLowerCase())} options={(clientsData?.data ?? []).map((c: any) => ({ value: c.id, label: c.companyName || `${c.firstName} ${c.lastName}` }))} />
                 </Form.Item>
               </Col>
               <Col span={12}>
@@ -936,13 +1095,7 @@ export default function OrderDetailPage() {
               </Col>
               <Col span={12}>
                 <Form.Item name="organizacionId" label="Organización">
-                  <Select
-                    allowClear
-                    showSearch
-                    placeholder="Seleccionar organización..."
-                    filterOption={(i, o) => String(o?.label ?? '').toLowerCase().includes(i.toLowerCase())}
-                    options={(orgData?.data ?? []).filter((o: any) => o.isActive).map((o: any) => ({ value: o.id, label: `${o.clave} — ${o.descripcion}` }))}
-                  />
+                  <Select allowClear showSearch placeholder="Seleccionar organización..." filterOption={(i, o) => String(o?.label ?? '').toLowerCase().includes(i.toLowerCase())} options={(orgData?.data ?? []).filter((o: any) => o.isActive).map((o: any) => ({ value: o.id, label: `${o.clave} — ${o.descripcion}` }))} />
                 </Form.Item>
               </Col>
               <Col span={24}>
@@ -952,7 +1105,6 @@ export default function OrderDetailPage() {
               </Col>
             </Row>
           )}
-
           {canEdit && (
             <Card size="small" style={{ marginBottom: 16 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -972,7 +1124,6 @@ export default function OrderDetailPage() {
               </div>
             </Card>
           )}
-
           {canEditActual ? (
             <Tabs defaultActiveKey="requested" items={[
               {
@@ -986,16 +1137,8 @@ export default function OrderDetailPage() {
                     pagination={false}
                     scroll={{ x: 'max-content' }}
                     columns={[
-                      {
-                        title: 'Descripción', dataIndex: 'description', key: 'desc', width: 180,
-                        render: (text: string, record: any) => (
-                          <span>{record.isPackage && '📦 '}{text}</span>
-                        ),
-                      },
-                      {
-                        title: 'P. Unitario', dataIndex: 'normalPrice', width: 110,
-                        render: (v: number) => v ? `$${v.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—',
-                      },
+                      { title: 'Descripción', dataIndex: 'description', key: 'desc', width: 180, render: (text: string, record: any) => <span>{record.isPackage && '📦 '}{text}</span> },
+                      { title: 'P. Unitario', dataIndex: 'normalPrice', width: 110, render: (v: number) => v ? `$${v.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—' },
                       { title: 'Unidad', key: 'unit', width: 80, render: (_: any, r: any) => r.unit || '—' },
                       { title: 'Detalle', key: 'detail', width: 140, render: (_: any, r: any) => r.detail || '—' },
                       { title: 'Cantidad', dataIndex: 'quantity', width: 90, render: (v: number) => Number(v) },
@@ -1034,7 +1177,7 @@ export default function OrderDetailPage() {
                 key: 'actual',
                 label: '✓ Valores Reales',
                 children: (
-                  <div style={{ backgroundColor: '#f0f5ff', padding: '12px', borderRadius: '6px', marginBottom: '16px' }}>
+                  <div style={{ backgroundColor: '#f0f5ff', padding: 12, borderRadius: 6, marginBottom: 16 }}>
                     <Table
                       dataSource={editLineItems}
                       rowKey="instanceId"
@@ -1042,16 +1185,8 @@ export default function OrderDetailPage() {
                       pagination={false}
                       scroll={{ x: 'max-content' }}
                       columns={[
-                        {
-                          title: 'Descripción', dataIndex: 'description', key: 'desc', width: 180,
-                          render: (text: string, record: any) => (
-                            <span>{record.isPackage && '📦 '}{text}</span>
-                          ),
-                        },
-                        {
-                          title: 'P. Unitario', dataIndex: 'normalPrice', width: 110,
-                          render: (v: number) => v ? `$${v.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—',
-                        },
+                        { title: 'Descripción', dataIndex: 'description', key: 'desc', width: 180, render: (text: string, record: any) => <span>{record.isPackage && '📦 '}{text}</span> },
+                        { title: 'P. Unitario', dataIndex: 'normalPrice', width: 110, render: (v: number) => v ? `$${v.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—' },
                         { title: 'Unidad', key: 'unit', width: 80, render: (_: any, r: any) => r.unit || '—' },
                         { title: 'Detalle', key: 'detail', width: 140, render: (_: any, r: any) => r.detail || '—' },
                         { title: 'Ud. Tiempo', key: 'tu', width: 90, render: (_: any, r: any) => r.timeUnit || 'no aplica' },
@@ -1059,16 +1194,12 @@ export default function OrderDetailPage() {
                         { title: '× Tiempo', key: 'tuv', width: 80, render: (_: any, r: any) => calcTimeUnitValue(r.timeUnit, order?.startDate, order?.endDate) },
                         {
                           title: '✓ Cantidad Real', dataIndex: 'actualQuantity', key: 'aqty', width: 110,
-                          render: (v: number, r: any) => (
-                            <InputNumber min={0.001} value={v} onChange={val => updateEditLineItem(r.instanceId, 'actualQuantity', val)} style={{ width: 90, fontWeight: 500 }} size="small" />
-                          ),
+                          render: (v: number, r: any) => <InputNumber min={0.001} value={v} onChange={val => updateEditLineItem(r.instanceId, 'actualQuantity', val)} style={{ width: 90, fontWeight: 500 }} size="small" />,
                           onCell: () => ({ style: { backgroundColor: '#e6f4ff', fontWeight: 500 } })
                         },
                         {
                           title: '✓ Desc. Real %', dataIndex: 'actualDiscountPct', key: 'adisc', width: 110,
-                          render: (v: number, r: any) => (
-                            <InputNumber min={0} max={100} value={v} onChange={val => updateEditLineItem(r.instanceId, 'actualDiscountPct', val)} style={{ width: 90, fontWeight: 500 }} size="small" />
-                          ),
+                          render: (v: number, r: any) => <InputNumber min={0} max={100} value={v} onChange={val => updateEditLineItem(r.instanceId, 'actualDiscountPct', val)} style={{ width: 90, fontWeight: 500 }} size="small" />,
                           onCell: () => ({ style: { backgroundColor: '#e6f4ff', fontWeight: 500 } })
                         },
                         {
@@ -1078,9 +1209,7 @@ export default function OrderDetailPage() {
                         },
                         {
                           title: '✓ Obs. Real', dataIndex: 'actualObservations', key: 'aobs', width: 160,
-                          render: (v: string, r: any) => (
-                            <Input value={v} onChange={e => updateEditLineItem(r.instanceId, 'actualObservations', e.target.value)} size="small" style={{ fontWeight: 500 }} />
-                          ),
+                          render: (v: string, r: any) => <Input value={v} onChange={e => updateEditLineItem(r.instanceId, 'actualObservations', e.target.value)} size="small" style={{ fontWeight: 500 }} />,
                           onCell: () => ({ style: { backgroundColor: '#e6f4ff', fontWeight: 500 } })
                         },
                       ]}
@@ -1120,30 +1249,14 @@ export default function OrderDetailPage() {
                     </span>
                   ),
                 },
-                {
-                  title: 'P. Normal', dataIndex: 'normalPrice', width: 110,
-                  render: (v: number) => v ? `$${v.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—',
-                },
-                {
-                  title: 'Cantidad', dataIndex: 'quantity', key: 'qty', width: 90,
-                  render: (v: number, r: any) => (
-                    <InputNumber min={0.001} value={v} onChange={val => updateEditLineItem(r.instanceId, 'quantity', val)} style={{ width: 80 }} size="small" />
-                  ),
-                },
-                {
-                  title: 'Desc. %', dataIndex: 'discountPct', key: 'disc', width: 80,
-                  render: (v: number, r: any) => (
-                    <InputNumber min={0} max={100} value={v} onChange={val => updateEditLineItem(r.instanceId, 'discountPct', val)} style={{ width: 70 }} size="small" />
-                  ),
-                },
+                { title: 'P. Normal', dataIndex: 'normalPrice', width: 110, render: (v: number) => v ? `$${v.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—' },
+                { title: 'Cantidad', dataIndex: 'quantity', key: 'qty', width: 90, render: (v: number, r: any) => <InputNumber min={0.001} value={v} onChange={val => updateEditLineItem(r.instanceId, 'quantity', val)} style={{ width: 80 }} size="small" /> },
+                { title: 'Desc. %', dataIndex: 'discountPct', key: 'disc', width: 80, render: (v: number, r: any) => <InputNumber min={0} max={100} value={v} onChange={val => updateEditLineItem(r.instanceId, 'discountPct', val)} style={{ width: 70 }} size="small" /> },
                 { title: 'Unidad', key: 'unit', width: 80, render: (_: any, r: any) => r.unit || '—' },
                 { title: 'Detalle', key: 'detail', width: 140, render: (_: any, r: any) => r.detail || '—' },
                 { title: 'Ud. Tiempo', key: 'tu', width: 90, render: (_: any, r: any) => r.timeUnit || 'no aplica' },
                 { title: 'Factor', key: 'factor', width: 70, render: (_: any, r: any) => r.factor ?? 1 },
-                {
-                  title: '× Tiempo', key: 'tuv', width: 80,
-                  render: (_: any, r: any) => calcTimeUnitValue(r.timeUnit, editForm.getFieldValue('startDate')?.toISOString(), editForm.getFieldValue('endDate')?.toISOString()),
-                },
+                { title: '× Tiempo', key: 'tuv', width: 80, render: (_: any, r: any) => calcTimeUnitValue(r.timeUnit, editForm.getFieldValue('startDate')?.toISOString(), editForm.getFieldValue('endDate')?.toISOString()) },
                 {
                   title: 'Total', key: 'total', width: 120,
                   render: (_: any, r: any) => {
@@ -1152,18 +1265,8 @@ export default function OrderDetailPage() {
                     return `$${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
                   },
                 },
-                {
-                  title: 'Observaciones', dataIndex: 'observations', key: 'obs', width: 160,
-                  render: (v: string, r: any) => (
-                    <Input value={v} onChange={e => updateEditLineItem(r.instanceId, 'observations', e.target.value)} size="small" />
-                  ),
-                },
-                {
-                  title: '', key: 'del', width: 48,
-                  render: (_: any, r: any) => (
-                    <Button danger size="small" icon={<DeleteOutlined />} onClick={() => removeEditLineItem(r.instanceId)} />
-                  ),
-                },
+                { title: 'Observaciones', dataIndex: 'observations', key: 'obs', width: 160, render: (v: string, r: any) => <Input value={v} onChange={e => updateEditLineItem(r.instanceId, 'observations', e.target.value)} size="small" /> },
+                { title: '', key: 'del', width: 48, render: (_: any, r: any) => <Button danger size="small" icon={<DeleteOutlined />} onClick={() => removeEditLineItem(r.instanceId)} /> },
               ]}
               expandable={{
                 expandedRowRender: (r: any) => {
@@ -1186,13 +1289,11 @@ export default function OrderDetailPage() {
                             title: 'Seleccionado', key: 'selected', width: 150,
                             render: (_: any, comp: any) => {
                               if (!comp.componentResource?.isSubstitute) return null
-                              const selectedValue = r.substitutionSelections?.[comp.componentResourceId]
-                              if (selectedValue) {
-                                const componentOptions = substitutionPackageDetails[comp.componentResourceId] || []
-                                const selectedComp = componentOptions.find((c: any) => c.componentResourceId === selectedValue)
-                                if (selectedComp?.componentResource?.name) {
-                                  return <Tag color="green">✓ {selectedComp.componentResource.name}</Tag>
-                                }
+                              const val = r.substitutionSelections?.[comp.componentResourceId]
+                              if (val) {
+                                const opts = substitutionPackageDetails[comp.componentResourceId] || []
+                                const sel = opts.find((c: any) => c.componentResourceId === val)
+                                if (sel?.componentResource?.name) return <Tag color="green">✓ {sel.componentResource.name}</Tag>
                               }
                               return <span style={{ color: '#999' }}>—</span>
                             },
@@ -1266,13 +1367,7 @@ export default function OrderDetailPage() {
         <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
           Las cantidades se sugieren en negativo a partir de los valores reales de la orden. Puedes modificar las cantidades (0 o negativos).
         </Text>
-        <Input.TextArea
-          rows={2}
-          placeholder="Notas de la nota de crédito..."
-          value={creditNoteNotes}
-          onChange={e => setCreditNoteNotes(e.target.value)}
-          style={{ marginBottom: 12 }}
-        />
+        <Input.TextArea rows={2} placeholder="Notas de la nota de crédito..." value={creditNoteNotes} onChange={e => setCreditNoteNotes(e.target.value)} style={{ marginBottom: 12 }} />
         <Table
           dataSource={creditNoteItems}
           rowKey={(_, idx) => String(idx)}
@@ -1282,12 +1377,7 @@ export default function OrderDetailPage() {
           columns={[
             { title: 'Descripción', dataIndex: 'description', width: 200 },
             { title: 'P. Unitario', dataIndex: 'unitPrice', width: 110, render: (v: number) => `$${Number(v).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` },
-            {
-              title: 'Cantidad', dataIndex: 'quantity', width: 110,
-              render: (v: number, _: any, idx: number) => (
-                <InputNumber value={v} max={0} onChange={val => updateCreditNoteItem(idx, 'quantity', val)} style={{ width: 90 }} size="small" />
-              ),
-            },
+            { title: 'Cantidad', dataIndex: 'quantity', width: 110, render: (v: number, _: any, idx: number) => <InputNumber value={v} max={0} onChange={val => updateCreditNoteItem(idx, 'quantity', val)} style={{ width: 90 }} size="small" /> },
             { title: 'Desc. %', dataIndex: 'discountPct', width: 80, render: (v: number) => `${v}%` },
             {
               title: 'Total', width: 120,
@@ -1296,12 +1386,7 @@ export default function OrderDetailPage() {
                 return <span style={{ color: total < 0 ? '#ff4d4f' : undefined, fontWeight: 500 }}>${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
               },
             },
-            {
-              title: 'Observaciones', dataIndex: 'observations', width: 160,
-              render: (v: string, _: any, idx: number) => (
-                <Input value={v} onChange={e => updateCreditNoteItem(idx, 'observations', e.target.value)} size="small" />
-              ),
-            },
+            { title: 'Observaciones', dataIndex: 'observations', width: 160, render: (v: string, _: any, idx: number) => <Input value={v} onChange={e => updateCreditNoteItem(idx, 'observations', e.target.value)} size="small" /> },
           ]}
           footer={() => {
             const subtotal = creditNoteItems.reduce((sum, li) => sum + (li.quantity || 0) * (li.unitPrice || 0) * (1 - (li.discountPct || 0) / 100), 0)
@@ -1319,4 +1404,3 @@ export default function OrderDetailPage() {
     </div>
   )
 }
-

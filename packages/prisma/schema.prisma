@@ -771,7 +771,9 @@ model Event {
   name            String      @db.VarChar(300)
   status          EventStatus @default(QUOTED)
   description     String?     @db.Text
-  venueLocation   String?     @map("venue_location") @db.VarChar(300)
+  venueLocation      String?     @map("venue_location") @db.VarChar(300)
+  venue              String?     @db.VarChar(300)
+  expectedAttendance Int?        @map("expected_attendance")
   setupStart      DateTime?   @map("setup_start")
   setupEnd        DateTime?   @map("setup_end")
   eventStart      DateTime?   @map("event_start")

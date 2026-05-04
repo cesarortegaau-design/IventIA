@@ -1,20 +1,25 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Card, Button, Space, Row, Col, App, Typography, Tag, Table, Divider, Timeline, Modal, Form, Input, Descriptions, DatePicker } from 'antd'
-import { ArrowLeftOutlined, EditOutlined } from '@ant-design/icons'
+import {
+  Card, Button, Space, App, Typography, Tag, Table, Timeline,
+  Modal, Form, Input, Descriptions, DatePicker, Tabs, Progress, Popconfirm,
+} from 'antd'
+import { ArrowLeftOutlined, EditOutlined, CheckOutlined, StopOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { purchaseOrdersApi } from '../../../api/purchaseOrders'
+import { PageHeader } from '../../../components/ui'
+import { formatMoney } from '../../../utils/format'
 
-const { Title } = Typography
+const { Text } = Typography
 
-const PO_STATUSES = {
-  DRAFT: { label: 'Borrador', color: 'default' },
-  CONFIRMED: { label: 'Confirmado', color: 'blue' },
-  PARTIALLY_RECEIVED: { label: 'Recibido Parcial', color: 'orange' },
-  RECEIVED: { label: 'Recibido', color: 'green' },
-  INVOICED: { label: 'Facturado', color: 'purple' },
-  CANCELLED: { label: 'Cancelado', color: 'red' },
+const PO_STATUSES: Record<string, { label: string; color: string }> = {
+  DRAFT:              { label: 'Borrador',        color: 'default' },
+  CONFIRMED:         { label: 'Confirmada',      color: 'blue' },
+  PARTIALLY_RECEIVED:{ label: 'Recibida parcial',color: 'orange' },
+  RECEIVED:          { label: 'Recibida total',  color: 'green' },
+  INVOICED:          { label: 'Facturada',       color: 'purple' },
+  CANCELLED:         { label: 'Anulada',         color: 'red' },
 }
 
 export default function PurchaseOrderDetailPage() {
@@ -24,6 +29,7 @@ export default function PurchaseOrderDetailPage() {
   const queryClient = useQueryClient()
   const [confirmForm] = Form.useForm()
   const [editForm] = Form.useForm()
+  const [activeTab, setActiveTab] = useState('items')
   const [confirmModalOpen, setConfirmModalOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
 
@@ -87,24 +93,18 @@ export default function PurchaseOrderDetailPage() {
     },
   })
 
-  if (isLoading) return <div>Cargando...</div>
-  if (!po) return <div>No encontrado</div>
+  if (isLoading) return <Card loading />
+  if (!po) return null
 
-  const status = PO_STATUSES[po.status as keyof typeof PO_STATUSES] || { label: po.status, color: 'default' }
+  const status = PO_STATUSES[po.status as keyof typeof PO_STATUSES] ?? { label: po.status, color: 'default' }
 
-  const lineItemColumns = [
-    { title: 'Código', render: (_: any, r: any) => r.resource?.code },
-    { title: 'Descripción', render: (_: any, r: any) => r.description || r.resource?.name },
-    { title: 'Cantidad', render: (_: any, r: any) => r.quantity },
-    { title: 'Precio', render: (_: any, r: any) => `$${parseFloat(r.unitPrice).toFixed(2)}` },
-    { title: 'Total', render: (_: any, r: any) => `$${parseFloat(r.lineTotal).toFixed(2)}` },
-    { title: 'Recibido', render: (_: any, r: any) => r.receivedQty || '0' },
-  ]
+  const lineItems = po.lineItems ?? []
+  const receivedCount = lineItems.filter((li: any) => parseFloat(li.receivedQty ?? 0) >= parseFloat(li.quantity)).length
+  const receptionPct = lineItems.length > 0 ? Math.round((receivedCount / lineItems.length) * 100) : 0
 
-  const statusHistoryItems = (po.statusHistory || []).map((sh: any) => ({
-    label: `${sh.fromStatus} → ${sh.toStatus}`,
-    children: <div>{sh.changedBy && `${sh.changedBy.firstName} ${sh.changedBy.lastName}`}{sh.notes && ` - ${sh.notes}`}</div>,
-  }))
+  const subtotal = parseFloat(po.subtotal || 0)
+  const taxAmt = parseFloat(po.taxAmount || 0)
+  const totalAmt = parseFloat(po.total || 0)
 
   function openEditModal() {
     editForm.setFieldsValue({
@@ -116,138 +116,273 @@ export default function PurchaseOrderDetailPage() {
     setEditModalOpen(true)
   }
 
+  const lineColumns = [
+    {
+      title: 'Código',
+      render: (_: any, r: any) => (
+        <span style={{ fontSize: 12, fontFamily: 'monospace' }}>{r.resource?.code ?? '—'}</span>
+      ),
+      width: 90,
+    },
+    {
+      title: 'Descripción',
+      render: (_: any, r: any) => r.description || r.resource?.name || '—',
+    },
+    {
+      title: 'Unidad',
+      render: (_: any, r: any) => r.resource?.unit ?? '—',
+      width: 70,
+    },
+    {
+      title: 'Cantidad',
+      dataIndex: 'quantity',
+      width: 80,
+      align: 'center' as const,
+      render: (v: string) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{parseFloat(v)}</span>,
+    },
+    {
+      title: 'Precio Unit.',
+      dataIndex: 'unitPrice',
+      width: 110,
+      align: 'right' as const,
+      render: (v: string) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatMoney(parseFloat(v), po.currency || 'MXN')}</span>,
+    },
+    {
+      title: 'Total',
+      dataIndex: 'lineTotal',
+      width: 120,
+      align: 'right' as const,
+      render: (v: string) => (
+        <Text strong style={{ fontVariantNumeric: 'tabular-nums' }}>
+          {formatMoney(parseFloat(v), po.currency || 'MXN')}
+        </Text>
+      ),
+    },
+    {
+      title: 'Recibido',
+      width: 130,
+      render: (_: any, r: any) => {
+        const qty = parseFloat(r.quantity || 0)
+        const recv = parseFloat(r.receivedQty || 0)
+        const pct = qty > 0 ? Math.round((recv / qty) * 100) : 0
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Progress percent={pct} size="small" showInfo={false} strokeColor={pct >= 100 ? '#16a34a' : '#f59e0b'} style={{ flex: 1 }} />
+            <span style={{ fontSize: 11, fontVariantNumeric: 'tabular-nums', color: 'rgba(0,0,0,0.55)', minWidth: 40 }}>
+              {recv}/{qty}
+            </span>
+          </div>
+        )
+      },
+    },
+  ]
+
   return (
-    <div>
-      <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/catalogos/ordenes-compra')} style={{ marginBottom: 16 }}>
-        Volver
-      </Button>
-
-      <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col span={16}>
-          <Card>
-            <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-              <Title level={3} style={{ margin: 0 }}>{po.orderNumber}</Title>
-              <Space>
-                <Tag color={status.color} style={{ fontSize: 14, padding: '4px 12px' }}>
-                  {status.label}
-                </Tag>
-                {po.status === 'DRAFT' && (
-                  <Button icon={<EditOutlined />} onClick={openEditModal}>
-                    Editar
-                  </Button>
-                )}
-              </Space>
-            </Row>
-            <Descriptions size="small" column={2} style={{ marginBottom: 16 }}>
-              <Descriptions.Item label="Proveedor">{po.supplier?.name}</Descriptions.Item>
-              <Descriptions.Item label="Fecha de Creación">{new Date(po.createdAt).toLocaleDateString('es-MX')}</Descriptions.Item>
-              <Descriptions.Item label="Lista de Precios">{po.priceList?.name}</Descriptions.Item>
-              <Descriptions.Item label="Fecha Requerida">
-                {po.requiredDeliveryDate ? new Date(po.requiredDeliveryDate).toLocaleDateString('es-MX') : '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="Creado por">
-                {po.createdBy && `${po.createdBy.firstName} ${po.createdBy.lastName}`}
-              </Descriptions.Item>
-              <Descriptions.Item label="Confirmado por">
-                {po.confirmedBy ? `${po.confirmedBy.firstName} ${po.confirmedBy.lastName}` : '-'}
-              </Descriptions.Item>
-              {po.originOrder && (
-                <Descriptions.Item label="Orden de Servicio Origen">
-                  <Button type="link" size="small" style={{ padding: 0 }} onClick={() => navigate(`/ordenes/${po.originOrder.id}`)}>
-                    {po.originOrder.orderNumber}
-                  </Button>
-                </Descriptions.Item>
-              )}
-            </Descriptions>
-
-            {po.description && (
+    <div style={{ minHeight: '100vh', background: '#fafafa' }}>
+      {/* Page header */}
+      <PageHeader
+        title={
+          <Space size={8} align="center">
+            <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/catalogos/ordenes-compra')} />
+            {po.orderNumber}
+            <Tag color={status.color}>{status.label}</Tag>
+          </Space>
+        }
+        meta={
+          <span>
+            Proveedor <strong>{po.supplier?.name ?? '—'}</strong>
+            {po.originOrder && (
               <>
-                <Divider />
-                <div><strong>Descripción:</strong></div>
-                <div>{po.description}</div>
-              </>
-            )}
-
-            {po.notes && (
-              <>
-                <Divider />
-                <div><strong>Notas:</strong></div>
-                <div>{po.notes}</div>
-              </>
-            )}
-          </Card>
-
-          <Card style={{ marginTop: 16 }}>
-            <Title level={4}>Líneas de Orden</Title>
-            <Table
-              dataSource={po.lineItems || []}
-              columns={lineItemColumns}
-              rowKey="id"
-              size="small"
-              pagination={false}
-            />
-          </Card>
-
-          <Card style={{ marginTop: 16 }}>
-            <Title level={4}>Historial de Estado</Title>
-            {statusHistoryItems.length > 0 ? (
-              <Timeline items={statusHistoryItems} />
-            ) : (
-              <div>Sin cambios de estado registrados</div>
-            )}
-          </Card>
-        </Col>
-
-        <Col span={8}>
-          <Card>
-            <Title level={4}>Totales</Title>
-            <Divider />
-            <Row justify="space-between" style={{ marginBottom: 8 }}>
-              <span>Subtotal:</span>
-              <span>${parseFloat(po.subtotal).toFixed(2)}</span>
-            </Row>
-            <Row justify="space-between" style={{ marginBottom: 8 }}>
-              <span>Impuesto ({(po.taxRate * 100).toFixed(0)}%):</span>
-              <span>${parseFloat(po.taxAmount).toFixed(2)}</span>
-            </Row>
-            <Divider />
-            <Row justify="space-between" style={{ fontWeight: 'bold', fontSize: 16, marginBottom: 16 }}>
-              <span>Total:</span>
-              <span>${parseFloat(po.total).toFixed(2)}</span>
-            </Row>
-
-            <Card size="small" style={{ marginBottom: 16, background: '#f5f5f5' }}>
-              <div><strong>Divisa:</strong> {po.currency}</div>
-              {po.deliveryLocation && <div><strong>Ubicación:</strong> {po.deliveryLocation}</div>}
-            </Card>
-
-            <Space direction="vertical" style={{ width: '100%' }}>
-              {po.status === 'DRAFT' && (
-                <>
-                  <Button type="primary" block onClick={() => setConfirmModalOpen(true)}>
-                    Confirmar Orden
-                  </Button>
-                  <Button danger block onClick={() => cancelMutation.mutate()}>
-                    Cancelar Orden
-                  </Button>
-                </>
-              )}
-              {['CONFIRMED', 'PARTIALLY_RECEIVED'].includes(po.status) && (
-                <Button danger block onClick={() => cancelMutation.mutate()}>
-                  Cancelar Orden
+                {' · '}OS origen{' '}
+                <Button type="link" size="small" style={{ padding: 0, fontSize: 13, color: '#6B46C1', height: 'auto' }} onClick={() => navigate(`/ordenes/${po.originOrder.id}`)}>
+                  {po.originOrder.orderNumber}
                 </Button>
-              )}
-            </Space>
-          </Card>
-        </Col>
-      </Row>
+              </>
+            )}
+            {po.requiredDeliveryDate && (
+              <> · Entrega <strong>{dayjs(po.requiredDeliveryDate).format('DD/MM/YYYY')}</strong></>
+            )}
+          </span>
+        }
+        actions={
+          <>
+            {po.status === 'DRAFT' && (
+              <Button icon={<EditOutlined />} onClick={openEditModal}>Editar</Button>
+            )}
+            {po.status === 'DRAFT' && (
+              <Button type="primary" icon={<CheckOutlined />} onClick={() => setConfirmModalOpen(true)}>
+                Confirmar OC
+              </Button>
+            )}
+            {['DRAFT', 'CONFIRMED', 'PARTIALLY_RECEIVED'].includes(po.status) && (
+              <Popconfirm
+                title="¿Cancelar esta OC?"
+                onConfirm={() => cancelMutation.mutate()}
+                okText="Sí, cancelar"
+                cancelText="No"
+                okButtonProps={{ danger: true }}
+              >
+                <Button danger icon={<StopOutlined />} loading={cancelMutation.isPending}>
+                  Cancelar
+                </Button>
+              </Popconfirm>
+            )}
+          </>
+        }
+        tabs={
+          <Tabs
+            activeKey={activeTab}
+            onChange={setActiveTab}
+            style={{ marginBottom: -1 }}
+            items={[
+              { key: 'items', label: `Items (${lineItems.length})` },
+              { key: 'historial', label: 'Historial' },
+            ]}
+          />
+        }
+      />
 
+      {/* Content */}
+      <div style={{ padding: 24 }}>
+        {activeTab === 'items' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 20, alignItems: 'start' }}>
+            {/* Main: items table */}
+            <div>
+              {/* Reception progress summary */}
+              {lineItems.length > 0 && (
+                <Card size="small" style={{ marginBottom: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <Text type="secondary" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>Recepción general</Text>
+                    <Progress
+                      percent={receptionPct}
+                      strokeColor={receptionPct === 100 ? '#16a34a' : '#f59e0b'}
+                      style={{ flex: 1 }}
+                      size="small"
+                    />
+                    <Text style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                      {receivedCount}/{lineItems.length} líneas
+                    </Text>
+                  </div>
+                </Card>
+              )}
+
+              <Card styles={{ body: { padding: 0 } }} title="Líneas de orden">
+                <Table
+                  dataSource={lineItems}
+                  columns={lineColumns}
+                  rowKey="id"
+                  size="small"
+                  pagination={false}
+                  scroll={{ x: 800 }}
+                />
+              </Card>
+            </div>
+
+            {/* Sidebar */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Financial summary */}
+              <Card size="small" title="Resumen financiero">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Text type="secondary">Subtotal</Text>
+                    <Text>{formatMoney(subtotal, po.currency || 'MXN')}</Text>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Text type="secondary">Impuesto ({((po.taxRate || 0) * 100).toFixed(0)}%)</Text>
+                    <Text>{formatMoney(taxAmt, po.currency || 'MXN')}</Text>
+                  </div>
+                  <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 8, display: 'flex', justifyContent: 'space-between' }}>
+                    <Text strong style={{ fontSize: 15 }}>Total</Text>
+                    <Text strong style={{ fontSize: 15, color: '#6B46C1' }}>{formatMoney(totalAmt, po.currency || 'MXN')}</Text>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>Divisa</Text>
+                    <Tag>{po.currency || 'MXN'}</Tag>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Proveedor */}
+              <Card size="small" title="Proveedor">
+                <Descriptions column={1} size="small" colon={false}>
+                  <Descriptions.Item label="Nombre">
+                    <Text strong>{po.supplier?.name ?? '—'}</Text>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Código">{po.supplier?.code ?? '—'}</Descriptions.Item>
+                  {po.deliveryLocation && (
+                    <Descriptions.Item label="Entrega">{po.deliveryLocation}</Descriptions.Item>
+                  )}
+                  <Descriptions.Item label="Lista de precios">{po.priceList?.name ?? '—'}</Descriptions.Item>
+                </Descriptions>
+              </Card>
+
+              {/* Info OC */}
+              <Card size="small" title="Datos de OC">
+                <Descriptions column={1} size="small" colon={false}>
+                  <Descriptions.Item label="Creada">
+                    {dayjs(po.createdAt).format('DD/MM/YYYY HH:mm')}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Creado por">
+                    {po.createdBy ? `${po.createdBy.firstName} ${po.createdBy.lastName}` : '—'}
+                  </Descriptions.Item>
+                  {po.requiredDeliveryDate && (
+                    <Descriptions.Item label="Entrega requerida">
+                      {dayjs(po.requiredDeliveryDate).format('DD/MM/YYYY')}
+                    </Descriptions.Item>
+                  )}
+                  {po.confirmedBy && (
+                    <Descriptions.Item label="Confirmada por">
+                      {po.confirmedBy.firstName} {po.confirmedBy.lastName}
+                    </Descriptions.Item>
+                  )}
+                </Descriptions>
+              </Card>
+
+              {/* Notes */}
+              {(po.description || po.notes) && (
+                <Card size="small" title="Notas">
+                  {po.description && <Text style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>{po.description}</Text>}
+                  {po.notes && <Text type="secondary" style={{ fontSize: 12 }}>{po.notes}</Text>}
+                </Card>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'historial' && (
+          <Card title="Historial de Estado" style={{ maxWidth: 640 }}>
+            {(po.statusHistory ?? []).length > 0 ? (
+              <Timeline
+                items={(po.statusHistory ?? []).map((sh: any) => ({
+                  color: PO_STATUSES[sh.toStatus]?.color === 'default' ? 'gray' : PO_STATUSES[sh.toStatus]?.color ?? 'blue',
+                  children: (
+                    <div>
+                      <Text strong>{PO_STATUSES[sh.fromStatus]?.label ?? sh.fromStatus} → {PO_STATUSES[sh.toStatus]?.label ?? sh.toStatus}</Text>
+                      <br />
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {sh.changedBy ? `${sh.changedBy.firstName} ${sh.changedBy.lastName}` : '—'}
+                        {' · '}{dayjs(sh.createdAt).format('DD/MM/YYYY HH:mm')}
+                      </Text>
+                      {sh.notes && <div><Text type="secondary" style={{ fontSize: 12 }}>{sh.notes}</Text></div>}
+                    </div>
+                  ),
+                }))}
+              />
+            ) : (
+              <Text type="secondary">Sin cambios de estado registrados</Text>
+            )}
+          </Card>
+        )}
+      </div>
+
+      {/* Confirm modal */}
       <Modal
         title="Confirmar Orden de Compra"
         open={confirmModalOpen}
         onCancel={() => setConfirmModalOpen(false)}
         onOk={() => confirmForm.submit()}
         confirmLoading={confirmMutation.isPending}
+        okText="Confirmar OC"
       >
         <Form form={confirmForm} layout="vertical" onFinish={(values) => confirmMutation.mutate(values.notes)}>
           <Form.Item name="notes" label="Notas (opcional)">
@@ -256,6 +391,7 @@ export default function PurchaseOrderDetailPage() {
         </Form>
       </Modal>
 
+      {/* Edit modal */}
       <Modal
         title="Editar Orden de Compra"
         open={editModalOpen}
@@ -265,7 +401,7 @@ export default function PurchaseOrderDetailPage() {
       >
         <Form form={editForm} layout="vertical" onFinish={(values) => updateMutation.mutate(values)}>
           <Form.Item name="requiredDeliveryDate" label="Fecha de Entrega Requerida">
-            <DatePicker style={{ width: '100%' }} />
+            <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
           </Form.Item>
           <Form.Item name="deliveryLocation" label="Ubicación de Entrega">
             <Input placeholder="Ej: Bodega principal" />

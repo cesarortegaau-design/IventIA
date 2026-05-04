@@ -30,26 +30,10 @@ import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '../stores/authStore'
 import { chatApi } from '../api/chat'
 import { PRIVILEGES } from '@iventia/shared'
+import { T } from '../styles/tokens'
 
 const { Text } = Typography
 const { useBreakpoint } = Grid
-
-// Design tokens from Variant C
-const T = {
-  navy:      '#1a3a5c',
-  navyDark:  '#0f2540',
-  blue:      '#2e7fc1',
-  light:     '#f0f6ff',
-  bg:        '#f5f7fa',
-  border:    '#e5e9f0',
-  text:      '#1f2937',
-  textMuted: '#64748b',
-  textDim:   '#94a3b8',
-  success:   '#10b981',
-  warning:   '#f59e0b',
-  danger:    '#ef4444',
-  purple:    '#8b5cf6',
-}
 
 // Top-level area definitions
 const TOP_AREAS = [
@@ -137,12 +121,9 @@ export default function MainLayout() {
       { key: '/catalogos/clientes', label: 'Clientes', icon: <TeamOutlined />, route: '/catalogos/clientes', privilege: PRIVILEGES.CLIENT_VIEW },
       { key: '/catalogos/proveedores', label: 'Proveedores', icon: <ContactsOutlined />, route: '/catalogos/proveedores', privilege: PRIVILEGES.SUPPLIER_VIEW },
       { type: 'section', label: 'Estructura' },
-      { key: '/catalogos/organizaciones', label: 'Organizaciones', icon: <ApartmentOutlined />, route: '/catalogos/organizaciones', privilege: PRIVILEGES.ORGANIZATION_VIEW },
-      { key: '/catalogos/departamentos', label: 'Departamentos', icon: <ApartmentOutlined />, route: '/catalogos/departamentos', privilege: PRIVILEGES.DEPARTMENT_VIEW },
+      { key: '/catalogos/organizaciones', label: 'Organizaciones y Depts.', icon: <ApartmentOutlined />, route: '/catalogos/organizaciones', privilege: PRIVILEGES.ORGANIZATION_VIEW },
       { type: 'section', label: 'Accesos' },
-      { key: '/catalogos/usuarios', label: 'Usuarios', icon: <UserOutlined />, route: '/catalogos/usuarios', privilege: PRIVILEGES.USER_VIEW },
-      { key: '/catalogos/perfiles', label: 'Perfiles', icon: <SafetyCertificateOutlined />, route: '/catalogos/perfiles', privilege: PRIVILEGES.PROFILE_VIEW },
-      { key: '/catalogos/usuarios-portal', label: 'Usuarios Portal', icon: <TeamOutlined />, route: '/catalogos/usuarios-portal', privilege: PRIVILEGES.PORTAL_USER_VIEW },
+      { key: '/catalogos/usuarios-perfiles', label: 'Usuarios y Perfiles', icon: <UserOutlined />, route: '/catalogos/usuarios-perfiles', privilege: PRIVILEGES.USER_VIEW },
     ],
     analitica: [
       { type: 'section', label: 'Inteligencia' },

@@ -1,35 +1,38 @@
 import { useState, useRef, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Table, Button, Card, Input, Space, Tag, Modal, Form, Typography,
-  Row, Col, App, Select, Tabs, Switch, Upload, Avatar,
+  Table, Button, Space, Tag, Modal, Form, Input, Typography,
+  Row, Col, App, Select, Tabs, Switch, Upload, Avatar, Skeleton, Empty,
 } from 'antd'
 import {
   PlusOutlined, EditOutlined, PoweroffOutlined, EyeOutlined,
-  DownloadOutlined, UploadOutlined, SearchOutlined, TeamOutlined,
-  DollarOutlined, ClearOutlined,
+  DownloadOutlined, UploadOutlined, MoreOutlined,
 } from '@ant-design/icons'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { clientsApi } from '../../../api/clients'
 import { exportToCsv } from '../../../utils/exportCsv'
+import { PageHeader, FilterBar, StatCard } from '../../../components/ui'
+import { formatMoney, getInitials, getAvatarColors } from '../../../utils/format'
 
-const { Title, Text } = Typography
-const PURPLE = '#6B46C1'
+const { Text } = Typography
 
 export default function ClientsPage() {
   const [form] = Form.useForm()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [typeFilter, setTypeFilter] = useState<string | undefined>()
+  const [statusTab, setStatusTab] = useState<string>(searchParams.get('status') ?? 'all')
   const [importPreview, setImportPreview] = useState<any[] | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['clients', { search }],
-    queryFn: () => clientsApi.list({ search, pageSize: 100 }),
+    queryFn: () => clientsApi.list({ search, pageSize: 200 }),
   })
 
   const saveMutation = useMutation({
@@ -43,8 +46,7 @@ export default function ClientsPage() {
       message.success(editingId ? 'Cliente actualizado' : 'Cliente creado')
     },
     onError: (err: any) => {
-      const msg = err?.response?.data?.error?.message ?? 'Error al guardar el cliente'
-      message.error(msg)
+      message.error(err?.response?.data?.error?.message ?? 'Error al guardar el cliente')
     },
   })
 
@@ -97,106 +99,207 @@ export default function ClientsPage() {
     setModalOpen(true)
   }
 
-  const clients = data?.data ?? []
-  const activeCount = clients.filter((c: any) => c.isActive).length
-  const inactiveCount = clients.filter((c: any) => !c.isActive).length
+  const allClients: any[] = data?.data ?? []
 
-  const COLORS = ['#dbeafe/#1e40af', '#fef3c7/#92400e', '#fee2e2/#991b1b', '#dcfce7/#166534', '#e0e7ff/#3730a3', '#fce7f3/#9f1239', '#f3e8ff/#6b21a8', '#fef9c3/#854d0e']
+  const stats = useMemo(() => {
+    const active = allClients.filter((c: any) => c.isActive).length
+    const inactive = allClients.filter((c: any) => !c.isActive).length
+    // Top type by count
+    const typeCounts: Record<string, number> = {}
+    allClients.forEach((c: any) => {
+      if (c.personType) typeCounts[c.personType] = (typeCounts[c.personType] || 0) + 1
+    })
+    const topType = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0]
+    const topLabel = topType ? (topType[0] === 'MORAL' ? 'Persona Moral' : 'Persona Física') : '—'
+    return { active, inactive, topLabel }
+  }, [allClients])
+
+  const tabCounts = useMemo(() => ({
+    all: allClients.length,
+    active: allClients.filter((c: any) => c.isActive).length,
+    inactive: allClients.filter((c: any) => !c.isActive).length,
+  }), [allClients])
+
+  const filtered = useMemo(() => {
+    return allClients.filter((c: any) => {
+      if (statusTab === 'active' && !c.isActive) return false
+      if (statusTab === 'inactive' && c.isActive) return false
+      if (typeFilter && c.personType !== typeFilter) return false
+      return true
+    })
+  }, [allClients, statusTab, typeFilter])
+
+  const hasFilters = !!(typeFilter || search)
 
   const columns = [
     {
-      title: 'Cliente', key: 'name',
+      title: 'Cliente',
       render: (_: any, r: any) => {
         const name = r.companyName || `${r.firstName ?? ''} ${r.lastName ?? ''}`.trim()
-        const initials = name.split(' ').map((s: string) => s[0]).slice(0, 2).join('').toUpperCase()
-        const idx = (r.id?.charCodeAt(0) || 0) % COLORS.length
-        const [bg, fg] = COLORS[idx].split('/')
+        const { bg, fg } = getAvatarColors(name)
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Avatar size={32} style={{ background: bg, color: fg, fontSize: 12, fontWeight: 600 }}>{initials}</Avatar>
+            <Avatar size={32} style={{ background: bg, color: fg, fontSize: 12, fontWeight: 600, flexShrink: 0 }}>
+              {getInitials(name)}
+            </Avatar>
             <div>
-              <div style={{ fontWeight: 600, fontSize: 13 }}>{name}</div>
-              {r.rfc && <div style={{ fontSize: 11, color: 'rgba(0,0,0,0.45)', fontFamily: 'monospace' }}>{r.rfc}</div>}
+              <Text style={{ fontWeight: 600, fontSize: 13, display: 'block' }}>{name}</Text>
+              {r.rfc && (
+                <Text code style={{ fontSize: 11 }}>{r.rfc}</Text>
+              )}
             </div>
           </div>
         )
       },
     },
     {
-      title: 'Tipo', dataIndex: 'personType', width: 90,
-      render: (v: string) => <Tag color={v === 'MORAL' ? 'blue' : 'green'}>{v === 'MORAL' ? 'Moral' : 'Física'}</Tag>,
+      title: 'Tipo',
+      dataIndex: 'personType',
+      width: 110,
+      render: (v: string) => v ? (
+        <Tag>{v === 'MORAL' ? 'Moral' : 'Física'}</Tag>
+      ) : <Text type="secondary">—</Text>,
     },
     {
-      title: 'Contacto', key: 'contact',
+      title: 'Contacto',
       render: (_: any, r: any) => (
         <div>
-          {r.email && <div style={{ fontSize: 13 }}>{r.email}</div>}
-          {r.phone && <div style={{ fontSize: 11, color: 'rgba(0,0,0,0.45)' }}>{r.phone}</div>}
+          {r.email && <Text style={{ fontSize: 13, display: 'block' }}>{r.email}</Text>}
+          {r.phone && <Text type="secondary" style={{ fontSize: 11 }}>{r.phone}</Text>}
+          {!r.email && !r.phone && <Text type="secondary">—</Text>}
         </div>
       ),
     },
     {
-      title: 'Estado', dataIndex: 'isActive', width: 100,
+      title: 'Eventos',
+      width: 80,
+      render: (_: any, r: any) => (
+        <Text style={{ fontVariantNumeric: 'tabular-nums' }}>
+          {r._count?.orders ?? r._count?.events ?? '—'}
+        </Text>
+      ),
+    },
+    {
+      title: 'Estado',
+      dataIndex: 'isActive',
+      width: 100,
       render: (v: boolean) => <Tag color={v ? 'green' : 'default'}>{v ? 'Activo' : 'Inactivo'}</Tag>,
     },
     {
-      title: '', key: 'actions', width: 110,
+      title: '',
+      key: 'actions',
+      width: 90,
+      fixed: 'right' as const,
       render: (_: any, r: any) => (
-        <Space size={4}>
-          <Button size="small" type="text" icon={<EyeOutlined />} onClick={() => navigate(`/catalogos/clientes/${r.id}`)} />
+        <Space size={2}>
+          <Button
+            size="small"
+            type="text"
+            icon={<EyeOutlined />}
+            onClick={() => navigate(`/catalogos/clientes/${r.id}`)}
+          />
           <Button size="small" type="text" icon={<EditOutlined />} onClick={() => openEdit(r)} />
-          <Button size="small" type="text" icon={<PoweroffOutlined />} onClick={() => toggleMutation.mutate(r.id)} />
+          <Button
+            size="small"
+            type="text"
+            icon={<MoreOutlined />}
+            onClick={() => toggleMutation.mutate(r.id)}
+            title={r.isActive ? 'Desactivar' : 'Activar'}
+          />
         </Space>
       ),
     },
   ]
 
+  const tabItems = [
+    { key: 'all',      label: `Todos (${tabCounts.all})` },
+    { key: 'active',   label: `Activos (${tabCounts.active})` },
+    { key: 'inactive', label: `Inactivos (${tabCounts.inactive})` },
+  ]
+
   return (
     <div>
-      {/* Page header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <div>
-          <Title level={4} style={{ margin: 0 }}>Clientes</Title>
-          <Text type="secondary" style={{ fontSize: 13 }}>Empresas y contactos para los que se producen eventos</Text>
-        </div>
-        <Space>
-          <Upload beforeUpload={parseCsvFile} showUploadList={false} accept=".csv">
-            <Button icon={<UploadOutlined />}>Importar</Button>
-          </Upload>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true) }}>
-            Nuevo cliente
-          </Button>
-        </Space>
+      <PageHeader
+        title="Clientes"
+        meta={`Empresas y contactos · ${data?.meta?.total ?? allClients.length} totales`}
+        actions={
+          <Space>
+            <Upload beforeUpload={parseCsvFile} showUploadList={false} accept=".csv">
+              <Button icon={<UploadOutlined />}>Importar</Button>
+            </Upload>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true) }}
+            >
+              Nuevo cliente
+            </Button>
+          </Space>
+        }
+        tabs={
+          <Tabs
+            activeKey={statusTab}
+            onChange={(k) => {
+              setStatusTab(k)
+              const next = new URLSearchParams(searchParams)
+              if (k === 'all') next.delete('status'); else next.set('status', k)
+              setSearchParams(next, { replace: true })
+            }}
+            items={tabItems}
+            style={{ marginBottom: -1 }}
+          />
+        }
+      />
+
+      {/* KPI cards */}
+      <div style={{ padding: '20px 24px 4px', background: '#fafafa' }}>
+        <Row gutter={[12, 12]}>
+          <Col xs={24} sm={12} lg={6}>
+            <StatCard label="Total clientes" value={data?.meta?.total ?? allClients.length} tone="default" />
+          </Col>
+          <Col xs={24} sm={12} lg={6}>
+            <StatCard label="Activos" value={stats.active} tone="primary" />
+          </Col>
+          <Col xs={24} sm={12} lg={6}>
+            <StatCard label="Inactivos" value={stats.inactive} tone="default" hint="Sin actividad" />
+          </Col>
+          <Col xs={24} sm={12} lg={6}>
+            <StatCard label="Tipo principal" value={stats.topLabel} tone="info" />
+          </Col>
+        </Row>
       </div>
 
-      {/* Stats cards */}
-      <Row gutter={[12, 12]} style={{ marginBottom: 20 }}>
-        {[
-          { title: 'Total clientes', value: data?.meta?.total ?? clients.length, color: '#1a3a5c' },
-          { title: 'Activos', value: activeCount, color: '#16a34a' },
-          { title: 'Inactivos', value: inactiveCount, color: '#64748b' },
-        ].map(card => (
-          <Col xs={24} sm={8} key={card.title}>
-            <Card bodyStyle={{ padding: 16 }} style={{ borderRadius: 10 }}>
-              <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.5)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{card.title}</div>
-              <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: card.color }}>{card.value}</div>
-            </Card>
-          </Col>
-        ))}
-      </Row>
-
       {/* Filters */}
-      <Card bodyStyle={{ padding: '12px 16px' }} style={{ marginBottom: 16, borderRadius: 10 }}>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-          <Input
-            prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
-            placeholder="Buscar cliente, RFC, contacto…"
-            style={{ width: 280 }}
-            onPressEnter={(e) => setSearch((e.target as HTMLInputElement).value)}
-            allowClear
-            onClear={() => setSearch('')}
-          />
-          <Button icon={<DownloadOutlined />} onClick={() => exportToCsv('clientes', clients.map((r: any) => ({
+      <FilterBar
+        search={search}
+        onSearch={(v) => setSearch(v)}
+        placeholder="Buscar cliente, RFC, contacto…"
+        right={
+          hasFilters ? (
+            <Button
+              type="link"
+              style={{ color: '#6B46C1', paddingLeft: 0 }}
+              onClick={() => { setTypeFilter(undefined); setSearch('') }}
+            >
+              Limpiar filtros
+            </Button>
+          ) : undefined
+        }
+      >
+        <Select
+          placeholder="Tipo de persona"
+          allowClear
+          value={typeFilter}
+          onChange={setTypeFilter}
+          options={[
+            { value: 'MORAL',    label: 'Persona Moral' },
+            { value: 'PHYSICAL', label: 'Persona Física' },
+          ]}
+          style={{ width: 160 }}
+        />
+        <Button
+          icon={<DownloadOutlined />}
+          onClick={() => exportToCsv('clientes', filtered.map((r: any) => ({
             tipo: r.personType === 'MORAL' ? 'Moral' : 'Física',
             nombre: r.companyName || `${r.firstName} ${r.lastName}`,
             rfc: r.rfc ?? '', email: r.email ?? '', telefono: r.phone ?? '',
@@ -204,25 +307,47 @@ export default function ClientsPage() {
             { header: 'Tipo', key: 'tipo' }, { header: 'Nombre', key: 'nombre' },
             { header: 'RFC', key: 'rfc' }, { header: 'Email', key: 'email' },
             { header: 'Teléfono', key: 'telefono' },
-          ])}>
-            Exportar
-          </Button>
-        </div>
-      </Card>
+          ])}
+        >
+          Exportar
+        </Button>
+      </FilterBar>
 
       {/* Table */}
-      <Card bodyStyle={{ padding: 0 }} style={{ borderRadius: 10 }}>
-        <Table
-          dataSource={clients}
-          columns={columns}
-          rowKey="id"
-          loading={isLoading}
-          size="small"
-          pagination={{ pageSize: 20, total: data?.meta?.total, showTotal: t => `${t} clientes` }}
-          scroll={{ x: 700 }}
-        />
-      </Card>
+      <div style={{ background: '#fff' }}>
+        {isLoading ? (
+          <div style={{ padding: 24 }}><Skeleton active paragraph={{ rows: 8 }} /></div>
+        ) : filtered.length === 0 ? (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={hasFilters ? 'Sin resultados para los filtros aplicados' : 'No hay clientes aún'}
+            style={{ padding: 64 }}
+          >
+            {!hasFilters && (
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true) }}>
+                Agregar cliente
+              </Button>
+            )}
+          </Empty>
+        ) : (
+          <Table
+            dataSource={filtered}
+            columns={columns}
+            rowKey="id"
+            size="middle"
+            scroll={{ x: 800 }}
+            onRow={(r) => ({ onClick: () => navigate(`/catalogos/clientes/${r.id}`), style: { cursor: 'pointer' } })}
+            pagination={{
+              pageSize: 25,
+              total: filtered.length,
+              showSizeChanger: true,
+              showTotal: t => `${t} clientes`,
+            }}
+          />
+        )}
+      </div>
 
+      {/* Create/Edit modal */}
       <Modal
         title={editingId ? 'Editar Cliente' : 'Nuevo Cliente'}
         open={modalOpen}
@@ -310,7 +435,7 @@ export default function ClientsPage() {
               ),
             },
             {
-              key: 'imagen', label: 'Deportivo',
+              key: 'deportivo', label: 'Deportivo',
               children: (
                 <>
                   <Form.Item name="playerNumber" label="Número de jugador">
@@ -338,7 +463,7 @@ export default function ClientsPage() {
       >
         <Table
           dataSource={importPreview ?? []}
-          rowKey={(r, i) => String(i)}
+          rowKey={(_, i) => String(i)}
           size="small"
           pagination={{ pageSize: 10 }}
           scroll={{ x: 'max-content' }}

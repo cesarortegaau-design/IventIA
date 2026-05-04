@@ -1,0 +1,15 @@
+export const T = {
+  navy:      '#1a3a5c',
+  navyDark:  '#0f2540',
+  blue:      '#2e7fc1',
+  light:     '#f0f6ff',
+  bg:        '#f5f7fa',
+  border:    '#e5e9f0',
+  text:      '#1f2937',
+  textMuted: '#64748b',
+  textDim:   '#94a3b8',
+  success:   '#10b981',
+  warning:   '#f59e0b',
+  danger:    '#ef4444',
+  purple:    '#8b5cf6',
+}
