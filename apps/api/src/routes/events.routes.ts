@@ -3,7 +3,7 @@ import multer from 'multer'
 import { authenticate } from '../middleware/authenticate'
 import { requirePrivilege } from '../middleware/authorize'
 import { PRIVILEGES } from '@iventia/shared'
-import { listEvents, getEvent, createEvent, updateEvent, updateEventStatus, getEventOrders } from '../controllers/events.controller'
+import { listEvents, getEvent, getEventHeader, createEvent, updateEvent, updateEventStatus, getEventOrders } from '../controllers/events.controller'
 import { createOrder } from '../controllers/orders.controller'
 import { listEventSpaces, createEventSpace, updateEventSpace, deleteEventSpace, getEventSpaceAudit } from '../controllers/eventSpaces.controller'
 import { uploadEventDocument, deleteEventDocument } from '../controllers/documents.controller'
@@ -36,6 +36,7 @@ router.use(authenticate)
 router.get('/', requirePrivilege(PRIVILEGES.EVENT_VIEW), listEvents)
 router.post('/', requirePrivilege(PRIVILEGES.EVENT_CREATE), createEvent)
 router.get('/:id', requirePrivilege(PRIVILEGES.EVENT_VIEW), getEvent)
+router.get('/:id/header', requirePrivilege(PRIVILEGES.EVENT_VIEW), getEventHeader)
 router.put('/:id', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), updateEvent)
 router.patch('/:id/status', requirePrivilege(PRIVILEGES.EVENT_CONFIRM), updateEventStatus)
 

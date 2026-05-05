@@ -150,6 +150,29 @@ export async function getEventOrders(req: Request, res: Response, next: NextFunc
   }
 }
 
+export async function getEventHeader(req: Request, res: Response, next: NextFunction) {
+  try {
+    const event = await prisma.event.findFirst({
+      where: { id: req.params.id, tenantId: req.user!.tenantId },
+      select: {
+        id: true, code: true, name: true, status: true, description: true,
+        setupStart: true, setupEnd: true, eventStart: true, eventEnd: true,
+        teardownStart: true, teardownEnd: true,
+        primaryClientId: true, priceListId: true,
+        eventType: true, eventClass: true, eventCategory: true,
+        coordinator: true, executive: true, notes: true,
+        venue: true, expectedAttendance: true,
+        portalEnabled: true, portalSettings: true,
+        sportLocalTeamId: true, sportVisitingTeamId: true,
+      },
+    })
+    if (!event) throw new AppError(404, 'EVENT_NOT_FOUND', 'Event not found')
+    res.json({ success: true, data: event })
+  } catch (err) {
+    next(err)
+  }
+}
+
 export async function createEvent(req: Request, res: Response, next: NextFunction) {
   try {
     const data = createEventSchema.parse(req.body)

@@ -210,8 +210,9 @@ export default function EventDetailPage() {
   // Prefetch edit-form dependencies in the background so navigating to edit is instant
   useEffect(() => {
     if (!id) return
+    queryClient.prefetchQuery({ queryKey: ['event-header', id], queryFn: () => eventsApi.getHeader(id), staleTime: 5 * 60_000 })
     queryClient.prefetchQuery({ queryKey: ['price-lists'], queryFn: () => priceListsApi.list(), staleTime: 5 * 60_000 })
-    queryClient.prefetchQuery({ queryKey: ['clients', { pageSize: 200 }], queryFn: () => clientsApi.list({ pageSize: 200 }), staleTime: 5 * 60_000 })
+    queryClient.prefetchQuery({ queryKey: ['clients', { pageSize: 200 }], queryFn: () => clientsApi.list({ pageSize: 200, minimal: true }), staleTime: 5 * 60_000 })
   }, [id])
 
   const { data: eventOrdersData } = useQuery({

@@ -21,10 +21,9 @@ export default function EventFormPage() {
   const isEdit = !!id
 
   const { data: eventData } = useQuery({
-    queryKey: ['event', id],
-    queryFn: () => eventsApi.get(id!),
+    queryKey: ['event-header', id],
+    queryFn: () => eventsApi.getHeader(id!),
     enabled: isEdit,
-    initialData: () => queryClient.getQueryData(['event', id]) as any,
     staleTime: FIVE_MIN,
   })
 
