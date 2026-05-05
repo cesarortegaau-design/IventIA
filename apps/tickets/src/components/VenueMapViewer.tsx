@@ -1,4 +1,5 @@
 import { useRef, useEffect, useCallback, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Button, Badge, InputNumber, message, Empty } from 'antd'
 import { ShoppingCartOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons'
 import { useCart } from '../store/cart'
@@ -49,6 +50,7 @@ interface Props {
 }
 
 export default function VenueMapViewer({ sections, mapData, mode, slug, containerHeight = 'calc(100vh - 130px)' }: Props) {
+  const navigate = useNavigate()
   const { addItem, removeItem, items, setSlug, total } = useCart()
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -315,7 +317,7 @@ export default function VenueMapViewer({ sections, mapData, mode, slug, containe
       <Button
         size="small"
         style={{ background: '#fff', color: '#6B46C1', border: 'none', fontWeight: 600 }}
-        onClick={() => window.location.href = '/carrito'}
+        onClick={() => navigate('/carrito')}
       >
         Ver carrito →
       </Button>
