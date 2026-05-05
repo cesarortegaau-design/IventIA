@@ -38,6 +38,7 @@ import ProfilesPage from '../pages/catalogs/profiles/ProfilesPage'
 import OrganizationsPage from '../pages/catalogs/organizations/OrganizationsPage'
 import UsersAndProfilesPage from '../pages/catalogs/users/UsersAndProfilesPage'
 import AnalysisDashboard from '../pages/analysis/AnalysisDashboard'
+import EventResumenReport from '../pages/events/EventResumenReport'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.accessToken)
@@ -61,6 +62,7 @@ export function AppRouter() {
         <Route path="eventos" element={<EventsCalendarPage />} />
         <Route path="eventos/nuevo" element={<EventFormPage />} />
         <Route path="eventos/:id" element={<EventDetailPage />} />
+        <Route path="eventos/:id/reporte" element={<EventResumenReport />} />
         <Route path="eventos/:id/editar" element={<EventFormPage />} />
         <Route path="eventos/:eventId/ordenes/nueva" element={<OrderFormWizard />} />
         <Route path="ordenes" element={<OrdersListPage />} />

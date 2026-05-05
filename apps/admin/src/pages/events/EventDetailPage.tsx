@@ -623,6 +623,9 @@ export default function EventDetailPage() {
             <button style={BTN_SECONDARY} onClick={() => setGenerateDocOpen(true)}>
               Generar Word
             </button>
+            <button style={BTN_SECONDARY} onClick={() => navigate(`/eventos/${id}/reporte`)}>
+              <BarChartOutlined style={{ marginRight: 5 }} />Resumen
+            </button>
             <Select
               value={event.status}
               onChange={(v) => updateStatusMutation.mutate(v)}
