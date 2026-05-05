@@ -32,6 +32,7 @@ import { floorPlansApi } from '../../api/floorPlans'
 import { standsApi } from '../../api/stands'
 import TicketEventTab from './TicketEventTab'
 import EventSummaryTab from './EventSummaryTab'
+import EventTimelineTab from './EventTimelineTab'
 import { T } from '../../styles/tokens'
 
 const { Text } = Typography
@@ -506,6 +507,7 @@ export default function EventDetailPage() {
   const TABS = [
     { key: 'resumen',    label: 'Resumen' },
     { key: 'espacios',   label: `Espacios (${spaces.length})` },
+    { key: 'timeline',   label: 'Timeline' },
     { key: 'ordenes',    label: `Órdenes (${event._count?.orders ?? event.orders?.length ?? 0})` },
     ...(eventContracts.length > 0 ? [{ key: 'contratos', label: `Contratos (${eventContracts.length})` }] : []),
     { key: 'documentos', label: `Documentos (${event.documents?.length ?? 0})` },
@@ -777,6 +779,11 @@ export default function EventDetailPage() {
               ]}
             />
           </div>
+        )}
+
+        {/* ── Tab: Timeline ── */}
+        {activeTab === 'timeline' && (
+          <EventTimelineTab eventId={id!} event={event} activeTab={activeTab} />
         )}
 
         {/* ── Tab: Mapa del Venue ── */}

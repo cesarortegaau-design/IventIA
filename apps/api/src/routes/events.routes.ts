@@ -9,6 +9,7 @@ import { listEventSpaces, createEventSpace, updateEventSpace, deleteEventSpace, 
 import { uploadEventDocument, deleteEventDocument } from '../controllers/documents.controller'
 import { importStands, listStands, createStand, updateStand, deleteStand } from '../controllers/stands.controller'
 import { listFloorPlans, getFloorPlanUploadSignature, createFloorPlanRecord, deleteFloorPlan, getFloorPlanContent } from '../controllers/floorPlans.controller'
+import { listEventActivities, createEventActivity, updateEventActivity, deleteEventActivity, bulkReorderActivities, exportActivitiesCsv, importActivitiesCsv } from '../controllers/eventActivities.controller'
 
 const DXF_SIZE_LIMIT = 100 * 1024 * 1024  // 100 MB — complex multi-drawing DXF files can be large
 
@@ -68,5 +69,14 @@ router.post('/:eventId/stands/import', requirePrivilege(PRIVILEGES.EVENT_EDIT_QU
 // Documents
 router.post('/:id/documents', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), docUpload.single('file'), uploadEventDocument)
 router.delete('/:id/documents/:docId', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), deleteEventDocument)
+
+// Timeline (Activities) — fixed routes BEFORE /:activityId to avoid param capture
+router.get('/:eventId/activities',                requirePrivilege(PRIVILEGES.EVENT_TIMELINE_VIEW), listEventActivities)
+router.get('/:eventId/activities/export',         requirePrivilege(PRIVILEGES.EVENT_TIMELINE_VIEW), exportActivitiesCsv)
+router.post('/:eventId/activities',               requirePrivilege(PRIVILEGES.EVENT_TIMELINE_EDIT), createEventActivity)
+router.post('/:eventId/activities/import',        requirePrivilege(PRIVILEGES.EVENT_TIMELINE_EDIT), importActivitiesCsv)
+router.patch('/:eventId/activities/reorder',      requirePrivilege(PRIVILEGES.EVENT_TIMELINE_EDIT), bulkReorderActivities)
+router.put('/:eventId/activities/:activityId',    requirePrivilege(PRIVILEGES.EVENT_TIMELINE_EDIT), updateEventActivity)
+router.delete('/:eventId/activities/:activityId', requirePrivilege(PRIVILEGES.EVENT_TIMELINE_EDIT), deleteEventActivity)
 
 export default router

@@ -15,6 +15,8 @@ export const PRIVILEGES = {
   EVENT_CONFIRM: 'event.status.confirm',
   EVENT_EXECUTE: 'event.status.execute',
   EVENT_CLOSE: 'event.status.close',
+  EVENT_TIMELINE_VIEW: 'event.timeline.view',
+  EVENT_TIMELINE_EDIT: 'event.timeline.edit',
 
   // ── Clients ─────────────────────────────────────────────────────────────────
   CLIENT_VIEW: 'client.view',
@@ -171,6 +173,8 @@ export const PRIVILEGE_GROUPS: { label: string; privileges: { key: PrivilegeKey;
       { key: PRIVILEGES.EVENT_CLOSE, label: 'Cerrar evento' },
       { key: PRIVILEGES.EVENT_CANCEL, label: 'Cancelar evento' },
       { key: PRIVILEGES.EVENT_DELETE, label: 'Eliminar evento' },
+      { key: PRIVILEGES.EVENT_TIMELINE_VIEW, label: 'Ver timeline de evento' },
+      { key: PRIVILEGES.EVENT_TIMELINE_EDIT, label: 'Gestionar timeline de evento' },
     ],
   },
   {
