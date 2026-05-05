@@ -538,21 +538,29 @@ export default function OrderDetailPage() {
       {/* Page header */}
       <PageHeader
         title={
-          <Space size={8} align="center">
-            <Button
-              type="text"
-              icon={<ArrowLeftOutlined />}
-              onClick={() => navigate(-1)}
-              style={{ marginRight: 4 }}
-            />
-            {order.orderNumber}
-            <Tag color={STATUS_COLORS[order.status]}>{STATUS_LABELS[order.status]}</Tag>
-            <Tag color={PAYMENT_STATUS_COLORS[order.paymentStatus]}>
-              {PAYMENT_STATUS_LABELS[order.paymentStatus] || 'Pendiente'}
-            </Tag>
-            <Tag>{TIER_LABELS[order.pricingTier]}</Tag>
-            {order.isCreditNote && <Tag color="red">Nota de Crédito</Tag>}
-          </Space>
+          <div>
+            {/* Row 1: back button + order number (never wraps) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 8 }}>
+              <Button
+                type="text"
+                icon={<ArrowLeftOutlined />}
+                onClick={() => navigate(-1)}
+                style={{ flexShrink: 0 }}
+              />
+              <span style={{ fontWeight: 700, fontSize: 18, whiteSpace: 'nowrap' }}>
+                {order.orderNumber}
+              </span>
+            </div>
+            {/* Row 2: status tags — wrap freely */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              <Tag color={STATUS_COLORS[order.status]}>{STATUS_LABELS[order.status]}</Tag>
+              <Tag color={PAYMENT_STATUS_COLORS[order.paymentStatus]}>
+                {PAYMENT_STATUS_LABELS[order.paymentStatus] || 'Pendiente'}
+              </Tag>
+              <Tag>{TIER_LABELS[order.pricingTier]}</Tag>
+              {order.isCreditNote && <Tag color="red">Nota de Crédito</Tag>}
+            </div>
+          </div>
         }
         meta={
           <span>
