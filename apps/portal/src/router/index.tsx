@@ -47,12 +47,14 @@ export default function AppRouter() {
       {/* Public landing page — self-contained, no layout wrapper */}
       <Route path="/" element={<LandingPage />} />
 
+      {/* Standalone full-page ticket purchase — no layout wrapper */}
+      <Route path="/boletos/:slug" element={<TicketPurchasePage />} />
+
       <Route element={<PublicLayout />}>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
-        <Route path="/boletos/:slug" element={<TicketPurchasePage />} />
       </Route>
 
       {/* Client setup — authenticated but no client required */}

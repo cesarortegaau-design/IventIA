@@ -1071,7 +1071,7 @@ export default function TicketPurchasePage() {
           </div>
           <div style={{ display: 'flex', gap: 16, fontSize: 12, color: C.textMute, flexWrap: 'wrap', marginTop: 2 }}>
             {eventData.event?.eventStart && <span>📅 {formatDate(eventData.event.eventStart)}</span>}
-            {eventData.event?.venue && <span>📍 {eventData.event.venue}</span>}
+            {eventData.event?.venueLocation && <span>📍 {eventData.event.venueLocation}</span>}
           </div>
         </div>
         {eventData.description && (
