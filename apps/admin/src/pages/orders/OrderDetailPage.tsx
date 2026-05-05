@@ -82,7 +82,7 @@ export default function OrderDetailPage() {
   const { message, modal } = App.useApp()
   const [paymentForm] = Form.useForm()
   const [editForm] = Form.useForm()
-  const [activeTab, setActiveTab] = useState('items')
+  const [activeTab, setActiveTab] = useState('general')
   const [paymentModalOpen, setPaymentModalOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [editLineItems, setEditLineItems] = useState<any[]>([])
@@ -615,6 +615,7 @@ export default function OrderDetailPage() {
             onChange={setActiveTab}
             style={{ marginBottom: -1 }}
             items={[
+              { key: 'general', label: 'General' },
               { key: 'items', label: `Items (${order.lineItems?.length ?? 0})` },
               { key: 'financiero', label: 'Financiero' },
               { key: 'documentos', label: `Documentos (${order.documents?.length ?? 0})` },
@@ -627,6 +628,102 @@ export default function OrderDetailPage() {
 
       {/* Content */}
       <div style={{ padding: 24 }}>
+        {/* ── TAB: General ── */}
+        {activeTab === 'general' && (() => {
+          const lineItems: any[] = order.lineItems ?? []
+          const depts = new Set(lineItems.map((li: any) => li.resource?.department?.name).filter(Boolean))
+          const suppliers = new Set((order.purchaseOrders ?? []).map((po: any) => po.supplier?.id).filter(Boolean))
+          const ocCount = order.purchaseOrders?.length ?? 0
+          return (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16, alignItems: 'start' }}>
+              {/* Mini-stats */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                {[
+                  { label: 'Items', value: lineItems.length },
+                  { label: 'Deptos.', value: depts.size },
+                  { label: 'Proveedores', value: suppliers.size },
+                  { label: 'OC asociadas', value: ocCount },
+                ].map(({ label, value }) => (
+                  <div key={label} style={{ background: '#fafafa', border: '1px solid #f0f0f0', borderRadius: 6, padding: '10px 12px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: '#6B46C1', fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Event info */}
+              <Card size="small" title="Evento">
+                <Descriptions column={1} size="small" colon={false}>
+                  <Descriptions.Item label="Nombre">{order.event?.name ?? '—'}</Descriptions.Item>
+                  <Descriptions.Item label="Lista de precios">{order.priceList?.name ?? '—'}</Descriptions.Item>
+                  {order.stand && <Descriptions.Item label="Stand">{order.stand.code}</Descriptions.Item>}
+                  {order.organizacion && <Descriptions.Item label="Org.">{order.organizacion.descripcion}</Descriptions.Item>}
+                  {order.startDate && (
+                    <Descriptions.Item label="Inicio">
+                      {dayjs(order.startDate).format('DD/MM/YYYY HH:mm')}
+                    </Descriptions.Item>
+                  )}
+                  {order.endDate && (
+                    <Descriptions.Item label="Fin">
+                      {dayjs(order.endDate).format('DD/MM/YYYY HH:mm')}
+                    </Descriptions.Item>
+                  )}
+                </Descriptions>
+                {order.event?.id && (
+                  <Button
+                    type="link"
+                    size="small"
+                    style={{ padding: 0, marginTop: 4 }}
+                    onClick={() => navigate(`/eventos/${order.event.id}`)}
+                  >
+                    Ver evento completo →
+                  </Button>
+                )}
+              </Card>
+
+              {/* Client */}
+              <Card size="small" title="Cliente">
+                <Text strong>{clientName}</Text>
+                {order.billingClient && (
+                  <div style={{ marginTop: 4 }}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>Facturación: </Text>
+                    <Text style={{ fontSize: 12 }}>{order.billingClient.companyName || order.billingClient.rfc}</Text>
+                  </div>
+                )}
+              </Card>
+
+              {/* Notes */}
+              {order.notes && (
+                <Card size="small" title="Notas internas">
+                  <Text type="secondary" style={{ fontSize: 13 }}>{order.notes}</Text>
+                </Card>
+              )}
+
+              {/* Credit note links */}
+              {(order.originalOrder || order.creditNotes?.length > 0) && (
+                <Card size="small" title="Referencias">
+                  {order.originalOrder && (
+                    <div>
+                      <Text type="secondary" style={{ fontSize: 12 }}>Orden original: </Text>
+                      <Button type="link" size="small" style={{ padding: 0, fontSize: 12 }} onClick={() => navigate(`/ordenes/${order.originalOrder.id}`)}>
+                        {order.originalOrder.orderNumber}
+                      </Button>
+                    </div>
+                  )}
+                  {order.creditNotes?.map((cn: any) => (
+                    <div key={cn.id}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>NC: </Text>
+                      <Button type="link" size="small" style={{ padding: 0, fontSize: 12 }} onClick={() => navigate(`/ordenes/${cn.id}`)}>
+                        {cn.orderNumber} ({formatMoney(Number(cn.total), 'MXN')})
+                      </Button>
+                    </div>
+                  ))}
+                </Card>
+              )}
+            </div>
+          )
+        })()}
+
         {/* ── TAB: Items ── */}
         {activeTab === 'items' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -648,8 +745,8 @@ export default function OrderDetailPage() {
               </div>
             ))}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20, alignItems: 'start' }}>
-            {/* Main: items grouped by department */}
+          <div>
+            {/* Items grouped by department */}
             <div>
               {(() => {
                 const lineItems: any[] = order.lineItems ?? []
@@ -763,102 +860,6 @@ export default function OrderDetailPage() {
                   </div>
                 )
               })()}
-            </div>
-
-            {/* Sidebar */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {/* 2x2 mini-stats */}
-              {(() => {
-                const lineItems: any[] = order.lineItems ?? []
-                const depts = new Set(lineItems.map((li: any) => li.resource?.department?.name).filter(Boolean))
-                const suppliers = new Set((order.purchaseOrders ?? []).map((po: any) => po.supplier?.id).filter(Boolean))
-                const ocCount = order.purchaseOrders?.length ?? 0
-                return (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                    {[
-                      { label: 'Items', value: lineItems.length },
-                      { label: 'Deptos.', value: depts.size },
-                      { label: 'Proveedores', value: suppliers.size },
-                      { label: 'OC asociadas', value: ocCount },
-                    ].map(({ label, value }) => (
-                      <div key={label} style={{ background: '#fafafa', border: '1px solid #f0f0f0', borderRadius: 6, padding: '10px 12px', textAlign: 'center' }}>
-                        <div style={{ fontSize: 20, fontWeight: 700, color: '#6B46C1', fontVariantNumeric: 'tabular-nums' }}>{value}</div>
-                        <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{label}</div>
-                      </div>
-                    ))}
-                  </div>
-                )
-              })()}
-
-              {/* Event info */}
-              <Card size="small" title="Evento">
-                <Descriptions column={1} size="small" colon={false}>
-                  <Descriptions.Item label="Nombre">{order.event?.name ?? '—'}</Descriptions.Item>
-                  <Descriptions.Item label="Lista de precios">{order.priceList?.name ?? '—'}</Descriptions.Item>
-                  {order.stand && <Descriptions.Item label="Stand">{order.stand.code}</Descriptions.Item>}
-                  {order.organizacion && <Descriptions.Item label="Org.">{order.organizacion.descripcion}</Descriptions.Item>}
-                  {order.startDate && (
-                    <Descriptions.Item label="Inicio">
-                      {dayjs(order.startDate).format('DD/MM/YYYY HH:mm')}
-                    </Descriptions.Item>
-                  )}
-                  {order.endDate && (
-                    <Descriptions.Item label="Fin">
-                      {dayjs(order.endDate).format('DD/MM/YYYY HH:mm')}
-                    </Descriptions.Item>
-                  )}
-                </Descriptions>
-                {order.event?.id && (
-                  <Button
-                    type="link"
-                    size="small"
-                    style={{ padding: 0, marginTop: 4 }}
-                    onClick={() => navigate(`/eventos/${order.event.id}`)}
-                  >
-                    Ver evento completo →
-                  </Button>
-                )}
-              </Card>
-
-              {/* Client */}
-              <Card size="small" title="Cliente">
-                <Text strong>{clientName}</Text>
-                {order.billingClient && (
-                  <div style={{ marginTop: 4 }}>
-                    <Text type="secondary" style={{ fontSize: 12 }}>Facturación: </Text>
-                    <Text style={{ fontSize: 12 }}>{order.billingClient.companyName || order.billingClient.rfc}</Text>
-                  </div>
-                )}
-              </Card>
-
-              {/* Notes */}
-              {order.notes && (
-                <Card size="small" title="Notas internas">
-                  <Text type="secondary" style={{ fontSize: 13 }}>{order.notes}</Text>
-                </Card>
-              )}
-
-              {/* Credit note links */}
-              {(order.originalOrder || order.creditNotes?.length > 0) && (
-                <Card size="small" title="Referencias">
-                  {order.originalOrder && (
-                    <div>
-                      <Text type="secondary" style={{ fontSize: 12 }}>Orden original: </Text>
-                      <Button type="link" size="small" style={{ padding: 0, fontSize: 12 }} onClick={() => navigate(`/ordenes/${order.originalOrder.id}`)}>
-                        {order.originalOrder.orderNumber}
-                      </Button>
-                    </div>
-                  )}
-                  {order.creditNotes?.map((cn: any) => (
-                    <div key={cn.id}>
-                      <Text type="secondary" style={{ fontSize: 12 }}>NC: </Text>
-                      <Button type="link" size="small" style={{ padding: 0, fontSize: 12 }} onClick={() => navigate(`/ordenes/${cn.id}`)}>
-                        {cn.orderNumber} ({formatMoney(Number(cn.total), 'MXN')})
-                      </Button>
-                    </div>
-                  ))}
-                </Card>
-              )}
             </div>
           </div>
           </div>
