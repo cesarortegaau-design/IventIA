@@ -36,7 +36,7 @@ export default function EventFormPage() {
 
   const { data: clients } = useQuery({
     queryKey: ['clients', { pageSize: 200 }],
-    queryFn: () => clientsApi.list({ pageSize: 200 }),
+    queryFn: () => clientsApi.list({ pageSize: 200, minimal: true }),
     staleTime: FIVE_MIN,
   })
 

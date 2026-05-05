@@ -20,6 +20,7 @@ import { eventSpacesApi } from '../../api/eventSpaces'
 import { resourcesApi } from '../../api/resources'
 import { bookingsApi } from '../../api/bookings'
 import { auditApi } from '../../api/audit'
+import { priceListsApi } from '../../api/priceLists'
 import { clientsApi } from '../../api/clients'
 import { exportToCsv } from '../../utils/exportCsv'
 import AuditTimeline from '../../components/AuditTimeline'
@@ -205,6 +206,13 @@ export default function EventDetailPage() {
     queryFn: () => eventsApi.get(id!),
     staleTime: 60_000,
   })
+
+  // Prefetch edit-form dependencies in the background so navigating to edit is instant
+  useEffect(() => {
+    if (!id) return
+    queryClient.prefetchQuery({ queryKey: ['price-lists'], queryFn: () => priceListsApi.list(), staleTime: 5 * 60_000 })
+    queryClient.prefetchQuery({ queryKey: ['clients', { pageSize: 200 }], queryFn: () => clientsApi.list({ pageSize: 200 }), staleTime: 5 * 60_000 })
+  }, [id])
 
   const { data: eventOrdersData } = useQuery({
     queryKey: ['event-orders', id],

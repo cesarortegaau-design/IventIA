@@ -26,7 +26,7 @@ const clientSchema = z.object({
 
 export async function listClients(req: Request, res: Response, next: NextFunction) {
   try {
-    const { search, active, isTeam, page = '1', pageSize = '20' } = req.query as Record<string, string>
+    const { search, active, isTeam, minimal, page = '1', pageSize = '20' } = req.query as Record<string, string>
     const tenantId = req.user!.tenantId
     const where: any = { tenantId }
     if (active !== undefined) where.isActive = active === 'true'
@@ -48,7 +48,9 @@ export async function listClients(req: Request, res: Response, next: NextFunctio
         skip: (p - 1) * ps,
         take: ps,
         orderBy: [{ companyName: 'asc' }, { lastName: 'asc' }],
-        include: { contacts: { where: { isActive: true, isPrimary: true } } },
+        ...(minimal === 'true'
+          ? { select: { id: true, companyName: true, firstName: true, lastName: true } }
+          : { include: { contacts: { where: { isActive: true, isPrimary: true } } } }),
       }),
     ])
     res.json({ success: true, data: clients, meta: { total, page: p, pageSize: ps } })
