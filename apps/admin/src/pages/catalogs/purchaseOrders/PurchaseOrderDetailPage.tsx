@@ -5,7 +5,7 @@ import {
   Card, Button, Space, App, Typography, Tag, Table, Timeline,
   Modal, Form, Input, Descriptions, DatePicker, Tabs, Progress, Popconfirm,
 } from 'antd'
-import { ArrowLeftOutlined, EditOutlined, CheckOutlined, StopOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, EditOutlined, CheckOutlined, StopOutlined, FilePdfOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { purchaseOrdersApi } from '../../../api/purchaseOrders'
 import { PageHeader } from '../../../components/ui'
@@ -32,6 +32,29 @@ export default function PurchaseOrderDetailPage() {
   const [activeTab, setActiveTab] = useState('items')
   const [confirmModalOpen, setConfirmModalOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
+  const [pdfLoading, setPdfLoading] = useState(false)
+
+  async function downloadPdf() {
+    if (!po) return
+    setPdfLoading(true)
+    try {
+      const [{ pdf }, { PurchaseOrderPdf }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('../../../components/PurchaseOrderPdf'),
+      ])
+      const blob = await pdf(<PurchaseOrderPdf po={po} />).toBlob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${po.orderNumber}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      message.error('Error al generar PDF')
+    } finally {
+      setPdfLoading(false)
+    }
+  }
 
   const { data: response, isLoading } = useQuery({
     queryKey: ['purchaseOrder', id],
@@ -206,6 +229,13 @@ export default function PurchaseOrderDetailPage() {
         }
         actions={
           <>
+            <Button
+              icon={<FilePdfOutlined />}
+              onClick={downloadPdf}
+              loading={pdfLoading}
+            >
+              Descargar PDF
+            </Button>
             {po.status === 'DRAFT' && (
               <Button icon={<EditOutlined />} onClick={openEditModal}>Editar</Button>
             )}

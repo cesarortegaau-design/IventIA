@@ -1,8 +1,9 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Typography, Tag, Spin, Table, Timeline, Button } from 'antd'
+import { Typography, Tag, Spin, Table, Timeline, Button, App } from 'antd'
 import {
   ShoppingOutlined, FileTextOutlined, HistoryOutlined,
-  DownloadOutlined, ArrowLeftOutlined,
+  DownloadOutlined, ArrowLeftOutlined, FilePdfOutlined,
 } from '@ant-design/icons'
 import { useParams, useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
@@ -54,12 +55,36 @@ function SectionCard({ icon, title, children }: { icon: React.ReactNode; title: 
 export default function PurchaseOrderDetailPage() {
   const { orderId } = useParams<{ orderId: string }>()
   const navigate    = useNavigate()
+  const { message } = App.useApp()
+  const [pdfLoading, setPdfLoading] = useState(false)
 
   const { data: order, isLoading } = useQuery({
     queryKey: ['supplier-order', orderId],
     queryFn:  () => purchaseOrdersApi.get(orderId!),
     enabled:  !!orderId,
   })
+
+  async function downloadPdf() {
+    if (!order) return
+    setPdfLoading(true)
+    try {
+      const [{ pdf }, { PurchaseOrderPdf }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('../../components/PurchaseOrderPdf'),
+      ])
+      const blob = await pdf(<PurchaseOrderPdf po={order} />).toBlob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${order.orderNumber ?? orderId}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      message.error('Error al generar PDF')
+    } finally {
+      setPdfLoading(false)
+    }
+  }
 
   if (isLoading) return <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>
   if (!order)    return <div style={{ textAlign: 'center', padding: 60 }}><Text type="secondary">Orden no encontrada</Text></div>
@@ -147,11 +172,21 @@ export default function PurchaseOrderDetailPage() {
           pointerEvents: 'none',
         }} />
         <div style={{ position: 'relative' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <Title level={3} style={{ color: '#fff', margin: 0 }}>{poNumber}</Title>
-            <Tag color={STATUS_COLORS[order.status]} style={{ fontSize: 13, padding: '2px 10px' }}>
-              {STATUS_LABELS[order.status] ?? order.status}
-            </Tag>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <Title level={3} style={{ color: '#fff', margin: 0 }}>{poNumber}</Title>
+              <Tag color={STATUS_COLORS[order.status]} style={{ fontSize: 13, padding: '2px 10px' }}>
+                {STATUS_LABELS[order.status] ?? order.status}
+              </Tag>
+            </div>
+            <Button
+              icon={<FilePdfOutlined />}
+              onClick={downloadPdf}
+              loading={pdfLoading}
+              style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff' }}
+            >
+              Descargar PDF
+            </Button>
           </div>
           {order.requiredDate && (
             <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 6, display: 'block' }}>
