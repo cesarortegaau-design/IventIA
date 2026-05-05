@@ -38,9 +38,10 @@ const POI_COLORS: Record<string, string> = {
   merch: '#EC4899',
   med: '#EF4444',
   info: '#10B981',
+  stage: '#FBBF24',
 }
 
-const POI_LABELS: Record<string, string> = { wc: 'WC', fb: 'F&B', merch: 'Merch', med: 'Médico', info: 'Info' }
+const POI_LABELS: Record<string, string> = { wc: 'WC', fb: 'F&B', merch: 'Merch', med: 'Médico', info: 'Info', stage: 'Escenario' }
 
 // ── Spinner ────────────────────────────────────────────────────────────────────
 const spinnerKeyframes = `
@@ -265,13 +266,21 @@ function VenueMapSVG({
         {/* POIs */}
         {(mapData.pois ?? []).map(poi => {
           const color = POI_COLORS[poi.type] ?? '#64748b'
+          const isStage = poi.type === 'stage'
+          const width = isStage ? 60 : 36
+          const height = isStage ? 40 : 20
+          const offsetX = isStage ? 30 : 18
+          const offsetY = isStage ? 20 : 10
+          const fontSize1 = isStage ? 12 : 9
+          const fontSize2 = isStage ? 10 : 8
+          const labelOffsetY = isStage ? 24 : 18
           return (
             <g key={poi.id} pointerEvents="none">
-              <rect x={poi.x - 18} y={poi.y - 10} width="36" height="20" rx="10" fill="#1e293b" stroke={color} strokeWidth="1.5" />
-              <text x={poi.x} y={poi.y + 1} fontSize="9" fill={color} textAnchor="middle" dominantBaseline="middle">
+              <rect x={poi.x - offsetX} y={poi.y - offsetY} width={width} height={height} rx="10" fill="#1e293b" stroke={color} strokeWidth="1.5" />
+              <text x={poi.x} y={poi.y + 1} fontSize={fontSize1} fill={color} textAnchor="middle" dominantBaseline="middle">
                 {POI_LABELS[poi.type] ?? poi.type}
               </text>
-              <text x={poi.x} y={poi.y + 18} fontSize="8" fill="#475569" textAnchor="middle">{poi.label}</text>
+              <text x={poi.x} y={poi.y + labelOffsetY} fontSize={fontSize2} fill="#475569" textAnchor="middle">{poi.label}</text>
             </g>
           )
         })}

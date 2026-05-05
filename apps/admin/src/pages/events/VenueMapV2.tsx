@@ -36,7 +36,7 @@ interface Access {
 
 interface POI {
   id: string
-  type: 'wc' | 'fb' | 'merch' | 'med' | 'info'
+  type: 'wc' | 'fb' | 'merch' | 'med' | 'info' | 'stage'
   x: number
   y: number
   label: string
@@ -79,6 +79,7 @@ const POI_TYPES = [
   { value: 'merch', label: 'Merch' },
   { value: 'med', label: 'Médico' },
   { value: 'info', label: 'Info' },
+  { value: 'stage', label: 'Escenario' },
 ]
 
 const POI_COLORS: Record<string, string> = {
@@ -87,6 +88,7 @@ const POI_COLORS: Record<string, string> = {
   merch: '#EC4899',
   med: '#EF4444',
   info: '#10B981',
+  stage: '#FBBF24',
 }
 
 const TEMPLATES: Record<string, { name: string; width: number; height: number; shapes: Omit<Shape, 'id'>[] }> = {
@@ -266,13 +268,21 @@ function VenueViewer({ sections, mapData, svgWidth, svgHeight }: {
         {/* POIs */}
         {mapData.pois.map(poi => {
           const color = POI_COLORS[poi.type] ?? '#64748b'
+          const isStage = poi.type === 'stage'
+          const width = isStage ? 60 : 36
+          const height = isStage ? 40 : 20
+          const offsetX = isStage ? 30 : 18
+          const offsetY = isStage ? 20 : 10
+          const fontSize1 = isStage ? 12 : 9
+          const fontSize2 = isStage ? 10 : 8
+          const labelOffsetY = isStage ? 24 : 18
           return (
             <g key={poi.id}>
-              <rect x={poi.x - 18} y={poi.y - 10} width="36" height="20" rx="10" fill="#1e293b" stroke={color} strokeWidth="1.5" />
-              <text x={poi.x} y={poi.y + 1} fontSize="9" fill={color} textAnchor="middle" dominantBaseline="middle" pointerEvents="none">
+              <rect x={poi.x - offsetX} y={poi.y - offsetY} width={width} height={height} rx="10" fill="#1e293b" stroke={color} strokeWidth="1.5" />
+              <text x={poi.x} y={poi.y + 1} fontSize={fontSize1} fill={color} textAnchor="middle" dominantBaseline="middle" pointerEvents="none">
                 {POI_TYPES.find(t => t.value === poi.type)?.label ?? poi.type.toUpperCase()}
               </text>
-              <text x={poi.x} y={poi.y + 18} fontSize="8" fill="#64748b" textAnchor="middle" pointerEvents="none">{poi.label}</text>
+              <text x={poi.x} y={poi.y + labelOffsetY} fontSize={fontSize2} fill="#64748b" textAnchor="middle" pointerEvents="none">{poi.label}</text>
             </g>
           )
         })}
@@ -905,6 +915,14 @@ export default function VenueMapV2({ eventId }: VenueMapV2Props) {
             {/* POIs */}
             {pois.map(poi => {
               const color = POI_COLORS[poi.type] ?? '#64748b'
+              const isStage = poi.type === 'stage'
+              const width = isStage ? 60 : 36
+              const height = isStage ? 40 : 20
+              const offsetX = isStage ? 30 : 18
+              const offsetY = isStage ? 20 : 10
+              const fontSize1 = isStage ? 12 : 9
+              const fontSize2 = isStage ? 10 : 8
+              const labelOffsetY = isStage ? 24 : 18
               return (
                 <g
                   key={poi.id}
@@ -920,11 +938,11 @@ export default function VenueMapV2({ eventId }: VenueMapV2Props) {
                     }
                   }}
                 >
-                  <rect x={poi.x - 18} y={poi.y - 10} width="36" height="20" rx="10" fill="white" stroke={color} strokeWidth="1.5" />
-                  <text x={poi.x} y={poi.y + 1} fontSize="9" fill={color} textAnchor="middle" dominantBaseline="middle" pointerEvents="none">
+                  <rect x={poi.x - offsetX} y={poi.y - offsetY} width={width} height={height} rx="10" fill="white" stroke={color} strokeWidth="1.5" />
+                  <text x={poi.x} y={poi.y + 1} fontSize={fontSize1} fill={color} textAnchor="middle" dominantBaseline="middle" pointerEvents="none">
                     {POI_TYPES.find(t => t.value === poi.type)?.label ?? poi.type}
                   </text>
-                  <text x={poi.x} y={poi.y + 18} fontSize="8" fill="#777" textAnchor="middle" pointerEvents="none">{poi.label}</text>
+                  <text x={poi.x} y={poi.y + labelOffsetY} fontSize={fontSize2} fill="#777" textAnchor="middle" pointerEvents="none">{poi.label}</text>
                 </g>
               )
             })}
