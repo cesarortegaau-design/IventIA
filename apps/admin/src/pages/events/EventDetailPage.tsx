@@ -513,6 +513,7 @@ export default function EventDetailPage() {
     { key: 'documentos', label: `Documentos (${event.documents?.length ?? 0})` },
     { key: 'produccion', label: 'Producción' },
     { key: 'mapa',       label: 'Mapa del Venue' },
+    { key: 'boletos',    label: 'Boletos' },
     { key: 'portal',     label: 'Portal' },
     { key: 'deporte',    label: 'Portal Deportivo' },
     { key: 'auditoria',  label: 'Auditoría' },

@@ -115,9 +115,9 @@ export async function createSection(req: Request, res: Response, next: NextFunct
     const te = await prisma.ticketEvent.findFirst({ where: { eventId, tenantId } })
     if (!te) throw new AppError(404, 'NOT_FOUND', 'Portal de boletos no encontrado')
 
-    const { name, colorHex, capacity, price, resourceId, sortOrder } = req.body
+    const { name, colorHex, capacity, price, resourceId, sortOrder, tier } = req.body
     const section = await prisma.ticketSection.create({
-      data: { ticketEventId: te.id, name, colorHex: colorHex || '#6B46C1', capacity: Number(capacity ?? 0), price: Number(price ?? 0), resourceId: resourceId || null, sortOrder: Number(sortOrder ?? 0) },
+      data: { ticketEventId: te.id, name, colorHex: colorHex || '#6B46C1', capacity: Number(capacity ?? 0), price: Number(price ?? 0), resourceId: resourceId || null, sortOrder: Number(sortOrder ?? 0), tier: tier ?? null },
     })
     res.status(201).json({ success: true, data: section })
   } catch (err) { next(err) }
@@ -130,10 +130,10 @@ export async function updateSection(req: Request, res: Response, next: NextFunct
     const te = await prisma.ticketEvent.findFirst({ where: { eventId, tenantId } })
     if (!te) throw new AppError(404, 'NOT_FOUND', 'Portal de boletos no encontrado')
 
-    const { name, colorHex, capacity, price, resourceId, sortOrder } = req.body
+    const { name, colorHex, capacity, price, resourceId, sortOrder, tier } = req.body
     const section = await prisma.ticketSection.update({
       where: { id: sectionId },
-      data: { name, colorHex, capacity, price, resourceId: resourceId || null, sortOrder },
+      data: { name, colorHex, capacity, price, resourceId: resourceId || null, sortOrder, ...(tier !== undefined && { tier }) },
     })
     res.json({ success: true, data: section })
   } catch (err) { next(err) }
@@ -190,7 +190,7 @@ export async function getVenueMap(req: Request, res: Response, next: NextFunctio
 
     const sections = await prisma.ticketSection.findMany({
       where: { ticketEventId: te.id },
-      select: { id: true, name: true, colorHex: true, shapeType: true, shapeData: true, labelX: true, labelY: true },
+      select: { id: true, name: true, colorHex: true, tier: true, capacity: true, sold: true, price: true, shapeType: true, shapeData: true, labelX: true, labelY: true },
       orderBy: { sortOrder: 'asc' },
     })
     res.json({ success: true, data: { mapData: te.mapData, sections } })
@@ -225,6 +225,9 @@ export async function saveVenueMap(req: Request, res: Response, next: NextFuncti
                 shapeData: sec.shapeData ? JSON.parse(JSON.stringify(sec.shapeData)) : null,
                 labelX: typeof sec.labelX === 'number' ? Math.floor(sec.labelX) : null,
                 labelY: typeof sec.labelY === 'number' ? Math.floor(sec.labelY) : null,
+                tier: sec.tier ?? null,
+                ...(sec.colorHex !== undefined && { colorHex: sec.colorHex }),
+                ...(sec.name     !== undefined && { name:     sec.name }),
               },
             })
           } catch (secErr: any) {

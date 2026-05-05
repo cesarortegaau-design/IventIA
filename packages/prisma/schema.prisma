@@ -2055,6 +2055,7 @@ model TicketSection {
   shapeData     Json?             @map("shape_data")
   labelX        Int?              @map("label_x")
   labelY        Int?              @map("label_y")
+  tier          String?           @db.VarChar(30)  // general | vip | platinum | palco | field
   orderItems    TicketOrderItem[]
   seats         TicketSeat[]
   resource      Resource?         @relation(fields: [resourceId], references: [id])

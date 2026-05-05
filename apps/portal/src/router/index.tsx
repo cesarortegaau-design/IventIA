@@ -19,6 +19,7 @@ import CalendarPage from '../pages/calendar/CalendarPage'
 import CatalogPage from '../pages/catalog/CatalogPage'
 import FloorPlanPortalPage from '../pages/event/FloorPlanPortalPage'
 import ClientSetupPage from '../pages/onboarding/ClientSetupPage'
+import TicketPurchasePage from '../pages/tickets/TicketPurchasePage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { accessToken } = useAuthStore()
@@ -51,6 +52,7 @@ export default function AppRouter() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/boletos/:slug" element={<TicketPurchasePage />} />
       </Route>
 
       {/* Client setup — authenticated but no client required */}
