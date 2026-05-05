@@ -234,7 +234,10 @@ export default function DxfViewer({
         baseTransform.current = { scale: fitScale, x: tx, y: ty }
         setScale(fitScale); setPos({ x: tx, y: ty })
       })
-      .catch((e) => setError(e?.message ?? 'Error al cargar el plano'))
+      .catch((e) => {
+        const serverMsg = e?.response?.data?.error?.message
+        setError(serverMsg ?? e?.message ?? 'Error al cargar el plano')
+      })
       .finally(() => setLoading(false))
   }, [floorPlan.id]) // eslint-disable-line react-hooks/exhaustive-deps
 

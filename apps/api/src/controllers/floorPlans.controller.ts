@@ -121,12 +121,18 @@ export async function getFloorPlanContent(req: Request, res: Response, next: Nex
     const fp = await prisma.floorPlan.findFirst({ where: { id: fpId, eventId } })
     if (!fp) throw new AppError(404, 'NOT_FOUND', 'Plano no encontrado')
 
+    // Normalize Cloudinary URL: ensure raw files use /raw/upload/ not /image/upload/
+    const fileUrl = fp.fileUrl.replace(
+      /res\.cloudinary\.com\/([^/]+)\/image\/upload\//,
+      'res.cloudinary.com/$1/raw/upload/'
+    )
+
     let raw: Buffer
     try {
-      raw = await fetchUrlAsBuffer(fp.fileUrl)
+      raw = await fetchUrlAsBuffer(fileUrl)
     } catch (fetchErr: any) {
-      console.error('[getFloorPlanContent] Failed to fetch from Cloudinary:', fetchErr?.message, 'URL:', fp.fileUrl.slice(0, 80))
-      throw new AppError(502, 'FILE_FETCH_FAILED', `No se pudo obtener el archivo desde el servidor de almacenamiento: ${fetchErr?.message ?? 'error desconocido'}`)
+      console.error('[getFloorPlanContent] Failed to fetch from Cloudinary:', fetchErr?.message, 'URL:', fileUrl.slice(0, 100))
+      throw new AppError(502, 'FILE_FETCH_FAILED', `No se pudo obtener el archivo desde Cloudinary: ${fetchErr?.message ?? 'error desconocido'}`)
     }
 
     let buffer: Buffer
