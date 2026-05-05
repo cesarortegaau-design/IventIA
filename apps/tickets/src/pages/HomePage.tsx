@@ -45,16 +45,36 @@ export default function HomePage() {
     <div style={{ minHeight: '100vh', background: '#f8f8f8' }}>
       {/* Header */}
       <div style={{
-        background: 'linear-gradient(135deg, #6B46C1 0%, #553C9A 100%)',
-        padding: '24px 32px',
-        color: '#fff',
+        background: 'linear-gradient(135deg, #6B46C1 0%, #9b79e3 100%)',
+        padding: '0 28px',
+        height: 52,
+        display: 'flex', alignItems: 'center',
+        boxShadow: '0 2px 8px rgba(107,70,193,0.25)',
       }}>
-        <Space align="center" size={12}>
-          <span style={{ fontSize: 28 }}>🎫</span>
-          <Title level={3} style={{ color: '#fff', margin: 0 }}>IventIA Boletos</Title>
-        </Space>
-        <Text style={{ color: 'rgba(255,255,255,0.8)', display: 'block', marginTop: 4 }}>
-          Compra tus boletos de forma segura
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{
+            width: 30, height: 30, borderRadius: 8,
+            background: 'rgba(255,255,255,0.2)',
+            border: '1.5px solid rgba(255,255,255,0.4)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 16, color: '#fff', fontWeight: 800,
+          }}>I</div>
+          <span style={{ color: '#fff', fontWeight: 800, fontSize: 18, letterSpacing: '-0.3px' }}>IventIA</span>
+          <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: 400 }}>Boletos</span>
+        </div>
+      </div>
+
+      {/* Hero */}
+      <div style={{
+        background: 'linear-gradient(135deg, #f4eeff 0%, #faf8ff 100%)',
+        padding: '32px 28px 24px',
+        borderBottom: '1px solid #ede9fe',
+      }}>
+        <Title level={3} style={{ margin: 0, color: '#1a1a2e' }}>
+          <span style={{ fontSize: 22 }}>🎫</span> Compra tus boletos
+        </Title>
+        <Text style={{ color: '#666', fontSize: 14 }}>
+          Selecciona un evento para ver disponibilidad y precios
         </Text>
       </div>
 

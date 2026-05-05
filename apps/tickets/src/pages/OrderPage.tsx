@@ -5,9 +5,10 @@ import {
   Spin, Table, Tag, Typography,
 } from 'antd'
 import {
-  CalendarOutlined, EnvironmentOutlined, DownloadOutlined,
-  ArrowLeftOutlined,
+  CalendarOutlined, EnvironmentOutlined,
+  ArrowLeftOutlined, WhatsAppOutlined,
 } from '@ant-design/icons'
+import { QRCodeSVG } from 'qrcode.react'
 import { ticketsApi } from '../api/client'
 import dayjs from 'dayjs'
 
@@ -92,7 +93,7 @@ export default function OrderPage() {
         items: (raw.items ?? []).map((i: any) => ({
           id: i.id,
           sectionName: i.section?.name ?? '',
-          seatLabel: i.seat?.label,
+          seatLabel: i.seat ? `${i.seat.row}${i.seat.number}` : undefined,
           quantity: i.quantity,
           unitPrice: Number(i.unitPrice),
         })),
@@ -204,25 +205,50 @@ export default function OrderPage() {
           />
         </Card>
 
-        {/* Download */}
+        {/* QR + share for PAID orders */}
         {order.status === 'PAID' && (
           <Card
             style={{ borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: 'none', textAlign: 'center' }}
-            bodyStyle={{ padding: 24 }}
+            bodyStyle={{ padding: 32 }}
           >
+            <div style={{ marginBottom: 8, fontSize: 14, color: '#555', fontWeight: 600 }}>
+              Tu boleto electrónico
+            </div>
+            <div style={{
+              display: 'inline-block',
+              background: '#fff',
+              border: '3px solid #6B46C1',
+              borderRadius: 16,
+              padding: 16,
+              boxShadow: '0 4px 12px rgba(107,70,193,0.15)',
+              marginBottom: 12,
+            }}>
+              <QRCodeSVG
+                value={`${window.location.origin}/mi-orden/${order.token}`}
+                size={180}
+                level="H"
+                fgColor="#1a1a2e"
+                bgColor="#ffffff"
+              />
+            </div>
+            <div style={{ fontSize: 12, color: '#888', marginBottom: 20 }}>
+              Presenta este código en el acceso al evento
+            </div>
             <Button
-              type="primary"
-              icon={<DownloadOutlined />}
+              icon={<WhatsAppOutlined />}
               size="large"
-              style={{ borderRadius: 8 }}
-              onClick={() => alert('Boletos disponibles pronto')}
+              onClick={() => {
+                const url = `${window.location.origin}/mi-orden/${order.token}`
+                const text = `Mis boletos para ${order.event.name} 🎟️ ${url}`
+                window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
+              }}
+              style={{
+                background: '#25D366', borderColor: '#25D366', color: '#fff',
+                borderRadius: 10, height: 44, fontWeight: 600,
+              }}
             >
-              Descargar boletos
+              Compartir por WhatsApp
             </Button>
-            <br />
-            <Text type="secondary" style={{ fontSize: 12, marginTop: 8, display: 'block' }}>
-              Boletos disponibles pronto
-            </Text>
           </Card>
         )}
       </div>

@@ -1170,27 +1170,47 @@ export default function VenueMapV2({ eventId }: VenueMapV2Props) {
 
         {/* Preview grid */}
         <div style={{ marginTop: 8 }}>
-          <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>
-            Vista previa — {seatPreviewRows} filas × {seatPreviewSeats} butacas = {seatPreviewRows * seatPreviewSeats} total
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <span style={{ fontSize: 12, color: '#666' }}>
+              Vista previa — {seatPreviewRows} filas × {seatPreviewSeats} butacas = <strong>{seatPreviewRows * seatPreviewSeats} total</strong>
+            </span>
+            <div style={{ display: 'flex', gap: 10 }}>
+              {[
+                { bg: '#ccfbf1', border: '#5eead4', label: 'Disponible' },
+                { bg: '#d9d9d9', border: '#d9d9d9', label: 'Vendida' },
+              ].map(({ bg, border, label }) => (
+                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#666' }}>
+                  <div style={{ width: 14, height: 14, borderRadius: 3, background: bg, border: `1.5px solid ${border}` }} />
+                  {label}
+                </div>
+              ))}
+            </div>
           </div>
-          <div style={{ maxHeight: 200, overflowY: 'auto', background: '#f8f8f8', borderRadius: 6, padding: 8 }}>
-            {genRowLabels(Math.min(seatPreviewRows, 10)).map(rowLabel => (
+          <div style={{ maxHeight: 220, overflowY: 'auto', background: '#1a1a2e', borderRadius: 8, padding: '12px 10px' }}>
+            {genRowLabels(Math.min(seatPreviewRows, 12)).map(rowLabel => (
               <div key={rowLabel} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-                <span style={{ fontSize: 11, color: '#888', width: 24, textAlign: 'right' }}>{rowLabel}</span>
-                <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                  {Array.from({ length: Math.min(seatPreviewSeats, 20) }).map((_, i) => (
+                <span style={{ fontSize: 10, color: '#64748b', width: 22, textAlign: 'right', flexShrink: 0, fontFamily: 'monospace' }}>{rowLabel}</span>
+                <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                  {Array.from({ length: Math.min(seatPreviewSeats, 25) }).map((_, i) => (
                     <div
                       key={i}
-                      style={{ width: 10, height: 10, borderRadius: 2, background: '#6B46C1', opacity: 0.7 }}
+                      style={{
+                        width: 16, height: 16, borderRadius: 4,
+                        background: '#ccfbf1',
+                        border: '1.5px solid #5eead4',
+                        flexShrink: 0,
+                      }}
                     />
                   ))}
-                  {seatPreviewSeats > 20 && <span style={{ fontSize: 10, color: '#999' }}>+{seatPreviewSeats - 20}</span>}
+                  {seatPreviewSeats > 25 && (
+                    <span style={{ fontSize: 10, color: '#64748b', alignSelf: 'center' }}>+{seatPreviewSeats - 25}</span>
+                  )}
                 </div>
               </div>
             ))}
-            {seatPreviewRows > 10 && (
-              <div style={{ fontSize: 11, color: '#999', textAlign: 'center', paddingTop: 4 }}>
-                ... y {seatPreviewRows - 10} filas más
+            {seatPreviewRows > 12 && (
+              <div style={{ fontSize: 11, color: '#64748b', textAlign: 'center', paddingTop: 6 }}>
+                · · · y {seatPreviewRows - 12} filas más
               </div>
             )}
           </div>

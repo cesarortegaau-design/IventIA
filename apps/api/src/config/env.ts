@@ -23,6 +23,7 @@ const envSchema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   STRIPE_SUCCESS_URL: z.string().default('http://localhost:5174/orders'),
   STRIPE_CANCEL_URL: z.string().default('http://localhost:5174/orders'),
+  TICKETS_APP_URL: z.string().default('http://localhost:5175'),
 })
 
 const parsed = envSchema.safeParse(process.env)

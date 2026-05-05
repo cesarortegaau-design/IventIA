@@ -98,12 +98,36 @@ export default function EventPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8f8f8' }}>
-      {/* Back */}
-      <div style={{ background: '#6B46C1', padding: '12px 24px' }}>
+      {/* Top nav */}
+      <div style={{
+        background: 'linear-gradient(135deg, #6B46C1 0%, #9b79e3 100%)',
+        padding: '0 24px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        height: 52,
+        boxShadow: '0 2px 8px rgba(107,70,193,0.25)',
+      }}>
+        {/* Brand */}
+        <div
+          onClick={() => navigate('/')}
+          style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+        >
+          <div style={{
+            width: 30, height: 30, borderRadius: 8,
+            background: 'rgba(255,255,255,0.2)',
+            border: '1.5px solid rgba(255,255,255,0.4)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 16, color: '#fff', fontWeight: 800,
+          }}>I</div>
+          <span style={{ color: '#fff', fontWeight: 800, fontSize: 18, letterSpacing: '-0.3px' }}>IventIA</span>
+          <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: 400 }}>Boletos</span>
+        </div>
+
+        {/* Back */}
         <Button
           icon={<ArrowLeftOutlined />}
           type="text"
-          style={{ color: '#fff' }}
+          size="small"
+          style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13 }}
           onClick={() => navigate('/')}
         >
           Todos los eventos

@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Button, Badge, InputNumber, message, Empty } from 'antd'
+import { Button, Badge, message, Empty } from 'antd'
 import { ShoppingCartOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons'
 import { useCart } from '../store/cart'
 
@@ -175,14 +175,21 @@ export default function VenueMapViewer({ sections, mapData, mode, slug, containe
           </div>
 
           {/* Legend */}
-          <div style={{ padding: '8px 16px', borderBottom: '1px solid #f0f0f0', display: 'flex', gap: 16, flexShrink: 0 }}>
+          <div style={{ padding: '8px 16px', borderBottom: '1px solid #f0f0f0', display: 'flex', gap: 16, flexShrink: 0, flexWrap: 'wrap' }}>
             {[
-              { color: '#e2e8f0', label: 'Disponible', border: '#cbd5e1' },
-              { color: '#6B46C1', label: 'Seleccionado', border: '#6B46C1' },
-              { color: '#d9d9d9', label: 'Vendido', border: '#d9d9d9' },
-            ].map(({ color: c, label, border }) => (
+              { bg: '#ccfbf1', border: '#5eead4', label: 'Disponible' },
+              { bg: '#6B46C1', border: '#6B46C1', label: 'Seleccionada', text: '#fff' },
+              { bg: '#f5f5f5', border: '#d9d9d9', label: 'Vendida' },
+            ].map(({ bg, border, label, text }) => (
               <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11 }}>
-                <div style={{ width: 12, height: 12, borderRadius: 3, background: c, border: `1px solid ${border}`, flexShrink: 0 }} />
+                <div style={{
+                  width: 16, height: 16, borderRadius: 4, background: bg,
+                  border: `1.5px solid ${border}`, flexShrink: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 9, color: text ?? 'transparent',
+                }}>
+                  {text ? '✓' : ''}
+                </div>
                 <span style={{ color: '#666' }}>{label}</span>
               </div>
             ))}
@@ -199,8 +206,8 @@ export default function VenueMapViewer({ sections, mapData, mode, slug, containe
                   {byRow[row].sort((a, b) => a.number - b.number).map(seat => {
                     const isInCart = cartSeatIds.has(seat.id)
                     const isAvail = seat.status === 'AVAILABLE'
-                    let bg = '#d9d9d9'
-                    if (isAvail) bg = isInCart ? '#6B46C1' : '#e2e8f0'
+                    const bg = !isAvail ? '#f5f5f5' : isInCart ? '#6B46C1' : '#ccfbf1'
+                    const border = !isAvail ? '#d9d9d9' : isInCart ? '#6B46C1' : '#5eead4'
                     return (
                       <button
                         key={seat.id}
@@ -208,14 +215,20 @@ export default function VenueMapViewer({ sections, mapData, mode, slug, containe
                         onClick={() => toggleSeat(selected, seat)}
                         disabled={!isAvail}
                         style={{
-                          width: 22, height: 22, borderRadius: 4,
-                          border: isInCart ? '1px solid #6B46C1' : '1px solid #cbd5e1',
+                          width: 26, height: 26, borderRadius: 5,
+                          border: `1.5px solid ${border}`,
                           background: bg,
                           cursor: isAvail ? 'pointer' : 'not-allowed',
-                          fontSize: 0, flexShrink: 0, padding: 0,
-                          transition: 'background 0.1s',
+                          fontSize: isInCart ? 12 : 0,
+                          color: '#fff',
+                          flexShrink: 0, padding: 0,
+                          transition: 'all 0.1s',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontWeight: 700,
                         }}
-                      />
+                      >
+                        {isInCart ? '✓' : ''}
+                      </button>
                     )
                   })}
                 </div>
@@ -273,16 +286,39 @@ export default function VenueMapViewer({ sections, mapData, mode, slug, containe
             <Button disabled block size="large">Agotado</Button>
           ) : (
             <div>
-              <div style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 12, color: '#888', display: 'block', marginBottom: 6 }}>Cantidad</label>
-                <InputNumber
-                  min={1}
-                  max={avail}
-                  value={localQty}
-                  onChange={v => setLocalQty(v ?? 1)}
-                  style={{ width: '100%' }}
-                  size="large"
-                />
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: 12, color: '#888', display: 'block', marginBottom: 8 }}>Cantidad de boletos</label>
+                {/* Styled stepper matching design mockup */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 0,
+                  background: '#f4eeff', borderRadius: 10, border: '1px solid #d3adf7',
+                  overflow: 'hidden',
+                }}>
+                  <button
+                    onClick={() => setLocalQty(q => Math.max(1, q - 1))}
+                    style={{
+                      width: 44, height: 44, border: 'none', background: '#fff',
+                      cursor: 'pointer', fontSize: 20, color: '#6B46C1', fontWeight: 700,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      borderRight: '1px solid #d3adf7',
+                    }}
+                  >−</button>
+                  <div style={{
+                    flex: 1, textAlign: 'center', fontWeight: 700, fontSize: 16, color: '#333',
+                    padding: '0 12px',
+                  }}>
+                    {localQty} {localQty === 1 ? 'boleto' : 'boletos'}
+                  </div>
+                  <button
+                    onClick={() => setLocalQty(q => Math.min(avail, q + 1))}
+                    style={{
+                      width: 44, height: 44, border: 'none', background: '#6B46C1',
+                      cursor: 'pointer', fontSize: 20, color: '#fff', fontWeight: 700,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      borderLeft: '1px solid #5a3aad',
+                    }}
+                  >+</button>
+                </div>
               </div>
               <Button
                 type="primary"
@@ -290,7 +326,7 @@ export default function VenueMapViewer({ sections, mapData, mode, slug, containe
                 size="large"
                 icon={<ShoppingCartOutlined />}
                 onClick={() => addSectionToCart(selected, localQty)}
-                style={{ background: '#6B46C1', borderColor: '#6B46C1' }}
+                style={{ background: '#6B46C1', borderColor: '#6B46C1', borderRadius: 10, height: 48, fontSize: 15, fontWeight: 600 }}
               >
                 Agregar · ${(localQty * selected.price).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
               </Button>

@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from 'express'
 import Stripe from 'stripe'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
+import { emailService } from '../services/email.service'
+import dayjs from 'dayjs'
 
 const RESERVATION_MINUTES = 30
 
@@ -172,7 +174,10 @@ export async function stripeWebhook(req: Request, res: Response, next: NextFunct
 
       const order = await prisma.ticketOrder.findUnique({
         where: { id: ticketOrderId },
-        include: { items: true },
+        include: {
+          items: { include: { section: true, seat: true } },
+          ticketEvent: { include: { event: true } },
+        },
       })
       if (!order || order.status === 'PAID') { res.json({ received: true }); return }
 
@@ -195,6 +200,25 @@ export async function stripeWebhook(req: Request, res: Response, next: NextFunct
           await tx.ticketSeat.updateMany({ where: { id: { in: seatIds } }, data: { status: 'SOLD' } })
         }
       })
+
+      // Send confirmation email (fire-and-forget)
+      emailService.sendTicketConfirmation({
+        to: order.buyerEmail,
+        buyerName: order.buyerName,
+        orderToken: order.token,
+        eventName: order.ticketEvent?.event?.name ?? 'Evento',
+        eventDate: order.ticketEvent?.event?.eventStart
+          ? dayjs(order.ticketEvent.event.eventStart).format('DD MMM YYYY, HH:mm')
+          : '',
+        venue: order.ticketEvent?.event?.venueLocation ?? undefined,
+        items: order.items.map(i => ({
+          section: i.section?.name ?? '',
+          seat: i.seat ? `${i.seat.row}${i.seat.number}` : undefined,
+          quantity: i.quantity,
+          unitPrice: Number(i.unitPrice),
+        })),
+        total: Number(order.total),
+      }).catch(err => console.error('[email] ticket confirmation failed:', err))
     }
 
     if (event.type === 'checkout.session.expired') {
