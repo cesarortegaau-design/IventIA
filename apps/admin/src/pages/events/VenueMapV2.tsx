@@ -381,37 +381,48 @@ export default function VenueMapV2({ eventId }: VenueMapV2Props) {
   const [history, setHistory] = useState<Shape[][]>([[]])
   const [historyIndex, setHistoryIndex] = useState(0)
 
+  // Track whether sections have been loaded at least once to avoid resetting
+  // unsaved edits on background refetches (e.g. window-focus).
+  const initialLoadDone = useRef(false)
+
   // Load map data
   const { data: mapDataRes, isLoading } = useQuery({
     queryKey: ['venue-map', eventId],
     queryFn: () => ticketEventsApi.getMap(eventId),
+    staleTime: Infinity,        // never auto-stale; we invalidate explicitly on save
+    refetchOnWindowFocus: false, // don't wipe unsaved edits when user alt-tabs
   })
 
   useEffect(() => {
-    if (mapDataRes?.data) {
-      const md = mapDataRes.data.mapData
-      if (md?.width) setSvgWidth(md.width)
-      if (md?.height) setSvgHeight(md.height)
-      if (md?.accesses) setAccesses(md.accesses)
-      if (md?.pois) setPois(md.pois)
-      const loaded: Shape[] = (mapDataRes.data.sections || []).map((s: Shape, idx: number) => {
-        if (s.shapeType && s.shapeData) return s
-        const col = idx % 3
-        const row = Math.floor(idx / 3)
-        const x = 50 + col * 350
-        const y = 50 + row * 200
-        return {
-          ...s,
-          shapeType: 'rect',
-          shapeData: { x, y, w: 300, h: 150 },
-          labelX: x + 150,
-          labelY: y + 75,
-        }
-      })
-      setSections(loaded)
-      setHistory([loaded])
-      setHistoryIndex(0)
-    }
+    if (!mapDataRes?.data) return
+    // Only reset editor state on the very first load.
+    // After that we only reload when the save mutation explicitly invalidates
+    // the query (tracked via saveMutation.isSuccess + a dedicated effect below).
+    if (initialLoadDone.current) return
+    initialLoadDone.current = true
+
+    const md = mapDataRes.data.mapData
+    if (md?.width) setSvgWidth(md.width)
+    if (md?.height) setSvgHeight(md.height)
+    if (md?.accesses) setAccesses(md.accesses)
+    if (md?.pois) setPois(md.pois)
+    const loaded: Shape[] = (mapDataRes.data.sections || []).map((s: Shape, idx: number) => {
+      if (s.shapeType && s.shapeData) return s
+      const col = idx % 3
+      const row = Math.floor(idx / 3)
+      const x = 50 + col * 350
+      const y = 50 + row * 200
+      return {
+        ...s,
+        shapeType: 'rect',
+        shapeData: { x, y, w: 300, h: 150 },
+        labelX: x + 150,
+        labelY: y + 75,
+      }
+    })
+    setSections(loaded)
+    setHistory([loaded])
+    setHistoryIndex(0)
   }, [mapDataRes])
 
   const currentMapData: MapData = {
@@ -429,6 +440,8 @@ export default function VenueMapV2({ eventId }: VenueMapV2Props) {
   const saveMutation = useMutation({
     mutationFn: (data: any) => ticketEventsApi.saveMap(eventId, data),
     onSuccess: () => {
+      // Allow the next mapDataRes update (from invalidation) to reload sections
+      initialLoadDone.current = false
       queryClient.invalidateQueries({ queryKey: ['venue-map', eventId] })
       message.success('Mapa guardado')
     },

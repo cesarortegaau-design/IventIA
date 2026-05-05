@@ -207,58 +207,52 @@ export async function saveVenueMap(req: Request, res: Response, next: NextFuncti
     const { mapData, sections: sectionsUpdate } = req.body
     if (!Array.isArray(sectionsUpdate)) throw new AppError(400, 'INVALID_INPUT', 'sections debe ser un array')
 
-    try {
-      // Update ticket event mapData
-      await prisma.ticketEvent.update({
-        where: { id: te.id },
-        data: { mapData: mapData ?? null },
-      })
+    // Update ticket event mapData
+    await prisma.ticketEvent.update({
+      where: { id: te.id },
+      data: { mapData: mapData ?? null },
+    })
 
-      // Update sections (shape geometry)
-      for (const sec of sectionsUpdate) {
-        if (sec.id) {
-          try {
-            await prisma.ticketSection.update({
-              where: { id: sec.id },
-              data: {
-                shapeType: sec.shapeType ?? null,
-                shapeData: sec.shapeData ? JSON.parse(JSON.stringify(sec.shapeData)) : null,
-                labelX: typeof sec.labelX === 'number' ? Math.floor(sec.labelX) : null,
-                labelY: typeof sec.labelY === 'number' ? Math.floor(sec.labelY) : null,
-                tier: sec.tier ?? null,
-                ...(sec.colorHex !== undefined && { colorHex: sec.colorHex }),
-                ...(sec.name     !== undefined && { name:     sec.name }),
-              },
-            })
-          } catch (secErr: any) {
-            console.error(`[saveVenueMap] Error updating section ${sec.id}:`, secErr?.message)
-            // Continue with other sections
-          }
-        }
-      }
-
-      // Audit log
+    // Update sections (shape geometry) — collect failures instead of swallowing them
+    const sectionErrors: string[] = []
+    for (const sec of sectionsUpdate) {
+      if (!sec.id) continue
       try {
-        await prisma.auditLog.create({
+        await prisma.ticketSection.update({
+          where: { id: sec.id },
           data: {
-            tenantId,
-            entityType: 'TicketEvent',
-            entityId: te.id,
-            action: 'UPDATE_MAP',
-            changes: { mapData, sections: sectionsUpdate },
-            userId: req.user!.userId,
+            shapeType: sec.shapeType ?? null,
+            shapeData: sec.shapeData ? JSON.parse(JSON.stringify(sec.shapeData)) : null,
+            labelX: typeof sec.labelX === 'number' ? Math.floor(sec.labelX) : null,
+            labelY: typeof sec.labelY === 'number' ? Math.floor(sec.labelY) : null,
+            tier: sec.tier ?? null,
+            ...(sec.colorHex !== undefined && { colorHex: sec.colorHex }),
+            ...(sec.name     !== undefined && { name:     sec.name }),
           },
         })
-      } catch (auditErr: any) {
-        console.warn('[saveVenueMap] Audit log failed:', auditErr?.message)
-        // Non-blocking error
+      } catch (secErr: any) {
+        console.error(`[saveVenueMap] Error updating section ${sec.id}:`, secErr?.message)
+        sectionErrors.push(`${sec.name ?? sec.id}: ${secErr?.message}`)
       }
-
-      res.json({ success: true, message: 'Mapa guardado' })
-    } catch (dbErr: any) {
-      console.error('[saveVenueMap] DB error:', dbErr?.message, dbErr?.code)
-      throw new AppError(500, 'DB_ERROR', `Error: ${dbErr?.message ?? 'Unknown database error'}`)
     }
+
+    if (sectionErrors.length > 0) {
+      throw new AppError(500, 'SECTION_SAVE_FAILED', `No se pudieron guardar algunas secciones: ${sectionErrors.join('; ')}`)
+    }
+
+    // Audit log (non-blocking)
+    prisma.auditLog.create({
+      data: {
+        tenantId,
+        entityType: 'TicketEvent',
+        entityId: te.id,
+        action: 'UPDATE_MAP',
+        changes: { mapData, sections: sectionsUpdate },
+        userId: req.user!.userId,
+      },
+    }).catch((auditErr: any) => console.warn('[saveVenueMap] Audit log failed:', auditErr?.message))
+
+    res.json({ success: true, message: 'Mapa guardado' })
   } catch (err) { next(err) }
 }
 
