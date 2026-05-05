@@ -121,9 +121,27 @@ export async function getFloorPlanContent(req: Request, res: Response, next: Nex
     const fp = await prisma.floorPlan.findFirst({ where: { id: fpId, eventId } })
     if (!fp) throw new AppError(404, 'NOT_FOUND', 'Plano no encontrado')
 
-    const raw = await fetchUrlAsBuffer(fp.fileUrl)
-    const buffer = fp.fileName.endsWith('.gz') ? await gunzip(raw) : raw
-    const content = buffer.toString('utf8')
+    let raw: Buffer
+    try {
+      raw = await fetchUrlAsBuffer(fp.fileUrl)
+    } catch (fetchErr: any) {
+      console.error('[getFloorPlanContent] Failed to fetch from Cloudinary:', fetchErr?.message, 'URL:', fp.fileUrl.slice(0, 80))
+      throw new AppError(502, 'FILE_FETCH_FAILED', `No se pudo obtener el archivo desde el servidor de almacenamiento: ${fetchErr?.message ?? 'error desconocido'}`)
+    }
+
+    let buffer: Buffer
+    try {
+      buffer = fp.fileName.endsWith('.gz') ? await gunzip(raw) : raw
+    } catch (gzErr: any) {
+      console.error('[getFloorPlanContent] Decompression failed:', gzErr?.message)
+      throw new AppError(422, 'DECOMPRESS_FAILED', 'Error al descomprimir el archivo. Puede estar corrupto.')
+    }
+
+    // Try UTF-8 first; fall back to latin1 for older DXF files with extended ASCII
+    let content: string
+    const utf8 = buffer.toString('utf8')
+    // Detect common UTF-8 corruption: replacement character U+FFFD indicates bad decode
+    content = utf8.includes('\uFFFD') ? buffer.toString('latin1') : utf8
 
     res.json({ success: true, data: { content, fileName: fp.fileName } })
   } catch (err) {
@@ -145,7 +163,7 @@ function fetchUrlAsBuffer(url: string, redirectsLeft = 5): Promise<Buffer> {
       }
       if (statusCode && statusCode >= 400) {
         proxyRes.resume()
-        reject(new Error(`Failed to fetch file: HTTP ${statusCode}`))
+        reject(new Error(`HTTP ${statusCode} al obtener el archivo desde Cloudinary. Verifica que el archivo exista y sea accesible.`))
         return
       }
       const chunks: Buffer[] = []
