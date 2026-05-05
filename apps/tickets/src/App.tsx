@@ -11,6 +11,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/evento/:slug" element={<EventPage />} />
+      <Route path="/boletos/:slug" element={<EventPage />} />
       <Route path="/carrito" element={<CartPage />} />
       <Route path="/pago/exito" element={<SuccessPage />} />
       <Route path="/pago/cancelado" element={<CancelPage />} />
