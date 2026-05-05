@@ -713,11 +713,12 @@ function SeatDetail({
         </span>
       </div>
 
+      <div style={{ marginBottom: 12, fontSize: 11, fontWeight: 600, color: C.text }}>Frente</div>
       <div style={{ overflowX: 'auto' }}>
         {rows.map(row => (
           <div key={row} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
             <span style={{ fontSize: 11, color: C.textMute, width: 20, textAlign: 'right', flexShrink: 0 }}>{row}</span>
-            <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 3, flexWrap: 'nowrap' }}>
               {byRow[row].sort((a, b) => a.number - b.number).map(seat => {
                 const isInCart = !!seatCart[seat.id]
                 const isSold = seat.status !== 'AVAILABLE'
