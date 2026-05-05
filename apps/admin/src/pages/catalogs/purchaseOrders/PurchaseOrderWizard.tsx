@@ -96,16 +96,8 @@ export default function PurchaseOrderWizard() {
 
   const createMutation = useMutation({
     mutationFn: () => {
-      const values = headerForm.getFieldsValue()
+      const values = headerForm.getFieldsValue(true)
       const supplier = (suppliersData?.data ?? []).find((s: any) => s.id === selectedSupplierId)
-      if (!values.requiredDeliveryDate) {
-        message.error('Selecciona una fecha de entrega')
-        return Promise.reject()
-      }
-      if (lineItems.length === 0) {
-        message.error('Agrega al menos un item')
-        return Promise.reject()
-      }
       return purchaseOrdersApi.create({
         supplierId: selectedSupplierId!,
         priceListId: selectedPriceListId,
@@ -168,6 +160,10 @@ export default function PurchaseOrderWizard() {
         setStep(1)
       } catch {}
     } else {
+      if (lineItems.length === 0) {
+        message.error('Agrega al menos un item')
+        return
+      }
       createMutation.mutate()
     }
   }
