@@ -78,30 +78,49 @@ export async function listEvents(req: Request, res: Response, next: NextFunction
 
 export async function getEvent(req: Request, res: Response, next: NextFunction) {
   try {
-    const event = await prisma.event.findFirst({
-      where: { id: req.params.id, tenantId: req.user!.tenantId },
-      include: {
-        primaryClient: { select: { id: true, companyName: true, firstName: true, lastName: true } },
-        priceList: { select: { id: true, name: true } },
-        documents: true,
-        ticketEvent: { include: { sections: true } },
-        _count: { select: { orders: true } },
-        orders: {
-          select: {
-            id: true,
-            orderNumber: true,
-            status: true,
-            total: true,
-            createdAt: true,
-            assignedTo: { select: { id: true, firstName: true, lastName: true } },
-            contract: { select: { id: true, contractNumber: true, description: true, status: true, totalAmount: true, paidAmount: true, client: { select: { id: true, companyName: true, firstName: true, lastName: true } } } },
-          },
-          orderBy: { createdAt: 'desc' },
+    const { id } = req.params
+    const tenantId = req.user!.tenantId
+
+    const [event, orderAgg, activeCount, pendingCount, teamRows] = await Promise.all([
+      prisma.event.findFirst({
+        where: { id, tenantId },
+        include: {
+          primaryClient: { select: { id: true, companyName: true, firstName: true, lastName: true } },
+          priceList: { select: { id: true, name: true } },
+          documents: true,
+          ticketEvent: { include: { sections: true } },
+          _count: { select: { orders: true } },
+        },
+      }),
+      prisma.order.aggregate({
+        where: { eventId: id, tenantId },
+        _sum: { total: true },
+        _count: { id: true },
+      }),
+      prisma.order.count({ where: { eventId: id, tenantId, status: { notIn: ['CANCELLED', 'CREDIT_NOTE'] } } }),
+      prisma.order.count({ where: { eventId: id, tenantId, status: 'QUOTED' } }),
+      prisma.order.findMany({
+        where: { eventId: id, tenantId, assignedToId: { not: null } },
+        select: { assignedTo: { select: { id: true, firstName: true, lastName: true } } },
+        distinct: ['assignedToId'],
+      }),
+    ])
+
+    if (!event) throw new AppError(404, 'EVENT_NOT_FOUND', 'Event not found')
+
+    res.json({
+      success: true,
+      data: {
+        ...event,
+        orderSummary: {
+          count: orderAgg._count.id,
+          totalRevenue: Number(orderAgg._sum.total ?? 0),
+          activeCount,
+          pendingCount,
+          team: teamRows.map(r => r.assignedTo).filter(Boolean),
         },
       },
     })
-    if (!event) throw new AppError(404, 'EVENT_NOT_FOUND', 'Event not found')
-    res.json({ success: true, data: event })
   } catch (err) {
     next(err)
   }

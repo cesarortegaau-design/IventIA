@@ -489,12 +489,11 @@ export default function EventDetailPage() {
 
   // ── Derived data ──────────────────────────────────────────────────────────
   const contractsMap = new Map<string, any>()
-  const ordersForContracts = fullOrders.length > 0 ? fullOrders : (event.orders ?? [])
-  for (const o of ordersForContracts) {
+  for (const o of fullOrders) {
     if (o.contract && !contractsMap.has(o.contract.id)) {
       contractsMap.set(o.contract.id, {
         ...o.contract,
-        _orderCount: ordersForContracts.filter((x: any) => x.contract?.id === o.contract.id).length,
+        _orderCount: fullOrders.filter((x: any) => x.contract?.id === o.contract.id).length,
       })
     }
   }

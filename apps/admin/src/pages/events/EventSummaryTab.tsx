@@ -30,24 +30,13 @@ export default function EventSummaryTab({ event, auditData, onSwitchTab }: Props
   const totalSold = ticketSections.reduce((s: number, sec: any) => s + (sec.sold ?? 0), 0)
   const ocupacionPct = totalCapacity > 0 ? Math.round((totalSold / totalCapacity) * 100) : null
 
-  const orders: any[] = event.orders ?? []
-  const totalRevenue = orders.reduce((s: number, o: any) => s + Number(o.total), 0)
-  const activeOrders = orders.filter((o: any) => !['CANCELLED', 'CREDIT_NOTE'].includes(o.status)).length
-  const pendingOrders = orders.filter((o: any) => o.status === 'QUOTED').length
+  const summary = event.orderSummary ?? {}
+  const totalRevenue: number = summary.totalRevenue ?? 0
+  const activeOrders: number = summary.activeCount ?? 0
+  const pendingOrders: number = summary.pendingCount ?? 0
+  const team: any[] = summary.team ?? []
 
   const daysToEvent = event.eventStart ? dayjs(event.eventStart).diff(dayjs(), 'day') : null
-
-  const team = useMemo(() => {
-    const seen = new Set<string>()
-    const members: any[] = []
-    for (const o of orders) {
-      if (o.assignedTo && !seen.has(o.assignedTo.id)) {
-        seen.add(o.assignedTo.id)
-        members.push(o.assignedTo)
-      }
-    }
-    return members
-  }, [orders])
 
   const recentAudit = (auditData ?? []).slice(0, 3)
 
