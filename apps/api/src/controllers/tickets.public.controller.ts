@@ -37,7 +37,6 @@ export async function getPublicTicketEvent(req: Request, res: Response, next: Ne
         sections: {
           include: {
             seats: {
-              where: { status: 'AVAILABLE' },
               orderBy: [{ row: 'asc' }, { number: 'asc' }],
             },
           },
