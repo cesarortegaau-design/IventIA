@@ -99,7 +99,7 @@ export default function EventSummaryTab({ event, auditData, onSwitchTab }: Props
             <>
               <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 4 }}>Ingreso total</div>
               <div style={{ fontSize: 22, fontWeight: 700, color: T.navy }}>{revenueDisplay}</div>
-              <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>{orders.length} órdenes</div>
+              <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>{summary.count ?? 0} órdenes</div>
             </>
           )}
           {kpiCard(
