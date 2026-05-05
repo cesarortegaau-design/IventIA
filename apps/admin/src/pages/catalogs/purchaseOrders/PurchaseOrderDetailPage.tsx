@@ -57,7 +57,7 @@ export default function PurchaseOrderDetailPage() {
       message.success('Orden de Compra actualizada')
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.message || 'Error al actualizar')
+      message.error(error?.response?.data?.message || 'Error al actualizar')
     },
   })
 
@@ -74,7 +74,7 @@ export default function PurchaseOrderDetailPage() {
       message.success('Orden de Compra confirmada')
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.message || 'Error al confirmar')
+      message.error(error?.response?.data?.message || 'Error al confirmar')
     },
   })
 
@@ -89,7 +89,7 @@ export default function PurchaseOrderDetailPage() {
       message.success('Orden de Compra cancelada')
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.message || 'Error al cancelar')
+      message.error(error?.response?.data?.message || 'Error al cancelar')
     },
   })
 

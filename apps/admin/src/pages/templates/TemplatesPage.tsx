@@ -64,7 +64,7 @@ export default function TemplatesPage() {
       message.success(`Plantilla subida — ${count} marcador(es) detectado(s)`)
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.message || error.message || 'Error al subir plantilla')
+      message.error(error?.response?.data?.message || error.message || 'Error al subir plantilla')
     },
   })
 

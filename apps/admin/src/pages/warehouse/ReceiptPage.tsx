@@ -65,7 +65,7 @@ export default function ReceiptPage() {
       message.success('Recepción registrada exitosamente')
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.message || 'Error al registrar recepción')
+      message.error(error?.response?.data?.message || 'Error al registrar recepción')
     },
   })
 

@@ -213,7 +213,7 @@ export default function OrderDetailPage() {
       message.success('Orden actualizada')
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.message || 'Error al actualizar')
+      message.error(error?.response?.data?.message || 'Error al actualizar')
     },
   })
 
@@ -232,7 +232,7 @@ export default function OrderDetailPage() {
       message.success('Valores reales actualizados')
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.message || 'Error al actualizar valores reales')
+      message.error(error?.response?.data?.message || 'Error al actualizar valores reales')
     },
   })
 
@@ -259,10 +259,10 @@ export default function OrderDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['order', id] })
       setCreditNoteModalOpen(false)
       message.success('Nota de crédito creada')
-      navigate(`/ordenes/${res.data.id}`)
+      navigate(`/ordenes/${res.data.data?.id ?? res.data.id}`)
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.message || 'Error al crear nota de crédito')
+      message.error(error?.response?.data?.message || 'Error al crear nota de crédito')
     },
   })
 

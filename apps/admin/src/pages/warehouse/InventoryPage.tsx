@@ -50,7 +50,7 @@ export default function InventoryPage() {
       message.success('Inventario ajustado')
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.message || 'Error al ajustar inventario')
+      message.error(error?.response?.data?.message || 'Error al ajustar inventario')
     },
   })
 
@@ -71,7 +71,7 @@ export default function InventoryPage() {
       message.success('Transferencia realizada')
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.message || 'Error al transferir')
+      message.error(error?.response?.data?.message || 'Error al transferir')
     },
   })
 

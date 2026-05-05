@@ -229,7 +229,7 @@ export default function CreatePurchaseOrderModal({
     onSuccess: (res) => {
       message.success('Orden de Compra creada exitosamente')
       onClose()
-      navigate(`/catalogos/ordenes-compra/${res.data.id}`)
+      navigate(`/catalogos/ordenes-compra/${res.data.data?.id ?? res.data.id}`)
     },
     onError: () => {
       message.error('Error al crear la Orden de Compra')

@@ -92,7 +92,7 @@ export default function SuppliersPage() {
       message.success(editingId ? 'Proveedor actualizado' : 'Proveedor creado')
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.message || 'Error')
+      message.error(error?.response?.data?.message || 'Error')
     },
   })
 

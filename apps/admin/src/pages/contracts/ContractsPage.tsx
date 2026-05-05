@@ -51,7 +51,7 @@ export default function ContractsPage() {
       navigate(`/contratos/${data.id}`)
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.message || 'Error al crear contrato')
+      message.error(error?.response?.data?.message || 'Error al crear contrato')
     },
   })
 

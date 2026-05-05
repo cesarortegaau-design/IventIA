@@ -115,7 +115,7 @@ export default function SupplierPriceListsPage() {
       message.success(editingId ? 'Lista actualizada' : 'Lista creada')
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.message || 'Error')
+      message.error(error?.response?.data?.message || 'Error')
     },
   })
 
@@ -142,7 +142,7 @@ export default function SupplierPriceListsPage() {
       message.success(editingItemId ? 'Recurso actualizado' : 'Recurso agregado')
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.message || 'Error al guardar recurso')
+      message.error(error?.response?.data?.message || 'Error al guardar recurso')
     },
   })
 
@@ -156,7 +156,7 @@ export default function SupplierPriceListsPage() {
       message.success('Recurso eliminado')
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.message || 'Error al eliminar')
+      message.error(error?.response?.data?.message || 'Error al eliminar')
     },
   })
 

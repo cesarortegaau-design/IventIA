@@ -78,9 +78,9 @@ export default function MainLayout() {
   const activeArea = useMemo(() => {
     const p = location.pathname
     if (p.startsWith('/eventos') || p.startsWith('/booking-calendar') || p.startsWith('/contratos') || p.startsWith('/plantillas')) return 'eventos'
-    if (p.startsWith('/reportes') || p.startsWith('/catalogos/ordenes-compra') || p.startsWith('/produccion') || p.startsWith('/almacen') || p.startsWith('/ordenes')) return 'operaciones'
+    if (p.startsWith('/reportes') || p.startsWith('/catalogos/ordenes-compra') || p.startsWith('/almacen') || p.startsWith('/ordenes')) return 'operaciones'
     if (p.startsWith('/catalogos')) return 'catalogos'
-    if (p.startsWith('/analisis') || p.startsWith('/dashboard')) return 'analitica'
+    if (p.startsWith('/analisis') || p.startsWith('/dashboard') || p.startsWith('/produccion')) return 'analitica'
     if (p.startsWith('/crm') || p.startsWith('/chat')) return 'crm'
     return 'inicio'
   }, [location.pathname])
@@ -106,7 +106,6 @@ export default function MainLayout() {
       { type: 'section', label: 'Comercial' },
       { key: '/reportes/ordenes', label: 'Órdenes de Servicio', icon: <DollarOutlined />, route: '/reportes/ordenes', privilege: PRIVILEGES.REPORT_ORDERS },
       { key: '/catalogos/ordenes-compra', label: 'Órdenes de Compra', icon: <FileTextOutlined />, route: '/catalogos/ordenes-compra', privilege: PRIVILEGES.PURCHASE_ORDER_VIEW },
-      { key: '/produccion', label: 'Producción y Costos', icon: <BarChartOutlined />, route: '/produccion', privilege: PRIVILEGES.PRODUCTION_VIEW },
       { type: 'section', label: 'Almacén' },
       { key: '/almacen/almacenes', label: 'Almacenes', icon: <ApartmentOutlined />, route: '/almacen/almacenes', privilege: PRIVILEGES.WAREHOUSE_VIEW },
       { key: '/almacen/inventario', label: 'Inventario', icon: <TagsOutlined />, route: '/almacen/inventario', privilege: PRIVILEGES.WAREHOUSE_VIEW },
@@ -133,6 +132,7 @@ export default function MainLayout() {
       { key: '/dashboard/operaciones', label: 'Operaciones', icon: <ToolOutlined />, route: '/dashboard/operaciones', privilege: PRIVILEGES.DASHBOARD_OPERATIONS },
       { type: 'section', label: 'Reportes' },
       { key: '/reportes/ordenes', label: 'Reporte de Órdenes', icon: <FileTextOutlined />, route: '/reportes/ordenes', privilege: PRIVILEGES.REPORT_ORDERS },
+      { key: '/produccion', label: 'Producción y Costos', icon: <BarChartOutlined />, route: '/produccion', privilege: PRIVILEGES.PRODUCTION_VIEW },
     ],
     crm: [
       { type: 'section', label: 'Comercial' },

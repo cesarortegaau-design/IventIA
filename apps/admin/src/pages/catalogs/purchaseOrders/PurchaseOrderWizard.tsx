@@ -128,10 +128,10 @@ export default function PurchaseOrderWizard() {
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['purchaseOrders'] })
       message.success('Orden de Compra creada')
-      navigate(`/catalogos/ordenes-compra/${data.id}`)
+      navigate(`/catalogos/ordenes-compra/${data.data?.id ?? data.id}`)
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.message || 'Error al crear OC')
+      message.error(error?.response?.data?.message || 'Error al crear OC')
     },
   })
 
