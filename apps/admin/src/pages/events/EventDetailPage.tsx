@@ -206,6 +206,14 @@ export default function EventDetailPage() {
     staleTime: 60_000,
   })
 
+  const { data: eventOrdersData } = useQuery({
+    queryKey: ['event-orders', id],
+    queryFn: () => eventsApi.getOrders(id!),
+    enabled: !!id && (activeTab === 'ordenes' || activeTab === 'contratos'),
+    staleTime: 60_000,
+  })
+  const fullOrders: any[] = eventOrdersData?.data ?? []
+
   const { data: auditData, isLoading: auditLoading } = useQuery({
     queryKey: ['event-audit', id],
     queryFn: () => auditApi.getLog('Event', id!),
@@ -473,11 +481,12 @@ export default function EventDetailPage() {
 
   // ── Derived data ──────────────────────────────────────────────────────────
   const contractsMap = new Map<string, any>()
-  for (const o of (event.orders ?? [])) {
+  const ordersForContracts = fullOrders.length > 0 ? fullOrders : (event.orders ?? [])
+  for (const o of ordersForContracts) {
     if (o.contract && !contractsMap.has(o.contract.id)) {
       contractsMap.set(o.contract.id, {
         ...o.contract,
-        _orderCount: (event.orders ?? []).filter((x: any) => x.contract?.id === o.contract.id).length,
+        _orderCount: ordersForContracts.filter((x: any) => x.contract?.id === o.contract.id).length,
       })
     }
   }
@@ -489,7 +498,7 @@ export default function EventDetailPage() {
   const TABS = [
     { key: 'resumen',    label: 'Resumen' },
     { key: 'espacios',   label: `Espacios (${spaces.length})` },
-    { key: 'ordenes',    label: `Órdenes (${event.orders?.length ?? 0})` },
+    { key: 'ordenes',    label: `Órdenes (${event._count?.orders ?? event.orders?.length ?? 0})` },
     ...(eventContracts.length > 0 ? [{ key: 'contratos', label: `Contratos (${eventContracts.length})` }] : []),
     { key: 'documentos', label: `Documentos (${event.documents?.length ?? 0})` },
     { key: 'produccion', label: 'Producción' },
@@ -884,7 +893,7 @@ export default function EventDetailPage() {
               <Space>
                 <Button
                   icon={<DownloadOutlined />}
-                  onClick={() => exportToCsv(`ordenes-${event.code}`, (event.orders ?? []).map((o: any) => ({
+                  onClick={() => exportToCsv(`ordenes-${event.code}`, fullOrders.map((o: any) => ({
                     numero: o.orderNumber,
                     cliente: o.client?.companyName || `${o.client?.firstName} ${o.client?.lastName}`,
                     stand: o.stand?.code ?? '',
@@ -908,7 +917,7 @@ export default function EventDetailPage() {
               </Space>
             </div>
             <Table
-              dataSource={event.orders ?? []}
+              dataSource={fullOrders}
               columns={orderColumns}
               rowKey="id"
               size="small"

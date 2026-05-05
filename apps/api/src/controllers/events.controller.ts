@@ -78,24 +78,23 @@ export async function listEvents(req: Request, res: Response, next: NextFunction
 
 export async function getEvent(req: Request, res: Response, next: NextFunction) {
   try {
-    const orgIds = await getUserOrgIds(req)
-    const ordersWhere = orgIds !== null ? { organizacionId: { in: orgIds } } : {}
-
     const event = await prisma.event.findFirst({
       where: { id: req.params.id, tenantId: req.user!.tenantId },
       include: {
-        primaryClient: true,
-        priceList: true,
+        primaryClient: { select: { id: true, companyName: true, firstName: true, lastName: true } },
+        priceList: { select: { id: true, name: true } },
         documents: true,
         ticketEvent: { include: { sections: true } },
+        _count: { select: { orders: true } },
         orders: {
-          where: ordersWhere,
-          include: {
-            client: { select: { id: true, companyName: true, firstName: true, lastName: true } },
-            stand: { select: { id: true, code: true } },
-            organizacion: { select: { id: true, clave: true, descripcion: true } },
-            contract: { select: { id: true, contractNumber: true, description: true, status: true, totalAmount: true, paidAmount: true, client: { select: { id: true, companyName: true, firstName: true, lastName: true } } } },
+          select: {
+            id: true,
+            orderNumber: true,
+            status: true,
+            total: true,
+            createdAt: true,
             assignedTo: { select: { id: true, firstName: true, lastName: true } },
+            contract: { select: { id: true, contractNumber: true, description: true, status: true, totalAmount: true, paidAmount: true, client: { select: { id: true, companyName: true, firstName: true, lastName: true } } } },
           },
           orderBy: { createdAt: 'desc' },
         },
@@ -103,6 +102,30 @@ export async function getEvent(req: Request, res: Response, next: NextFunction) 
     })
     if (!event) throw new AppError(404, 'EVENT_NOT_FOUND', 'Event not found')
     res.json({ success: true, data: event })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function getEventOrders(req: Request, res: Response, next: NextFunction) {
+  try {
+    const orgIds = await getUserOrgIds(req)
+    const where: any = { eventId: req.params.id }
+    if (orgIds !== null) where.organizacionId = { in: orgIds }
+
+    const orders = await prisma.order.findMany({
+      where,
+      include: {
+        client: { select: { id: true, companyName: true, firstName: true, lastName: true } },
+        stand: { select: { id: true, code: true } },
+        organizacion: { select: { id: true, clave: true, descripcion: true } },
+        contract: { select: { id: true, contractNumber: true, description: true, status: true, totalAmount: true, paidAmount: true, client: { select: { id: true, companyName: true, firstName: true, lastName: true } } } },
+        assignedTo: { select: { id: true, firstName: true, lastName: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    res.json({ success: true, data: orders })
   } catch (err) {
     next(err)
   }

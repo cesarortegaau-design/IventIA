@@ -3,8 +3,8 @@ import multer from 'multer'
 import { authenticate } from '../middleware/authenticate'
 import { requirePrivilege } from '../middleware/authorize'
 import { PRIVILEGES } from '@iventia/shared'
-import { listEvents, getEvent, createEvent, updateEvent, updateEventStatus } from '../controllers/events.controller'
-import { listOrdersForEvent, createOrder } from '../controllers/orders.controller'
+import { listEvents, getEvent, createEvent, updateEvent, updateEventStatus, getEventOrders } from '../controllers/events.controller'
+import { createOrder } from '../controllers/orders.controller'
 import { listEventSpaces, createEventSpace, updateEventSpace, deleteEventSpace, getEventSpaceAudit } from '../controllers/eventSpaces.controller'
 import { uploadEventDocument, deleteEventDocument } from '../controllers/documents.controller'
 import { importStands, listStands, createStand, updateStand, deleteStand } from '../controllers/stands.controller'
@@ -40,7 +40,7 @@ router.put('/:id', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), updateEvent)
 router.patch('/:id/status', requirePrivilege(PRIVILEGES.EVENT_CONFIRM), updateEventStatus)
 
 // Nested orders
-router.get('/:eventId/orders', requirePrivilege(PRIVILEGES.ORDER_VIEW), listOrdersForEvent)
+router.get('/:id/orders', requirePrivilege(PRIVILEGES.EVENT_VIEW), getEventOrders)
 router.post('/:eventId/orders', requirePrivilege(PRIVILEGES.ORDER_CREATE), createOrder)
 
 // Nested event spaces (bookings)
