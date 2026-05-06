@@ -221,13 +221,13 @@ export default function VenueMapViewer({ sections, mapData, mode, slug, containe
           </div>
 
           {/* Seat grid */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+          <div style={{ flex: 1, overflow: 'auto', padding: '12px 16px' }}>
             {rows.length === 0 ? (
               <div style={{ color: '#aaa', fontSize: 13, textAlign: 'center', paddingTop: 24 }}>Sin butacas configuradas</div>
             ) : rows.map(row => (
               <div key={row} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 5 }}>
                 <span style={{ fontSize: 11, color: '#999', width: 18, textAlign: 'right', flexShrink: 0 }}>{row}</span>
-                <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 3, flexWrap: 'nowrap' }}>
                   {byRow[row].sort((a, b) => a.number - b.number).map(seat => {
                     const isInCart = cartSeatIds.has(seat.id)
                     const isAvail = seat.status === 'AVAILABLE'
