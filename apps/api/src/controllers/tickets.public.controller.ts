@@ -3,8 +3,6 @@ import Stripe from 'stripe'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { emailService } from '../services/email.service'
-import { generateTicketPdf } from '../services/ticket-pdf.service'
-import { sendTicketWhatsApp } from '../services/whatsapp.service'
 import { env } from '../config/env'
 import dayjs from 'dayjs'
 
@@ -204,74 +202,62 @@ export async function stripeWebhook(req: Request, res: Response, next: NextFunct
         }
       })
 
-      // Generate ticket PDF and send email + WhatsApp (fire-and-forget)
-      ;(async () => {
-        try {
-          console.log(`[ticket-confirmation] Starting PDF generation for order ${order.token}`)
+      // ── Step 1: build shared params ──────────────────────────────────────
+      const emailParams = {
+        to: order.buyerEmail,
+        buyerName: order.buyerName,
+        orderToken: order.token,
+        eventName: order.ticketEvent?.event?.name ?? 'Evento',
+        eventDate: order.ticketEvent?.event?.eventStart
+          ? dayjs(order.ticketEvent.event.eventStart).format('DD MMM YYYY, HH:mm')
+          : '',
+        venue: order.ticketEvent?.event?.venueLocation ?? undefined,
+        items: order.items.map(i => ({
+          section: i.section?.name ?? '',
+          seat: i.seat ? `${i.seat.row}${i.seat.number}` : undefined,
+          quantity: i.quantity,
+          unitPrice: Number(i.unitPrice),
+        })),
+        total: Number(order.total),
+      }
 
-          const pdfBuffer = await generateTicketPdf({
-            orderToken: order.token,
+      // ── Step 2: try to generate PDF (non-blocking) ─────────────────────
+      let pdfBuffer: Buffer | undefined
+      try {
+        const { generateTicketPdf } = await import('../services/ticket-pdf.service')
+        pdfBuffer = await generateTicketPdf({
+          ...emailParams,
+          ticketsAppUrl: env.TICKETS_APP_URL,
+        })
+        console.log(`[ticket] PDF generated (${pdfBuffer.length} bytes)`)
+      } catch (pdfErr) {
+        console.error('[ticket] PDF generation failed, sending email without attachment:', pdfErr)
+      }
+
+      // ── Step 3: send email (ALWAYS, with or without PDF) ───────────────
+      emailService.sendTicketConfirmation({
+        ...emailParams,
+        pdfAttachment: pdfBuffer,
+      }).then(() => {
+        console.log(`[ticket] Email sent to ${order.buyerEmail}`)
+      }).catch(err => {
+        console.error('[ticket] Email failed:', err)
+      })
+
+      // ── Step 4: send WhatsApp if phone available (non-blocking) ────────
+      if (order.buyerPhone && env.API_BASE_URL) {
+        import('../services/whatsapp.service').then(({ sendTicketWhatsApp }) => {
+          const pdfUrl = `${env.API_BASE_URL}/api/v1/public/tickets/orders/${order.token}/pdf`
+          sendTicketWhatsApp({
+            to: order.buyerPhone!,
             buyerName: order.buyerName,
-            eventName: order.ticketEvent?.event?.name ?? 'Evento',
-            eventDate: order.ticketEvent?.event?.eventStart
-              ? dayjs(order.ticketEvent.event.eventStart).format('DD MMM YYYY, HH:mm')
-              : '',
-            venue: order.ticketEvent?.event?.venueLocation ?? undefined,
-            items: order.items.map(i => ({
-              section: i.section?.name ?? '',
-              seat: i.seat ? `${i.seat.row}${i.seat.number}` : undefined,
-              quantity: i.quantity,
-              unitPrice: Number(i.unitPrice),
-            })),
-            total: Number(order.total),
-            ticketsAppUrl: env.TICKETS_APP_URL,
-          })
-
-          console.log(`[ticket-confirmation] PDF generated (${pdfBuffer.length} bytes) for order ${order.token}`)
-
-          // Send email with PDF attachment
-          await emailService.sendTicketConfirmation({
-            to: order.buyerEmail,
-            buyerName: order.buyerName,
-            orderToken: order.token,
-            eventName: order.ticketEvent?.event?.name ?? 'Evento',
-            eventDate: order.ticketEvent?.event?.eventStart
-              ? dayjs(order.ticketEvent.event.eventStart).format('DD MMM YYYY, HH:mm')
-              : '',
-            venue: order.ticketEvent?.event?.venueLocation ?? undefined,
-            items: order.items.map(i => ({
-              section: i.section?.name ?? '',
-              seat: i.seat ? `${i.seat.row}${i.seat.number}` : undefined,
-              quantity: i.quantity,
-              unitPrice: Number(i.unitPrice),
-            })),
-            total: Number(order.total),
-            pdfAttachment: pdfBuffer,
-          })
-
-          console.log(`[ticket-confirmation] Email sent to ${order.buyerEmail}`)
-
-          // Send WhatsApp with PDF if phone is available and API_BASE_URL is configured
-          if (order.buyerPhone && env.API_BASE_URL) {
-            const pdfUrl = `${env.API_BASE_URL}/api/v1/public/tickets/orders/${order.token}/pdf`
-            console.log(`[ticket-confirmation] Sending WhatsApp to ${order.buyerPhone}`)
-            await sendTicketWhatsApp({
-              to: order.buyerPhone,
-              buyerName: order.buyerName,
-              eventName: order.ticketEvent?.event?.name ?? 'Evento',
-              eventDate: order.ticketEvent?.event?.eventStart
-                ? dayjs(order.ticketEvent.event.eventStart).format('DD MMM YYYY')
-                : '',
-              pdfUrl,
-            })
-            console.log(`[ticket-confirmation] WhatsApp sent successfully`)
-          } else if (order.buyerPhone && !env.API_BASE_URL) {
-            console.warn(`[ticket-confirmation] Cannot send WhatsApp: API_BASE_URL not configured`)
-          }
-        } catch (err) {
-          console.error('[ticket-confirmation] error generating PDF or sending notifications:', err)
-        }
-      })()
+            eventName: emailParams.eventName,
+            eventDate: emailParams.eventDate,
+            pdfUrl,
+          }).then(() => console.log(`[ticket] WhatsApp sent to ${order.buyerPhone}`))
+            .catch(err => console.error('[ticket] WhatsApp failed:', err))
+        }).catch(err => console.error('[ticket] WhatsApp import failed:', err))
+      }
     }
 
     if (event.type === 'checkout.session.expired') {
@@ -325,6 +311,7 @@ export async function downloadTicketPdf(req: Request, res: Response, next: NextF
     })
     if (!order || order.status !== 'PAID') throw new AppError(404, 'NOT_FOUND', 'Boleto no encontrado o no pagado')
 
+    const { generateTicketPdf } = await import('../services/ticket-pdf.service')
     const pdfBuffer = await generateTicketPdf({
       orderToken: order.token,
       buyerName: order.buyerName,
