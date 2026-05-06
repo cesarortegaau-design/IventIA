@@ -207,6 +207,8 @@ export async function stripeWebhook(req: Request, res: Response, next: NextFunct
       // Generate ticket PDF and send email + WhatsApp (fire-and-forget)
       ;(async () => {
         try {
+          console.log(`[ticket-confirmation] Starting PDF generation for order ${order.token}`)
+
           const pdfBuffer = await generateTicketPdf({
             orderToken: order.token,
             buyerName: order.buyerName,
@@ -224,6 +226,8 @@ export async function stripeWebhook(req: Request, res: Response, next: NextFunct
             total: Number(order.total),
             ticketsAppUrl: env.TICKETS_APP_URL,
           })
+
+          console.log(`[ticket-confirmation] PDF generated (${pdfBuffer.length} bytes) for order ${order.token}`)
 
           // Send email with PDF attachment
           await emailService.sendTicketConfirmation({
@@ -245,9 +249,12 @@ export async function stripeWebhook(req: Request, res: Response, next: NextFunct
             pdfAttachment: pdfBuffer,
           })
 
-          // Send WhatsApp with PDF if phone is available
-          if (order.buyerPhone) {
+          console.log(`[ticket-confirmation] Email sent to ${order.buyerEmail}`)
+
+          // Send WhatsApp with PDF if phone is available and API_BASE_URL is configured
+          if (order.buyerPhone && env.API_BASE_URL) {
             const pdfUrl = `${env.API_BASE_URL}/api/v1/public/tickets/orders/${order.token}/pdf`
+            console.log(`[ticket-confirmation] Sending WhatsApp to ${order.buyerPhone}`)
             await sendTicketWhatsApp({
               to: order.buyerPhone,
               buyerName: order.buyerName,
@@ -257,6 +264,9 @@ export async function stripeWebhook(req: Request, res: Response, next: NextFunct
                 : '',
               pdfUrl,
             })
+            console.log(`[ticket-confirmation] WhatsApp sent successfully`)
+          } else if (order.buyerPhone && !env.API_BASE_URL) {
+            console.warn(`[ticket-confirmation] Cannot send WhatsApp: API_BASE_URL not configured`)
           }
         } catch (err) {
           console.error('[ticket-confirmation] error generating PDF or sending notifications:', err)
@@ -315,7 +325,6 @@ export async function downloadTicketPdf(req: Request, res: Response, next: NextF
     })
     if (!order || order.status !== 'PAID') throw new AppError(404, 'NOT_FOUND', 'Boleto no encontrado o no pagado')
 
-    const { env } = await import('../config/env')
     const pdfBuffer = await generateTicketPdf({
       orderToken: order.token,
       buyerName: order.buyerName,
