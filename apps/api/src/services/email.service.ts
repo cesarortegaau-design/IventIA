@@ -20,6 +20,7 @@ export const emailService = {
     venue?: string
     items: Array<{ section: string; seat?: string; quantity: number; unitPrice: number }>
     total: number
+    pdfAttachment?: Buffer
   }) {
     const orderUrl = `${env.TICKETS_APP_URL}/mi-orden/${params.orderToken}`
     const whatsappText = `Mis boletos para ${params.eventName} 🎟️ ${orderUrl}`
@@ -130,6 +131,15 @@ export const emailService = {
       to: params.to,
       subject: `🎟️ Tus boletos para ${params.eventName} — Confirmado`,
       html,
+      attachments: params.pdfAttachment
+        ? [
+            {
+              filename: `boleto-${params.orderToken.slice(0, 8)}.pdf`,
+              content: params.pdfAttachment,
+              contentType: 'application/pdf',
+            },
+          ]
+        : [],
     })
   },
 

@@ -3,6 +3,9 @@ import Stripe from 'stripe'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { emailService } from '../services/email.service'
+import { generateTicketPdf } from '../services/ticket-pdf.service'
+import { sendTicketWhatsApp } from '../services/whatsapp.service'
+import { env } from '../config/env'
 import dayjs from 'dayjs'
 
 const RESERVATION_MINUTES = 30
@@ -201,24 +204,64 @@ export async function stripeWebhook(req: Request, res: Response, next: NextFunct
         }
       })
 
-      // Send confirmation email (fire-and-forget)
-      emailService.sendTicketConfirmation({
-        to: order.buyerEmail,
-        buyerName: order.buyerName,
-        orderToken: order.token,
-        eventName: order.ticketEvent?.event?.name ?? 'Evento',
-        eventDate: order.ticketEvent?.event?.eventStart
-          ? dayjs(order.ticketEvent.event.eventStart).format('DD MMM YYYY, HH:mm')
-          : '',
-        venue: order.ticketEvent?.event?.venueLocation ?? undefined,
-        items: order.items.map(i => ({
-          section: i.section?.name ?? '',
-          seat: i.seat ? `${i.seat.row}${i.seat.number}` : undefined,
-          quantity: i.quantity,
-          unitPrice: Number(i.unitPrice),
-        })),
-        total: Number(order.total),
-      }).catch(err => console.error('[email] ticket confirmation failed:', err))
+      // Generate ticket PDF and send email + WhatsApp (fire-and-forget)
+      ;(async () => {
+        try {
+          const pdfBuffer = await generateTicketPdf({
+            orderToken: order.token,
+            buyerName: order.buyerName,
+            eventName: order.ticketEvent?.event?.name ?? 'Evento',
+            eventDate: order.ticketEvent?.event?.eventStart
+              ? dayjs(order.ticketEvent.event.eventStart).format('DD MMM YYYY, HH:mm')
+              : '',
+            venue: order.ticketEvent?.event?.venueLocation ?? undefined,
+            items: order.items.map(i => ({
+              section: i.section?.name ?? '',
+              seat: i.seat ? `${i.seat.row}${i.seat.number}` : undefined,
+              quantity: i.quantity,
+              unitPrice: Number(i.unitPrice),
+            })),
+            total: Number(order.total),
+            ticketsAppUrl: env.TICKETS_APP_URL,
+          })
+
+          // Send email with PDF attachment
+          await emailService.sendTicketConfirmation({
+            to: order.buyerEmail,
+            buyerName: order.buyerName,
+            orderToken: order.token,
+            eventName: order.ticketEvent?.event?.name ?? 'Evento',
+            eventDate: order.ticketEvent?.event?.eventStart
+              ? dayjs(order.ticketEvent.event.eventStart).format('DD MMM YYYY, HH:mm')
+              : '',
+            venue: order.ticketEvent?.event?.venueLocation ?? undefined,
+            items: order.items.map(i => ({
+              section: i.section?.name ?? '',
+              seat: i.seat ? `${i.seat.row}${i.seat.number}` : undefined,
+              quantity: i.quantity,
+              unitPrice: Number(i.unitPrice),
+            })),
+            total: Number(order.total),
+            pdfAttachment: pdfBuffer,
+          })
+
+          // Send WhatsApp with PDF if phone is available
+          if (order.buyerPhone) {
+            const pdfUrl = `${env.API_BASE_URL}/api/v1/public/tickets/orders/${order.token}/pdf`
+            await sendTicketWhatsApp({
+              to: order.buyerPhone,
+              buyerName: order.buyerName,
+              eventName: order.ticketEvent?.event?.name ?? 'Evento',
+              eventDate: order.ticketEvent?.event?.eventStart
+                ? dayjs(order.ticketEvent.event.eventStart).format('DD MMM YYYY')
+                : '',
+              pdfUrl,
+            })
+          }
+        } catch (err) {
+          console.error('[ticket-confirmation] error generating PDF or sending notifications:', err)
+        }
+      })()
     }
 
     if (event.type === 'checkout.session.expired') {
@@ -256,5 +299,46 @@ export async function getPublicOrder(req: Request, res: Response, next: NextFunc
     })
     if (!order) throw new AppError(404, 'NOT_FOUND', 'Orden no encontrada')
     res.json({ success: true, data: order })
+  } catch (err) { next(err) }
+}
+
+// GET /public/tickets/orders/:token/pdf — descargar boleto en PDF
+export async function downloadTicketPdf(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { token } = req.params
+    const order = await prisma.ticketOrder.findUnique({
+      where: { token },
+      include: {
+        ticketEvent: { include: { event: true } },
+        items: { include: { section: true, seat: true } },
+      },
+    })
+    if (!order || order.status !== 'PAID') throw new AppError(404, 'NOT_FOUND', 'Boleto no encontrado o no pagado')
+
+    const { env } = await import('../config/env')
+    const pdfBuffer = await generateTicketPdf({
+      orderToken: order.token,
+      buyerName: order.buyerName,
+      eventName: order.ticketEvent?.event?.name ?? 'Evento',
+      eventDate: order.ticketEvent?.event?.eventStart
+        ? dayjs(order.ticketEvent.event.eventStart).format('DD MMM YYYY, HH:mm')
+        : '',
+      venue: order.ticketEvent?.event?.venueLocation ?? undefined,
+      items: order.items.map(i => ({
+        section: i.section?.name ?? '',
+        seat: i.seat ? `${i.seat.row}${i.seat.number}` : undefined,
+        quantity: i.quantity,
+        unitPrice: Number(i.unitPrice),
+      })),
+      total: Number(order.total),
+      ticketsAppUrl: env.TICKETS_APP_URL,
+    })
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="boleto-${token.slice(0, 8)}.pdf"`,
+      'Cache-Control': 'public, max-age=3600',
+    })
+    res.send(pdfBuffer)
   } catch (err) { next(err) }
 }

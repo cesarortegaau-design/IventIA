@@ -194,6 +194,37 @@ export async function sendBulkWhatsApp(
 }
 
 /**
+ * Ticket confirmation with PDF attachment
+ */
+export async function sendTicketWhatsApp(params: {
+  to: string
+  buyerName: string
+  eventName: string
+  eventDate: string
+  pdfUrl: string
+}): Promise<string> {
+  if (!client || !env.TWILIO_WHATSAPP_FROM) {
+    console.warn('⚠️ WhatsApp not configured: cannot send ticket')
+    return 'SKIPPED'
+  }
+
+  try {
+    const message = await client.messages.create({
+      from: `whatsapp:${env.TWILIO_WHATSAPP_FROM}`,
+      to: `whatsapp:${params.to}`,
+      body: `🎟️ Hola ${params.buyerName}, aquí están tus boletos para *${params.eventName}* (${params.eventDate}). Presenta el QR en la entrada. 👇`,
+      mediaUrl: [params.pdfUrl],
+    })
+
+    console.log(`✓ Ticket WhatsApp sent to ${params.to}: ${message.sid}`)
+    return message.sid
+  } catch (error) {
+    console.error(`✗ Failed to send ticket WhatsApp to ${params.to}:`, error)
+    throw new AppError(500, 'WHATSAPP_SEND_FAILED', 'Failed to send ticket WhatsApp')
+  }
+}
+
+/**
  * Check if WhatsApp is configured
  */
 export function isWhatsAppConfigured(): boolean {
