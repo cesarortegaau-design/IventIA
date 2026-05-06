@@ -59,6 +59,13 @@ export default function VenueMapViewer({ sections, mapData, mode, slug, containe
   const [isPanning, setIsPanning] = useState(false)
   const [panStart, setPanStart] = useState({ x: 0, y: 0 })
   const containerRef = useRef<HTMLDivElement>(null)
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   const svgWidth = mapData?.width ?? 1200
   const svgHeight = mapData?.height ?? 600
@@ -97,6 +104,24 @@ export default function VenueMapViewer({ sections, mapData, mode, slug, containe
     if (isPanning) setPan({ x: e.clientX - panStart.x, y: e.clientY - panStart.y })
   }
   const handleMouseUp = () => setIsPanning(false)
+
+  // Touch support for mobile
+  const handleTouchStart = (e: React.TouchEvent<SVGSVGElement>) => {
+    if (e.touches.length === 1) {
+      const tag = (e.target as SVGElement).tagName
+      if (['svg', 'path', 'ellipse'].includes(tag)) {
+        setIsPanning(true)
+        setPanStart({ x: e.touches[0].clientX - pan.x, y: e.touches[0].clientY - pan.y })
+      }
+    }
+  }
+  const handleTouchMove = (e: React.TouchEvent<SVGSVGElement>) => {
+    if (isPanning && e.touches.length === 1) {
+      e.preventDefault()
+      setPan({ x: e.touches[0].clientX - panStart.x, y: e.touches[0].clientY - panStart.y })
+    }
+  }
+  const handleTouchEnd = () => setIsPanning(false)
 
   const ensureSlug = () => {
     const { slug: cartSlug } = useCart.getState()
@@ -363,9 +388,9 @@ export default function VenueMapViewer({ sections, mapData, mode, slug, containe
   // ── Fallback: no shapes ────────────────────────────────────────────────────
   if (!mapData || !hasShapes) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: containerHeight }}>
-        <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
-          <div style={{ display: 'flex', gap: 24 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : containerHeight, minHeight: isMobile ? '100vh' : undefined }}>
+        <div style={{ flex: 1, overflow: 'auto', padding: isMobile ? '16px' : '24px' }}>
+          <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? 16 : 24 }}>
             {/* Section list */}
             <div style={{ flex: 1 }}>
               {sections.length === 0 ? (
@@ -402,7 +427,7 @@ export default function VenueMapViewer({ sections, mapData, mode, slug, containe
               })}
             </div>
             {/* Panel */}
-            <div style={{ width: 320, flexShrink: 0, border: '1px solid #f0f0f0', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ width: isMobile ? '100%' : 320, flexShrink: 0, border: '1px solid #f0f0f0', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: isMobile ? 200 : undefined }}>
               {renderPanel()}
             </div>
           </div>
@@ -414,22 +439,25 @@ export default function VenueMapViewer({ sections, mapData, mode, slug, containe
 
   // ── Map view ───────────────────────────────────────────────────────────────
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: containerHeight }}>
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : containerHeight, minHeight: isMobile ? '100vh' : undefined }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: isMobile ? 'column' : 'row', overflow: isMobile ? 'visible' : 'hidden' }}>
         {/* SVG canvas */}
         <div
           ref={containerRef}
-          style={{ flex: 1, position: 'relative', overflow: 'hidden', background: '#1a1a2e' }}
+          style={{ flex: isMobile ? 'none' : 1, height: isMobile ? '50vh' : undefined, position: 'relative', overflow: 'hidden', background: '#1a1a2e' }}
         >
           <svg
             width="100%"
             height="100%"
             viewBox={`${-pan.x / zoom} ${-pan.y / zoom} ${svgWidth / zoom} ${svgHeight / zoom}`}
-            style={{ cursor: isPanning ? 'grabbing' : 'grab', userSelect: 'none', display: 'block' }}
+            style={{ cursor: isPanning ? 'grabbing' : 'grab', userSelect: 'none', display: 'block', touchAction: 'none' }}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
           >
             {mapData?.perimeter && (
               <path d={mapData.perimeter} fill="#0f1e35" stroke="#1e3a5f" strokeWidth="2" />
@@ -546,15 +574,18 @@ export default function VenueMapViewer({ sections, mapData, mode, slug, containe
             background: 'rgba(0,0,0,0.5)', color: '#94a3b8',
             fontSize: 11, padding: '4px 10px', borderRadius: 20,
           }}>
-            Scroll para zoom · Arrastra para mover
+            {isMobile ? 'Toca una zona para ver detalles' : 'Scroll para zoom · Arrastra para mover'}
           </div>
         </div>
 
         {/* Side panel */}
         <div style={{
-          width: 320, flexShrink: 0, background: '#fff',
-          borderLeft: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column',
-          overflow: 'hidden',
+          width: isMobile ? '100%' : 320, flexShrink: 0, background: '#fff',
+          borderLeft: isMobile ? 'none' : '1px solid #f0f0f0',
+          borderTop: isMobile ? '1px solid #f0f0f0' : 'none',
+          display: 'flex', flexDirection: 'column',
+          overflow: isMobile ? 'visible' : 'hidden',
+          minHeight: isMobile ? 200 : undefined,
         }}>
           {renderPanel()}
         </div>
