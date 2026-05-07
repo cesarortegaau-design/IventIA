@@ -175,8 +175,8 @@ export async function ticketBuyerForgotPassword(req: Request, res: Response, nex
 
     await prisma.ticketBuyerPasswordReset.create({ data: { buyerUserId: user.id, token, expiresAt } })
 
-    const resetUrl = `${env.TICKETS_APP_URL}/boletos/reset-password?token=${token}`
-    emailService.sendPasswordReset(user.email, resetUrl, user.firstName).catch(err =>
+    const resetUrl = `${env.TICKETS_APP_URL}/reset-password?token=${token}`
+    emailService.sendPasswordReset(user.email, resetUrl, user.firstName, 'Restablecer contraseña — IventIA Boletos').catch(err =>
       console.error('[ticket-buyer] Reset email failed:', err)
     )
 

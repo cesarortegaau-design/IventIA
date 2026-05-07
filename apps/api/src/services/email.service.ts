@@ -143,7 +143,7 @@ export const emailService = {
     })
   },
 
-  async sendPasswordReset(to: string, resetUrl: string, firstName: string) {
+  async sendPasswordReset(to: string, resetUrl: string, firstName: string, subject = 'Restablecer contraseña — IventIA') {
     if (!transporter) {
       console.warn('[email] No SENDGRID_API_KEY configured — logging reset link instead')
       console.log(`[email] Password reset for ${to}: ${resetUrl}`)
@@ -153,7 +153,7 @@ export const emailService = {
     await transporter.sendMail({
       from: `IventIA <${env.EMAIL_FROM}>`,
       to,
-      subject: 'Restablecer contraseña — Portal de Expositores',
+      subject,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
           <h2>Hola ${firstName},</h2>

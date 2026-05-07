@@ -227,6 +227,7 @@ export async function stripeWebhook(req: Request, res: Response, next: NextFunct
         const { generateTicketPdf } = await import('../services/ticket-pdf.service')
         pdfBuffer = await generateTicketPdf({
           ...emailParams,
+          eventImageUrl: order.ticketEvent?.imageUrl ?? undefined,
           ticketsAppUrl: env.TICKETS_APP_URL,
         })
         console.log(`[ticket] PDF generated (${pdfBuffer.length} bytes)`)
