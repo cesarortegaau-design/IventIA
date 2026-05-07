@@ -1,13 +1,15 @@
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { Button, Space, Typography } from 'antd'
 import { QRCodeSVG } from 'qrcode.react'
-import { CheckCircleFilled, WhatsAppOutlined, ArrowRightOutlined } from '@ant-design/icons'
+import { CheckCircleFilled, WhatsAppOutlined, ArrowRightOutlined, UserAddOutlined } from '@ant-design/icons'
+import { useAuthStore } from '../store/authStore'
 
 const { Text } = Typography
 
 const TICKETS_URL = import.meta.env.VITE_TICKETS_URL ?? window.location.origin
 
 export default function SuccessPage() {
+  const { accessToken } = useAuthStore()
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const token = params.get('token')
@@ -131,6 +133,30 @@ export default function SuccessPage() {
           >
             Volver al inicio
           </Button>
+
+          {!accessToken && (
+            <Link to="/registro">
+              <Button
+                block
+                size="large"
+                icon={<UserAddOutlined />}
+                style={{ borderRadius: 12, height: 44, color: '#6B46C1', borderColor: '#d3adf7' }}
+              >
+                Crear cuenta para guardar mis boletos
+              </Button>
+            </Link>
+          )}
+
+          {accessToken && (
+            <Button
+              block
+              size="large"
+              onClick={() => navigate('/mis-boletos')}
+              style={{ borderRadius: 12, height: 44, color: '#6B46C1', borderColor: '#d3adf7' }}
+            >
+              Ver mis boletos
+            </Button>
+          )}
         </Space>
 
         {/* Footer note */}

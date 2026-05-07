@@ -1,12 +1,13 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import {
   Button, Card, Col, Divider, Empty, Form, Input, Row,
-  Space, Table, Typography, message,
+  Space, Table, Typography, message, Alert,
 } from 'antd'
-import { ArrowLeftOutlined, ShoppingCartOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, ShoppingCartOutlined, UserOutlined } from '@ant-design/icons'
 import { useCart } from '../store/cart'
 import { ticketsApi } from '../api/client'
+import { useAuthStore } from '../store/authStore'
 
 const { Title, Text } = Typography
 
@@ -19,6 +20,7 @@ interface BuyerForm {
 export default function CartPage() {
   const navigate = useNavigate()
   const { items, slug, clear, total } = useCart()
+  const { user: buyerUser } = useAuthStore()
   const [form] = Form.useForm<BuyerForm>()
   const [loading, setLoading] = useState(false)
 
@@ -140,6 +142,23 @@ export default function CartPage() {
               title="Datos del comprador"
               style={{ borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: 'none' }}
             >
+              {!buyerUser && (
+                <Alert
+                  style={{ marginBottom: 16, borderRadius: 8 }}
+                  message={
+                    <span>
+                      ¿Ya tienes cuenta?{' '}
+                      <Link to="/login" style={{ color: '#6B46C1', fontWeight: 600 }}>
+                        Inicia sesión
+                      </Link>
+                      {' '}para guardar tus boletos
+                    </span>
+                  }
+                  type="info"
+                  showIcon
+                  icon={<UserOutlined />}
+                />
+              )}
               <Form form={form} layout="vertical" onFinish={handlePay}>
                 <Form.Item
                   name="name"
