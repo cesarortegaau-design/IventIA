@@ -52,7 +52,7 @@ myApi.interceptors.response.use(
 
 export const myTicketsApi = {
   listOrders: () => myApi.get('/public/tickets/my/orders'),
-  pdfUrl: (token: string) => `${BASE}/public/tickets/my/orders/${token}/pdf`,
+  downloadPdf: (token: string) => myApi.get(`/public/tickets/my/orders/${token}/pdf`, { responseType: 'blob' }),
   updateProfile: (data: { firstName?: string; lastName?: string; phone?: string | null }) =>
     myApi.patch('/public/tickets/me', data),
   changePassword: (currentPassword: string, newPassword: string) =>

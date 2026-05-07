@@ -1,7 +1,8 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Button, Card, Col, Divider, Empty, Row, Space, Spin, Tag, Typography,
+  Button, Card, Col, Divider, Empty, Row, Space, Spin, Tag, Typography, message,
 } from 'antd'
 import {
   CalendarOutlined, EnvironmentOutlined, DownloadOutlined,
@@ -20,9 +21,24 @@ const STATUS_LABEL: Record<string, string> = {
   PAID: 'Pagado', PENDING: 'Pendiente', CANCELLED: 'Cancelado', REFUNDED: 'Reembolsado',
 }
 
+async function downloadPdf(token: string, eventName: string) {
+  try {
+    const res = await myTicketsApi.downloadPdf(token)
+    const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `boleto-${eventName.replace(/\s+/g, '-').toLowerCase()}.pdf`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch {
+    message.error('Error al descargar el boleto')
+  }
+}
+
 export default function MyTicketsPage() {
   const navigate = useNavigate()
   const { user, clearAuth } = useAuthStore()
+  const [downloading, setDownloading] = useState<string | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['my-ticket-orders'],
@@ -136,15 +152,19 @@ export default function MyTicketsPage() {
                     {/* Actions */}
                     <Space wrap>
                       {order.status === 'PAID' && (
-                        <a href={myTicketsApi.pdfUrl(order.token)} target="_blank" rel="noopener noreferrer">
-                          <Button
-                            icon={<DownloadOutlined />}
-                            type="primary"
-                            style={{ background: '#6B46C1', borderColor: '#6B46C1', borderRadius: 8 }}
-                          >
-                            Descargar boleto PDF
-                          </Button>
-                        </a>
+                        <Button
+                          icon={<DownloadOutlined />}
+                          type="primary"
+                          loading={downloading === order.token}
+                          style={{ background: '#6B46C1', borderColor: '#6B46C1', borderRadius: 8 }}
+                          onClick={async () => {
+                            setDownloading(order.token)
+                            await downloadPdf(order.token, event?.name ?? 'boleto')
+                            setDownloading(null)
+                          }}
+                        >
+                          Descargar boleto PDF
+                        </Button>
                       )}
                       <Button
                         onClick={() => navigate(`/mi-orden/${order.token}`)}
