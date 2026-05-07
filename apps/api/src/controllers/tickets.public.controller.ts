@@ -246,6 +246,7 @@ export async function stripeWebhook(req: Request, res: Response, next: NextFunct
       })
 
       // ── Step 4: send WhatsApp if phone available (non-blocking) ────────
+      console.log(`[ticket] WhatsApp check — phone: ${order.buyerPhone || 'none'}, API_BASE_URL: ${env.API_BASE_URL || 'not set'}`)
       if (order.buyerPhone && env.API_BASE_URL) {
         import('../services/whatsapp.service').then(({ sendTicketWhatsApp }) => {
           const pdfUrl = `${env.API_BASE_URL}/api/v1/public/tickets/orders/${order.token}/pdf`
