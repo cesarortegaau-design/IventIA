@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Button, Badge, message, Empty } from 'antd'
 import { ShoppingCartOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons'
 import { useCart } from '../store/cart'
+import { useAuthStore } from '../store/authStore'
 
 interface Seat {
   id: string
@@ -51,10 +52,10 @@ interface Props {
 
 export default function VenueMapViewer({ sections, mapData, mode, slug, containerHeight = 'calc(100vh - 130px)' }: Props) {
   const navigate = useNavigate()
-  const { addItem, removeItem, items, setSlug, total } = useCart()
+  const { accessToken } = useAuthStore()
+  const { addItem, removeItem, updateQuantity, items, setSlug, total } = useCart()
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [localQty, setLocalQty] = useState(1)
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [isPanning, setIsPanning] = useState(false)
@@ -80,13 +81,6 @@ export default function VenueMapViewer({ sections, mapData, mode, slug, containe
   const cartSeatIds = new Set(cartItems.filter(i => i.seatId).map(i => i.seatId!))
   const sectionCartQty = (sectionId: string) =>
     cartItems.find(i => i.sectionId === sectionId && !i.seatId)?.quantity ?? 0
-
-  useEffect(() => {
-    if (selectedId) {
-      const qty = sectionCartQty(selectedId)
-      setLocalQty(qty > 0 ? qty : 1)
-    }
-  }, [selectedId])
 
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault()
@@ -131,6 +125,15 @@ export default function VenueMapViewer({ sections, mapData, mode, slug, containe
   }
   const handleTouchEnd = () => setIsPanning(false)
 
+  const ensureAuth = () => {
+    if (!accessToken) {
+      message.info('Inicia sesión para comprar boletos')
+      navigate(`/login?returnTo=/evento/${slug}`)
+      return false
+    }
+    return true
+  }
+
   const ensureSlug = () => {
     const { slug: cartSlug } = useCart.getState()
     if (cartSlug && cartSlug !== slug) {
@@ -141,14 +144,9 @@ export default function VenueMapViewer({ sections, mapData, mode, slug, containe
     return true
   }
 
-  const addSectionToCart = (section: Section, qty: number) => {
-    if (!ensureSlug()) return
-    addItem({ sectionId: section.id, sectionName: section.name, quantity: qty, unitPrice: section.price })
-    message.success(`${qty} boleto(s) de "${section.name}" agregados`)
-  }
-
   const toggleSeat = (section: Section, seat: Seat) => {
     if (seat.status !== 'AVAILABLE') return
+    if (!ensureAuth()) return
     if (!ensureSlug()) return
     if (cartSeatIds.has(seat.id)) {
       removeItem(section.id, seat.id)
@@ -284,7 +282,25 @@ export default function VenueMapViewer({ sections, mapData, mode, slug, containe
       )
     }
 
-    // SECTION mode panel
+    // SECTION mode panel — qty synced directly to cart
+    const cartQty = sectionCartQty(selected.id)
+
+    const increment = () => {
+      if (!ensureAuth()) return
+      if (!ensureSlug()) return
+      if (cartQty === 0) {
+        addItem({ sectionId: selected.id, sectionName: selected.name, quantity: 1, unitPrice: selected.price })
+      } else if (cartQty < avail) {
+        updateQuantity(selected.id, cartQty + 1)
+      }
+    }
+
+    const decrement = () => {
+      if (cartQty === 0) return
+      if (cartQty === 1) removeItem(selected.id)
+      else updateQuantity(selected.id, cartQty - 1)
+    }
+
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         <div style={{ padding: '14px 16px', borderBottom: '1px solid #f0f0f0', flexShrink: 0 }}>
@@ -316,50 +332,53 @@ export default function VenueMapViewer({ sections, mapData, mode, slug, containe
             <Button disabled block size="large">Agotado</Button>
           ) : (
             <div>
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: 12, color: '#888', display: 'block', marginBottom: 8 }}>Cantidad de boletos</label>
-                {/* Styled stepper matching design mockup */}
+              <label style={{ fontSize: 12, color: '#888', display: 'block', marginBottom: 8 }}>
+                {cartQty > 0 ? 'En tu carrito' : 'Cantidad de boletos'}
+              </label>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 0,
+                background: cartQty > 0 ? '#f4eeff' : '#f9f9f9',
+                borderRadius: 10,
+                border: `1px solid ${cartQty > 0 ? '#d3adf7' : '#e8e8e8'}`,
+                overflow: 'hidden',
+                transition: 'all 0.2s',
+              }}>
+                <button
+                  onClick={decrement}
+                  disabled={cartQty === 0}
+                  style={{
+                    width: 44, height: 48, border: 'none',
+                    background: cartQty > 0 ? '#fff' : 'transparent',
+                    cursor: cartQty > 0 ? 'pointer' : 'not-allowed',
+                    fontSize: 22, color: cartQty > 0 ? '#6B46C1' : '#ccc', fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    borderRight: `1px solid ${cartQty > 0 ? '#d3adf7' : '#e8e8e8'}`,
+                  }}
+                >−</button>
                 <div style={{
-                  display: 'flex', alignItems: 'center', gap: 0,
-                  background: '#f4eeff', borderRadius: 10, border: '1px solid #d3adf7',
-                  overflow: 'hidden',
+                  flex: 1, textAlign: 'center', fontWeight: 700, fontSize: 18,
+                  color: cartQty > 0 ? '#6B46C1' : '#bbb',
                 }}>
-                  <button
-                    onClick={() => setLocalQty(q => Math.max(1, q - 1))}
-                    style={{
-                      width: 44, height: 44, border: 'none', background: '#fff',
-                      cursor: 'pointer', fontSize: 20, color: '#6B46C1', fontWeight: 700,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      borderRight: '1px solid #d3adf7',
-                    }}
-                  >−</button>
-                  <div style={{
-                    flex: 1, textAlign: 'center', fontWeight: 700, fontSize: 16, color: '#333',
-                    padding: '0 12px',
-                  }}>
-                    {localQty} {localQty === 1 ? 'boleto' : 'boletos'}
-                  </div>
-                  <button
-                    onClick={() => setLocalQty(q => Math.min(avail, q + 1))}
-                    style={{
-                      width: 44, height: 44, border: 'none', background: '#6B46C1',
-                      cursor: 'pointer', fontSize: 20, color: '#fff', fontWeight: 700,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      borderLeft: '1px solid #5a3aad',
-                    }}
-                  >+</button>
+                  {cartQty}
                 </div>
+                <button
+                  onClick={increment}
+                  disabled={cartQty >= avail}
+                  style={{
+                    width: 44, height: 48, border: 'none',
+                    background: cartQty >= avail ? '#f0f0f0' : '#6B46C1',
+                    cursor: cartQty >= avail ? 'not-allowed' : 'pointer',
+                    fontSize: 22, color: '#fff', fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    borderLeft: `1px solid ${cartQty >= avail ? '#e8e8e8' : '#5a3aad'}`,
+                  }}
+                >+</button>
               </div>
-              <Button
-                type="primary"
-                block
-                size="large"
-                icon={<ShoppingCartOutlined />}
-                onClick={() => addSectionToCart(selected, localQty)}
-                style={{ background: '#6B46C1', borderColor: '#6B46C1', borderRadius: 10, height: 48, fontSize: 15, fontWeight: 600 }}
-              >
-                Agregar · ${(localQty * selected.price).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-              </Button>
+              {cartQty > 0 && (
+                <div style={{ marginTop: 12, padding: '8px 12px', background: '#f4eeff', borderRadius: 8, fontSize: 13, color: '#6B46C1', fontWeight: 600, textAlign: 'center' }}>
+                  {cartQty} {cartQty === 1 ? 'boleto' : 'boletos'} · ${(cartQty * selected.price).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                </div>
+              )}
             </div>
           )}
         </div>

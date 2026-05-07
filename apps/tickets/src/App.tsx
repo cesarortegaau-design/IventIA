@@ -1,4 +1,4 @@
-import { Navigate, Routes, Route } from 'react-router-dom'
+import { Navigate, Routes, Route, useLocation } from 'react-router-dom'
 import { useAuthStore } from './store/authStore'
 import HomePage from './pages/HomePage'
 import EventPage from './pages/EventPage'
@@ -14,7 +14,8 @@ import MyTicketsPage from './pages/MyTicketsPage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { accessToken } = useAuthStore()
-  if (!accessToken) return <Navigate to="/login" replace />
+  const location = useLocation()
+  if (!accessToken) return <Navigate to={`/login?returnTo=${encodeURIComponent(location.pathname)}`} replace />
   return <>{children}</>
 }
 
@@ -24,7 +25,6 @@ export default function App() {
       <Route path="/" element={<HomePage />} />
       <Route path="/evento/:slug" element={<EventPage />} />
       <Route path="/boletos/:slug" element={<EventPage />} />
-      <Route path="/carrito" element={<CartPage />} />
       <Route path="/pago/exito" element={<SuccessPage />} />
       <Route path="/pago/cancelado" element={<CancelPage />} />
       <Route path="/mi-orden/:token" element={<OrderPage />} />
@@ -36,6 +36,7 @@ export default function App() {
       <Route path="/reset-password" element={<ResetPasswordPage />} />
 
       {/* Protected */}
+      <Route path="/carrito" element={<RequireAuth><CartPage /></RequireAuth>} />
       <Route path="/mis-boletos" element={<RequireAuth><MyTicketsPage /></RequireAuth>} />
     </Routes>
   )

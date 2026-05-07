@@ -1,27 +1,20 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import {
-  Button, Card, Col, Divider, Empty, Form, Input, Row,
-  Space, Table, Typography, message, Alert,
+  Button, Card, Col, Divider, Empty, Row,
+  Space, Table, Typography, message,
 } from 'antd'
-import { ArrowLeftOutlined, ShoppingCartOutlined, UserOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, ShoppingCartOutlined, UserOutlined, MailOutlined, PhoneOutlined } from '@ant-design/icons'
 import { useCart } from '../store/cart'
 import { ticketsApi } from '../api/client'
 import { useAuthStore } from '../store/authStore'
 
 const { Title, Text } = Typography
 
-interface BuyerForm {
-  name: string
-  email: string
-  phone?: string
-}
-
 export default function CartPage() {
   const navigate = useNavigate()
   const { items, slug, clear, total } = useCart()
-  const { user: buyerUser } = useAuthStore()
-  const [form] = Form.useForm<BuyerForm>()
+  const { user } = useAuthStore()
   const [loading, setLoading] = useState(false)
 
   if (items.length === 0) {
@@ -73,14 +66,15 @@ export default function CartPage() {
     },
   ]
 
-  async function handlePay(values: BuyerForm) {
+  async function handlePay() {
+    if (!user) return
     setLoading(true)
     try {
       const payload = {
         slug,
-        buyerName: values.name,
-        buyerEmail: values.email,
-        buyerPhone: values.phone,
+        buyerName: `${user.firstName} ${user.lastName}`,
+        buyerEmail: user.email,
+        buyerPhone: user.phone ?? undefined,
         items: items.map(i => ({
           sectionId: i.sectionId,
           seatId: i.seatId,
@@ -137,61 +131,47 @@ export default function CartPage() {
               />
             </Card>
 
-            {/* Buyer form */}
+            {/* Buyer info — read-only from auth */}
             <Card
-              title="Datos del comprador"
+              title="Comprando como"
               style={{ borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: 'none' }}
             >
-              {!buyerUser && (
-                <Alert
-                  style={{ marginBottom: 16, borderRadius: 8 }}
-                  message={
-                    <span>
-                      ¿Ya tienes cuenta?{' '}
-                      <Link to="/login" style={{ color: '#6B46C1', fontWeight: 600 }}>
-                        Inicia sesión
-                      </Link>
-                      {' '}para guardar tus boletos
-                    </span>
-                  }
-                  type="info"
-                  showIcon
-                  icon={<UserOutlined />}
-                />
-              )}
-              <Form form={form} layout="vertical" onFinish={handlePay}>
-                <Form.Item
-                  name="name"
-                  label="Nombre completo"
-                  rules={[{ required: true, message: 'Ingresa tu nombre' }]}
-                >
-                  <Input placeholder="Juan Pérez" size="large" style={{ borderRadius: 8 }} />
-                </Form.Item>
-                <Form.Item
-                  name="email"
-                  label="Correo electrónico"
-                  rules={[
-                    { required: true, message: 'Ingresa tu correo' },
-                    { type: 'email', message: 'Correo inválido' },
-                  ]}
-                >
-                  <Input placeholder="juan@correo.com" size="large" style={{ borderRadius: 8 }} />
-                </Form.Item>
-                <Form.Item name="phone" label="Teléfono (opcional)">
-                  <Input placeholder="+52 33 1234 5678" size="large" style={{ borderRadius: 8 }} />
-                </Form.Item>
+              <Space direction="vertical" size={10} style={{ width: '100%' }}>
+                <Space size={10}>
+                  <UserOutlined style={{ color: '#6B46C1' }} />
+                  <Text strong>{user?.firstName} {user?.lastName}</Text>
+                </Space>
+                <Space size={10}>
+                  <MailOutlined style={{ color: '#6B46C1' }} />
+                  <Text>{user?.email}</Text>
+                </Space>
+                {user?.phone && (
+                  <Space size={10}>
+                    <PhoneOutlined style={{ color: '#6B46C1' }} />
+                    <Text>{user.phone}</Text>
+                  </Space>
+                )}
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  Los boletos se enviarán a este correo.{' '}
+                  <span
+                    style={{ color: '#6B46C1', cursor: 'pointer' }}
+                    onClick={() => navigate('/')}
+                  >
+                    ¿No eres tú? Cambia de cuenta
+                  </span>
+                </Text>
+              </Space>
 
-                <Button
-                  type="primary"
-                  htmlType="submit"
-                  size="large"
-                  block
-                  loading={loading}
-                  style={{ borderRadius: 8, background: '#6B46C1', borderColor: '#6B46C1' }}
-                >
-                  Pagar con Stripe
-                </Button>
-              </Form>
+              <Button
+                type="primary"
+                size="large"
+                block
+                loading={loading}
+                onClick={handlePay}
+                style={{ borderRadius: 8, background: '#6B46C1', borderColor: '#6B46C1', marginTop: 24 }}
+              >
+                Pagar con Stripe
+              </Button>
             </Card>
           </Col>
 

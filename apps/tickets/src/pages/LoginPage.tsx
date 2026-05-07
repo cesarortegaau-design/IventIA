@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { Button, Card, Form, Input, Typography, Divider, message } from 'antd'
 import { UserOutlined, LockOutlined, ArrowLeftOutlined } from '@ant-design/icons'
 import { authApi } from '../api/auth'
@@ -9,6 +9,8 @@ const { Title, Text } = Typography
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const returnTo = params.get('returnTo') ?? '/mis-boletos'
   const setAuth = useAuthStore(s => s.setAuth)
   const [loading, setLoading] = useState(false)
 
@@ -17,7 +19,7 @@ export default function LoginPage() {
     try {
       const { data } = await authApi.login(values.email, values.password)
       setAuth(data.data.user, data.data.accessToken, data.data.refreshToken)
-      navigate('/mis-boletos')
+      navigate(returnTo)
     } catch (err: any) {
       message.error(err?.response?.data?.error?.message ?? 'Correo o contraseña incorrectos')
     } finally {
