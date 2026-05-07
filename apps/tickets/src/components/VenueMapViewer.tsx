@@ -54,6 +54,7 @@ export default function VenueMapViewer({ sections, mapData, mode, slug, containe
   const { addItem, removeItem, items, setSlug, total } = useCart()
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [localQty, setLocalQty] = useState(1)
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [isPanning, setIsPanning] = useState(false)
@@ -79,6 +80,13 @@ export default function VenueMapViewer({ sections, mapData, mode, slug, containe
   const cartSeatIds = new Set(cartItems.filter(i => i.seatId).map(i => i.seatId!))
   const sectionCartQty = (sectionId: string) =>
     cartItems.find(i => i.sectionId === sectionId && !i.seatId)?.quantity ?? 0
+
+  useEffect(() => {
+    if (selectedId) {
+      const qty = sectionCartQty(selectedId)
+      setLocalQty(qty > 0 ? qty : 1)
+    }
+  }, [selectedId])
 
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault()
@@ -277,9 +285,6 @@ export default function VenueMapViewer({ sections, mapData, mode, slug, containe
     }
 
     // SECTION mode panel
-    const qty = sectionCartQty(selected.id)
-    const [localQty, setLocalQty] = useState(qty > 0 ? qty : 1)
-
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         <div style={{ padding: '14px 16px', borderBottom: '1px solid #f0f0f0', flexShrink: 0 }}>
