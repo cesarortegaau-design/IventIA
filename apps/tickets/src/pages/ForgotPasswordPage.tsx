@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { Button, Card, Form, Input, Typography, Result, App } from 'antd'
+import { Button, Card, Form, Input, Typography, Result, message } from 'antd'
 import { ArrowLeftOutlined, MailOutlined } from '@ant-design/icons'
 import { authApi } from '../api/auth'
 
@@ -8,7 +8,6 @@ const { Text } = Typography
 
 export default function ForgotPasswordPage() {
   const navigate = useNavigate()
-  const { message } = App.useApp()
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
 

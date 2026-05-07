@@ -1,5 +1,5 @@
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
-import { Button, Card, Form, Input, Typography, App, Result } from 'antd'
+import { Button, Card, Form, Input, Typography, message, Result } from 'antd'
 import { CheckCircleOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import { authApi } from '../api/auth'
@@ -8,7 +8,6 @@ const { Text } = Typography
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate()
-  const { message } = App.useApp()
   const [params] = useSearchParams()
   const token = params.get('token') ?? ''
   const [loading, setLoading] = useState(false)

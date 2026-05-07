@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { Button, Card, Form, Input, Typography, Divider, App, Row, Col } from 'antd'
+import { Button, Card, Form, Input, Typography, Divider, message, Row, Col } from 'antd'
 import { ArrowLeftOutlined } from '@ant-design/icons'
 import HCaptcha from '@hcaptcha/react-hcaptcha'
 import { authApi } from '../api/auth'
@@ -10,7 +10,6 @@ const { Title, Text } = Typography
 
 export default function RegisterPage() {
   const navigate = useNavigate()
-  const { message } = App.useApp()
   const setAuth = useAuthStore(s => s.setAuth)
   const captchaRef = useRef<HCaptcha>(null)
   const [hCaptchaToken, setHCaptchaToken] = useState<string | null>(null)
