@@ -5,6 +5,8 @@ import {
   ticketBuyerLogin,
   ticketBuyerRefresh,
   ticketBuyerMe,
+  ticketBuyerUpdateProfile,
+  ticketBuyerChangePassword,
   ticketBuyerForgotPassword,
   ticketBuyerResetPassword,
 } from '../controllers/ticket-buyer.auth.controller'
@@ -26,6 +28,8 @@ router.post('/auth/reset-password', ticketBuyerResetPassword)
 // Protected routes
 router.use('/me', authenticateTicketBuyer)
 router.get('/me', ticketBuyerMe)
+router.patch('/me', ticketBuyerUpdateProfile)
+router.post('/me/change-password', ticketBuyerChangePassword)
 
 router.use('/my', authenticateTicketBuyer)
 router.get('/my/orders', ticketBuyerListOrders)

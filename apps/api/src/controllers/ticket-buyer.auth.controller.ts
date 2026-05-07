@@ -184,6 +184,47 @@ export async function ticketBuyerForgotPassword(req: Request, res: Response, nex
   } catch (err) { next(err) }
 }
 
+// PATCH /public/tickets/me
+export async function ticketBuyerUpdateProfile(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { ticketBuyerUserId } = req.ticketBuyerUser!
+    const schema = z.object({
+      firstName: z.string().min(1).optional(),
+      lastName: z.string().min(1).optional(),
+      phone: z.string().optional().nullable(),
+    })
+    const data = schema.parse(req.body)
+    const user = await prisma.ticketBuyerUser.update({
+      where: { id: ticketBuyerUserId },
+      data,
+      select: { id: true, email: true, firstName: true, lastName: true, phone: true },
+    })
+    res.json({ success: true, data: user })
+  } catch (err) { next(err) }
+}
+
+// POST /public/tickets/me/change-password
+export async function ticketBuyerChangePassword(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { ticketBuyerUserId } = req.ticketBuyerUser!
+    const { currentPassword, newPassword } = z.object({
+      currentPassword: z.string(),
+      newPassword: z.string().min(8),
+    }).parse(req.body)
+
+    const user = await prisma.ticketBuyerUser.findUnique({ where: { id: ticketBuyerUserId } })
+    if (!user) throw new AppError(404, 'NOT_FOUND', 'Usuario no encontrado')
+
+    const ok = await bcrypt.compare(currentPassword, user.passwordHash)
+    if (!ok) throw new AppError(400, 'WRONG_PASSWORD', 'Contraseña actual incorrecta')
+
+    const passwordHash = await bcrypt.hash(newPassword, 12)
+    await prisma.ticketBuyerUser.update({ where: { id: ticketBuyerUserId }, data: { passwordHash } })
+
+    res.json({ success: true })
+  } catch (err) { next(err) }
+}
+
 // POST /public/tickets/auth/reset-password
 export async function ticketBuyerResetPassword(req: Request, res: Response, next: NextFunction) {
   try {

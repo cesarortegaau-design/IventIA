@@ -53,4 +53,8 @@ myApi.interceptors.response.use(
 export const myTicketsApi = {
   listOrders: () => myApi.get('/public/tickets/my/orders'),
   pdfUrl: (token: string) => `${BASE}/public/tickets/my/orders/${token}/pdf`,
+  updateProfile: (data: { firstName?: string; lastName?: string; phone?: string | null }) =>
+    myApi.patch('/public/tickets/me', data),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    myApi.post('/public/tickets/me/change-password', { currentPassword, newPassword }),
 }
