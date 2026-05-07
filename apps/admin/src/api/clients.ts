@@ -58,6 +58,16 @@ export const clientsApi = {
     form.append('file', file)
     return apiClient.post(`/clients/${id}/logo`, form, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data)
   },
+
+  // Ticket Buyer Users Management
+  listTicketBuyerUsers: () =>
+    apiClient.get('/clients/ticket-buyer-users').then(r => r.data.data),
+  getTicketBuyerUser: (id: string) =>
+    apiClient.get(`/clients/ticket-buyer-users/${id}`).then(r => r.data),
+  updateTicketBuyerUser: (id: string, data: any) =>
+    apiClient.patch(`/clients/ticket-buyer-users/${id}`, data).then(r => r.data),
+  resetTicketBuyerUserPassword: (id: string, password: string) =>
+    apiClient.post(`/clients/ticket-buyer-users/${id}/reset-password`, { password }).then(r => r.data),
   importClients: (rows: any[]) =>
     apiClient.post('/clients/import', rows).then(r => r.data),
 }

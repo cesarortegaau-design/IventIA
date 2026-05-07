@@ -320,6 +320,7 @@ export async function downloadTicketPdf(req: Request, res: Response, next: NextF
         ? dayjs(order.ticketEvent.event.eventStart).format('DD MMM YYYY, HH:mm')
         : '',
       venue: order.ticketEvent?.event?.venueLocation ?? undefined,
+      eventImageUrl: order.ticketEvent?.imageUrl ?? undefined,
       items: order.items.map(i => ({
         section: i.section?.name ?? '',
         seat: i.seat ? `${i.seat.row}${i.seat.number}` : undefined,

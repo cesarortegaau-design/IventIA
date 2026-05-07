@@ -25,6 +25,7 @@ const envSchema = z.object({
   STRIPE_CANCEL_URL: z.string().default('http://localhost:5174/orders'),
   TICKETS_APP_URL: z.string().default('http://localhost:5175'),
   API_BASE_URL: z.string().default('http://localhost:3001'),
+  HCAPTCHA_SECRET_KEY: z.string().optional(),
 })
 
 const parsed = envSchema.safeParse(process.env)

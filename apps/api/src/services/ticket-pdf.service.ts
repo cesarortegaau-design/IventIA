@@ -7,6 +7,7 @@ export async function generateTicketPdf(params: {
   eventName: string
   eventDate: string
   venue?: string
+  eventImageUrl?: string
   items: Array<{ section: string; seat?: string; quantity: number; unitPrice: number }>
   total: number
   ticketsAppUrl: string
@@ -20,6 +21,15 @@ export async function generateTicketPdf(params: {
     color: { dark: '#1a1a2e', light: '#ffffff' },
   })
 
+  // Pre-load event image if provided
+  let eventImgBuf: Buffer | null = null
+  if (params.eventImageUrl) {
+    try {
+      const imgRes = await fetch(params.eventImageUrl)
+      if (imgRes.ok) eventImgBuf = Buffer.from(await imgRes.arrayBuffer())
+    } catch { /* ignore */ }
+  }
+
   // Create PDF document
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'LETTER', margin: 40 })
@@ -31,8 +41,14 @@ export async function generateTicketPdf(params: {
 
     // ── Header ─────────────────────────────────────────────────────────────
     doc.rect(0, 0, doc.page.width, 100).fill('#6B46C1')
-    doc.fontSize(32).fillColor('#fff').font('Helvetica-Bold').text('BOLETO DE ENTRADA', 40, 30)
-    doc.fontSize(14).fillColor('rgba(255,255,255,0.9)').font('Helvetica').text('🎟️ Evento', 40, 70)
+
+    // Embed event image
+    if (eventImgBuf) {
+      doc.image(eventImgBuf, doc.page.width - 120, 5, { width: 90, height: 90 })
+    }
+
+    doc.fontSize(26).fillColor('#fff').font('Helvetica-Bold').text('BOLETO DE ENTRADA', 40, 22)
+    doc.fontSize(13).fillColor('rgba(255,255,255,0.9)').font('Helvetica').text('IventIA Tickets', 40, 58)
 
     // ── Event info ──────────────────────────────────────────────────────────
     doc.moveTo(0, 120).lineTo(doc.page.width, 120).stroke('#ddd')

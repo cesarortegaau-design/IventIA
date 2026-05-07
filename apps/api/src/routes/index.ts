@@ -31,6 +31,7 @@ import iflagRoutes from './iflag.routes'
 import aiRoutes from './ai.routes'
 import ticketEventsRoutes from './ticketEvents.routes'
 import ticketsPublicRoutes from './tickets.public.routes'
+import ticketBuyerRoutes from './ticket-buyer.routes'
 
 const router = Router()
 
@@ -66,5 +67,6 @@ router.use('/iflag', iflagRoutes)
 router.use('/ai', aiRoutes)
 router.use('/events', ticketEventsRoutes)
 router.use('/public/tickets', ticketsPublicRoutes)
+router.use('/public/tickets', ticketBuyerRoutes)
 
 export default router

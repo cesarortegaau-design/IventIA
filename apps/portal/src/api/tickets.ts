@@ -15,4 +15,5 @@ export const ticketsPublicApi = {
     buyerPhone?: string
     items: Array<{ sectionId: string; seatId?: string; quantity: number }>
   }) => publicApi.post('/orders', data).then(r => r.data),
+  getOrder: (token: string) => publicApi.get(`/orders/${token}`),
 }

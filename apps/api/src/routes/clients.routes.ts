@@ -12,6 +12,12 @@ import {
   listSupplierPortalUsers, getSupplierPortalUser, updateSupplierPortalUser, resetSupplierPortalUserPassword,
   importClients,
 } from '../controllers/clients.controller'
+import {
+  adminListTicketBuyerUsers,
+  adminGetTicketBuyerUser,
+  adminUpdateTicketBuyerUser,
+  adminResetTicketBuyerUserPassword,
+} from '../controllers/ticket-buyer.admin.controller'
 import { uploadClientDocument, deleteClientDocument, uploadClientLogo } from '../controllers/documents.controller'
 
 const docUpload = multer({
@@ -48,6 +54,12 @@ router.get('/supplier-portal-users', requirePrivilege(PRIVILEGES.SUPPLIER_VIEW),
 router.get('/supplier-portal-users/:supplierPortalUserId', requirePrivilege(PRIVILEGES.SUPPLIER_VIEW), getSupplierPortalUser)
 router.patch('/supplier-portal-users/:supplierPortalUserId', requirePrivilege(PRIVILEGES.SUPPLIER_EDIT), updateSupplierPortalUser)
 router.post('/supplier-portal-users/:supplierPortalUserId/reset-password', requirePrivilege(PRIVILEGES.SUPPLIER_EDIT), resetSupplierPortalUserPassword)
+
+// Ticket Buyer Users Management (Admin)
+router.get('/ticket-buyer-users', requirePrivilege(PRIVILEGES.PORTAL_USER_VIEW), adminListTicketBuyerUsers)
+router.get('/ticket-buyer-users/:id', requirePrivilege(PRIVILEGES.PORTAL_USER_VIEW), adminGetTicketBuyerUser)
+router.patch('/ticket-buyer-users/:id', requirePrivilege(PRIVILEGES.PORTAL_USER_EDIT), adminUpdateTicketBuyerUser)
+router.post('/ticket-buyer-users/:id/reset-password', requirePrivilege(PRIVILEGES.PORTAL_USER_EDIT), adminResetTicketBuyerUserPassword)
 
 // Import
 router.post('/import', requirePrivilege(PRIVILEGES.CLIENT_CREATE), importClients)

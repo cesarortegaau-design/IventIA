@@ -65,6 +65,7 @@ model Tenant {
   supplierPortalUsers       SupplierPortalUser[]
   supplierPriceLists        SupplierPriceList[]
   suppliers                 Supplier[]
+  ticketBuyerUsers          TicketBuyerUser[]
   ticketEvents              TicketEvent[]
   ticketOrders              TicketOrder[]
   users                     User[]
@@ -2095,11 +2096,14 @@ model TicketOrder {
   expiresAt       DateTime?         @map("expires_at")
   createdAt       DateTime          @default(now()) @map("created_at")
   updatedAt       DateTime          @updatedAt @map("updated_at")
-  items           TicketOrderItem[]
-  tenant          Tenant            @relation(fields: [tenantId], references: [id])
-  ticketEvent     TicketEvent       @relation(fields: [ticketEventId], references: [id])
+  ticketBuyerUserId String?           @map("ticket_buyer_user_id")
+  items             TicketOrderItem[]
+  tenant            Tenant            @relation(fields: [tenantId], references: [id])
+  ticketBuyerUser   TicketBuyerUser?  @relation(fields: [ticketBuyerUserId], references: [id])
+  ticketEvent       TicketEvent       @relation(fields: [ticketEventId], references: [id])
 
   @@index([tenantId, status])
+  @@index([ticketBuyerUserId])
   @@index([stripeSessionId])
   @@index([token])
   @@map("ticket_orders")
@@ -2119,6 +2123,39 @@ model TicketOrderItem {
 
   @@index([ticketOrderId])
   @@map("ticket_order_items")
+}
+
+model TicketBuyerUser {
+  id             String                      @id @default(uuid())
+  tenantId       String                      @map("tenant_id") @db.VarChar(50)
+  email          String                      @db.VarChar(200)
+  passwordHash   String                      @map("password_hash")
+  firstName      String                      @map("first_name") @db.VarChar(100)
+  lastName       String                      @map("last_name") @db.VarChar(100)
+  phone          String?                     @db.VarChar(30)
+  isActive       Boolean                     @default(true) @map("is_active")
+  createdAt      DateTime                    @default(now()) @map("created_at")
+  updatedAt      DateTime                    @updatedAt @map("updated_at")
+  orders         TicketOrder[]
+  passwordResets TicketBuyerPasswordReset[]
+  tenant         Tenant                      @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@map("ticket_buyer_users")
+}
+
+model TicketBuyerPasswordReset {
+  id          String          @id @default(uuid())
+  buyerUserId String          @map("buyer_user_id")
+  token       String          @unique @db.VarChar(64)
+  expiresAt   DateTime        @map("expires_at")
+  usedAt      DateTime?       @map("used_at")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  buyerUser   TicketBuyerUser @relation(fields: [buyerUserId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@map("ticket_buyer_password_resets")
 }
 
 enum ResourceType {

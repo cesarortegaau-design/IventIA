@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { ticketsPublicApi } from '../../api/tickets'
+import { useTicketBuyerAuthStore } from '../../stores/ticketBuyerAuthStore'
 
 // ── Color Tokens ───────────────────────────────────────────────────────────────
 const C = {
@@ -876,6 +877,7 @@ function CheckoutModal({
   sectionCart: SectionCart; seatCart: SeatCart
   onClose: () => void; onSuccess: (url: string) => void
 }) {
+  const { user: buyerUser } = useTicketBuyerAuthStore()
   const [form, setForm] = useState({ name: '', email: '', phone: '' })
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -926,7 +928,20 @@ function CheckoutModal({
         background: C.bg1, borderRadius: 12, padding: 28,
         width: 400, border: `1px solid ${C.line}`, boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
       }}>
-        <h3 style={{ color: C.text, margin: '0 0 20px', fontSize: 18 }}>Datos del comprador</h3>
+        <h3 style={{ color: C.text, margin: '0 0 16px', fontSize: 18 }}>Datos del comprador</h3>
+
+        {/* Login prompt for non-authenticated buyers */}
+        {!buyerUser && (
+          <div style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)',
+            borderRadius: 8, padding: '10px 14px', marginBottom: 16,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 12, color: C.textMute }}>¿Ya tienes cuenta?</span>
+            <Link to="/boletos/login"
+              style={{ fontSize: 12, color: C.accent, fontWeight: 600, textDecoration: 'none' }}>
+              Iniciar sesión →
+            </Link>
+          </div>
+        )}
 
         <div style={{ marginBottom: 16 }}>
           <label style={{ fontSize: 12, color: C.textMute, display: 'block', marginBottom: 6 }}>

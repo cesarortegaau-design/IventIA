@@ -1,9 +1,11 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '../stores/authStore'
+import { useTicketBuyerAuthStore } from '../stores/ticketBuyerAuthStore'
 import { ordersApi } from '../api/orders'
 import PublicLayout from '../layouts/PublicLayout'
 import PortalLayout from '../layouts/PortalLayout'
+import TicketBuyerLayout from '../layouts/TicketBuyerLayout'
 import LandingPage from '../pages/landing/LandingPage'
 import LoginPage from '../pages/auth/LoginPage'
 import RegisterPage from '../pages/auth/RegisterPage'
@@ -20,10 +22,23 @@ import CatalogPage from '../pages/catalog/CatalogPage'
 import FloorPlanPortalPage from '../pages/event/FloorPlanPortalPage'
 import ClientSetupPage from '../pages/onboarding/ClientSetupPage'
 import TicketPurchasePage from '../pages/tickets/TicketPurchasePage'
+import LoginBuyerPage from '../pages/tickets/LoginBuyerPage'
+import RegisterBuyerPage from '../pages/tickets/RegisterBuyerPage'
+import ForgotPasswordBuyerPage from '../pages/tickets/ForgotPasswordBuyerPage'
+import ResetPasswordBuyerPage from '../pages/tickets/ResetPasswordBuyerPage'
+import MyTicketsPage from '../pages/tickets/MyTicketsPage'
+import PaymentSuccessPage from '../pages/tickets/PaymentSuccessPage'
+import PaymentCancelledPage from '../pages/tickets/PaymentCancelledPage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { accessToken } = useAuthStore()
   if (!accessToken) return <Navigate to="/login" replace />
+  return <>{children}</>
+}
+
+function RequireTicketBuyerAuth({ children }: { children: React.ReactNode }) {
+  const { accessToken } = useTicketBuyerAuthStore()
+  if (!accessToken) return <Navigate to="/boletos/login" replace />
   return <>{children}</>
 }
 
@@ -49,6 +64,25 @@ export default function AppRouter() {
 
       {/* Standalone full-page ticket purchase — no layout wrapper */}
       <Route path="/boletos/:slug" element={<TicketPurchasePage />} />
+
+      {/* Payment result pages — no layout wrapper */}
+      <Route path="/pago/exito" element={<PaymentSuccessPage />} />
+      <Route path="/pago/cancelado" element={<PaymentCancelledPage />} />
+
+      {/* Ticket buyer auth pages */}
+      <Route element={<TicketBuyerLayout />}>
+        <Route path="/boletos/login" element={<LoginBuyerPage />} />
+        <Route path="/boletos/register" element={<RegisterBuyerPage />} />
+        <Route path="/boletos/forgot-password" element={<ForgotPasswordBuyerPage />} />
+        <Route path="/boletos/reset-password" element={<ResetPasswordBuyerPage />} />
+      </Route>
+
+      {/* Ticket buyer protected page */}
+      <Route path="/mis-boletos" element={
+        <RequireTicketBuyerAuth>
+          <MyTicketsPage />
+        </RequireTicketBuyerAuth>
+      } />
 
       <Route element={<PublicLayout />}>
         <Route path="/login" element={<LoginPage />} />

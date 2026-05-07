@@ -2,15 +2,16 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Table, Tag, Typography, Button, Space, Input, Modal, Form,
-  Select, App, Popconfirm, Descriptions, List, Avatar, Empty, Drawer, Segmented,
+  Select, App, Popconfirm, Descriptions, List, Avatar, Empty, Drawer, Segmented, Tabs,
 } from 'antd'
 import {
   UserOutlined, SearchOutlined, LockOutlined, TeamOutlined,
   PlusOutlined, DeleteOutlined, CheckCircleOutlined, StopOutlined,
-  CalendarOutlined, ShopOutlined,
+  CalendarOutlined, ShopOutlined, TagOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { clientsApi } from '../../../api/clients'
+import TicketBuyerUsersTab from './TicketBuyerUsersTab'
 
 const { Title, Text } = Typography
 
@@ -204,20 +205,8 @@ export default function PortalUsersPage() {
     },
   ]
 
-  return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <Space>
-          <div style={{ background: '#6B46C1', borderRadius: 10, padding: '8px 12px', display: 'flex', alignItems: 'center' }}>
-            <TeamOutlined style={{ color: '#fff', fontSize: 20 }} />
-          </div>
-          <div>
-            <Title level={4} style={{ margin: 0 }}>Usuarios de Portal</Title>
-            <Text type="secondary" style={{ fontSize: 12 }}>Gestiona usuarios del portal de expositores y proveedores</Text>
-          </div>
-        </Space>
-      </div>
-
+  const ExhibitorProveedorContent = (
+    <>
       <Card style={{ marginBottom: 16 }} styles={{ body: { padding: '12px 16px' } }}>
         <Space wrap>
           <Input
@@ -250,6 +239,37 @@ export default function PortalUsersPage() {
           pagination={{ pageSize: 20, showTotal: t => `${t} usuarios` }}
         />
       </Card>
+    </>
+  )
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+        <Space>
+          <div style={{ background: '#6B46C1', borderRadius: 10, padding: '8px 12px', display: 'flex', alignItems: 'center' }}>
+            <TeamOutlined style={{ color: '#fff', fontSize: 20 }} />
+          </div>
+          <div>
+            <Title level={4} style={{ margin: 0 }}>Usuarios de Portal</Title>
+            <Text type="secondary" style={{ fontSize: 12 }}>Gestiona usuarios del portal de expositores, proveedores y compradores</Text>
+          </div>
+        </Space>
+      </div>
+
+      <Tabs
+        items={[
+          {
+            key: 'exhibitor-supplier',
+            label: <Space><UserOutlined />Expositores y Proveedores</Space>,
+            children: ExhibitorProveedorContent,
+          },
+          {
+            key: 'boletos',
+            label: <Space><TagOutlined />Compradores de Boletos</Space>,
+            children: <TicketBuyerUsersTab />,
+          },
+        ]}
+      />
 
       {/* Detail Drawer */}
       <Drawer
