@@ -6,7 +6,7 @@ import {
 } from 'antd'
 import {
   CalendarOutlined, EnvironmentOutlined, TagOutlined,
-  UserOutlined, LogoutOutlined, TicketOutlined, EditOutlined,
+  UserOutlined, LogoutOutlined, FileTextOutlined, EditOutlined,
   LockOutlined, DownOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
@@ -94,7 +94,7 @@ export default function HomePage() {
   const userMenuItems = [
     {
       key: 'mis-boletos',
-      icon: <TicketOutlined />,
+      icon: <FileTextOutlined />,
       label: 'Mis boletos',
       onClick: () => navigate('/mis-boletos'),
     },
