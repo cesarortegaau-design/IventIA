@@ -14,7 +14,7 @@ export async function ticketBuyerListOrders(req: Request, res: Response, next: N
         ticketEvent: {
           include: { event: { select: { name: true, eventStart: true, venueLocation: true } } },
         },
-        items: { include: { section: true, seat: true } },
+        items: { include: { section: true, seat: true, attendee: true } },
       },
       orderBy: { createdAt: 'desc' },
     })
@@ -34,7 +34,7 @@ export async function ticketBuyerGetOrder(req: Request, res: Response, next: Nex
         ticketEvent: {
           include: { event: { select: { name: true, eventStart: true, venueLocation: true } } },
         },
-        items: { include: { section: true, seat: true } },
+        items: { include: { section: true, seat: true, attendee: true } },
       },
     })
     if (!order) throw new AppError(404, 'NOT_FOUND', 'Orden no encontrada')
@@ -83,6 +83,50 @@ export async function ticketBuyerDownloadPdf(req: Request, res: Response, next: 
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="boleto-${token.slice(0, 8)}.pdf"`,
+      'Cache-Control': 'public, max-age=3600',
+    })
+    res.send(pdfBuffer)
+  } catch (err) { next(err) }
+}
+
+// GET /public/tickets/my/orders/:token/attendees/:attendeeId/pdf
+export async function ticketBuyerDownloadAttendeePdf(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { ticketBuyerUserId } = req.ticketBuyerUser!
+    const { token, attendeeId } = req.params
+
+    const order = await prisma.ticketOrder.findUnique({
+      where: { token },
+      include: {
+        ticketEvent: { include: { event: true } },
+        items: { include: { section: true, seat: true, attendee: true } },
+      },
+    })
+    if (!order || order.status !== 'PAID') throw new AppError(404, 'NOT_FOUND', 'Boleto no encontrado o no pagado')
+    if (order.ticketBuyerUserId !== ticketBuyerUserId) throw new AppError(403, 'FORBIDDEN', 'Sin acceso a esta orden')
+
+    // Find the item with the matching attendee
+    const item = order.items.find(i => i.attendee?.id === attendeeId)
+    if (!item || !item.attendee) throw new AppError(404, 'NOT_FOUND', 'Asistente no encontrado')
+
+    const { generateAttendeePdf } = await import('../services/ticket-pdf.service')
+    const pdfBuffer = await generateAttendeePdf({
+      orderToken: order.token,
+      attendeeId: item.attendee.id,
+      attendeeName: `${item.attendee.firstName} ${item.attendee.paternalLastName} ${item.attendee.maternalLastName || ''}`.trim(),
+      sectionName: item.section?.name ?? '',
+      eventName: order.ticketEvent?.event?.name ?? 'Evento',
+      eventDate: order.ticketEvent?.event?.eventStart
+        ? dayjs(order.ticketEvent.event.eventStart).format('DD MMM YYYY, HH:mm')
+        : '',
+      venue: order.ticketEvent?.event?.venueLocation ?? undefined,
+      eventImageUrl: order.ticketEvent?.imageUrl ?? undefined,
+      ticketsAppUrl: env.TICKETS_APP_URL,
+    })
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="boleto-${item.attendee.firstName.toLowerCase()}-${token.slice(0, 8)}.pdf"`,
       'Cache-Control': 'public, max-age=3600',
     })
     res.send(pdfBuffer)

@@ -13,7 +13,20 @@ export const ticketsPublicApi = {
     buyerEmail: string
     buyerName: string
     buyerPhone?: string
-    items: Array<{ sectionId: string; seatId?: string; quantity: number }>
+    items: Array<{
+      sectionId: string
+      seatId?: string
+      quantity: number
+      attendee?: {
+        firstName: string
+        paternalLastName: string
+        maternalLastName?: string
+        phone?: string
+        email: string
+      }
+    }>
+    paymentMethod?: 'STRIPE' | 'CODE' | 'FREE'
+    accessCode?: string
   }) => publicApi.post('/orders', data).then(r => r.data),
   getOrder: (token: string) => publicApi.get(`/orders/${token}`),
 }

@@ -121,3 +121,93 @@ export async function generateTicketPdf(params: {
     doc.end()
   })
 }
+
+export async function generateAttendeePdf(params: {
+  orderToken: string
+  attendeeId: string
+  attendeeName: string
+  sectionName: string
+  eventName: string
+  eventDate: string
+  venue?: string
+  eventImageUrl?: string
+  ticketsAppUrl: string
+}): Promise<Buffer> {
+  const orderUrl = `${params.ticketsAppUrl}/mi-orden/${params.orderToken}?attendee=${params.attendeeId}`
+
+  // Generate QR as PNG buffer
+  const qrPng = await QRCode.toBuffer(orderUrl, {
+    width: 300,
+    margin: 2,
+    color: { dark: '#1a1a2e', light: '#ffffff' },
+  })
+
+  // Pre-load event image if provided
+  let eventImgBuf: Buffer | null = null
+  if (params.eventImageUrl) {
+    try {
+      const imgRes = await fetch(params.eventImageUrl)
+      if (imgRes.ok) eventImgBuf = Buffer.from(await imgRes.arrayBuffer())
+    } catch { /* ignore */ }
+  }
+
+  // Create PDF document
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'LETTER', margin: 40 })
+    const chunks: Buffer[] = []
+
+    doc.on('data', chunk => chunks.push(chunk as Buffer))
+    doc.on('end', () => resolve(Buffer.concat(chunks)))
+    doc.on('error', reject)
+
+    // ── Header ─────────────────────────────────────────────────────────────
+    doc.rect(0, 0, doc.page.width, 100).fill('#6B46C1')
+
+    // Embed event image
+    if (eventImgBuf) {
+      doc.image(eventImgBuf, doc.page.width - 120, 5, { width: 90, height: 90 })
+    }
+
+    doc.fontSize(26).fillColor('#fff').font('Helvetica-Bold').text('BOLETO DE REGISTRO', 40, 22)
+    doc.fontSize(13).fillColor('rgba(255,255,255,0.9)').font('Helvetica').text('IventIA Tickets', 40, 58)
+
+    // ── Event info ──────────────────────────────────────────────────────────
+    doc.moveTo(0, 120).lineTo(doc.page.width, 120).stroke('#ddd')
+    doc.y = 140
+    doc.fontSize(18).fillColor('#1a1a2e').font('Helvetica-Bold').text(params.eventName)
+    doc.fontSize(11).fillColor('#666').font('Helvetica').text(params.eventDate)
+    if (params.venue) doc.text(params.venue)
+
+    // ── Attendee info ──────────────────────────────────────────────────────
+    doc.y += 20
+    doc.fontSize(10).fillColor('#888').font('Helvetica').text('ASISTENTE')
+    doc.fontSize(13).fillColor('#1a1a2e').font('Helvetica-Bold').text(params.attendeeName)
+
+    // ── Section info ──────────────────────────────────────────────────────
+    doc.y += 20
+    doc.fontSize(10).fillColor('#888').font('Helvetica').text('SECCIÓN')
+    doc.fontSize(13).fillColor('#1a1a2e').font('Helvetica-Bold').text(params.sectionName)
+
+    // ── QR Code ─────────────────────────────────────────────────────────────
+    doc.y += 50
+    const qrSize = 180
+    const qrX = (doc.page.width - qrSize) / 2
+    doc.image(qrPng, qrX, doc.y, { width: qrSize, height: qrSize })
+
+    // QR instruction
+    doc.y += qrSize + 15
+    doc.fontSize(12).fillColor('#1a1a2e').font('Helvetica-Bold')
+    doc.text('Presenta este código QR en la entrada', { align: 'center' })
+
+    // ── Token reference ─────────────────────────────────────────────────────
+    doc.y += 15
+    doc.moveTo(40, doc.y).lineTo(doc.page.width - 40, doc.y).stroke('#eee')
+    doc.y += 10
+    doc.fontSize(9).fillColor('#999').font('Helvetica')
+    doc.text(`Referencia: ${params.orderToken}`, { align: 'center' })
+    doc.text('Imprime o guarda este boleto. Es tu acceso al evento.', { align: 'center' })
+
+    // Finalize
+    doc.end()
+  })
+}

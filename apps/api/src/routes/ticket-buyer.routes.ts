@@ -14,6 +14,7 @@ import {
   ticketBuyerListOrders,
   ticketBuyerGetOrder,
   ticketBuyerDownloadPdf,
+  ticketBuyerDownloadAttendeePdf,
 } from '../controllers/ticket-buyer.orders.controller'
 
 const router = Router()
@@ -35,5 +36,6 @@ router.use('/my', authenticateTicketBuyer)
 router.get('/my/orders', ticketBuyerListOrders)
 router.get('/my/orders/:token', ticketBuyerGetOrder)
 router.get('/my/orders/:token/pdf', ticketBuyerDownloadPdf)
+router.get('/my/orders/:token/attendees/:attendeeId/pdf', ticketBuyerDownloadAttendeePdf)
 
 export default router

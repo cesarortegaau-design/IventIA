@@ -1,0 +1,5 @@
+el evento debe tener un timeline, que le permita 	definir las actividades que sucederán en el evento y que considere
+el CRM para crear tareas, notificaciones, los espacios donde sucede el evento, las ordenes de servicio y el personal que trabajara en el 
+evento.
+Implementa el timeline como una sección más del evento dentro de un tab e implementa la configuración de las actividades
+con las características de un PM que incluya la exportación e importación a archivos CSV

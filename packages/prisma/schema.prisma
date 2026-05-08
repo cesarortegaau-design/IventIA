@@ -65,6 +65,7 @@ model Tenant {
   supplierPortalUsers       SupplierPortalUser[]
   supplierPriceLists        SupplierPriceList[]
   suppliers                 Supplier[]
+  ticketAccessCodes         TicketAccessCode[]
   ticketBuyerUsers          TicketBuyerUser[]
   ticketEvents              TicketEvent[]
   ticketOrders              TicketOrder[]
@@ -133,6 +134,7 @@ model User {
   assignedOrders      Order[]                      @relation("OrderAssignedTo")
   createdOrders       Order[]                      @relation("OrderCreatedBy")
   createdPortalCodes  PortalAccessCode[]           @relation("PortalCodeCreator")
+  createdTicketCodes  TicketAccessCode[]           @relation("TicketCodeCreator")
   poDocuments         PurchaseOrderDocument[]
   poStatusHistory     PurchaseOrderStatusHistory[]
   poConfirmedBy       PurchaseOrder[]              @relation("POConfirmedBy")
@@ -2035,6 +2037,7 @@ model TicketEvent {
   tenant      Tenant          @relation(fields: [tenantId], references: [id])
   orders      TicketOrder[]
   sections    TicketSection[]
+  accessCodes TicketAccessCode[]
 
   @@index([tenantId])
   @@index([slug])
@@ -2096,11 +2099,14 @@ model TicketOrder {
   expiresAt       DateTime?         @map("expires_at")
   createdAt       DateTime          @default(now()) @map("created_at")
   updatedAt       DateTime          @updatedAt @map("updated_at")
-  ticketBuyerUserId String?           @map("ticket_buyer_user_id")
+  ticketBuyerUserId String?          @map("ticket_buyer_user_id")
+  paymentMethod   String            @default("STRIPE") @map("payment_method") @db.VarChar(20)
+  ticketAccessCodeId String?         @map("ticket_access_code_id")
   items             TicketOrderItem[]
   tenant            Tenant            @relation(fields: [tenantId], references: [id])
   ticketBuyerUser   TicketBuyerUser?  @relation(fields: [ticketBuyerUserId], references: [id])
   ticketEvent       TicketEvent       @relation(fields: [ticketEventId], references: [id])
+  ticketAccessCode  TicketAccessCode? @relation(fields: [ticketAccessCodeId], references: [id])
 
   @@index([tenantId, status])
   @@index([ticketBuyerUserId])
@@ -2110,16 +2116,17 @@ model TicketOrder {
 }
 
 model TicketOrderItem {
-  id            String        @id @default(uuid())
-  ticketOrderId String        @map("ticket_order_id")
-  sectionId     String        @map("section_id")
-  seatId        String?       @map("seat_id")
-  quantity      Int           @default(1)
-  unitPrice     Decimal       @map("unit_price") @db.Decimal(12, 2)
-  lineTotal     Decimal       @map("line_total") @db.Decimal(12, 2)
-  seat          TicketSeat?   @relation(fields: [seatId], references: [id])
-  section       TicketSection @relation(fields: [sectionId], references: [id])
-  ticketOrder   TicketOrder   @relation(fields: [ticketOrderId], references: [id], onDelete: Cascade)
+  id            String         @id @default(uuid())
+  ticketOrderId String         @map("ticket_order_id")
+  sectionId     String         @map("section_id")
+  seatId        String?        @map("seat_id")
+  quantity      Int            @default(1)
+  unitPrice     Decimal        @map("unit_price") @db.Decimal(12, 2)
+  lineTotal     Decimal        @map("line_total") @db.Decimal(12, 2)
+  seat          TicketSeat?    @relation(fields: [seatId], references: [id])
+  section       TicketSection  @relation(fields: [sectionId], references: [id])
+  ticketOrder   TicketOrder    @relation(fields: [ticketOrderId], references: [id], onDelete: Cascade)
+  attendee      TicketAttendee?
 
   @@index([ticketOrderId])
   @@map("ticket_order_items")
@@ -2156,6 +2163,43 @@ model TicketBuyerPasswordReset {
 
   @@index([token])
   @@map("ticket_buyer_password_resets")
+}
+
+model TicketAttendee {
+  id                  String          @id @default(uuid())
+  ticketOrderItemId   String          @unique @map("ticket_order_item_id")
+  firstName           String          @map("first_name") @db.VarChar(100)
+  paternalLastName    String          @map("paternal_last_name") @db.VarChar(100)
+  maternalLastName    String?         @map("maternal_last_name") @db.VarChar(100)
+  phone               String?         @db.VarChar(30)
+  email               String          @db.VarChar(200)
+  createdAt           DateTime        @default(now()) @map("created_at")
+  ticketOrderItem     TicketOrderItem @relation(fields: [ticketOrderItemId], references: [id], onDelete: Cascade)
+
+  @@index([ticketOrderItemId])
+  @@map("ticket_attendees")
+}
+
+model TicketAccessCode {
+  id            String      @id @default(uuid())
+  tenantId      String      @map("tenant_id") @db.VarChar(50)
+  ticketEventId String      @map("ticket_event_id")
+  code          String      @unique @db.VarChar(20)
+  maxUses       Int         @default(1) @map("max_uses")
+  usedCount     Int         @default(0) @map("used_count")
+  expiresAt     DateTime?   @map("expires_at")
+  isActive      Boolean     @default(true) @map("is_active")
+  createdById   String      @map("created_by_id")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+  createdBy     User        @relation("TicketCodeCreator", fields: [createdById], references: [id])
+  ticketEvent   TicketEvent @relation(fields: [ticketEventId], references: [id], onDelete: Cascade)
+  tenant        Tenant      @relation(fields: [tenantId], references: [id])
+  orders        TicketOrder[]
+
+  @@index([tenantId, ticketEventId])
+  @@index([code])
+  @@map("ticket_access_codes")
 }
 
 enum ResourceType {
@@ -2425,6 +2469,7 @@ enum ClassStatus {
 enum TicketMode {
   SECTION
   SEAT
+  REGISTRO
 }
 
 enum TicketOrderStatus {

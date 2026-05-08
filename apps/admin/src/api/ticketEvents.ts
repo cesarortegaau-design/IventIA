@@ -26,4 +26,10 @@ export const ticketEventsApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }).then(r => r.data)
   },
+  listCodes: (eventId: string) =>
+    apiClient.get(`/events/${eventId}/tickets/codes`).then(r => r.data),
+  generateCodes: (eventId: string, data: { count: number; maxUses: number; expiresAt?: string }) =>
+    apiClient.post(`/events/${eventId}/tickets/codes/generate`, data).then(r => r.data),
+  revokeCode: (eventId: string, codeId: string) =>
+    apiClient.patch(`/events/${eventId}/tickets/codes/${codeId}/revoke`).then(r => r.data),
 }

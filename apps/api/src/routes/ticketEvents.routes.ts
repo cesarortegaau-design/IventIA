@@ -9,6 +9,7 @@ import {
   generateSeats, listTicketOrders,
   getVenueMap, saveVenueMap,
 } from '../controllers/ticketEvents.controller'
+import ticketAccessCodesRouter from './ticketAccessCodes.routes'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } })
 
@@ -25,5 +26,6 @@ router.put('/:eventId/tickets/sections/:sectionId', requirePrivilege(PRIVILEGES.
 router.delete('/:eventId/tickets/sections/:sectionId', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), deleteSection)
 router.post('/:eventId/tickets/sections/:sectionId/seats', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), generateSeats)
 router.get('/:eventId/tickets/orders', requirePrivilege(PRIVILEGES.EVENT_VIEW), listTicketOrders)
+router.use('/:eventId/tickets/codes', ticketAccessCodesRouter)
 
 export default router

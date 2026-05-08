@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>IventIA Admin · Variante C profundizada</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; font-family: 'Inter', system-ui, sans-serif; background: #f5f7fa; color: #1f2937; }
+  * { box-sizing: border-box; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+<script src="shell-data.js"></script>
+<script type="text/babel" src="shell-icons.jsx"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="variant-c.jsx"></script>
+<script type="text/babel" src="vc-areas.jsx"></script>
+<script type="text/babel" src="vc-states.jsx"></script>
+<script type="text/babel" src="vc-detail-mobile.jsx"></script>
+<script type="text/babel" data-presets="react">
+const App = () => (
+  <window.DesignCanvas>
+    <window.DCSection id="overview" title="Variante C — Vista general">
+      <window.DCArtboard id="vc-base" label="Shell completo (Eventos · Tablero)" width={1440} height={900}>
+        <window.VariantC />
+      </window.DCArtboard>
+    </window.DCSection>
+
+    <window.DCSection id="areas" title="Arquitectura de información">
+      <window.DCArtboard id="map" label="Mapeo: 6 áreas → módulos" width={1200} height={520}>
+        <window.VC_AreaMap />
+      </window.DCArtboard>
+      <window.DCArtboard id="sb" label="Sidebars contextuales (las 6 áreas)" width={1620} height={620}>
+        <window.VC_Sidebars />
+      </window.DCArtboard>
+    </window.DCSection>
+
+    <window.DCSection id="states" title="Estados, búsqueda y notificaciones">
+      <window.DCArtboard id="states" label="Estados del top-nav" width={1100} height={420}>
+        <window.VC_TopNavStates />
+      </window.DCArtboard>
+      <window.DCArtboard id="cmdk" label="Modal ⌘K — búsqueda global" width={1000} height={720}>
+        <window.VC_CmdK />
+      </window.DCArtboard>
+      <window.DCArtboard id="notif" label="Centro de notificaciones" width={900} height={720}>
+        <window.VC_Notifications />
+      </window.DCArtboard>
+    </window.DCSection>
+
+    <window.DCSection id="detail" title="Detalle de Evento con la nueva navegación">
+      <window.DCArtboard id="evd" label="Festival Vive Latino 2026 · Resumen" width={1440} height={900}>
+        <window.VC_EventDetail />
+      </window.DCArtboard>
+    </window.DCSection>
+
+    <window.DCSection id="responsive" title="Responsive">
+      <window.DCArtboard id="mob" label="Mobile + Tablet" width={1100} height={820}>
+        <window.VC_Mobile />
+      </window.DCArtboard>
+    </window.DCSection>
+  </window.DesignCanvas>
+);
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

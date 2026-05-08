@@ -44,6 +44,9 @@ export default function TicketEventTab({ eventId }: Props) {
   const [seatsForm] = Form.useForm()
   const [seatsPreview, setSeatsPreview] = useState<{ row: string; seats: number[] }[]>([])
 
+  const [codesModalOpen, setCodesModalOpen] = useState(false)
+  const [codesForm] = Form.useForm()
+
   const [configForm] = Form.useForm()
 
   // ── Queries ──────────────────────────────────────────────────────────────
@@ -72,6 +75,13 @@ export default function TicketEventTab({ eventId }: Props) {
     enabled: !!ticketEvent,
   })
   const orders: any[] = ordersData?.data ?? []
+
+  const { data: codesData } = useQuery({
+    queryKey: ['ticket-codes', eventId],
+    queryFn: () => ticketEventsApi.listCodes(eventId),
+    enabled: !!ticketEvent,
+  })
+  const codes: any[] = codesData?.data ?? []
 
   // ── Mutations ────────────────────────────────────────────────────────────
   const uploadImageMut = useMutation({
@@ -139,6 +149,26 @@ export default function TicketEventTab({ eventId }: Props) {
       message.success('Butacas generadas')
     },
     onError: () => message.error('Error al generar butacas'),
+  })
+
+  const generateCodesMutation = useMutation({
+    mutationFn: (data: any) => ticketEventsApi.generateCodes(eventId, data),
+    onSuccess: (res: any) => {
+      queryClient.invalidateQueries({ queryKey: ['ticket-codes', eventId] })
+      setCodesModalOpen(false)
+      codesForm.resetFields()
+      message.success(`${res.meta?.created ?? 0} códigos generados`)
+    },
+    onError: (err: any) => message.error(err?.response?.data?.error?.message ?? err?.response?.data?.message ?? 'Error al generar códigos'),
+  })
+
+  const revokeCodeMutation = useMutation({
+    mutationFn: (codeId: string) => ticketEventsApi.revokeCode(eventId, codeId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ticket-codes', eventId] })
+      message.success('Código revocado')
+    },
+    onError: () => message.error('Error al revocar código'),
   })
 
   // ── Helpers ──────────────────────────────────────────────────────────────
@@ -302,8 +332,14 @@ export default function TicketEventTab({ eventId }: Props) {
                     <Radio.Group>
                       <Radio value="SECTION">Por Sección</Radio>
                       <Radio value="SEAT">Por Butaca</Radio>
+                      <Radio value="REGISTRO">Registro</Radio>
                     </Radio.Group>
                   </Form.Item>
+                  {configForm.getFieldValue('mode') === 'REGISTRO' && (
+                    <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 16 }}>
+                      En modo Registro, las secciones pueden tener precio $0. Cada boleto captura los datos del asistente.
+                    </Text>
+                  )}
 
                   <Form.Item name="priceListId" label="Lista de precios">
                     <Select
@@ -639,6 +675,123 @@ export default function TicketEventTab({ eventId }: Props) {
                   },
                 ]}
               />
+            ),
+          },
+
+          // ── Códigos ─────────────────────────────────────────────────
+          {
+            key: 'codes',
+            label: `Códigos (${codes.length})`,
+            children: (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+                  <Button type="primary" icon={<PlusOutlined />} onClick={() => setCodesModalOpen(true)}>
+                    Generar códigos
+                  </Button>
+                </div>
+
+                <Table
+                  dataSource={codes}
+                  rowKey="id"
+                  size="small"
+                  pagination={false}
+                  scroll={{ x: 'max-content' }}
+                  locale={{ emptyText: <Empty description="Sin códigos" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
+                  columns={[
+                    {
+                      title: 'Código',
+                      dataIndex: 'code',
+                      render: (v: string) => <strong style={{ fontFamily: 'monospace' }}>{v}</strong>,
+                    },
+                    {
+                      title: 'Usos máximos',
+                      dataIndex: 'maxUses',
+                      align: 'right' as const,
+                    },
+                    {
+                      title: 'Usado',
+                      dataIndex: 'usedCount',
+                      align: 'right' as const,
+                    },
+                    {
+                      title: 'Expira',
+                      dataIndex: 'expiresAt',
+                      render: (v: string | null) => v ? dayjs(v).format('DD/MM/YY HH:mm') : '—',
+                    },
+                    {
+                      title: 'Estado',
+                      dataIndex: 'isActive',
+                      render: (v: boolean) => (
+                        <Tag color={v ? 'green' : 'red'}>
+                          {v ? 'Disponible' : 'Revocado'}
+                        </Tag>
+                      ),
+                    },
+                    {
+                      title: 'Acciones',
+                      key: 'actions',
+                      render: (_: any, r: any) => (
+                        <Popconfirm
+                          title="¿Revocar este código?"
+                          onConfirm={() => revokeCodeMutation.mutate(r.id)}
+                          okText="Sí"
+                          cancelText="No"
+                        >
+                          <Button
+                            size="small"
+                            danger
+                            loading={revokeCodeMutation.isPending}
+                            disabled={!r.isActive}
+                          >
+                            Revocar
+                          </Button>
+                        </Popconfirm>
+                      ),
+                    },
+                  ]}
+                />
+
+                {/* Generate codes modal */}
+                <Modal
+                  title="Generar códigos"
+                  open={codesModalOpen}
+                  onCancel={() => { setCodesModalOpen(false); codesForm.resetFields() }}
+                  onOk={() => {
+                    codesForm.validateFields().then(vals => {
+                      generateCodesMutation.mutate(vals)
+                    })
+                  }}
+                  confirmLoading={generateCodesMutation.isPending}
+                  okText="Generar"
+                  width={400}
+                  forceRender
+                >
+                  <Form form={codesForm} layout="vertical" style={{ marginTop: 16 }}>
+                    <Form.Item
+                      name="count"
+                      label="Cantidad de códigos"
+                      rules={[{ required: true }]}
+                      initialValue={10}
+                    >
+                      <InputNumber min={1} max={200} style={{ width: '100%' }} />
+                    </Form.Item>
+                    <Form.Item
+                      name="maxUses"
+                      label="Usos máximos por código"
+                      rules={[{ required: true }]}
+                      initialValue={1}
+                    >
+                      <InputNumber min={1} style={{ width: '100%' }} />
+                    </Form.Item>
+                    <Form.Item
+                      name="expiresAt"
+                      label="Fecha de expiración"
+                    >
+                      <input type="datetime-local" style={{ width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #d9d9d9' }} />
+                    </Form.Item>
+                  </Form>
+                </Modal>
+              </>
             ),
           },
         ]}

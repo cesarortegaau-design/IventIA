@@ -1,0 +1,34 @@
+En Portal Boletos
+- para acceder a la compra de boletos debe existir un esquema de signup/log in que debe ser también administrado
+desde iventia Admin en la sección de usuarios portal, agregando una sección para boletos
+- el signup debe contemplar verificación de que es un ser humano y los datos mínimos de las mejores prácticas
+- el portal debe tener una seccion donde el usuario pueda revisar los boletos adquiridos previamente
+- el boleto elctrónico debe ser descargable en PDF, debe incluir la imagen del evento y un identificador único
+QR
+
+Agregar otro modelo de boletaje llamado Registro
+que funciona de manera similar en Admin al evento por sección pero además permite que el valor
+del boleto sea 0
+
+en la experiencia de compra en Portal de Boletos con
+los siguientes cambios:
+
+En registro al comprar  boleto (aunque sea de diferentes secciones)
+se debe permitir crear por cada boleto la identidad de la persona que asistirá:
+NOmbre, apellido paterno y materno, teléfono, email
+de tal manera que se deben generar boletos personalizados para cada persona (pdf's para
+cada uno)
+
+agregar a Boletos la funcionalidad de Generar códigos justo como la de Portal dentro del Evento.
+Agregar en el pago de la orden de boletos el método de "Código" adicional al de pagar con Stripe
+este método permitirá al usuario proporcionar un código válido de los generados en la sección
+Generar códigos, cada código es válido para multiples usuarios
+
+Agregar en boletos la sección de Invitados
+que permitirá importar invitados una lista de CSV (funcionalidad similar de importar, exportar y generar
+plantilla) compuesta de los campos:
+Nombre, Apellido Paterno, Materno, email, teléfono, número de boletos
+Esta lista autogenerará un campo adicional de código al importar(mismo tipo de código aleatorio que se usa en
+stands) de tal manera que la lista tendrá los datos del invitado y un código
+una vez con una lista disponible se debe enviar por email y whatsapp la invitación al evento
+que incluye la descripción pública del evento y la imagen

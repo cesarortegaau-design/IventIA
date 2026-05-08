@@ -64,7 +64,7 @@ function Spinner() {
 }
 
 // ── Cart types ─────────────────────────────────────────────────────────────────
-interface SectionCartItem { sectionId: string; qty: number; name: string; price: number; colorHex: string; tier?: string }
+interface SectionCartItem { id?: string; sectionId: string; qty: number; name: string; price: number; colorHex: string; tier?: string }
 interface SeatCartItem { sectionId: string; seatId: string; row: string; number: number; price: number; sectionName: string }
 
 type SectionCart = Record<string, SectionCartItem>
@@ -101,7 +101,7 @@ function VenueMapSVG({
   filterTier: string | null
   sectionCart: SectionCart
   seatCart: SeatCart
-  mode: 'SECTION' | 'SEAT'
+  mode: 'SECTION' | 'SEAT' | 'REGISTRO'
   onSelectSection: (id: string) => void
 }) {
   const svgWidth = mapData.width ?? 1200
@@ -144,6 +144,8 @@ function VenueMapSVG({
     if (mode === 'SECTION') {
       const item = sectionCart[sec.id]
       return item ? item.qty : 0
+    } else if (mode === 'REGISTRO') {
+      return Object.values(sectionCart).filter(s => s.sectionId === sec.id).length
     } else {
       return Object.values(seatCart).filter(s => s.sectionId === sec.id).length
     }
@@ -383,20 +385,21 @@ function SidePanel({
   seatCart: SeatCart
   setSectionCart: React.Dispatch<React.SetStateAction<SectionCart>>
   setSeatCart: React.Dispatch<React.SetStateAction<SeatCart>>
-  mode: 'SECTION' | 'SEAT'
+  mode: 'SECTION' | 'SEAT' | 'REGISTRO'
   onCheckout: () => void
 }) {
   const [activeTab, setActiveTab] = useState<'leyenda' | 'detalle' | 'carrito'>('leyenda')
+  const isRegistro = mode === 'REGISTRO'
 
   useEffect(() => {
     if (selectedSection) setActiveTab('detalle')
   }, [selectedSection?.id])
 
-  const cartItemCount = mode === 'SECTION'
-    ? Object.values(sectionCart).reduce((s, i) => s + i.qty, 0)
+  const cartItemCount = mode === 'SECTION' || isRegistro
+    ? Object.keys(sectionCart).length
     : Object.keys(seatCart).length
 
-  const subtotal = mode === 'SECTION'
+  const subtotal = mode === 'SECTION' || isRegistro
     ? Object.values(sectionCart).reduce((s, i) => s + i.qty * i.price, 0)
     : Object.values(seatCart).reduce((s, i) => s + i.price, 0)
 
@@ -502,11 +505,12 @@ function SidePanel({
               <div style={{ color: C.textMute, fontSize: 13, textAlign: 'center', paddingTop: 40 }}>
                 Selecciona una zona en el mapa
               </div>
-            ) : mode === 'SECTION' ? (
+            ) : mode === 'SECTION' || isRegistro ? (
               <SectionDetail
                 section={selectedSection}
                 sectionCart={sectionCart}
                 setSectionCart={setSectionCart}
+                isRegistro={isRegistro}
               />
             ) : (
               <SeatDetail
@@ -540,28 +544,51 @@ function SectionDetail({
   section,
   sectionCart,
   setSectionCart,
+  isRegistro = false,
 }: {
   section: Section
   sectionCart: SectionCart
   setSectionCart: React.Dispatch<React.SetStateAction<SectionCart>>
+  isRegistro?: boolean
 }) {
   const avail = (section.capacity ?? 0) - (section.sold ?? 0)
   const isSoldOut = avail === 0 && (section.capacity ?? 0) > 0
-  const cartItem = sectionCart[section.id]
-  const qty = cartItem?.qty ?? 0
+
+  // In REGISTRO mode, count all items with matching sectionId; otherwise use single cart entry
+  const qty = isRegistro
+    ? Object.values(sectionCart).filter(item => item.sectionId === section.id).length
+    : sectionCart[section.id]?.qty ?? 0
 
   const addToCart = () => {
-    setSectionCart(prev => ({
-      ...prev,
-      [section.id]: {
-        sectionId: section.id,
-        qty: (prev[section.id]?.qty ?? 0) + 1,
-        name: section.name,
-        price: section.price ?? 0,
-        colorHex: section.colorHex,
-        tier: section.tier,
-      },
-    }))
+    setSectionCart(prev => {
+      if (isRegistro) {
+        // In REGISTRO mode, create a unique cart entry for each ticket (like individual cart items)
+        // Use timestamp + random to create unique key for each "slot"
+        const uniqueKey = `${section.id}-${Date.now()}-${Math.random()}`
+        return {
+          ...prev,
+          [uniqueKey]: {
+            sectionId: section.id,
+            qty: 1,
+            name: section.name,
+            price: section.price ?? 0,
+            colorHex: section.colorHex,
+            tier: section.tier,
+          },
+        }
+      }
+      return {
+        ...prev,
+        [section.id]: {
+          sectionId: section.id,
+          qty: (prev[section.id]?.qty ?? 0) + 1,
+          name: section.name,
+          price: section.price ?? 0,
+          colorHex: section.colorHex,
+          tier: section.tier,
+        },
+      }
+    })
   }
 
   const removeFromCart = () => {
@@ -621,7 +648,19 @@ function SectionDetail({
         }}>
           Agotado
         </div>
-      ) : qty > 0 ? (
+      ) : isRegistro || qty === 0 ? (
+        <button
+          onClick={addToCart}
+          disabled={qty >= avail}
+          style={{
+            width: '100%', padding: '12px', borderRadius: 8, border: 'none',
+            background: qty >= avail ? C.bg3 : C.accent, color: '#0a1220', fontSize: 14, fontWeight: 700,
+            cursor: qty >= avail ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {qty > 0 ? '+' : 'Agregar al carrito'} · ${Number(section.price ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+        </button>
+      ) : (
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, justifyContent: 'center' }}>
           <button
             onClick={removeFromCart}
@@ -645,17 +684,6 @@ function SectionDetail({
             +
           </button>
         </div>
-      ) : (
-        <button
-          onClick={addToCart}
-          style={{
-            width: '100%', padding: '12px', borderRadius: 8, border: 'none',
-            background: C.accent, color: '#0a1220', fontSize: 14, fontWeight: 700,
-            cursor: 'pointer',
-          }}
-        >
-          Agregar al carrito · ${Number(section.price ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-        </button>
       )}
     </div>
   )
@@ -769,7 +797,7 @@ function CartPanel({
   mode, sectionCart, seatCart, subtotal,
   setSectionCart, setSeatCart, onCheckout,
 }: {
-  mode: 'SECTION' | 'SEAT'
+  mode: 'SECTION' | 'SEAT' | 'REGISTRO'
   sectionCart: SectionCart
   seatCart: SeatCart
   subtotal: number
@@ -777,9 +805,10 @@ function CartPanel({
   setSeatCart: React.Dispatch<React.SetStateAction<SeatCart>>
   onCheckout: () => void
 }) {
+  const isRegistro = mode === 'REGISTRO'
   const serviceFee = subtotal * 0.1
   const total = subtotal + serviceFee
-  const isEmpty = mode === 'SECTION'
+  const isEmpty = mode === 'SECTION' || isRegistro
     ? Object.keys(sectionCart).length === 0
     : Object.keys(seatCart).length === 0
 
@@ -797,20 +826,20 @@ function CartPanel({
       ) : (
         <>
           <div style={{ marginBottom: 16 }}>
-            {mode === 'SECTION'
-              ? Object.values(sectionCart).map(item => (
-                <div key={item.sectionId} style={rowStyle}>
+            {mode === 'SECTION' || isRegistro
+              ? Object.entries(sectionCart).map(([cartKey, item]) => (
+                <div key={cartKey} style={rowStyle}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <div style={{ width: 10, height: 10, borderRadius: 2, background: item.colorHex }} />
                     <span style={{ color: C.text }}>{item.name}</span>
-                    <span style={{ color: C.textMute }}>×{item.qty}</span>
+                    {item.qty > 1 && <span style={{ color: C.textMute }}>×{item.qty}</span>}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ color: C.accent }}>
                       ${(item.qty * item.price).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                     </span>
                     <button
-                      onClick={() => setSectionCart(prev => { const n = { ...prev }; delete n[item.sectionId]; return n })}
+                      onClick={() => setSectionCart(prev => { const n = { ...prev }; delete n[cartKey]; return n })}
                       style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 16, padding: 0 }}
                     >
                       ×
@@ -818,15 +847,15 @@ function CartPanel({
                   </div>
                 </div>
               ))
-              : Object.values(seatCart).map(item => (
-                <div key={item.seatId} style={rowStyle}>
+              : Object.entries(seatCart).map(([cartKey, item]) => (
+                <div key={cartKey} style={rowStyle}>
                   <span style={{ color: C.text }}>{item.sectionName} – {item.row}{item.number}</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ color: C.accent }}>
                       ${item.price.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                     </span>
                     <button
-                      onClick={() => setSeatCart(prev => { const n = { ...prev }; delete n[item.seatId]; return n })}
+                      onClick={() => setSeatCart(prev => { const n = { ...prev }; delete n[cartKey]; return n })}
                       style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 16, padding: 0 }}
                     >
                       ×
@@ -868,47 +897,107 @@ function CartPanel({
   )
 }
 
-// ── Checkout Modal ─────────────────────────────────────────────────────────────
+// ── Checkout Modal (Multi-step for REGISTRO) ───────────────────────────────────
 function CheckoutModal({
   open, slug, mode, sectionCart, seatCart,
   onClose, onSuccess,
 }: {
-  open: boolean; slug: string; mode: 'SECTION' | 'SEAT'
+  open: boolean; slug: string; mode: 'SECTION' | 'SEAT' | 'REGISTRO'
   sectionCart: SectionCart; seatCart: SeatCart
   onClose: () => void; onSuccess: (url: string) => void
 }) {
   const { user: buyerUser } = useTicketBuyerAuthStore()
-  const [form, setForm] = useState({ name: '', email: '', phone: '' })
+  const [step, setStep] = useState<'buyer' | 'attendees' | 'payment'>('buyer')
+  const [buyerForm, setBuyerForm] = useState({ name: '', email: '', phone: '' })
+  const [attendees, setAttendees] = useState<Record<string, any>>({})
+  const [paymentMethod, setPaymentMethod] = useState<'STRIPE' | 'CODE'>('STRIPE')
+  const [accessCode, setAccessCode] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  const isRegistro = mode === 'REGISTRO'
+
+  // Build cart items for submission
+  const cartItems = isRegistro
+    ? Object.values(sectionCart).map((i, idx) => ({
+      sectionId: i.sectionId,
+      quantity: i.qty,
+      attendee: attendees[`item-${idx}`],
+    }))
+    : mode === 'SECTION'
+      ? Object.values(sectionCart).map(i => ({ sectionId: i.sectionId, quantity: i.qty }))
+      : Object.values(seatCart).map(i => ({ sectionId: i.sectionId, seatId: i.seatId, quantity: 1 }))
+
+  const totalAmount = mode === 'SECTION' || isRegistro
+    ? Object.values(sectionCart).reduce((s, i) => s + i.qty * i.price, 0)
+    : Object.values(seatCart).reduce((s, i) => s + i.price, 0)
 
   const createOrderMutation = useMutation({
     mutationFn: ticketsPublicApi.createOrder,
     onSuccess: (data: any) => {
+      // For CODE/FREE payments, order is PAID immediately
+      if (data?.token && !data?.checkoutUrl) {
+        onSuccess(`/mis-boletos`)
+        return
+      }
+      // For STRIPE payments, redirect to checkout
       if (data?.checkoutUrl) onSuccess(data.checkoutUrl)
     },
   })
 
-  const validate = () => {
+  const validateBuyer = () => {
     const e: Record<string, string> = {}
-    if (!form.name.trim()) e.name = 'Requerido'
-    if (!form.email.trim() || !/\S+@\S+\.\S+/.test(form.email)) e.email = 'Email inválido'
+    if (!buyerForm.name.trim()) e.name = 'Requerido'
+    if (!buyerForm.email.trim() || !/\S+@\S+\.\S+/.test(buyerForm.email)) e.email = 'Email inválido'
     setErrors(e)
     return Object.keys(e).length === 0
   }
 
-  const handleSubmit = () => {
-    if (!validate()) return
-    const items = mode === 'SECTION'
-      ? Object.values(sectionCart).map(i => ({ sectionId: i.sectionId, quantity: i.qty }))
-      : Object.values(seatCart).map(i => ({ sectionId: i.sectionId, seatId: i.seatId, quantity: 1 }))
+  const validateAttendees = () => {
+    const e: Record<string, string> = {}
+    let idx = 0
+    for (const item of cartItems) {
+      if (!item.attendee?.firstName?.trim()) e[`attendee-${idx}-firstName`] = 'Requerido'
+      if (!item.attendee?.paternalLastName?.trim()) e[`attendee-${idx}-paternalLastName`] = 'Requerido'
+      if (!item.attendee?.email?.trim() || !/\S+@\S+\.\S+/.test(item.attendee?.email)) e[`attendee-${idx}-email`] = 'Email inválido'
+      idx++
+    }
+    setErrors(e)
+    return Object.keys(e).length === 0
+  }
 
-    createOrderMutation.mutate({
+  const handleBuyerNext = () => {
+    if (!validateBuyer()) return
+    if (isRegistro) {
+      setStep('attendees')
+    } else {
+      setStep('payment')
+    }
+  }
+
+  const handleAttendeesNext = () => {
+    if (!validateAttendees()) return
+    setStep('payment')
+  }
+
+  const handlePaymentSubmit = () => {
+    if (paymentMethod === 'CODE' && !accessCode.trim()) {
+      setErrors({ accessCode: 'Código requerido' })
+      return
+    }
+    const payload: any = {
       slug,
-      buyerName: form.name,
-      buyerEmail: form.email,
-      buyerPhone: form.phone || undefined,
-      items,
-    })
+      buyerName: buyerForm.name,
+      buyerEmail: buyerForm.email,
+      buyerPhone: buyerForm.phone || undefined,
+      items: cartItems.map(i => ({ sectionId: i.sectionId, seatId: i.seatId, quantity: i.quantity, attendee: i.attendee })),
+    }
+    if (paymentMethod === 'CODE') {
+      payload.paymentMethod = 'CODE'
+      payload.accessCode = accessCode
+    } else if (totalAmount === 0) {
+      payload.paymentMethod = 'FREE'
+    }
+    createOrderMutation.mutate(payload)
   }
 
   if (!open) return null
@@ -926,93 +1015,282 @@ function CheckoutModal({
     }}>
       <div style={{
         background: C.bg1, borderRadius: 12, padding: 28,
-        width: 400, border: `1px solid ${C.line}`, boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+        width: 480, maxHeight: '90vh', overflowY: 'auto',
+        border: `1px solid ${C.line}`, boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
       }}>
-        <h3 style={{ color: C.text, margin: '0 0 16px', fontSize: 18 }}>Datos del comprador</h3>
-
-        {/* Login prompt for non-authenticated buyers */}
-        {!buyerUser && (
-          <div style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)',
-            borderRadius: 8, padding: '10px 14px', marginBottom: 16,
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 12, color: C.textMute }}>¿Ya tienes cuenta?</span>
-            <Link to="/boletos/login"
-              style={{ fontSize: 12, color: C.accent, fontWeight: 600, textDecoration: 'none' }}>
-              Iniciar sesión →
-            </Link>
+        {/* Step indicator */}
+        {isRegistro && (
+          <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+            {(['attendees', 'payment'] as const).map((s, i) => (
+              <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{
+                  width: 24, height: 24, borderRadius: '50%', display: 'flex',
+                  alignItems: 'center', justifyContent: 'center', fontSize: 12,
+                  fontWeight: 700,
+                  background: step === s || (s === 'payment' && step === 'payment') ? C.accent : C.bg3,
+                  color: step === s || (s === 'payment' && step === 'payment') ? '#0a1220' : C.textMute,
+                }}>
+                  {i + 1}
+                </div>
+                <span style={{ fontSize: 12, color: step === s ? C.accent : C.textMute }}>
+                  {s === 'attendees' ? 'Asistentes' : 'Pago'}
+                </span>
+                {i < 1 && <div style={{ width: 12, height: '1px', background: C.bg3 }} />}
+              </div>
+            ))}
           </div>
         )}
 
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ fontSize: 12, color: C.textMute, display: 'block', marginBottom: 6 }}>
-            Nombre completo *
-          </label>
-          <input
-            style={{ ...inputStyle, borderColor: errors.name ? '#ef4444' : C.line }}
-            value={form.name}
-            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-            placeholder="Juan Pérez"
-          />
-          {errors.name && <div style={{ color: '#ef4444', fontSize: 11, marginTop: 4 }}>{errors.name}</div>}
-        </div>
-
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ fontSize: 12, color: C.textMute, display: 'block', marginBottom: 6 }}>
-            Correo electrónico *
-          </label>
-          <input
-            style={{ ...inputStyle, borderColor: errors.email ? '#ef4444' : C.line }}
-            type="email"
-            value={form.email}
-            onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-            placeholder="juan@ejemplo.com"
-          />
-          {errors.email && <div style={{ color: '#ef4444', fontSize: 11, marginTop: 4 }}>{errors.email}</div>}
-        </div>
-
-        <div style={{ marginBottom: 24 }}>
-          <label style={{ fontSize: 12, color: C.textMute, display: 'block', marginBottom: 6 }}>
-            Teléfono (opcional)
-          </label>
-          <input
-            style={inputStyle}
-            type="tel"
-            value={form.phone}
-            onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-            placeholder="+52 55 1234 5678"
-          />
-        </div>
-
-        {createOrderMutation.isError && (
-          <div style={{ color: '#ef4444', fontSize: 13, marginBottom: 16 }}>
-            Error al procesar la orden. Intenta de nuevo.
-          </div>
+        {/* Buyer info step */}
+        {step === 'buyer' && (
+          <>
+            <h3 style={{ color: C.text, margin: '0 0 16px', fontSize: 18 }}>Datos del comprador</h3>
+            {!buyerUser && (
+              <div style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)',
+                borderRadius: 8, padding: '10px 14px', marginBottom: 16,
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 12, color: C.textMute }}>¿Ya tienes cuenta?</span>
+                <Link to="/boletos/login"
+                  style={{ fontSize: 12, color: C.accent, fontWeight: 600, textDecoration: 'none' }}>
+                  Iniciar sesión →
+                </Link>
+              </div>
+            )}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 12, color: C.textMute, display: 'block', marginBottom: 6 }}>Nombre *</label>
+              <input
+                style={{ ...inputStyle, borderColor: errors.name ? '#ef4444' : C.line }}
+                value={buyerForm.name}
+                onChange={e => setBuyerForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="Juan Pérez"
+              />
+              {errors.name && <div style={{ color: '#ef4444', fontSize: 11, marginTop: 4 }}>{errors.name}</div>}
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 12, color: C.textMute, display: 'block', marginBottom: 6 }}>Email *</label>
+              <input
+                style={{ ...inputStyle, borderColor: errors.email ? '#ef4444' : C.line }}
+                type="email"
+                value={buyerForm.email}
+                onChange={e => setBuyerForm(f => ({ ...f, email: e.target.value }))}
+                placeholder="juan@ejemplo.com"
+              />
+              {errors.email && <div style={{ color: '#ef4444', fontSize: 11, marginTop: 4 }}>{errors.email}</div>}
+            </div>
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ fontSize: 12, color: C.textMute, display: 'block', marginBottom: 6 }}>Teléfono (opcional)</label>
+              <input
+                style={inputStyle}
+                type="tel"
+                value={buyerForm.phone}
+                onChange={e => setBuyerForm(f => ({ ...f, phone: e.target.value }))}
+                placeholder="+52 55 1234 5678"
+              />
+            </div>
+            {createOrderMutation.isError && (
+              <div style={{ color: '#ef4444', fontSize: 13, marginBottom: 16 }}>
+                Error. Intenta de nuevo.
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button
+                onClick={onClose}
+                style={{
+                  flex: 1, padding: '11px', borderRadius: 8,
+                  border: `1px solid ${C.line}`, background: 'transparent',
+                  color: C.text, cursor: 'pointer', fontSize: 14,
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleBuyerNext}
+                style={{
+                  flex: 2, padding: '11px', borderRadius: 8, border: 'none',
+                  background: C.accent, color: '#0a1220', fontWeight: 700,
+                  cursor: 'pointer', fontSize: 14,
+                }}
+              >
+                {isRegistro ? 'Siguiente →' : 'Ir al pago →'}
+              </button>
+            </div>
+          </>
         )}
 
-        <div style={{ display: 'flex', gap: 12 }}>
-          <button
-            onClick={onClose}
-            style={{
-              flex: 1, padding: '11px', borderRadius: 8,
-              border: `1px solid ${C.line}`, background: 'transparent',
-              color: C.text, cursor: 'pointer', fontSize: 14,
-            }}
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={createOrderMutation.isPending}
-            style={{
-              flex: 2, padding: '11px', borderRadius: 8, border: 'none',
-              background: createOrderMutation.isPending ? C.bg3 : C.accent,
-              color: '#0a1220', fontWeight: 700, cursor: createOrderMutation.isPending ? 'not-allowed' : 'pointer',
-              fontSize: 14,
-            }}
-          >
-            {createOrderMutation.isPending ? 'Procesando…' : 'Ir al pago →'}
-          </button>
-        </div>
+        {/* Attendees step (REGISTRO only) */}
+        {isRegistro && step === 'attendees' && (
+          <>
+            <h3 style={{ color: C.text, margin: '0 0 16px', fontSize: 18 }}>Datos de asistentes</h3>
+            <div style={{ marginBottom: 20, maxHeight: '50vh', overflowY: 'auto' }}>
+              {cartItems.map((item, idx) => (
+                <div key={idx} style={{ marginBottom: 24, paddingBottom: 16, borderBottom: `1px solid ${C.line}` }}>
+                  <h4 style={{ color: C.accent, fontSize: 13, margin: '0 0 12px' }}>Boleto {idx + 1}</h4>
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ fontSize: 12, color: C.textMute, display: 'block', marginBottom: 6 }}>Nombre *</label>
+                    <input
+                      style={{ ...inputStyle, borderColor: errors[`attendee-${idx}-firstName`] ? '#ef4444' : C.line }}
+                      value={attendees[`item-${idx}`]?.firstName || ''}
+                      onChange={e => setAttendees(a => ({
+                        ...a,
+                        [`item-${idx}`]: { ...a[`item-${idx}`], firstName: e.target.value }
+                      }))}
+                      placeholder="Juan"
+                    />
+                    {errors[`attendee-${idx}-firstName`] && <div style={{ color: '#ef4444', fontSize: 11, marginTop: 4 }}>{errors[`attendee-${idx}-firstName`]}</div>}
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ fontSize: 12, color: C.textMute, display: 'block', marginBottom: 6 }}>Apellido paterno *</label>
+                    <input
+                      style={{ ...inputStyle, borderColor: errors[`attendee-${idx}-paternalLastName`] ? '#ef4444' : C.line }}
+                      value={attendees[`item-${idx}`]?.paternalLastName || ''}
+                      onChange={e => setAttendees(a => ({
+                        ...a,
+                        [`item-${idx}`]: { ...a[`item-${idx}`], paternalLastName: e.target.value }
+                      }))}
+                      placeholder="Pérez"
+                    />
+                    {errors[`attendee-${idx}-paternalLastName`] && <div style={{ color: '#ef4444', fontSize: 11, marginTop: 4 }}>{errors[`attendee-${idx}-paternalLastName`]}</div>}
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ fontSize: 12, color: C.textMute, display: 'block', marginBottom: 6 }}>Apellido materno</label>
+                    <input
+                      style={inputStyle}
+                      value={attendees[`item-${idx}`]?.maternalLastName || ''}
+                      onChange={e => setAttendees(a => ({
+                        ...a,
+                        [`item-${idx}`]: { ...a[`item-${idx}`], maternalLastName: e.target.value }
+                      }))}
+                      placeholder="García"
+                    />
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ fontSize: 12, color: C.textMute, display: 'block', marginBottom: 6 }}>Teléfono</label>
+                    <input
+                      style={inputStyle}
+                      type="tel"
+                      value={attendees[`item-${idx}`]?.phone || ''}
+                      onChange={e => setAttendees(a => ({
+                        ...a,
+                        [`item-${idx}`]: { ...a[`item-${idx}`], phone: e.target.value }
+                      }))}
+                      placeholder="+52 55 1234 5678"
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 12, color: C.textMute, display: 'block', marginBottom: 6 }}>Email *</label>
+                    <input
+                      style={{ ...inputStyle, borderColor: errors[`attendee-${idx}-email`] ? '#ef4444' : C.line }}
+                      type="email"
+                      value={attendees[`item-${idx}`]?.email || ''}
+                      onChange={e => setAttendees(a => ({
+                        ...a,
+                        [`item-${idx}`]: { ...a[`item-${idx}`], email: e.target.value }
+                      }))}
+                      placeholder="juan@ejemplo.com"
+                    />
+                    {errors[`attendee-${idx}-email`] && <div style={{ color: '#ef4444', fontSize: 11, marginTop: 4 }}>{errors[`attendee-${idx}-email`]}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button
+                onClick={() => setStep('buyer')}
+                style={{
+                  flex: 1, padding: '11px', borderRadius: 8,
+                  border: `1px solid ${C.line}`, background: 'transparent',
+                  color: C.text, cursor: 'pointer', fontSize: 14,
+                }}
+              >
+                ← Atrás
+              </button>
+              <button
+                onClick={handleAttendeesNext}
+                style={{
+                  flex: 2, padding: '11px', borderRadius: 8, border: 'none',
+                  background: C.accent, color: '#0a1220', fontWeight: 700,
+                  cursor: 'pointer', fontSize: 14,
+                }}
+              >
+                Siguiente →
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Payment step */}
+        {step === 'payment' && (
+          <>
+            <h3 style={{ color: C.text, margin: '0 0 16px', fontSize: 18 }}>Método de pago</h3>
+            {totalAmount === 0 ? (
+              <div style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)', borderRadius: 8, padding: 12, marginBottom: 20 }}>
+                <div style={{ fontSize: 13, color: C.accent, fontWeight: 600 }}>¡Gratis!</div>
+                <div style={{ fontSize: 12, color: C.textMute, marginTop: 4 }}>Este boleto no tiene costo</div>
+              </div>
+            ) : (
+              <>
+                <div style={{ marginBottom: 20 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px', borderRadius: 8, border: `2px solid ${paymentMethod === 'STRIPE' ? C.accent : C.line}`, background: paymentMethod === 'STRIPE' ? C.accent + '11' : 'transparent', cursor: 'pointer', marginBottom: 12 }}>
+                    <input type="radio" name="payment" checked={paymentMethod === 'STRIPE'} onChange={() => setPaymentMethod('STRIPE')} style={{ accentColor: C.accent }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Tarjeta de crédito/débito</div>
+                      <div style={{ fontSize: 11, color: C.textMute }}>Visa, Mastercard, American Express</div>
+                    </div>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px', borderRadius: 8, border: `2px solid ${paymentMethod === 'CODE' ? C.accent : C.line}`, background: paymentMethod === 'CODE' ? C.accent + '11' : 'transparent', cursor: 'pointer' }}>
+                    <input type="radio" name="payment" checked={paymentMethod === 'CODE'} onChange={() => setPaymentMethod('CODE')} style={{ accentColor: C.accent }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Código de acceso</div>
+                      <div style={{ fontSize: 11, color: C.textMute }}>Ingresa un código válido</div>
+                    </div>
+                  </label>
+                </div>
+                {paymentMethod === 'CODE' && (
+                  <div style={{ marginBottom: 20 }}>
+                    <label style={{ fontSize: 12, color: C.textMute, display: 'block', marginBottom: 6 }}>Código *</label>
+                    <input
+                      style={{ ...inputStyle, borderColor: errors.accessCode ? '#ef4444' : C.line, fontFamily: 'monospace' }}
+                      value={accessCode}
+                      onChange={e => setAccessCode(e.target.value.toUpperCase())}
+                      placeholder="ABC12345"
+                    />
+                    {errors.accessCode && <div style={{ color: '#ef4444', fontSize: 11, marginTop: 4 }}>{errors.accessCode}</div>}
+                  </div>
+                )}
+              </>
+            )}
+            {createOrderMutation.isError && (
+              <div style={{ color: '#ef4444', fontSize: 13, marginBottom: 16 }}>
+                {(createOrderMutation.error as any)?.response?.data?.message || 'Error al procesar. Intenta de nuevo.'}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button
+                onClick={() => setStep(isRegistro ? 'attendees' : 'buyer')}
+                style={{
+                  flex: 1, padding: '11px', borderRadius: 8,
+                  border: `1px solid ${C.line}`, background: 'transparent',
+                  color: C.text, cursor: 'pointer', fontSize: 14,
+                }}
+              >
+                ← Atrás
+              </button>
+              <button
+                onClick={handlePaymentSubmit}
+                disabled={createOrderMutation.isPending}
+                style={{
+                  flex: 2, padding: '11px', borderRadius: 8, border: 'none',
+                  background: createOrderMutation.isPending ? C.bg3 : C.accent,
+                  color: '#0a1220', fontWeight: 700,
+                  cursor: createOrderMutation.isPending ? 'not-allowed' : 'pointer',
+                  fontSize: 14,
+                }}
+              >
+                {createOrderMutation.isPending ? 'Procesando…' : totalAmount === 0 ? 'Finalizar' : paymentMethod === 'CODE' ? 'Canjear código' : 'Ir al pago →'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
@@ -1037,7 +1315,7 @@ export default function TicketPurchasePage() {
 
   const sections: Section[] = eventData?.sections ?? []
   const mapData: MapData = eventData?.mapData ?? {}
-  const mode: 'SECTION' | 'SEAT' = eventData?.mode ?? 'SECTION'
+  const mode: 'SECTION' | 'SEAT' | 'REGISTRO' = eventData?.mode ?? 'SECTION'
   const selectedSection = sections.find(s => s.id === selectedId) ?? null
 
   const formatDate = (iso: string) => {
@@ -1139,11 +1417,17 @@ export default function TicketPurchasePage() {
       <CheckoutModal
         open={checkoutOpen}
         slug={slug!}
-        mode={mode}
+        mode={mode as any}
         sectionCart={sectionCart}
         seatCart={seatCart}
         onClose={() => setCheckoutOpen(false)}
-        onSuccess={(url) => { window.location.href = url }}
+        onSuccess={(url) => {
+          if (url.startsWith('/')) {
+            window.location.href = url
+          } else {
+            window.location.href = url
+          }
+        }}
       />
     </div>
   )
