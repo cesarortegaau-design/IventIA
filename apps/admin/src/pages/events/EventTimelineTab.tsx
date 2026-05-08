@@ -11,6 +11,7 @@ import dayjs from 'dayjs'
 import { eventActivitiesApi } from '../../api/eventActivities'
 import { eventSpacesApi } from '../../api/eventSpaces'
 import { eventsApi } from '../../api/events'
+import { usersApi } from '../../api/users'
 import ActivityFormModal from './modals/ActivityFormModal'
 import { T } from '../../styles/tokens'
 
@@ -285,19 +286,12 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
   })
   const orders: any[] = ordersData?.data ?? []
 
-  // Derive users from activities' assignedTo data (no dedicated users API)
-  const users: any[] = useMemo(() => {
-    const seen = new Set<string>()
-    const result: any[] = []
-    const flat = flattenActivities(activities)
-    for (const a of flat) {
-      if (a.assignedTo && !seen.has(a.assignedTo.id)) {
-        seen.add(a.assignedTo.id)
-        result.push(a.assignedTo)
-      }
-    }
-    return result
-  }, [activities])
+  const { data: usersData } = useQuery({
+    queryKey: ['users-assignable'],
+    queryFn: () => usersApi.listAssignable(),
+    staleTime: 5 * 60_000,
+  })
+  const users: any[] = usersData?.data ?? []
 
   // ── Mutations ───────────────────────────────────────────────────────────────
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['event-activities', eventId] })

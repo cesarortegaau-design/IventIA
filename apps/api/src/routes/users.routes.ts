@@ -22,6 +22,18 @@ const userSchema = z.object({
   isActive: z.boolean().optional(),
 })
 
+// Lightweight list of active users for assignment dropdowns — any authenticated user
+router.get('/assignable', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const users = await prisma.user.findMany({
+      where: { tenantId: req.user!.tenantId, isActive: true },
+      select: { id: true, firstName: true, lastName: true, email: true },
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+    })
+    res.json({ success: true, data: users })
+  } catch (err) { next(err) }
+})
+
 router.get('/', requireRole(['ADMIN']), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const users = await prisma.user.findMany({
