@@ -916,12 +916,23 @@ function CheckoutModal({
 
   const isRegistro = mode === 'REGISTRO'
 
-  // Build cart items for submission
+  // Reset step and form state when modal opens
+  useEffect(() => {
+    if (open) {
+      setStep('buyer')
+      setAttendees({})
+      setErrors({})
+      setAccessCode('')
+    }
+  }, [open])
+
+  // Build cart items for submission — use cartKey as attendee key for REGISTRO
+  const cartEntries = Object.entries(sectionCart)
   const cartItems = isRegistro
-    ? Object.values(sectionCart).map((i, idx) => ({
+    ? cartEntries.map(([cartKey, i]) => ({
       sectionId: i.sectionId,
       quantity: i.qty,
-      attendee: attendees[`item-${idx}`],
+      attendee: attendees[cartKey],
     }))
     : mode === 'SECTION'
       ? Object.values(sectionCart).map(i => ({ sectionId: i.sectionId, quantity: i.qty }))
@@ -954,13 +965,12 @@ function CheckoutModal({
 
   const validateAttendees = () => {
     const e: Record<string, string> = {}
-    let idx = 0
-    for (const item of cartItems) {
-      if (!item.attendee?.firstName?.trim()) e[`attendee-${idx}-firstName`] = 'Requerido'
-      if (!item.attendee?.paternalLastName?.trim()) e[`attendee-${idx}-paternalLastName`] = 'Requerido'
-      if (!item.attendee?.email?.trim() || !/\S+@\S+\.\S+/.test(item.attendee?.email)) e[`attendee-${idx}-email`] = 'Email inválido'
-      idx++
-    }
+    cartEntries.forEach(([cartKey], idx) => {
+      const att = attendees[cartKey]
+      if (!att?.firstName?.trim()) e[`attendee-${idx}-firstName`] = 'Requerido'
+      if (!att?.paternalLastName?.trim()) e[`attendee-${idx}-paternalLastName`] = 'Requerido'
+      if (!att?.email?.trim() || !/\S+@\S+\.\S+/.test(att?.email)) e[`attendee-${idx}-email`] = 'Email inválido'
+    })
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -1122,18 +1132,16 @@ function CheckoutModal({
           <>
             <h3 style={{ color: C.text, margin: '0 0 16px', fontSize: 18 }}>Datos de asistentes</h3>
             <div style={{ marginBottom: 20, maxHeight: '50vh', overflowY: 'auto' }}>
-              {cartItems.map((item, idx) => (
-                <div key={idx} style={{ marginBottom: 24, paddingBottom: 16, borderBottom: `1px solid ${C.line}` }}>
-                  <h4 style={{ color: C.accent, fontSize: 13, margin: '0 0 12px' }}>Boleto {idx + 1}</h4>
+              {cartEntries.map(([cartKey, cartItem], idx) => (
+                <div key={cartKey} style={{ marginBottom: 24, paddingBottom: 16, borderBottom: `1px solid ${C.line}` }}>
+                  <h4 style={{ color: C.accent, fontSize: 13, margin: '0 0 4px' }}>Boleto {idx + 1}</h4>
+                  <div style={{ fontSize: 11, color: C.textMute, marginBottom: 12 }}>{cartItem.name}</div>
                   <div style={{ marginBottom: 12 }}>
                     <label style={{ fontSize: 12, color: C.textMute, display: 'block', marginBottom: 6 }}>Nombre *</label>
                     <input
                       style={{ ...inputStyle, borderColor: errors[`attendee-${idx}-firstName`] ? '#ef4444' : C.line }}
-                      value={attendees[`item-${idx}`]?.firstName || ''}
-                      onChange={e => setAttendees(a => ({
-                        ...a,
-                        [`item-${idx}`]: { ...a[`item-${idx}`], firstName: e.target.value }
-                      }))}
+                      value={attendees[cartKey]?.firstName || ''}
+                      onChange={e => setAttendees(a => ({ ...a, [cartKey]: { ...a[cartKey], firstName: e.target.value } }))}
                       placeholder="Juan"
                     />
                     {errors[`attendee-${idx}-firstName`] && <div style={{ color: '#ef4444', fontSize: 11, marginTop: 4 }}>{errors[`attendee-${idx}-firstName`]}</div>}
@@ -1142,11 +1150,8 @@ function CheckoutModal({
                     <label style={{ fontSize: 12, color: C.textMute, display: 'block', marginBottom: 6 }}>Apellido paterno *</label>
                     <input
                       style={{ ...inputStyle, borderColor: errors[`attendee-${idx}-paternalLastName`] ? '#ef4444' : C.line }}
-                      value={attendees[`item-${idx}`]?.paternalLastName || ''}
-                      onChange={e => setAttendees(a => ({
-                        ...a,
-                        [`item-${idx}`]: { ...a[`item-${idx}`], paternalLastName: e.target.value }
-                      }))}
+                      value={attendees[cartKey]?.paternalLastName || ''}
+                      onChange={e => setAttendees(a => ({ ...a, [cartKey]: { ...a[cartKey], paternalLastName: e.target.value } }))}
                       placeholder="Pérez"
                     />
                     {errors[`attendee-${idx}-paternalLastName`] && <div style={{ color: '#ef4444', fontSize: 11, marginTop: 4 }}>{errors[`attendee-${idx}-paternalLastName`]}</div>}
@@ -1155,11 +1160,8 @@ function CheckoutModal({
                     <label style={{ fontSize: 12, color: C.textMute, display: 'block', marginBottom: 6 }}>Apellido materno</label>
                     <input
                       style={inputStyle}
-                      value={attendees[`item-${idx}`]?.maternalLastName || ''}
-                      onChange={e => setAttendees(a => ({
-                        ...a,
-                        [`item-${idx}`]: { ...a[`item-${idx}`], maternalLastName: e.target.value }
-                      }))}
+                      value={attendees[cartKey]?.maternalLastName || ''}
+                      onChange={e => setAttendees(a => ({ ...a, [cartKey]: { ...a[cartKey], maternalLastName: e.target.value } }))}
                       placeholder="García"
                     />
                   </div>
@@ -1168,11 +1170,8 @@ function CheckoutModal({
                     <input
                       style={inputStyle}
                       type="tel"
-                      value={attendees[`item-${idx}`]?.phone || ''}
-                      onChange={e => setAttendees(a => ({
-                        ...a,
-                        [`item-${idx}`]: { ...a[`item-${idx}`], phone: e.target.value }
-                      }))}
+                      value={attendees[cartKey]?.phone || ''}
+                      onChange={e => setAttendees(a => ({ ...a, [cartKey]: { ...a[cartKey], phone: e.target.value } }))}
                       placeholder="+52 55 1234 5678"
                     />
                   </div>
@@ -1181,11 +1180,8 @@ function CheckoutModal({
                     <input
                       style={{ ...inputStyle, borderColor: errors[`attendee-${idx}-email`] ? '#ef4444' : C.line }}
                       type="email"
-                      value={attendees[`item-${idx}`]?.email || ''}
-                      onChange={e => setAttendees(a => ({
-                        ...a,
-                        [`item-${idx}`]: { ...a[`item-${idx}`], email: e.target.value }
-                      }))}
+                      value={attendees[cartKey]?.email || ''}
+                      onChange={e => setAttendees(a => ({ ...a, [cartKey]: { ...a[cartKey], email: e.target.value } }))}
                       placeholder="juan@ejemplo.com"
                     />
                     {errors[`attendee-${idx}-email`] && <div style={{ color: '#ef4444', fontSize: 11, marginTop: 4 }}>{errors[`attendee-${idx}-email`]}</div>}
