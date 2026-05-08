@@ -1007,6 +1007,7 @@ function CheckoutModal({
     } else if (totalAmount === 0) {
       payload.paymentMethod = 'FREE'
     }
+    console.log('[checkout] payload', JSON.stringify(payload, null, 2))
     createOrderMutation.mutate(payload)
   }
 
@@ -1257,7 +1258,9 @@ function CheckoutModal({
             )}
             {createOrderMutation.isError && (
               <div style={{ color: '#ef4444', fontSize: 13, marginBottom: 16 }}>
-                {(createOrderMutation.error as any)?.response?.data?.message || 'Error al procesar. Intenta de nuevo.'}
+                {(createOrderMutation.error as any)?.response?.data?.error?.message
+                  || (createOrderMutation.error as any)?.response?.data?.message
+                  || 'Error al procesar. Intenta de nuevo.'}
               </div>
             )}
             <div style={{ display: 'flex', gap: 12 }}>
