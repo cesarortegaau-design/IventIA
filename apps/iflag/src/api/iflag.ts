@@ -1,10 +1,7 @@
 import axios from 'axios'
 import { apiClient } from './client'
 
-const publicBaseURL = import.meta.env.VITE_API_URL
-  ? `${import.meta.env.VITE_API_URL}/api/v1`
-  : '/api/v1'
-const publicClient = axios.create({ baseURL: publicBaseURL })
+const publicClient = axios.create({ baseURL: '/api/v1' })
 
 export const iflagApi = {
   listGames: (params?: { eventId?: string }) =>

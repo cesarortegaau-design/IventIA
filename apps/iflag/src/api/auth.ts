@@ -1,10 +1,6 @@
 import axios from 'axios'
 
-const baseURL = import.meta.env.VITE_API_URL
-  ? `${import.meta.env.VITE_API_URL}/api/v1`
-  : '/api/v1'
-
-const publicClient = axios.create({ baseURL })
+const publicClient = axios.create({ baseURL: '/api/v1' })
 
 export const authApi = {
   login: (email: string, password: string) =>
