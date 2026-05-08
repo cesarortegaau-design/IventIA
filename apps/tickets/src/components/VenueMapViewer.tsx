@@ -45,7 +45,7 @@ const POI_LABELS: Record<string, string> = { wc: 'WC', fb: 'F&B', merch: 'Merch'
 interface Props {
   sections: Section[]
   mapData?: MapData
-  mode: 'SECTION' | 'SEAT'
+  mode: 'SECTION' | 'SEAT' | 'REGISTRO'
   slug: string
   containerHeight?: string
 }
@@ -53,7 +53,7 @@ interface Props {
 export default function VenueMapViewer({ sections, mapData, mode, slug, containerHeight = 'calc(100vh - 130px)' }: Props) {
   const navigate = useNavigate()
   const { accessToken } = useAuthStore()
-  const { addItem, removeItem, updateQuantity, items, setSlug, total } = useCart()
+  const { addItem, removeItem, updateQuantity, items, setSlug, setMode, total } = useCart()
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [zoom, setZoom] = useState(1)
@@ -69,6 +69,10 @@ export default function VenueMapViewer({ sections, mapData, mode, slug, containe
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
+  useEffect(() => {
+    if (mode) setMode(mode as 'SECTION' | 'SEAT' | 'REGISTRO')
+  }, [mode])
+
   const svgWidth = mapData?.width ?? 1200
   const svgHeight = mapData?.height ?? 600
   const selected = sections.find(s => s.id === selectedId) ?? null
@@ -78,9 +82,11 @@ export default function VenueMapViewer({ sections, mapData, mode, slug, containe
   const cartTotal = total()
   const cartCount = cartItems.reduce((s, i) => s + i.quantity, 0)
 
-  const cartSeatIds = new Set(cartItems.filter(i => i.seatId).map(i => i.seatId!))
+  const cartSeatIds = new Set(cartItems.filter(i => i.seatId && !i.seatId.startsWith('registro-')).map(i => i.seatId!))
   const sectionCartQty = (sectionId: string) =>
-    cartItems.find(i => i.sectionId === sectionId && !i.seatId)?.quantity ?? 0
+    mode === 'REGISTRO'
+      ? cartItems.filter(i => i.sectionId === sectionId).length
+      : cartItems.find(i => i.sectionId === sectionId && !i.seatId)?.quantity ?? 0
 
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault()
@@ -278,6 +284,61 @@ export default function VenueMapViewer({ sections, mapData, mode, slug, containe
               </div>
             </div>
           )}
+        </div>
+      )
+    }
+
+    // REGISTRO mode panel
+    if (mode === 'REGISTRO') {
+      const registroCount = sectionCartQty(selected.id)
+      const addRegistroTicket = () => {
+        if (!ensureAuth()) return
+        if (!ensureSlug()) return
+        if (registroCount >= avail) return
+        addItem({
+          sectionId: selected.id,
+          sectionName: selected.name,
+          seatId: `registro-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          quantity: 1,
+          unitPrice: selected.price,
+        })
+      }
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <div style={{ padding: '14px 16px', borderBottom: '1px solid #f0f0f0', flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <div style={{ width: 14, height: 14, borderRadius: 3, background: color, flexShrink: 0 }} />
+              <span style={{ fontSize: 16, fontWeight: 700 }}>{selected.name}</span>
+            </div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: '#6B46C1', marginBottom: 4 }}>
+              {selected.price === 0 ? 'Gratis' : `$${Number(selected.price).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`}
+              <span style={{ fontSize: 13, fontWeight: 400, color: '#888' }}> / persona</span>
+            </div>
+            <div style={{ fontSize: 13, color: '#555' }}>
+              {avail > 0 ? `${avail} lugares disponibles` : 'Agotado'}
+            </div>
+          </div>
+          <div style={{ flex: 1, padding: '16px' }}>
+            {isSoldOut ? (
+              <Button disabled block size="large">Agotado</Button>
+            ) : (
+              <div>
+                <Button
+                  type="primary" block size="large"
+                  disabled={registroCount >= avail}
+                  onClick={addRegistroTicket}
+                  style={{ borderRadius: 8, background: '#6B46C1', borderColor: '#6B46C1', marginBottom: 12 }}
+                >
+                  + Agregar registro
+                </Button>
+                {registroCount > 0 && (
+                  <div style={{ padding: '8px 12px', background: '#f4eeff', borderRadius: 8, fontSize: 13, color: '#6B46C1', fontWeight: 600, textAlign: 'center' }}>
+                    {registroCount} {registroCount === 1 ? 'registro' : 'registros'} en carrito
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )
     }

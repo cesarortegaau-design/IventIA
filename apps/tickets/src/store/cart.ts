@@ -11,8 +11,10 @@ export interface CartItem {
 
 interface CartState {
   slug: string | null
+  mode: 'SECTION' | 'SEAT' | 'REGISTRO' | null
   items: CartItem[]
   setSlug: (slug: string) => void
+  setMode: (mode: 'SECTION' | 'SEAT' | 'REGISTRO') => void
   addItem: (item: CartItem) => void
   removeItem: (sectionId: string, seatId?: string) => void
   updateQuantity: (sectionId: string, quantity: number) => void
@@ -22,8 +24,10 @@ interface CartState {
 
 export const useCart = create<CartState>((set, get) => ({
   slug: null,
+  mode: null,
   items: [],
   setSlug: (slug) => set(s => s.slug === slug ? {} : { slug, items: [] }),
+  setMode: (mode) => set({ mode }),
   addItem: (item) => set(s => {
     const exists = s.items.find(i => i.sectionId === item.sectionId && i.seatId === item.seatId)
     if (exists) return { items: s.items.map(i => i.sectionId === item.sectionId && i.seatId === item.seatId ? { ...i, quantity: item.quantity } : i) }
@@ -35,6 +39,6 @@ export const useCart = create<CartState>((set, get) => ({
       ? s.items.filter(i => i.sectionId !== sectionId)
       : s.items.map(i => i.sectionId === sectionId ? { ...i, quantity } : i),
   })),
-  clear: () => set({ items: [], slug: null }),
+  clear: () => set({ items: [], slug: null, mode: null }),
   total: () => get().items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0),
 }))

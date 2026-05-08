@@ -39,7 +39,7 @@ interface EventDetail {
   venue?: string
   description?: string
   mapData?: any
-  mode: 'SECTION' | 'SEAT'
+  mode: 'SECTION' | 'SEAT' | 'REGISTRO'
   sections: Section[]
 }
 
@@ -66,7 +66,7 @@ export default function EventPage() {
     venue: eventData.data.event?.venueLocation,
     description: eventData.data.description || eventData.data.event?.description,
     mapData: eventData.data.mapData,
-    mode: eventData.data.mode ?? 'SECTION',
+    mode: (eventData.data.mode ?? 'SECTION') as 'SECTION' | 'SEAT' | 'REGISTRO',
     sections: (eventData.data.sections || []).map((s: any) => ({
       id: s.id,
       name: s.name,
@@ -171,7 +171,7 @@ export default function EventPage() {
       <VenueMapViewer
         sections={event.sections}
         mapData={event.mapData}
-        mode={eventData!.data.mode ?? 'SECTION'}
+        mode={(eventData!.data.mode ?? 'SECTION') as 'SECTION' | 'SEAT' | 'REGISTRO'}
         slug={slug!}
       />
     </div>
