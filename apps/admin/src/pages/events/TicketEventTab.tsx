@@ -2,9 +2,12 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   App, Button, Form, Input, InputNumber, Modal, Popconfirm, Radio,
-  Select, Space, Switch, Table, Tag, Tabs, Typography, Empty, Badge,
+  Select, Space, Switch, Table, Tag, Tabs, Typography, Empty, Badge, Checkbox, Tooltip,
 } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined, AppstoreOutlined, UploadOutlined } from '@ant-design/icons'
+import {
+  PlusOutlined, EditOutlined, DeleteOutlined, AppstoreOutlined, UploadOutlined,
+  MailOutlined, SendOutlined, DownloadOutlined,
+} from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { ticketEventsApi } from '../../api/ticketEvents'
 import { priceListsApi } from '../../api/priceLists'
@@ -49,6 +52,14 @@ export default function TicketEventTab({ eventId }: Props) {
 
   const [configForm] = Form.useForm()
 
+  // Guests state
+  const [guestImportPreview, setGuestImportPreview] = useState<any[] | null>(null)
+  const [sendModalOpen, setSendModalOpen] = useState(false)
+  const [sendTarget, setSendTarget] = useState<any>(null)
+  const [sendAll, setSendAll] = useState(false)
+  const [sendEmail, setSendEmailFlag] = useState(true)
+  const [sendWhatsapp, setSendWhatsappFlag] = useState(false)
+
   // ── Queries ──────────────────────────────────────────────────────────────
   const { data: ticketData, isLoading } = useQuery({
     queryKey: ['ticket-event', eventId],
@@ -82,6 +93,13 @@ export default function TicketEventTab({ eventId }: Props) {
     enabled: !!ticketEvent,
   })
   const codes: any[] = codesData?.data ?? []
+
+  const { data: guestsData } = useQuery({
+    queryKey: ['ticket-guests', eventId],
+    queryFn: () => ticketEventsApi.listGuests(eventId),
+    enabled: !!ticketEvent,
+  })
+  const guests: any[] = guestsData?.data ?? []
 
   // ── Mutations ────────────────────────────────────────────────────────────
   const uploadImageMut = useMutation({
@@ -171,6 +189,46 @@ export default function TicketEventTab({ eventId }: Props) {
     onError: () => message.error('Error al revocar código'),
   })
 
+  const importGuestsMutation = useMutation({
+    mutationFn: (rows: any[]) => ticketEventsApi.importGuests(eventId, rows),
+    onSuccess: (res: any) => {
+      queryClient.invalidateQueries({ queryKey: ['ticket-guests', eventId] })
+      setGuestImportPreview(null)
+      message.success(`${res.meta?.created ?? 0} invitados importados`)
+    },
+    onError: (err: any) => message.error(err?.response?.data?.error?.message ?? 'Error al importar'),
+  })
+
+  const sendInvitationMutation = useMutation({
+    mutationFn: ({ guestId, opts }: { guestId: string; opts: any }) =>
+      ticketEventsApi.sendGuestInvitation(eventId, guestId, opts),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ticket-guests', eventId] })
+      setSendModalOpen(false)
+      message.success('Invitación enviada')
+    },
+    onError: (err: any) => message.error(err?.response?.data?.error?.message ?? 'Error al enviar'),
+  })
+
+  const sendAllMutation = useMutation({
+    mutationFn: (opts: any) => ticketEventsApi.sendAllGuestInvitations(eventId, opts),
+    onSuccess: (res: any) => {
+      queryClient.invalidateQueries({ queryKey: ['ticket-guests', eventId] })
+      setSendModalOpen(false)
+      message.success(`Enviado: ${res.meta?.emailCount ?? 0} emails, ${res.meta?.whatsappCount ?? 0} WhatsApp`)
+    },
+    onError: (err: any) => message.error(err?.response?.data?.error?.message ?? 'Error al enviar'),
+  })
+
+  const deleteGuestMutation = useMutation({
+    mutationFn: (guestId: string) => ticketEventsApi.deleteGuest(eventId, guestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ticket-guests', eventId] })
+      message.success('Invitado eliminado')
+    },
+    onError: () => message.error('Error al eliminar'),
+  })
+
   // ── Helpers ──────────────────────────────────────────────────────────────
   function parseRows(input: string): string[] {
     const trimmed = input.trim()
@@ -245,6 +303,50 @@ export default function TicketEventTab({ eventId }: Props) {
         data: { rows, seatsPerRow: vals.seatsPerRow },
       })
     })
+  }
+
+  function downloadGuestTemplate() {
+    const csv = 'nombre,apellido_paterno,apellido_materno,email,telefono,numero_de_boletos\nJuan,Pérez,García,juan@email.com,5512345678,1\nMaría,López,,maria@email.com,,2'
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = 'plantilla_invitados.csv'
+    a.click()
+  }
+
+  function parseGuestCsvFile(file: File) {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const text = e.target?.result as string
+      const lines = text.split(/\r?\n/).filter(Boolean)
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/\s+/g, '_'))
+      const rows = lines.slice(1).map(line => {
+        const vals = line.split(',')
+        const row: any = {}
+        headers.forEach((h, i) => { row[h] = vals[i]?.trim() ?? '' })
+        return row
+      }).filter(r => r.nombre && r.email)
+      setGuestImportPreview(rows)
+    }
+    reader.readAsText(file)
+    return false
+  }
+
+  function openSendModal(guest: any | null, all: boolean) {
+    setSendTarget(guest)
+    setSendAll(all)
+    setSendEmailFlag(true)
+    setSendWhatsappFlag(false)
+    setSendModalOpen(true)
+  }
+
+  function handleSendConfirm() {
+    const opts = { sendEmail, sendWhatsapp }
+    if (sendAll) {
+      sendAllMutation.mutate(opts)
+    } else {
+      sendInvitationMutation.mutate({ guestId: sendTarget.id, opts })
+    }
   }
 
   const sections: any[] = ticketEvent?.sections ?? []
@@ -790,6 +892,190 @@ export default function TicketEventTab({ eventId }: Props) {
                       <input type="datetime-local" style={{ width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #d9d9d9' }} />
                     </Form.Item>
                   </Form>
+                </Modal>
+              </>
+            ),
+          },
+
+          // ── Invitados ───────────────────────────────────────────────────
+          {
+            key: 'guests',
+            label: `Invitados (${guests.length})`,
+            children: (
+              <>
+                {/* Toolbar */}
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+                  <Button icon={<DownloadOutlined />} onClick={downloadGuestTemplate}>
+                    Plantilla CSV
+                  </Button>
+                  <>
+                    <Button
+                      icon={<UploadOutlined />}
+                      onClick={() => document.getElementById('guest-csv-input')?.click()}
+                    >
+                      Importar CSV
+                    </Button>
+                    <input
+                      id="guest-csv-input"
+                      type="file"
+                      accept=".csv"
+                      style={{ display: 'none' }}
+                      onChange={e => { if (e.target.files?.[0]) { parseGuestCsvFile(e.target.files[0]); e.target.value = '' } }}
+                    />
+                  </>
+                  {guests.length > 0 && (
+                    <>
+                      <Button
+                        icon={<DownloadOutlined />}
+                        onClick={async () => {
+                          const { apiClient } = await import('../../api/client')
+                          const res = await apiClient.get(ticketEventsApi.exportGuestsUrl(eventId), { responseType: 'blob' })
+                          const blob = new Blob([res.data], { type: 'text/csv' })
+                          const a = document.createElement('a')
+                          a.href = URL.createObjectURL(blob)
+                          a.download = 'invitados.csv'
+                          a.click()
+                        }}
+                      >
+                        Exportar CSV
+                      </Button>
+                      <Button
+                        type="primary"
+                        icon={<SendOutlined />}
+                        onClick={() => openSendModal(null, true)}
+                      >
+                        Enviar a todos
+                      </Button>
+                    </>
+                  )}
+                </div>
+
+                <Table
+                  dataSource={guests}
+                  rowKey="id"
+                  size="small"
+                  pagination={{ pageSize: 20 }}
+                  scroll={{ x: 'max-content' }}
+                  locale={{ emptyText: <Empty description="Sin invitados. Importa un CSV para comenzar." image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
+                  columns={[
+                    {
+                      title: 'Nombre',
+                      key: 'name',
+                      render: (_: any, r: any) => `${r.firstName} ${r.paternalLastName}${r.maternalLastName ? ' ' + r.maternalLastName : ''}`,
+                    },
+                    { title: 'Email', dataIndex: 'email' },
+                    {
+                      title: 'Teléfono',
+                      dataIndex: 'phone',
+                      render: (v: string | null) => v || '—',
+                    },
+                    {
+                      title: 'Boletos',
+                      dataIndex: 'ticketCount',
+                      align: 'center' as const,
+                    },
+                    {
+                      title: 'Código',
+                      key: 'code',
+                      render: (_: any, r: any) => (
+                        <strong style={{ fontFamily: 'monospace' }}>{r.ticketAccessCode?.code}</strong>
+                      ),
+                    },
+                    {
+                      title: 'Usos',
+                      key: 'uses',
+                      align: 'center' as const,
+                      render: (_: any, r: any) =>
+                        r.ticketAccessCode ? `${r.ticketAccessCode.usedCount}/${r.ticketAccessCode.maxUses}` : '—',
+                    },
+                    {
+                      title: 'Email enviado',
+                      dataIndex: 'emailSentAt',
+                      render: (v: string | null) => v
+                        ? <Tooltip title={dayjs(v).format('DD/MM/YY HH:mm')}><Tag color="green">Enviado</Tag></Tooltip>
+                        : <Tag>Pendiente</Tag>,
+                    },
+                    {
+                      title: 'WhatsApp',
+                      dataIndex: 'whatsappSentAt',
+                      render: (v: string | null) => v
+                        ? <Tooltip title={dayjs(v).format('DD/MM/YY HH:mm')}><Tag color="green">Enviado</Tag></Tooltip>
+                        : <Tag>Pendiente</Tag>,
+                    },
+                    {
+                      title: 'Acciones',
+                      key: 'actions',
+                      render: (_: any, r: any) => (
+                        <Space>
+                          <Button
+                            size="small"
+                            icon={<MailOutlined />}
+                            onClick={() => openSendModal(r, false)}
+                          >
+                            Enviar
+                          </Button>
+                          <Popconfirm
+                            title="¿Eliminar este invitado?"
+                            onConfirm={() => deleteGuestMutation.mutate(r.id)}
+                            okText="Sí"
+                            cancelText="No"
+                          >
+                            <Button size="small" danger icon={<DeleteOutlined />} />
+                          </Popconfirm>
+                        </Space>
+                      ),
+                    },
+                  ]}
+                />
+
+                {/* Import preview modal */}
+                <Modal
+                  open={guestImportPreview !== null}
+                  title={`Importar invitados — ${guestImportPreview?.length ?? 0} filas`}
+                  onCancel={() => setGuestImportPreview(null)}
+                  onOk={() => importGuestsMutation.mutate(guestImportPreview!)}
+                  confirmLoading={importGuestsMutation.isPending}
+                  okText="Importar"
+                  width="min(860px, 95vw)"
+                >
+                  <Table
+                    dataSource={guestImportPreview ?? []}
+                    rowKey={(_, i) => String(i)}
+                    size="small"
+                    pagination={{ pageSize: 10 }}
+                    scroll={{ x: 'max-content' }}
+                    columns={[
+                      { title: 'Nombre', dataIndex: 'nombre' },
+                      { title: 'Ap. Paterno', dataIndex: 'apellido_paterno' },
+                      { title: 'Ap. Materno', dataIndex: 'apellido_materno' },
+                      { title: 'Email', dataIndex: 'email' },
+                      { title: 'Teléfono', dataIndex: 'telefono' },
+                      { title: 'Boletos', dataIndex: 'numero_de_boletos' },
+                    ]}
+                  />
+                </Modal>
+
+                {/* Send invitation modal */}
+                <Modal
+                  open={sendModalOpen}
+                  title={sendAll ? 'Enviar a todos los invitados' : `Enviar invitación — ${sendTarget?.firstName ?? ''}`}
+                  onCancel={() => setSendModalOpen(false)}
+                  onOk={handleSendConfirm}
+                  confirmLoading={sendInvitationMutation.isPending || sendAllMutation.isPending}
+                  okText="Enviar"
+                  width={360}
+                >
+                  <div style={{ marginTop: 16 }}>
+                    <p style={{ marginBottom: 12 }}>Selecciona cómo enviar la invitación:</p>
+                    <Space direction="vertical">
+                      <Checkbox checked={sendEmail} onChange={e => setSendEmailFlag(e.target.checked)}>
+                        Correo electrónico
+                      </Checkbox>
+                      <Checkbox checked={sendWhatsapp} onChange={e => setSendWhatsappFlag(e.target.checked)}>
+                        WhatsApp
+                      </Checkbox>
+                    </Space>
+                  </div>
                 </Modal>
               </>
             ),

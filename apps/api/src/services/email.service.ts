@@ -143,6 +143,85 @@ export const emailService = {
     })
   },
 
+  async sendGuestInvitation(params: {
+    to: string
+    guestName: string
+    eventName: string
+    eventDate: string
+    venue?: string
+    description?: string
+    imageUrl?: string
+    slug: string
+    code: string
+    ticketsAppUrl: string
+  }) {
+    if (!transporter) {
+      console.warn('[email] No SENDGRID_API_KEY — logging invitation instead')
+      console.log(`[email] Guest invitation for ${params.to}: code=${params.code}`)
+      return
+    }
+
+    const eventUrl = `${params.ticketsAppUrl}/evento/${params.slug}`
+    const formattedDate = params.eventDate
+      ? new Date(params.eventDate).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+      : ''
+
+    const html = `
+      <div style="font-family: 'Inter', Arial, sans-serif; max-width: 560px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #6B46C1 0%, #9b79e3 100%); padding: 32px 36px; text-align: center;">
+          <div style="font-size: 28px; font-weight: 800; color: #fff; letter-spacing: -0.5px;">IventIA Boletos</div>
+          <div style="font-size: 14px; color: rgba(255,255,255,0.8); margin-top: 4px;">Invitación al evento</div>
+        </div>
+
+        <!-- Event Image -->
+        ${params.imageUrl ? `<img src="${params.imageUrl}" alt="${params.eventName}" style="width: 100%; max-height: 240px; object-fit: cover; display: block;" />` : ''}
+
+        <!-- Body -->
+        <div style="padding: 32px 36px;">
+          <p style="font-size: 16px; color: #333; margin: 0 0 8px;">Hola <strong>${params.guestName}</strong>,</p>
+          <p style="font-size: 15px; color: #555; margin: 0 0 24px;">
+            Tienes una invitación para el evento <strong>${params.eventName}</strong>.
+            ${formattedDate ? `Se llevará a cabo el <strong>${formattedDate}</strong>.` : ''}
+            ${params.venue ? `Lugar: <strong>${params.venue}</strong>.` : ''}
+          </p>
+
+          ${params.description ? `<p style="font-size: 14px; color: #666; margin: 0 0 24px; line-height: 1.6;">${params.description}</p>` : ''}
+
+          <!-- Code box -->
+          <div style="background: #f5f3ff; border: 2px dashed #6B46C1; border-radius: 12px; padding: 20px 24px; text-align: center; margin: 0 0 24px;">
+            <div style="font-size: 12px; color: #6B46C1; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">Tu código de acceso</div>
+            <div style="font-size: 32px; font-weight: 800; letter-spacing: 6px; color: #1a1a2e; font-family: 'Courier New', monospace;">${params.code}</div>
+            <div style="font-size: 12px; color: #888; margin-top: 8px;">Úsalo al momento de registrarte para obtener tu boleto</div>
+          </div>
+
+          <!-- CTA -->
+          <div style="text-align: center; margin: 0 0 24px;">
+            <a href="${eventUrl}" style="display: inline-block; background: linear-gradient(135deg, #6B46C1 0%, #9b79e3 100%); color: #fff; padding: 14px 36px; border-radius: 10px; text-decoration: none; font-weight: 700; font-size: 16px;">
+              Ver evento y registrarme
+            </a>
+          </div>
+
+          <p style="font-size: 13px; color: #aaa; text-align: center; margin: 0;">
+            O copia este enlace: <a href="${eventUrl}" style="color: #6B46C1;">${eventUrl}</a>
+          </p>
+        </div>
+
+        <!-- Footer -->
+        <div style="background: #f8f8f8; padding: 16px 36px; text-align: center;">
+          <p style="font-size: 12px; color: #aaa; margin: 0;">IventIA · Sistema de boletos en línea</p>
+        </div>
+      </div>
+    `
+
+    await transporter.sendMail({
+      from: `IventIA Boletos <${env.EMAIL_FROM}>`,
+      to: params.to,
+      subject: `🎟️ Invitación: ${params.eventName}`,
+      html,
+    })
+  },
+
   async sendPasswordReset(to: string, resetUrl: string, firstName: string, subject = 'Restablecer contraseña — IventIA') {
     if (!transporter) {
       console.warn('[email] No SENDGRID_API_KEY configured — logging reset link instead')

@@ -225,6 +225,42 @@ export async function sendTicketWhatsApp(params: {
 }
 
 /**
+ * Guest invitation with access code
+ */
+export async function sendGuestInvitationWhatsApp(params: {
+  to: string
+  guestName: string
+  eventName: string
+  slug: string
+  code: string
+  ticketsAppUrl: string
+}): Promise<string> {
+  if (!client || !env.TWILIO_WHATSAPP_FROM) {
+    console.warn('⚠️ WhatsApp not configured: cannot send guest invitation')
+    return 'SKIPPED'
+  }
+
+  const eventUrl = `${params.ticketsAppUrl}/evento/${params.slug}`
+  const body =
+    `🎟️ Hola ${params.guestName}, tienes una invitación para *${params.eventName}*.\n\n` +
+    `Tu código de acceso es: *${params.code}*\n\n` +
+    `Regístrate aquí para obtener tu boleto:\n${eventUrl}`
+
+  try {
+    const message = await client.messages.create({
+      from: `whatsapp:${env.TWILIO_WHATSAPP_FROM}`,
+      to: `whatsapp:${params.to}`,
+      body,
+    })
+    console.log(`✓ Guest invitation WhatsApp sent to ${params.to}: ${message.sid}`)
+    return message.sid
+  } catch (error) {
+    console.error(`✗ Failed to send guest invitation WhatsApp to ${params.to}:`, error)
+    throw new AppError(500, 'WHATSAPP_SEND_FAILED', 'Failed to send guest invitation WhatsApp')
+  }
+}
+
+/**
  * Check if WhatsApp is configured
  */
 export function isWhatsAppConfigured(): boolean {

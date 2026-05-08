@@ -32,4 +32,16 @@ export const ticketEventsApi = {
     apiClient.post(`/events/${eventId}/tickets/codes/generate`, data).then(r => r.data),
   revokeCode: (eventId: string, codeId: string) =>
     apiClient.patch(`/events/${eventId}/tickets/codes/${codeId}/revoke`).then(r => r.data),
+  listGuests: (eventId: string) =>
+    apiClient.get(`/events/${eventId}/tickets/guests`).then(r => r.data),
+  importGuests: (eventId: string, guests: any[]) =>
+    apiClient.post(`/events/${eventId}/tickets/guests/import`, { guests }).then(r => r.data),
+  exportGuestsUrl: (eventId: string) =>
+    `/api/v1/events/${eventId}/tickets/guests/export`,
+  sendGuestInvitation: (eventId: string, guestId: string, opts: { sendEmail: boolean; sendWhatsapp: boolean }) =>
+    apiClient.post(`/events/${eventId}/tickets/guests/${guestId}/send`, opts).then(r => r.data),
+  sendAllGuestInvitations: (eventId: string, opts: { sendEmail: boolean; sendWhatsapp: boolean }) =>
+    apiClient.post(`/events/${eventId}/tickets/guests/send-all`, opts).then(r => r.data),
+  deleteGuest: (eventId: string, guestId: string) =>
+    apiClient.delete(`/events/${eventId}/tickets/guests/${guestId}`).then(r => r.data),
 }

@@ -66,6 +66,7 @@ model Tenant {
   supplierPriceLists        SupplierPriceList[]
   suppliers                 Supplier[]
   ticketAccessCodes         TicketAccessCode[]
+  ticketGuests              TicketGuest[]
   ticketBuyerUsers          TicketBuyerUser[]
   ticketEvents              TicketEvent[]
   ticketOrders              TicketOrder[]
@@ -135,6 +136,7 @@ model User {
   createdOrders       Order[]                      @relation("OrderCreatedBy")
   createdPortalCodes  PortalAccessCode[]           @relation("PortalCodeCreator")
   createdTicketCodes  TicketAccessCode[]           @relation("TicketCodeCreator")
+  createdTicketGuests TicketGuest[]                @relation("TicketGuestCreator")
   poDocuments         PurchaseOrderDocument[]
   poStatusHistory     PurchaseOrderStatusHistory[]
   poConfirmedBy       PurchaseOrder[]              @relation("POConfirmedBy")
@@ -2038,6 +2040,7 @@ model TicketEvent {
   orders      TicketOrder[]
   sections    TicketSection[]
   accessCodes TicketAccessCode[]
+  guests      TicketGuest[]
 
   @@index([tenantId])
   @@index([slug])
@@ -2196,10 +2199,36 @@ model TicketAccessCode {
   ticketEvent   TicketEvent @relation(fields: [ticketEventId], references: [id], onDelete: Cascade)
   tenant        Tenant      @relation(fields: [tenantId], references: [id])
   orders        TicketOrder[]
+  guest         TicketGuest?
 
   @@index([tenantId, ticketEventId])
   @@index([code])
   @@map("ticket_access_codes")
+}
+
+model TicketGuest {
+  id                  String           @id @default(uuid())
+  tenantId            String           @map("tenant_id") @db.VarChar(50)
+  ticketEventId       String           @map("ticket_event_id")
+  firstName           String           @map("first_name") @db.VarChar(100)
+  paternalLastName    String           @map("paternal_last_name") @db.VarChar(100)
+  maternalLastName    String?          @map("maternal_last_name") @db.VarChar(100)
+  email               String           @db.VarChar(200)
+  phone               String?          @db.VarChar(30)
+  ticketCount         Int              @default(1) @map("ticket_count")
+  ticketAccessCodeId  String           @unique @map("ticket_access_code_id")
+  emailSentAt         DateTime?        @map("email_sent_at")
+  whatsappSentAt      DateTime?        @map("whatsapp_sent_at")
+  createdById         String           @map("created_by_id")
+  createdAt           DateTime         @default(now()) @map("created_at")
+  updatedAt           DateTime         @updatedAt @map("updated_at")
+  ticketEvent         TicketEvent      @relation(fields: [ticketEventId], references: [id], onDelete: Cascade)
+  tenant              Tenant           @relation(fields: [tenantId], references: [id])
+  ticketAccessCode    TicketAccessCode @relation(fields: [ticketAccessCodeId], references: [id], onDelete: Cascade)
+  createdBy           User             @relation("TicketGuestCreator", fields: [createdById], references: [id])
+
+  @@index([tenantId, ticketEventId])
+  @@map("ticket_guests")
 }
 
 enum ResourceType {
