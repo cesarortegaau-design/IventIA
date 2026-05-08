@@ -141,6 +141,15 @@ export async function listTasks(req: Request, res: Response, next: NextFunction)
       include: {
         assignedTo: { select: { id: true, firstName: true, lastName: true } },
         createdBy: { select: { id: true, firstName: true, lastName: true } },
+        activities: {
+          take: 1,
+          select: {
+            id: true,
+            title: true,
+            eventId: true,
+            event: { select: { id: true, name: true } },
+          },
+        },
       },
     })
     res.json({ success: true, data: tasks })

@@ -11,7 +11,7 @@ import {
   TeamOutlined, FileTextOutlined, PlusOutlined, CheckOutlined,
   DeleteOutlined, EditOutlined, UserOutlined, CalendarOutlined,
   ShoppingCartOutlined, ClockCircleOutlined, LinkOutlined, DisconnectOutlined,
-  DownloadOutlined, FileOutlined, UploadOutlined, TrophyOutlined,
+  DownloadOutlined, FileOutlined, UploadOutlined, TrophyOutlined, ScheduleOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { crmApi } from '../../api/crm'
@@ -436,6 +436,17 @@ export default function ClientDetailPage() {
                             task.status === 'PENDING' && (
                               <Tooltip title="Marcar como completada" key="complete">
                                 <Button size="small" icon={<CheckOutlined />} type="primary" ghost onClick={() => completeTask.mutate(task.id)} />
+                              </Tooltip>
+                            ),
+                            task.activities?.[0] && (
+                              <Tooltip title={`Actividad en Timeline: ${task.activities[0].event?.name ?? ''}`} key="timeline">
+                                <Button
+                                  size="small"
+                                  icon={<ScheduleOutlined />}
+                                  onClick={() => navigate(`/eventos/${task.activities[0].eventId}?tab=timeline`)}
+                                >
+                                  Ver actividad
+                                </Button>
                               </Tooltip>
                             ),
                             <Button size="small" icon={<EditOutlined />} key="edit" onClick={() => openEditTask(task)} />,

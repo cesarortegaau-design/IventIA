@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Tag, Button, Table, Space, Tabs, App, Select, Typography, Form, DatePicker,
@@ -93,10 +93,11 @@ const BTN_PRIMARY: React.CSSProperties = {
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
 
-  const [activeTab, setActiveTab] = useState('resumen')
+  const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') ?? 'resumen')
 
   // ── Modal / UI state ──────────────────────────────────────────────────────
   const [genModalOpen, setGenModalOpen] = useState(false)
