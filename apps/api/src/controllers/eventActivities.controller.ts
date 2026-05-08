@@ -161,6 +161,12 @@ export async function createEventActivity(req: Request, res: Response, next: Nex
   }
 }
 
+function activityStatusToCrmStatus(status: string): 'PENDING' | 'DONE' | 'CANCELLED' {
+  if (status === 'DONE')      return 'DONE'
+  if (status === 'CANCELLED') return 'CANCELLED'
+  return 'PENDING'
+}
+
 export async function updateEventActivity(req: Request, res: Response, next: NextFunction) {
   try {
     const { eventId, activityId } = req.params
@@ -171,6 +177,47 @@ export async function updateEventActivity(req: Request, res: Response, next: Nex
     if (!existing) throw new AppError(404, 'ACTIVITY_NOT_FOUND', 'Activity not found')
 
     const data = updateActivitySchema.parse(req.body)
+
+    // Resolve effective crmTaskId (may be created below)
+    let resolvedCrmTaskId = existing.crmTaskId
+
+    // If autoCreateCrmTask toggled on and no CRM task linked yet, create one
+    if (data.autoCreateCrmTask && !existing.crmTaskId) {
+      const event = await prisma.event.findFirst({ where: { id: eventId, tenantId }, select: { primaryClientId: true } })
+      if (event?.primaryClientId) {
+        const effectiveTitle  = data.title ?? existing.title
+        const effectiveEnd    = data.endDate !== undefined ? data.endDate : existing.endDate?.toISOString()
+        const effectiveAssign = data.assignedToId !== undefined ? data.assignedToId : existing.assignedToId
+        const task = await prisma.clientTask.create({
+          data: {
+            tenantId,
+            clientId:     event.primaryClientId,
+            title:        effectiveTitle,
+            description:  (data.description ?? existing.description) ?? null,
+            dueDate:      effectiveEnd ? new Date(effectiveEnd) : null,
+            assignedToId: effectiveAssign ?? null,
+            createdById:  userId,
+          },
+        })
+        resolvedCrmTaskId = task.id
+      }
+    }
+
+    // If a CRM task is linked (existing or just created), sync it
+    if (resolvedCrmTaskId) {
+      const crmUpdate: any = {}
+      if (data.title        !== undefined) crmUpdate.title        = data.title
+      if (data.description  !== undefined) crmUpdate.description  = data.description
+      if (data.endDate      !== undefined) crmUpdate.dueDate      = data.endDate ? new Date(data.endDate) : null
+      if (data.assignedToId !== undefined) crmUpdate.assignedToId = data.assignedToId
+      if (data.status       !== undefined) {
+        crmUpdate.status      = activityStatusToCrmStatus(data.status)
+        crmUpdate.completedAt = data.status === 'DONE' ? new Date() : null
+      }
+      if (Object.keys(crmUpdate).length > 0) {
+        await prisma.clientTask.update({ where: { id: resolvedCrmTaskId }, data: crmUpdate })
+      }
+    }
 
     const updated = await prisma.eventActivity.update({
       where: { id: activityId },
@@ -186,11 +233,11 @@ export async function updateEventActivity(req: Request, res: Response, next: Nex
         ...(data.assignedToId !== undefined && { assignedToId: data.assignedToId }),
         ...(data.spaceId      !== undefined && { spaceId:      data.spaceId }),
         ...(data.orderId      !== undefined && { orderId:      data.orderId }),
-        ...(data.crmTaskId    !== undefined && { crmTaskId:    data.crmTaskId }),
-        ...(data.color        !== undefined && { color:        data.color }),
-        ...(data.position     !== undefined && { position:     data.position }),
-        ...(data.parentId     !== undefined && { parentId:     data.parentId }),
-        ...(data.notes        !== undefined && { notes:        data.notes }),
+        crmTaskId: resolvedCrmTaskId,
+        ...(data.color    !== undefined && { color:    data.color }),
+        ...(data.position !== undefined && { position: data.position }),
+        ...(data.parentId !== undefined && { parentId: data.parentId }),
+        ...(data.notes    !== undefined && { notes:    data.notes }),
       },
       include: ACTIVITY_INCLUDE,
     })

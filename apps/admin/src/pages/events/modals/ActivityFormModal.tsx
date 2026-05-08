@@ -57,6 +57,8 @@ export default function ActivityFormModal({
         ...initialValues,
         startDate: initialValues.startDate ? dayjs(initialValues.startDate) : undefined,
         endDate:   initialValues.endDate   ? dayjs(initialValues.endDate)   : undefined,
+        // If the activity already has a linked CRM task, show the switch as on
+        autoCreateCrmTask: initialValues.autoCreateCrmTask ?? !!initialValues.crmTaskId,
       })
     } else {
       form.resetFields()
@@ -178,7 +180,11 @@ export default function ActivityFormModal({
         </Form.Item>
 
         {showCrmOption && (
-          <Form.Item name="autoCreateCrmTask" label="Crear tarea CRM automáticamente" valuePropName="checked">
+          <Form.Item
+            name="autoCreateCrmTask"
+            label={initialValues?.crmTaskId ? 'Sincronizar con tarea CRM (vinculada)' : 'Crear tarea CRM automáticamente'}
+            valuePropName="checked"
+          >
             <Switch />
           </Form.Item>
         )}
