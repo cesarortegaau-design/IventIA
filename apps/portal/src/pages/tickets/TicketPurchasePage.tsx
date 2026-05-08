@@ -897,7 +897,7 @@ function CartPanel({
   )
 }
 
-// ── Checkout Modal (Multi-step for REGISTRO) ───────────────────────────────────
+// ── Checkout Modal (2-step: datos → pago) ─────────────────────────────────────
 function CheckoutModal({
   open, slug, mode, sectionCart, seatCart,
   onClose, onSuccess,
@@ -907,7 +907,8 @@ function CheckoutModal({
   onClose: () => void; onSuccess: (url: string) => void
 }) {
   const { user: buyerUser } = useTicketBuyerAuthStore()
-  const [step, setStep] = useState<'buyer' | 'attendees' | 'payment'>('buyer')
+  // 2 steps: 'datos' (buyer + attendees) → 'pago'
+  const [step, setStep] = useState<'datos' | 'pago'>('datos')
   const [buyerForm, setBuyerForm] = useState({ name: '', email: '', phone: '' })
   const [attendees, setAttendees] = useState<Record<string, any>>({})
   const [paymentMethod, setPaymentMethod] = useState<'STRIPE' | 'CODE'>('STRIPE')
@@ -915,81 +916,64 @@ function CheckoutModal({
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const isRegistro = mode === 'REGISTRO'
+  const cartEntries = Object.entries(sectionCart)
 
-  // Reset step and form state when modal opens
+  // Reset on every open
   useEffect(() => {
     if (open) {
-      setStep('buyer')
+      setStep('datos')
       setAttendees({})
       setErrors({})
       setAccessCode('')
+      setPaymentMethod('STRIPE')
     }
   }, [open])
 
-  // Build cart items for submission — use cartKey as attendee key for REGISTRO
-  const cartEntries = Object.entries(sectionCart)
+  const totalAmount = isRegistro || mode === 'SECTION'
+    ? Object.values(sectionCart).reduce((s, i) => s + i.qty * i.price, 0)
+    : Object.values(seatCart).reduce((s, i) => s + i.price, 0)
+
   const cartItems = isRegistro
     ? cartEntries.map(([cartKey, i]) => ({
       sectionId: i.sectionId,
-      quantity: i.qty,
+      quantity: 1,
       attendee: attendees[cartKey],
     }))
     : mode === 'SECTION'
       ? Object.values(sectionCart).map(i => ({ sectionId: i.sectionId, quantity: i.qty }))
       : Object.values(seatCart).map(i => ({ sectionId: i.sectionId, seatId: i.seatId, quantity: 1 }))
 
-  const totalAmount = mode === 'SECTION' || isRegistro
-    ? Object.values(sectionCart).reduce((s, i) => s + i.qty * i.price, 0)
-    : Object.values(seatCart).reduce((s, i) => s + i.price, 0)
-
   const createOrderMutation = useMutation({
     mutationFn: ticketsPublicApi.createOrder,
     onSuccess: (data: any) => {
-      // For CODE/FREE payments, order is PAID immediately
-      if (data?.token && !data?.checkoutUrl) {
-        onSuccess(`/mis-boletos`)
-        return
-      }
-      // For STRIPE payments, redirect to checkout
+      if (data?.token && !data?.checkoutUrl) { onSuccess('/mis-boletos'); return }
       if (data?.checkoutUrl) onSuccess(data.checkoutUrl)
     },
   })
 
-  const validateBuyer = () => {
+  // Validate step 1 (buyer + attendees)
+  const validateDatos = () => {
     const e: Record<string, string> = {}
     if (!buyerForm.name.trim()) e.name = 'Requerido'
     if (!buyerForm.email.trim() || !/\S+@\S+\.\S+/.test(buyerForm.email)) e.email = 'Email inválido'
-    setErrors(e)
-    return Object.keys(e).length === 0
-  }
-
-  const validateAttendees = () => {
-    const e: Record<string, string> = {}
-    cartEntries.forEach(([cartKey], idx) => {
-      const att = attendees[cartKey]
-      if (!att?.firstName?.trim()) e[`attendee-${idx}-firstName`] = 'Requerido'
-      if (!att?.paternalLastName?.trim()) e[`attendee-${idx}-paternalLastName`] = 'Requerido'
-      if (!att?.email?.trim() || !/\S+@\S+\.\S+/.test(att?.email)) e[`attendee-${idx}-email`] = 'Email inválido'
-    })
-    setErrors(e)
-    return Object.keys(e).length === 0
-  }
-
-  const handleBuyerNext = () => {
-    if (!validateBuyer()) return
     if (isRegistro) {
-      setStep('attendees')
-    } else {
-      setStep('payment')
+      cartEntries.forEach(([cartKey], idx) => {
+        const att = attendees[cartKey]
+        if (!att?.firstName?.trim()) e[`att-${idx}-firstName`] = 'Requerido'
+        if (!att?.paternalLastName?.trim()) e[`att-${idx}-paternalLastName`] = 'Requerido'
+        if (!att?.email?.trim() || !/\S+@\S+\.\S+/.test(att.email)) e[`att-${idx}-email`] = 'Email inválido'
+      })
     }
+    setErrors(e)
+    return Object.keys(e).length === 0
   }
 
-  const handleAttendeesNext = () => {
-    if (!validateAttendees()) return
-    setStep('payment')
+  const handleDatosNext = () => {
+    if (!validateDatos()) return
+    setStep('pago')
   }
 
-  const handlePaymentSubmit = () => {
+  const handleSubmit = () => {
     if (paymentMethod === 'CODE' && !accessCode.trim()) {
       setErrors({ accessCode: 'Código requerido' })
       return
@@ -999,7 +983,7 @@ function CheckoutModal({
       buyerName: buyerForm.name,
       buyerEmail: buyerForm.email,
       buyerPhone: buyerForm.phone || undefined,
-      items: cartItems.map(i => ({ sectionId: i.sectionId, seatId: i.seatId, quantity: i.quantity, attendee: i.attendee })),
+      items: cartItems,
     }
     if (paymentMethod === 'CODE') {
       payload.paymentMethod = 'CODE'
@@ -1007,17 +991,19 @@ function CheckoutModal({
     } else if (totalAmount === 0) {
       payload.paymentMethod = 'FREE'
     }
-    console.log('[checkout] payload', JSON.stringify(payload, null, 2))
     createOrderMutation.mutate(payload)
   }
 
   if (!open) return null
 
-  const inputStyle: React.CSSProperties = {
+  const inp: React.CSSProperties = {
     width: '100%', padding: '10px 12px', borderRadius: 8,
     border: `1px solid ${C.line}`, background: C.bg2, color: C.text,
     fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box',
   }
+  const err = (key: string) => errors[key]
+    ? <div style={{ color: '#ef4444', fontSize: 11, marginTop: 4 }}>{errors[key]}</div>
+    : null
 
   return (
     <div style={{
@@ -1026,216 +1012,173 @@ function CheckoutModal({
     }}>
       <div style={{
         background: C.bg1, borderRadius: 12, padding: 28,
-        width: 480, maxHeight: '90vh', overflowY: 'auto',
+        width: 500, maxHeight: '92vh', overflowY: 'auto',
         border: `1px solid ${C.line}`, boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
       }}>
-        {/* Step indicator */}
-        {isRegistro && (
-          <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-            {(['attendees', 'payment'] as const).map((s, i) => (
-              <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{
-                  width: 24, height: 24, borderRadius: '50%', display: 'flex',
-                  alignItems: 'center', justifyContent: 'center', fontSize: 12,
-                  fontWeight: 700,
-                  background: step === s || (s === 'payment' && step === 'payment') ? C.accent : C.bg3,
-                  color: step === s || (s === 'payment' && step === 'payment') ? '#0a1220' : C.textMute,
-                }}>
-                  {i + 1}
-                </div>
-                <span style={{ fontSize: 12, color: step === s ? C.accent : C.textMute }}>
-                  {s === 'attendees' ? 'Asistentes' : 'Pago'}
-                </span>
-                {i < 1 && <div style={{ width: 12, height: '1px', background: C.bg3 }} />}
-              </div>
-            ))}
-          </div>
-        )}
 
-        {/* Buyer info step */}
-        {step === 'buyer' && (
+        {/* Step indicator */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+          {(['datos', 'pago'] as const).map((s, i) => (
+            <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{
+                width: 24, height: 24, borderRadius: '50%', display: 'flex',
+                alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700,
+                background: step === s ? C.accent : C.bg3,
+                color: step === s ? '#0a1220' : C.textMute,
+              }}>{i + 1}</div>
+              <span style={{ fontSize: 12, color: step === s ? C.accent : C.textMute }}>
+                {s === 'datos' ? 'Datos' : 'Pago'}
+              </span>
+              {i < 1 && <div style={{ width: 20, height: 1, background: C.bg3 }} />}
+            </div>
+          ))}
+        </div>
+
+        {/* ── STEP 1: Datos ────────────────────────────────────── */}
+        {step === 'datos' && (
           <>
-            <h3 style={{ color: C.text, margin: '0 0 16px', fontSize: 18 }}>Datos del comprador</h3>
+            {/* Buyer info */}
+            <h3 style={{ color: C.text, margin: '0 0 14px', fontSize: 16 }}>Datos del comprador</h3>
             {!buyerUser && (
-              <div style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)',
-                borderRadius: 8, padding: '10px 14px', marginBottom: 16,
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{
+                background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)',
+                borderRadius: 8, padding: '8px 14px', marginBottom: 14,
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              }}>
                 <span style={{ fontSize: 12, color: C.textMute }}>¿Ya tienes cuenta?</span>
-                <Link to="/boletos/login"
-                  style={{ fontSize: 12, color: C.accent, fontWeight: 600, textDecoration: 'none' }}>
+                <Link to="/boletos/login" style={{ fontSize: 12, color: C.accent, fontWeight: 600, textDecoration: 'none' }}>
                   Iniciar sesión →
                 </Link>
               </div>
             )}
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ fontSize: 12, color: C.textMute, display: 'block', marginBottom: 6 }}>Nombre *</label>
-              <input
-                style={{ ...inputStyle, borderColor: errors.name ? '#ef4444' : C.line }}
-                value={buyerForm.name}
-                onChange={e => setBuyerForm(f => ({ ...f, name: e.target.value }))}
-                placeholder="Juan Pérez"
-              />
-              {errors.name && <div style={{ color: '#ef4444', fontSize: 11, marginTop: 4 }}>{errors.name}</div>}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+              <div>
+                <label style={{ fontSize: 12, color: C.textMute, display: 'block', marginBottom: 5 }}>Nombre completo *</label>
+                <input style={{ ...inp, borderColor: errors.name ? '#ef4444' : C.line }}
+                  value={buyerForm.name}
+                  onChange={e => setBuyerForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="Juan Pérez" />
+                {err('name')}
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: C.textMute, display: 'block', marginBottom: 5 }}>Teléfono</label>
+                <input style={inp} type="tel"
+                  value={buyerForm.phone}
+                  onChange={e => setBuyerForm(f => ({ ...f, phone: e.target.value }))}
+                  placeholder="+52 55 1234 5678" />
+              </div>
             </div>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ fontSize: 12, color: C.textMute, display: 'block', marginBottom: 6 }}>Email *</label>
-              <input
-                style={{ ...inputStyle, borderColor: errors.email ? '#ef4444' : C.line }}
+            <div style={{ marginBottom: isRegistro ? 20 : 24 }}>
+              <label style={{ fontSize: 12, color: C.textMute, display: 'block', marginBottom: 5 }}>Email *</label>
+              <input style={{ ...inp, borderColor: errors.email ? '#ef4444' : C.line }}
                 type="email"
                 value={buyerForm.email}
                 onChange={e => setBuyerForm(f => ({ ...f, email: e.target.value }))}
-                placeholder="juan@ejemplo.com"
-              />
-              {errors.email && <div style={{ color: '#ef4444', fontSize: 11, marginTop: 4 }}>{errors.email}</div>}
+                placeholder="juan@ejemplo.com" />
+              {err('email')}
             </div>
-            <div style={{ marginBottom: 24 }}>
-              <label style={{ fontSize: 12, color: C.textMute, display: 'block', marginBottom: 6 }}>Teléfono (opcional)</label>
-              <input
-                style={inputStyle}
-                type="tel"
-                value={buyerForm.phone}
-                onChange={e => setBuyerForm(f => ({ ...f, phone: e.target.value }))}
-                placeholder="+52 55 1234 5678"
-              />
-            </div>
-            {createOrderMutation.isError && (
-              <div style={{ color: '#ef4444', fontSize: 13, marginBottom: 16 }}>
-                Error. Intenta de nuevo.
-              </div>
+
+            {/* Attendees (REGISTRO only) */}
+            {isRegistro && cartEntries.length > 0 && (
+              <>
+                <div style={{ borderTop: `1px solid ${C.line}`, marginBottom: 16 }} />
+                <h3 style={{ color: C.text, margin: '0 0 14px', fontSize: 16 }}>
+                  Datos de asistentes ({cartEntries.length} {cartEntries.length === 1 ? 'boleto' : 'boletos'})
+                </h3>
+                {cartEntries.map(([cartKey, cartItem], idx) => (
+                  <div key={cartKey} style={{
+                    marginBottom: 20, padding: 14, borderRadius: 8,
+                    border: `1px solid ${C.line}`, background: C.bg2,
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: C.accent }} />
+                      <span style={{ fontSize: 13, fontWeight: 600, color: C.accent }}>Boleto {idx + 1}</span>
+                      <span style={{ fontSize: 11, color: C.textMute }}>— {cartItem.name}</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                      <div>
+                        <label style={{ fontSize: 11, color: C.textMute, display: 'block', marginBottom: 4 }}>Nombre *</label>
+                        <input style={{ ...inp, fontSize: 13, borderColor: errors[`att-${idx}-firstName`] ? '#ef4444' : C.line }}
+                          value={attendees[cartKey]?.firstName || ''}
+                          onChange={e => setAttendees(a => ({ ...a, [cartKey]: { ...a[cartKey], firstName: e.target.value } }))}
+                          placeholder="Juan" />
+                        {err(`att-${idx}-firstName`)}
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 11, color: C.textMute, display: 'block', marginBottom: 4 }}>Apellido paterno *</label>
+                        <input style={{ ...inp, fontSize: 13, borderColor: errors[`att-${idx}-paternalLastName`] ? '#ef4444' : C.line }}
+                          value={attendees[cartKey]?.paternalLastName || ''}
+                          onChange={e => setAttendees(a => ({ ...a, [cartKey]: { ...a[cartKey], paternalLastName: e.target.value } }))}
+                          placeholder="Pérez" />
+                        {err(`att-${idx}-paternalLastName`)}
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                      <div>
+                        <label style={{ fontSize: 11, color: C.textMute, display: 'block', marginBottom: 4 }}>Apellido materno</label>
+                        <input style={{ ...inp, fontSize: 13 }}
+                          value={attendees[cartKey]?.maternalLastName || ''}
+                          onChange={e => setAttendees(a => ({ ...a, [cartKey]: { ...a[cartKey], maternalLastName: e.target.value } }))}
+                          placeholder="García" />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 11, color: C.textMute, display: 'block', marginBottom: 4 }}>Teléfono</label>
+                        <input style={{ ...inp, fontSize: 13 }} type="tel"
+                          value={attendees[cartKey]?.phone || ''}
+                          onChange={e => setAttendees(a => ({ ...a, [cartKey]: { ...a[cartKey], phone: e.target.value } }))}
+                          placeholder="+52 55 1234 5678" />
+                      </div>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 11, color: C.textMute, display: 'block', marginBottom: 4 }}>Email *</label>
+                      <input style={{ ...inp, fontSize: 13, borderColor: errors[`att-${idx}-email`] ? '#ef4444' : C.line }}
+                        type="email"
+                        value={attendees[cartKey]?.email || ''}
+                        onChange={e => setAttendees(a => ({ ...a, [cartKey]: { ...a[cartKey], email: e.target.value } }))}
+                        placeholder="juan@ejemplo.com" />
+                      {err(`att-${idx}-email`)}
+                    </div>
+                  </div>
+                ))}
+              </>
             )}
+
             <div style={{ display: 'flex', gap: 12 }}>
-              <button
-                onClick={onClose}
-                style={{
-                  flex: 1, padding: '11px', borderRadius: 8,
-                  border: `1px solid ${C.line}`, background: 'transparent',
-                  color: C.text, cursor: 'pointer', fontSize: 14,
-                }}
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleBuyerNext}
-                style={{
-                  flex: 2, padding: '11px', borderRadius: 8, border: 'none',
-                  background: C.accent, color: '#0a1220', fontWeight: 700,
-                  cursor: 'pointer', fontSize: 14,
-                }}
-              >
-                {isRegistro ? 'Siguiente →' : 'Ir al pago →'}
-              </button>
+              <button onClick={onClose} style={{
+                flex: 1, padding: '11px', borderRadius: 8,
+                border: `1px solid ${C.line}`, background: 'transparent',
+                color: C.text, cursor: 'pointer', fontSize: 14,
+              }}>Cancelar</button>
+              <button onClick={handleDatosNext} style={{
+                flex: 2, padding: '11px', borderRadius: 8, border: 'none',
+                background: C.accent, color: '#0a1220', fontWeight: 700,
+                cursor: 'pointer', fontSize: 14,
+              }}>Siguiente →</button>
             </div>
           </>
         )}
 
-        {/* Attendees step (REGISTRO only) */}
-        {isRegistro && step === 'attendees' && (
-          <>
-            <h3 style={{ color: C.text, margin: '0 0 16px', fontSize: 18 }}>Datos de asistentes</h3>
-            <div style={{ marginBottom: 20, maxHeight: '50vh', overflowY: 'auto' }}>
-              {cartEntries.map(([cartKey, cartItem], idx) => (
-                <div key={cartKey} style={{ marginBottom: 24, paddingBottom: 16, borderBottom: `1px solid ${C.line}` }}>
-                  <h4 style={{ color: C.accent, fontSize: 13, margin: '0 0 4px' }}>Boleto {idx + 1}</h4>
-                  <div style={{ fontSize: 11, color: C.textMute, marginBottom: 12 }}>{cartItem.name}</div>
-                  <div style={{ marginBottom: 12 }}>
-                    <label style={{ fontSize: 12, color: C.textMute, display: 'block', marginBottom: 6 }}>Nombre *</label>
-                    <input
-                      style={{ ...inputStyle, borderColor: errors[`attendee-${idx}-firstName`] ? '#ef4444' : C.line }}
-                      value={attendees[cartKey]?.firstName || ''}
-                      onChange={e => setAttendees(a => ({ ...a, [cartKey]: { ...a[cartKey], firstName: e.target.value } }))}
-                      placeholder="Juan"
-                    />
-                    {errors[`attendee-${idx}-firstName`] && <div style={{ color: '#ef4444', fontSize: 11, marginTop: 4 }}>{errors[`attendee-${idx}-firstName`]}</div>}
-                  </div>
-                  <div style={{ marginBottom: 12 }}>
-                    <label style={{ fontSize: 12, color: C.textMute, display: 'block', marginBottom: 6 }}>Apellido paterno *</label>
-                    <input
-                      style={{ ...inputStyle, borderColor: errors[`attendee-${idx}-paternalLastName`] ? '#ef4444' : C.line }}
-                      value={attendees[cartKey]?.paternalLastName || ''}
-                      onChange={e => setAttendees(a => ({ ...a, [cartKey]: { ...a[cartKey], paternalLastName: e.target.value } }))}
-                      placeholder="Pérez"
-                    />
-                    {errors[`attendee-${idx}-paternalLastName`] && <div style={{ color: '#ef4444', fontSize: 11, marginTop: 4 }}>{errors[`attendee-${idx}-paternalLastName`]}</div>}
-                  </div>
-                  <div style={{ marginBottom: 12 }}>
-                    <label style={{ fontSize: 12, color: C.textMute, display: 'block', marginBottom: 6 }}>Apellido materno</label>
-                    <input
-                      style={inputStyle}
-                      value={attendees[cartKey]?.maternalLastName || ''}
-                      onChange={e => setAttendees(a => ({ ...a, [cartKey]: { ...a[cartKey], maternalLastName: e.target.value } }))}
-                      placeholder="García"
-                    />
-                  </div>
-                  <div style={{ marginBottom: 12 }}>
-                    <label style={{ fontSize: 12, color: C.textMute, display: 'block', marginBottom: 6 }}>Teléfono</label>
-                    <input
-                      style={inputStyle}
-                      type="tel"
-                      value={attendees[cartKey]?.phone || ''}
-                      onChange={e => setAttendees(a => ({ ...a, [cartKey]: { ...a[cartKey], phone: e.target.value } }))}
-                      placeholder="+52 55 1234 5678"
-                    />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 12, color: C.textMute, display: 'block', marginBottom: 6 }}>Email *</label>
-                    <input
-                      style={{ ...inputStyle, borderColor: errors[`attendee-${idx}-email`] ? '#ef4444' : C.line }}
-                      type="email"
-                      value={attendees[cartKey]?.email || ''}
-                      onChange={e => setAttendees(a => ({ ...a, [cartKey]: { ...a[cartKey], email: e.target.value } }))}
-                      placeholder="juan@ejemplo.com"
-                    />
-                    {errors[`attendee-${idx}-email`] && <div style={{ color: '#ef4444', fontSize: 11, marginTop: 4 }}>{errors[`attendee-${idx}-email`]}</div>}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div style={{ display: 'flex', gap: 12 }}>
-              <button
-                onClick={() => setStep('buyer')}
-                style={{
-                  flex: 1, padding: '11px', borderRadius: 8,
-                  border: `1px solid ${C.line}`, background: 'transparent',
-                  color: C.text, cursor: 'pointer', fontSize: 14,
-                }}
-              >
-                ← Atrás
-              </button>
-              <button
-                onClick={handleAttendeesNext}
-                style={{
-                  flex: 2, padding: '11px', borderRadius: 8, border: 'none',
-                  background: C.accent, color: '#0a1220', fontWeight: 700,
-                  cursor: 'pointer', fontSize: 14,
-                }}
-              >
-                Siguiente →
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* Payment step */}
-        {step === 'payment' && (
+        {/* ── STEP 2: Pago ─────────────────────────────────────── */}
+        {step === 'pago' && (
           <>
             <h3 style={{ color: C.text, margin: '0 0 16px', fontSize: 18 }}>Método de pago</h3>
             {totalAmount === 0 ? (
               <div style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)', borderRadius: 8, padding: 12, marginBottom: 20 }}>
                 <div style={{ fontSize: 13, color: C.accent, fontWeight: 600 }}>¡Gratis!</div>
-                <div style={{ fontSize: 12, color: C.textMute, marginTop: 4 }}>Este boleto no tiene costo</div>
+                <div style={{ fontSize: 12, color: C.textMute, marginTop: 4 }}>Este registro no tiene costo</div>
               </div>
             ) : (
               <>
                 <div style={{ marginBottom: 20 }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px', borderRadius: 8, border: `2px solid ${paymentMethod === 'STRIPE' ? C.accent : C.line}`, background: paymentMethod === 'STRIPE' ? C.accent + '11' : 'transparent', cursor: 'pointer', marginBottom: 12 }}>
-                    <input type="radio" name="payment" checked={paymentMethod === 'STRIPE'} onChange={() => setPaymentMethod('STRIPE')} style={{ accentColor: C.accent }} />
+                    <input type="radio" name="pay" checked={paymentMethod === 'STRIPE'} onChange={() => setPaymentMethod('STRIPE')} style={{ accentColor: C.accent }} />
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Tarjeta de crédito/débito</div>
                       <div style={{ fontSize: 11, color: C.textMute }}>Visa, Mastercard, American Express</div>
                     </div>
                   </label>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px', borderRadius: 8, border: `2px solid ${paymentMethod === 'CODE' ? C.accent : C.line}`, background: paymentMethod === 'CODE' ? C.accent + '11' : 'transparent', cursor: 'pointer' }}>
-                    <input type="radio" name="payment" checked={paymentMethod === 'CODE'} onChange={() => setPaymentMethod('CODE')} style={{ accentColor: C.accent }} />
+                    <input type="radio" name="pay" checked={paymentMethod === 'CODE'} onChange={() => setPaymentMethod('CODE')} style={{ accentColor: C.accent }} />
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Código de acceso</div>
                       <div style={{ fontSize: 11, color: C.textMute }}>Ingresa un código válido</div>
@@ -1246,16 +1189,16 @@ function CheckoutModal({
                   <div style={{ marginBottom: 20 }}>
                     <label style={{ fontSize: 12, color: C.textMute, display: 'block', marginBottom: 6 }}>Código *</label>
                     <input
-                      style={{ ...inputStyle, borderColor: errors.accessCode ? '#ef4444' : C.line, fontFamily: 'monospace' }}
+                      style={{ ...inp, borderColor: errors.accessCode ? '#ef4444' : C.line, fontFamily: 'monospace' }}
                       value={accessCode}
                       onChange={e => setAccessCode(e.target.value.toUpperCase())}
-                      placeholder="ABC12345"
-                    />
-                    {errors.accessCode && <div style={{ color: '#ef4444', fontSize: 11, marginTop: 4 }}>{errors.accessCode}</div>}
+                      placeholder="ABC12345" />
+                    {err('accessCode')}
                   </div>
                 )}
               </>
             )}
+
             {createOrderMutation.isError && (
               <div style={{ color: '#ef4444', fontSize: 13, marginBottom: 16 }}>
                 {(createOrderMutation.error as any)?.response?.data?.error?.message
@@ -1263,19 +1206,15 @@ function CheckoutModal({
                   || 'Error al procesar. Intenta de nuevo.'}
               </div>
             )}
+
             <div style={{ display: 'flex', gap: 12 }}>
+              <button onClick={() => setStep('datos')} style={{
+                flex: 1, padding: '11px', borderRadius: 8,
+                border: `1px solid ${C.line}`, background: 'transparent',
+                color: C.text, cursor: 'pointer', fontSize: 14,
+              }}>← Atrás</button>
               <button
-                onClick={() => setStep(isRegistro ? 'attendees' : 'buyer')}
-                style={{
-                  flex: 1, padding: '11px', borderRadius: 8,
-                  border: `1px solid ${C.line}`, background: 'transparent',
-                  color: C.text, cursor: 'pointer', fontSize: 14,
-                }}
-              >
-                ← Atrás
-              </button>
-              <button
-                onClick={handlePaymentSubmit}
+                onClick={handleSubmit}
                 disabled={createOrderMutation.isPending}
                 style={{
                   flex: 2, padding: '11px', borderRadius: 8, border: 'none',
@@ -1285,7 +1224,7 @@ function CheckoutModal({
                   fontSize: 14,
                 }}
               >
-                {createOrderMutation.isPending ? 'Procesando…' : totalAmount === 0 ? 'Finalizar' : paymentMethod === 'CODE' ? 'Canjear código' : 'Ir al pago →'}
+                {createOrderMutation.isPending ? 'Procesando…' : totalAmount === 0 ? 'Finalizar registro' : paymentMethod === 'CODE' ? 'Canjear código' : 'Ir al pago →'}
               </button>
             </div>
           </>
