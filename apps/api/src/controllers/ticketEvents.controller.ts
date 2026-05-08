@@ -65,7 +65,7 @@ export async function upsertTicketEvent(req: Request, res: Response, next: NextF
           eventId,
           mode: mode ?? 'SECTION',
           priceListId: priceListId ?? null,
-          slug: slug ?? '',
+          slug: slug || eventId.slice(0, 8),
           active: active ?? false,
           description: description ?? null,
           imageUrl: imageUrl ?? null,
