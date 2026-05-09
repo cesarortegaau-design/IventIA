@@ -49,11 +49,24 @@ const createActivitySchema = z.object({
   position:          z.coerce.number().int().default(0),
   parentId:          z.string().uuid().optional().nullable(),
   notes:             z.string().optional().nullable(),
-  departmentIds:     z.array(z.string().uuid()).optional().default([]),
-  orderIds:          z.array(z.string().uuid()).optional().default([]),
+  departmentIds:     z.any().optional().default([]),
+  orderIds:          z.any().optional().default([]),
 })
 
 const updateActivitySchema = createActivitySchema.partial()
+
+// Custom validator for array of UUIDs
+function validateUuidArray(value: any, fieldName: string): string[] {
+  if (!value) return []
+  if (!Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an array`)
+  }
+  return value.filter((id: any) => {
+    if (typeof id !== 'string') return false
+    // Simple UUID validation: 36 chars, hyphens in right places
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+  })
+}
 
 const bulkReorderSchema = z.array(
   z.object({ id: z.string().uuid(), position: z.coerce.number().int() })
@@ -122,7 +135,34 @@ export async function createEventActivity(req: Request, res: Response, next: Nex
     const event = await prisma.event.findFirst({ where: { id: eventId, tenantId }, select: { id: true, primaryClientId: true } })
     if (!event) throw new AppError(404, 'EVENT_NOT_FOUND', 'Event not found')
 
-    const data = createActivitySchema.parse(req.body)
+    let data
+    try {
+      data = createActivitySchema.parse(req.body)
+      // Validate and sanitize departmentIds and orderIds
+      try {
+        data.departmentIds = validateUuidArray(data.departmentIds, 'departmentIds')
+        data.orderIds = validateUuidArray(data.orderIds, 'orderIds')
+      } catch (validationErr: any) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid department or order IDs',
+          error: validationErr.message,
+        })
+      }
+    } catch (err: any) {
+      if (err.errors) {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation error',
+          errors: err.errors.map((e: any) => ({
+            path: e.path.join('.'),
+            message: e.message,
+            value: e.value,
+          })),
+        })
+      }
+      throw err
+    }
 
     // Auto-create CRM task if requested
     let crmTaskId = data.crmTaskId ?? null
@@ -214,6 +254,17 @@ export async function updateEventActivity(req: Request, res: Response, next: Nex
     let data
     try {
       data = updateActivitySchema.parse(req.body)
+      // Validate and sanitize departmentIds and orderIds
+      try {
+        data.departmentIds = validateUuidArray(data.departmentIds, 'departmentIds')
+        data.orderIds = validateUuidArray(data.orderIds, 'orderIds')
+      } catch (validationErr: any) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid department or order IDs',
+          error: validationErr.message,
+        })
+      }
     } catch (err: any) {
       if (err.errors) {
         return res.status(400).json({
