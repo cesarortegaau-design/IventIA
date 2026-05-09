@@ -211,7 +211,23 @@ export async function updateEventActivity(req: Request, res: Response, next: Nex
     const existing = await prisma.eventActivity.findFirst({ where: { id: activityId, eventId, tenantId } })
     if (!existing) throw new AppError(404, 'ACTIVITY_NOT_FOUND', 'Activity not found')
 
-    const data = updateActivitySchema.parse(req.body)
+    let data
+    try {
+      data = updateActivitySchema.parse(req.body)
+    } catch (err: any) {
+      if (err.errors) {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation error',
+          errors: err.errors.map((e: any) => ({
+            path: e.path.join('.'),
+            message: e.message,
+            value: e.value,
+          })),
+        })
+      }
+      throw err
+    }
 
     // Resolve effective crmTaskId (may be created below)
     let resolvedCrmTaskId = existing.crmTaskId
