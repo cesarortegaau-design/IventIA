@@ -4,6 +4,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Layout, Select, Input, Button, Empty, Spin, Space, message as antMessage } from 'antd'
 import { PlusOutlined, FilterOutlined } from '@ant-design/icons'
 import { collabTasksApi } from '../../../api/collabTasks'
+import { usersApi } from '../../../api/users'
+import { eventsApi } from '../../../api/events'
+import { clientsApi } from '../../../api/clients'
+import { ordersApi } from '../../../api/orders'
+import { resourcesApi } from '../../../api/resources'
 import { TaskListPanel } from './TaskListPanel'
 import { TaskDetailDrawer } from './TaskDetailDrawer'
 import { TaskFormModal } from './TaskFormModal'
@@ -45,6 +50,32 @@ export function TareasTab() {
   const { data: eventActivities = [], isLoading: activitiesLoading } = useQuery({
     queryKey: ['my-event-activities'],
     queryFn: () => collabTasksApi.listMyEventActivities(),
+  })
+
+  // Load reference data
+  const { data: users = [] } = useQuery({
+    queryKey: ['users-assignable'],
+    queryFn: () => usersApi.listAssignable(),
+  })
+
+  const { data: events = [] } = useQuery({
+    queryKey: ['events-list'],
+    queryFn: () => eventsApi.list({ pageSize: 1000 }),
+  })
+
+  const { data: clients = [] } = useQuery({
+    queryKey: ['clients-list'],
+    queryFn: () => clientsApi.list({ pageSize: 1000 }),
+  })
+
+  const { data: departments = [] } = useQuery({
+    queryKey: ['departments-list'],
+    queryFn: () => resourcesApi.listDepartments(),
+  })
+
+  const { data: orders = [] } = useQuery({
+    queryKey: ['orders-list'],
+    queryFn: () => ordersApi.report({ pageSize: 1000 }),
   })
 
   const isLoading = tasksLoading || activitiesLoading
@@ -251,6 +282,11 @@ export function TareasTab() {
         onCancel={() => { setShowFormModal(false); setEditingTask(null) }}
         onSubmit={handleFormSubmit}
         isLoading={editingTask ? updateMut.isPending : createMut.isPending}
+        users={users}
+        events={events}
+        clients={clients}
+        departments={departments}
+        orders={orders}
       />
     </>
   )

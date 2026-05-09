@@ -2,12 +2,8 @@ import { useEffect, useState } from 'react'
 import { Modal, Form, Input, Select, DatePicker, Slider, Space, Button, message as antMessage } from 'antd'
 import dayjs from 'dayjs'
 
-export function TaskFormModal({ open, task, onCancel, onSubmit, isLoading }: any) {
+export function TaskFormModal({ open, task, onCancel, onSubmit, isLoading, users = [], events: eventsData = [], clients: clientsData = [], departments: departmentsData = [], orders: ordersData = [] }: any) {
   const [form] = Form.useForm()
-  const [events, setEvents] = useState<any[]>([])
-  const [clients, setClients] = useState<any[]>([])
-  const [departments, setDepartments] = useState<any[]>([])
-  const [orders, setOrders] = useState<any[]>([])
 
   useEffect(() => {
     if (!open) {
@@ -120,10 +116,12 @@ export function TaskFormModal({ open, task, onCancel, onSubmit, isLoading }: any
           <Select
             placeholder="Seleccionar usuario"
             allowClear
-            options={[
-              // Note: Users list would come from a users API endpoint
-              // For now we'll leave this placeholder
-            ]}
+            showSearch
+            optionFilterProp="label"
+            options={users?.map?.((u: any) => ({
+              value: u.id,
+              label: `${u.firstName} ${u.lastName}`,
+            })) || []}
           />
         </Form.Item>
 
@@ -133,9 +131,11 @@ export function TaskFormModal({ open, task, onCancel, onSubmit, isLoading }: any
             <Select
               placeholder="Seleccionar evento"
               allowClear
-              options={events?.map?.((e: any) => ({
+              showSearch
+              optionFilterProp="label"
+              options={eventsData?.map?.((e: any) => ({
                 value: e.id,
-                label: e.name,
+                label: e.name || e.code,
               })) || []}
             />
           </Form.Item>
@@ -144,7 +144,9 @@ export function TaskFormModal({ open, task, onCancel, onSubmit, isLoading }: any
             <Select
               placeholder="Seleccionar cliente"
               allowClear
-              options={clients?.map?.((c: any) => ({
+              showSearch
+              optionFilterProp="label"
+              options={clientsData?.map?.((c: any) => ({
                 value: c.id,
                 label: c.companyName || `${c.firstName} ${c.lastName}`,
               })) || []}
@@ -157,7 +159,7 @@ export function TaskFormModal({ open, task, onCancel, onSubmit, isLoading }: any
           <Select
             mode="multiple"
             placeholder="Seleccionar departamentos"
-            options={departments?.map?.((d: any) => ({
+            options={departmentsData?.map?.((d: any) => ({
               value: d.id,
               label: d.name,
             })) || []}
@@ -169,7 +171,7 @@ export function TaskFormModal({ open, task, onCancel, onSubmit, isLoading }: any
           <Select
             mode="multiple"
             placeholder="Seleccionar órdenes"
-            options={orders?.map?.((o: any) => ({
+            options={ordersData?.map?.((o: any) => ({
               value: o.id,
               label: o.orderNumber,
             })) || []}
