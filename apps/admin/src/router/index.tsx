@@ -18,7 +18,7 @@ import OperationsDashboard from '../pages/dashboard/OperationsDashboard'
 import ClientDetailPage from '../pages/crm/ClientDetailPage'
 import CrmDashboard from '../pages/crm/CrmDashboard'
 import HomePage from '../pages/home/HomePage'
-import ChatPage from '../pages/chat/ChatPage'
+import ColaboraPage from '../pages/chat/ColaboraPage'
 import OrdersReportPage from '../pages/reports/OrdersReportPage'
 import BookingCalendarPage from '../pages/bookings/BookingCalendarPage'
 import SuppliersPage from '../pages/catalogs/suppliers/SuppliersPage'
@@ -76,7 +76,7 @@ export function AppRouter() {
         <Route path="catalogos/usuarios" element={<Navigate to="/catalogos/usuarios-perfiles?tab=internos" replace />} />
         <Route path="dashboard/contabilidad" element={<AccountingDashboard />} />
         <Route path="dashboard/operaciones" element={<OperationsDashboard />} />
-        <Route path="chat" element={<ChatPage />} />
+        <Route path="chat" element={<ColaboraPage />} />
         <Route path="reportes/ordenes" element={<OrdersReportPage />} />
         <Route path="booking-calendar" element={<BookingCalendarPage />} />
         <Route path="catalogos/proveedores" element={<SuppliersPage />} />

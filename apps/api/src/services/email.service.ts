@@ -248,4 +248,63 @@ export const emailService = {
       `,
     })
   },
+
+  async sendCollabTaskNotification(params: {
+    to: string
+    recipientName: string
+    taskTitle: string
+    taskUrl: string
+    action: 'created' | 'assigned'
+  }) {
+    if (!transporter) {
+      console.log(`[EMAIL] sendCollabTaskNotification skipped (not configured): ${params.to}`)
+      return
+    }
+
+    const actionText = params.action === 'created' ? 'ha sido creada' : 'te ha sido asignada'
+    const actionHeader = params.action === 'created' ? 'Nueva tarea de colaboración' : 'Tarea asignada'
+    const emoji = params.action === 'created' ? '📋' : '👤'
+
+    const html = `
+      <div style="font-family: 'Inter', Arial, sans-serif; max-width: 560px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #4A90E2 0%, #7cb5ec 100%); padding: 32px 36px; text-align: center;">
+          <div style="font-size: 28px; font-weight: 800; color: #fff; letter-spacing: -0.5px;">IventIA</div>
+          <div style="font-size: 14px; color: rgba(255,255,255,0.8); margin-top: 4px;">${actionHeader}</div>
+        </div>
+
+        <!-- Body -->
+        <div style="padding: 32px 36px;">
+          <p style="font-size: 16px; color: #333; margin: 0 0 8px;">Hola <strong>${params.recipientName}</strong>,</p>
+          <p style="font-size: 15px; color: #555; margin: 0 0 24px;">
+            ${emoji} Una tarea de colaboración ${actionText}:
+          </p>
+
+          <!-- Task info -->
+          <div style="background: #f0f5ff; border-left: 4px solid #4A90E2; border-radius: 8px; padding: 16px 20px; margin-bottom: 24px;">
+            <div style="font-size: 18px; font-weight: 700; color: #1a1a2e; margin-bottom: 8px;">${params.taskTitle}</div>
+          </div>
+
+          <!-- CTA Button -->
+          <div style="text-align: center; margin: 28px 0;">
+            <a href="${params.taskUrl}" style="background: linear-gradient(135deg, #4A90E2 0%, #357abd 100%); color: #fff; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-block;">
+              Ver tarea
+            </a>
+          </div>
+
+          <!-- Footer -->
+          <p style="color: #999; font-size: 12px; text-align: center; margin: 24px 0 0;">
+            Este es un mensaje automático. Por favor no respondas a este correo.
+          </p>
+        </div>
+      </div>
+    `
+
+    await transporter.sendMail({
+      from: `IventIA <${env.EMAIL_FROM}>`,
+      to: params.to,
+      subject: `${emoji} ${actionHeader}: ${params.taskTitle}`,
+      html,
+    })
+  },
 }

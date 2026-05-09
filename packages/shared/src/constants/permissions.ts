@@ -152,6 +152,12 @@ export const PRIVILEGES = {
   // ── Chat ────────────────────────────────────────────────────────────────────
   CHAT_VIEW: 'chat.view',
 
+  // ── Collab Tasks ────────────────────────────────────────────────────────────
+  COLLAB_TASK_VIEW: 'collab_task.view',
+  COLLAB_TASK_CREATE: 'collab_task.create',
+  COLLAB_TASK_EDIT: 'collab_task.edit',
+  COLLAB_TASK_DELETE: 'collab_task.delete',
+
   // ── Production ──────────────────────────────────────────────────────────────
   PRODUCTION_VIEW: 'production.view',
 } as const
@@ -357,6 +363,15 @@ export const PRIVILEGE_GROUPS: { label: string; privileges: { key: PrivilegeKey;
     privileges: [
       { key: PRIVILEGES.DASHBOARD_ACCOUNTING, label: 'Dashboard Contabilidad' },
       { key: PRIVILEGES.DASHBOARD_OPERATIONS, label: 'Dashboard Operaciones' },
+    ],
+  },
+  {
+    label: 'Tareas de Colaboración',
+    privileges: [
+      { key: PRIVILEGES.COLLAB_TASK_VIEW, label: 'Consultar tareas de colaboración' },
+      { key: PRIVILEGES.COLLAB_TASK_CREATE, label: 'Crear tareas de colaboración' },
+      { key: PRIVILEGES.COLLAB_TASK_EDIT, label: 'Modificar tareas de colaboración' },
+      { key: PRIVILEGES.COLLAB_TASK_DELETE, label: 'Eliminar tareas de colaboración' },
     ],
   },
   {

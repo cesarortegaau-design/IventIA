@@ -73,6 +73,9 @@ model Tenant {
   ticketOrders              TicketOrder[]
   users                     User[]
   warehouses                Warehouse[]
+  collabTasks               CollabTask[]
+  collabTaskDocuments       CollabTaskDocument[]
+  collabTaskComments        CollabTaskComment[]
 
   @@map("tenants")
 }
@@ -149,6 +152,10 @@ model User {
   profile             Profile?                     @relation(fields: [profileId], references: [id])
   tenant              Tenant                       @relation(fields: [tenantId], references: [id])
   managedWarehouses   Warehouse[]
+  assignedCollabTasks CollabTask[]                 @relation("CollabTaskAssignee")
+  createdCollabTasks  CollabTask[]                 @relation("CollabTaskCreator")
+  collabTaskDocUploads CollabTaskDocument[]        @relation("CollabTaskDocUploader")
+  collabTaskComments  CollabTaskComment[]          @relation("CollabTaskCommentAuthor")
 
   @@index([tenantId, isActive])
   @@map("users")
@@ -217,7 +224,8 @@ model Department {
   activityDepartments   EventActivityDepartment[]
   tenant                Tenant                   @relation(fields: [tenantId], references: [id])
   resources             Resource[]
-  userDepartments UserDepartment[]
+  userDepartments       UserDepartment[]
+  collabTaskDepartments CollabTaskDepartment[]
 
   @@index([tenantId, isActive])
   @@map("departments")
@@ -370,6 +378,7 @@ model Client {
   portalCodes       PortalAccessCode[]
   portalUserClients PortalUserClient[]
   stands            Stand[]
+  collabTasks       CollabTask[]
 
   @@index([tenantId, isActive])
   @@map("clients")
@@ -530,6 +539,7 @@ model Event {
   portalUserEvents    PortalUserEvent[]
   stands              Stand[]
   ticketEvent         TicketEvent?
+  collabTasks         CollabTask[]
 
   @@unique([tenantId, code])
   @@index([tenantId, status])
@@ -753,6 +763,7 @@ model Order {
   stand           Stand?               @relation(fields: [standId], references: [id])
   tenant          Tenant               @relation(fields: [tenantId], references: [id])
   purchaseOrders  PurchaseOrder[]
+  collabTaskOrders CollabTaskOrder[]    @relation("CollabTaskOrders")
 
   @@index([tenantId, status])
   @@index([tenantId, paymentStatus])
@@ -2276,6 +2287,93 @@ model TicketGuest {
   @@map("ticket_guests")
 }
 
+model CollabTask {
+  id           String             @id @default(uuid())
+  tenantId     String             @map("tenant_id")
+  title        String             @db.VarChar(300)
+  description  String?
+  startDate    DateTime?          @map("start_date")
+  endDate      DateTime?          @map("end_date")
+  status       CollabTaskStatus   @default(PENDING)
+  priority     CollabTaskPriority @default(MEDIUM)
+  progress     Int                @default(0)
+  assignedToId String?            @map("assigned_to_id")
+  createdById  String             @map("created_by_id")
+  eventId      String?            @map("event_id")
+  clientId     String?            @map("client_id")
+  completedAt  DateTime?          @map("completed_at")
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+
+  tenant       Tenant                  @relation(fields: [tenantId], references: [id])
+  assignedTo   User?                   @relation("CollabTaskAssignee", fields: [assignedToId], references: [id])
+  createdBy    User                    @relation("CollabTaskCreator", fields: [createdById], references: [id])
+  event        Event?                  @relation(fields: [eventId], references: [id])
+  client       Client?                 @relation(fields: [clientId], references: [id])
+  departments  CollabTaskDepartment[]
+  orders       CollabTaskOrder[]
+  documents    CollabTaskDocument[]
+  comments     CollabTaskComment[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, assignedToId, status])
+  @@map("collab_tasks")
+}
+
+model CollabTaskDepartment {
+  taskId       String     @map("task_id")
+  departmentId String     @map("department_id")
+  task         CollabTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, departmentId])
+  @@map("collab_task_departments")
+}
+
+model CollabTaskOrder {
+  taskId  String     @map("task_id")
+  orderId String     @map("order_id")
+  task    CollabTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  order   Order      @relation("CollabTaskOrders", fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, orderId])
+  @@map("collab_task_orders")
+}
+
+model CollabTaskDocument {
+  id           String     @id @default(uuid())
+  taskId       String     @map("task_id")
+  tenantId     String     @map("tenant_id")
+  fileName     String     @map("file_name") @db.VarChar(500)
+  blobKey      String     @map("blob_key") @db.VarChar(1000)
+  uploadedById String     @map("uploaded_by_id")
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  task       CollabTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  tenant     Tenant     @relation(fields: [tenantId], references: [id])
+  uploadedBy User       @relation("CollabTaskDocUploader", fields: [uploadedById], references: [id])
+
+  @@index([taskId])
+  @@map("collab_task_documents")
+}
+
+model CollabTaskComment {
+  id        String     @id @default(uuid())
+  taskId    String     @map("task_id")
+  tenantId  String     @map("tenant_id")
+  authorId  String     @map("author_id")
+  content   String
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  task   CollabTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  tenant Tenant     @relation(fields: [tenantId], references: [id])
+  author User       @relation("CollabTaskCommentAuthor", fields: [authorId], references: [id])
+
+  @@index([taskId, createdAt])
+  @@map("collab_task_comments")
+}
+
 enum ResourceType {
   CONSUMABLE
   EQUIPMENT
@@ -2444,6 +2542,21 @@ enum ActivityStatus {
 }
 
 enum ActivityPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum CollabTaskStatus {
+  PENDING
+  IN_PROGRESS
+  ON_HOLD
+  DONE
+  CANCELLED
+}
+
+enum CollabTaskPriority {
   LOW
   MEDIUM
   HIGH

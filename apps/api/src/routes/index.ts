@@ -32,6 +32,7 @@ import aiRoutes from './ai.routes'
 import ticketEventsRoutes from './ticketEvents.routes'
 import ticketsPublicRoutes from './tickets.public.routes'
 import ticketBuyerRoutes from './ticket-buyer.routes'
+import collabTasksRoutes from './collabTasks.routes'
 
 const router = Router()
 
@@ -50,6 +51,7 @@ router.use('/crm', crmRoutes)
 router.use('/portal', portalRoutes)
 router.use('/events/:id/portal-codes', portalCodesRoutes)
 router.use('/chat', chatRoutes)
+router.use('/collab-tasks', collabTasksRoutes)
 router.use('/bookings', bookingsRoutes)
 router.use('/audit', auditRoutes)
 router.use('/arte-capital', arteCapitalRoutes)
