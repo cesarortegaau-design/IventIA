@@ -1,5 +1,5 @@
 import { Tabs, Descriptions, Progress, Button, Space, Spin, Popconfirm, Tag, Avatar, Typography, Divider, Empty } from 'antd'
-import { DeleteOutlined, EditOutlined, DownloadOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EditOutlined, DownloadOutlined, CalendarOutlined } from '@ant-design/icons'
 import { TaskDocumentsPanel } from './TaskDocumentsPanel'
 import { TaskCommentThread } from './TaskCommentThread'
 
@@ -10,7 +10,7 @@ function formatDateTime(date: string | null | undefined) {
   return new Date(date).toLocaleDateString('es-MX', { month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-export function TaskDetailDrawer({ task, isLoading, statusConfig, priorityConfig, isEventActivity, onEdit, onDelete, isDeletingis }: any) {
+export function TaskDetailDrawer({ task, isLoading, statusConfig, priorityConfig, isEventActivity, onEdit, onDelete, isDeletingis, onEditEventActivity }: any) {
   if (isLoading) {
     return <div style={{ padding: 32, textAlign: 'center' }}><Spin /></div>
   }
@@ -39,22 +39,28 @@ export function TaskDetailDrawer({ task, isLoading, statusConfig, priorityConfig
               )}
             </Space>
           </div>
-          {!isEventActivity && (
-            <Space>
-              <Button icon={<EditOutlined />} onClick={onEdit}>Editar</Button>
-              <Popconfirm
-                title="Eliminar tarea"
-                description="¿Estás seguro de que deseas eliminar esta tarea?"
-                onConfirm={onDelete}
-                okText="Sí"
-                cancelText="No"
-              >
-                <Button icon={<DeleteOutlined />} danger loading={isDeletingis}>
-                  Eliminar
-                </Button>
-              </Popconfirm>
-            </Space>
-          )}
+          <Space>
+            {isEventActivity ? (
+              <Button icon={<CalendarOutlined />} type="primary" onClick={() => onEditEventActivity?.(task)}>
+                Editar en Timeline
+              </Button>
+            ) : (
+              <>
+                <Button icon={<EditOutlined />} onClick={onEdit}>Editar</Button>
+                <Popconfirm
+                  title="Eliminar tarea"
+                  description="¿Estás seguro de que deseas eliminar esta tarea?"
+                  onConfirm={onDelete}
+                  okText="Sí"
+                  cancelText="No"
+                >
+                  <Button icon={<DeleteOutlined />} danger loading={isDeletingis}>
+                    Eliminar
+                  </Button>
+                </Popconfirm>
+              </>
+            )}
+          </Space>
         </Space>
       </div>
 

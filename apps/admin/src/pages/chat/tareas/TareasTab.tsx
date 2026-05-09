@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Layout, Select, Input, Button, Empty, Spin, Space, message as antMessage } from 'antd'
 import { PlusOutlined, FilterOutlined } from '@ant-design/icons'
@@ -25,6 +26,7 @@ const PRIORITY_CONFIG = {
 }
 
 export function TareasTab() {
+  const navigate = useNavigate()
   const qc = useQueryClient()
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [showFormModal, setShowFormModal] = useState(false)
@@ -137,6 +139,12 @@ export function TareasTab() {
     }
   }
 
+  const handleEditEventActivity = (activity: any) => {
+    if (activity.event?.id) {
+      navigate(`/eventos/${activity.event.id}?tab=timeline`)
+    }
+  }
+
   return (
     <>
       <Layout style={{ height: '100%', borderRadius: 0, overflow: 'hidden' }}>
@@ -229,6 +237,7 @@ export function TareasTab() {
               isEventActivity={!!selectedEventActivity}
               onEdit={() => handleEditTask(selectedTask)}
               onDelete={() => handleDeleteTask(selectedTaskId)}
+              onEditEventActivity={handleEditEventActivity}
               isDeletingis={deleteMut.isPending}
             />
           )}
