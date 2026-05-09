@@ -1,8 +1,13 @@
-import { useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Modal, Form, Input, Select, DatePicker, InputNumber, Switch, Row, Col,
+  Tabs, Upload, List, Spin, Button, Typography, Space,
 } from 'antd'
+import {
+  UploadOutlined, FileOutlined, DeleteOutlined,
+} from '@ant-design/icons'
 import dayjs from 'dayjs'
+import { eventActivitiesApi } from '../../../api/eventActivities'
 
 const ACTIVITY_TYPE_OPTIONS = [
   { value: 'TASK',      label: 'Tarea' },
@@ -41,15 +46,20 @@ interface ActivityFormModalProps {
   spaces: any[]
   orders: any[]
   users: any[]
+  departments: any[]
   activities: any[]
   showCrmOption?: boolean
+  eventId: string
 }
 
 export default function ActivityFormModal({
   open, onClose, onSave, initialValues, loading,
-  spaces, orders, users, activities, showCrmOption,
+  spaces, orders, users, departments, activities, showCrmOption, eventId,
 }: ActivityFormModalProps) {
   const [form] = Form.useForm()
+  const [documents, setDocuments] = useState<any[]>([])
+  const [docsLoading, setDocsLoading] = useState(false)
+  const [uploadLoading, setUploadLoading] = useState(false)
 
   useEffect(() => {
     if (initialValues) {
@@ -57,7 +67,8 @@ export default function ActivityFormModal({
         ...initialValues,
         startDate: initialValues.startDate ? dayjs(initialValues.startDate) : undefined,
         endDate:   initialValues.endDate   ? dayjs(initialValues.endDate)   : undefined,
-        // If the activity already has a linked CRM task, show the switch as on
+        departmentIds: initialValues.activityDepartments?.map((d: any) => d.departmentId ?? d.department?.id) ?? [],
+        orderIds: initialValues.activityOrders?.map((o: any) => o.orderId ?? o.order?.id) ?? [],
         autoCreateCrmTask: initialValues.autoCreateCrmTask ?? !!initialValues.crmTaskId,
       })
     } else {
@@ -65,6 +76,52 @@ export default function ActivityFormModal({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialValues?.id])
+
+  useEffect(() => {
+    if (open && initialValues?.id) {
+      loadDocuments()
+    } else if (!open) {
+      setDocuments([])
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialValues?.id])
+
+  async function loadDocuments() {
+    if (!initialValues?.id) return
+    setDocsLoading(true)
+    try {
+      const result = await eventActivitiesApi.listDocuments(eventId, initialValues.id)
+      setDocuments(result?.data ?? result ?? [])
+    } catch {
+      // silently fail
+    } finally {
+      setDocsLoading(false)
+    }
+  }
+
+  async function handleUpload(file: File) {
+    if (!initialValues?.id) return false
+    setUploadLoading(true)
+    try {
+      await eventActivitiesApi.uploadDocument(eventId, initialValues.id, file)
+      await loadDocuments()
+    } catch {
+      // silently fail
+    } finally {
+      setUploadLoading(false)
+    }
+    return false
+  }
+
+  async function handleDeleteDocument(doc: any) {
+    if (!initialValues?.id) return
+    try {
+      await eventActivitiesApi.deleteDocument(eventId, initialValues.id, doc.id)
+      await loadDocuments()
+    } catch {
+      // silently fail
+    }
+  }
 
   function handleOk() {
     form.validateFields().then(values => {
@@ -81,6 +138,182 @@ export default function ActivityFormModal({
     .filter(a => a.id !== initialValues?.id)
     .map(a => ({ value: a.id, label: a.title }))
 
+  const datosTab = (
+    <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+
+      <Form.Item name="title" label="Título" rules={[{ required: true, message: 'El título es requerido' }]}>
+        <Input placeholder="Ej. Montaje de sonido" />
+      </Form.Item>
+
+      <Row gutter={12}>
+        <Col span={8}>
+          <Form.Item name="activityType" label="Tipo">
+            <Select options={ACTIVITY_TYPE_OPTIONS} placeholder="Seleccionar tipo" allowClear />
+          </Form.Item>
+        </Col>
+        <Col span={8}>
+          <Form.Item name="status" label="Estado">
+            <Select options={STATUS_OPTIONS} placeholder="Pendiente" allowClear />
+          </Form.Item>
+        </Col>
+        <Col span={8}>
+          <Form.Item name="priority" label="Prioridad">
+            <Select options={PRIORITY_OPTIONS} placeholder="Media" allowClear />
+          </Form.Item>
+        </Col>
+      </Row>
+
+      <Row gutter={12}>
+        <Col span={12}>
+          <Form.Item name="startDate" label="Fecha inicio">
+            <DatePicker
+              showTime
+              format="DD/MM/YY HH:mm"
+              style={{ width: '100%' }}
+              placeholder="DD/MM/YY HH:mm"
+            />
+          </Form.Item>
+        </Col>
+        <Col span={12}>
+          <Form.Item name="endDate" label="Fecha fin">
+            <DatePicker
+              showTime
+              format="DD/MM/YY HH:mm"
+              style={{ width: '100%' }}
+              placeholder="DD/MM/YY HH:mm"
+            />
+          </Form.Item>
+        </Col>
+      </Row>
+
+      <Form.Item name="durationMins" label="Duración (min)">
+        <InputNumber min={1} style={{ width: '100%' }} placeholder="60" />
+      </Form.Item>
+
+      <Form.Item name="assignedToId" label="Asignado a">
+        <Select
+          showSearch
+          allowClear
+          placeholder="Seleccionar responsable"
+          optionFilterProp="label"
+          options={users.map(u => ({
+            value: u.id,
+            label: `${u.firstName} ${u.lastName}`,
+          }))}
+        />
+      </Form.Item>
+
+      <Form.Item name="departmentIds" label="Departamentos">
+        <Select
+          mode="multiple"
+          allowClear
+          placeholder="Seleccionar departamentos"
+          options={departments.map(d => ({ value: d.id, label: d.name }))}
+        />
+      </Form.Item>
+
+      <Form.Item name="spaceId" label="Espacio">
+        <Select
+          allowClear
+          placeholder="Seleccionar espacio"
+          options={spaces.map(s => ({
+            value: s.id,
+            label: `${s.resource?.name ?? '—'} - ${s.phase}`,
+          }))}
+        />
+      </Form.Item>
+
+      <Form.Item name="orderIds" label="Órdenes de servicio">
+        <Select
+          mode="multiple"
+          allowClear
+          placeholder="Seleccionar órdenes"
+          options={orders.map(o => ({ value: o.id, label: o.orderNumber }))}
+        />
+      </Form.Item>
+
+      {showCrmOption && (
+        <Form.Item
+          name="autoCreateCrmTask"
+          label={initialValues?.crmTaskId ? 'Sincronizar con tarea CRM (vinculada)' : 'Crear tarea CRM automáticamente'}
+          valuePropName="checked"
+        >
+          <Switch />
+        </Form.Item>
+      )}
+
+      <Form.Item name="color" label="Color">
+        <Input placeholder="#3B82F6" style={{ width: 160 }} />
+      </Form.Item>
+
+      <Form.Item name="parentId" label="Actividad padre">
+        <Select
+          allowClear
+          placeholder="Sin padre"
+          options={parentOptions}
+        />
+      </Form.Item>
+
+      <Form.Item name="notes" label="Notas">
+        <Input.TextArea rows={3} placeholder="Observaciones adicionales..." />
+      </Form.Item>
+
+    </Form>
+  )
+
+  const documentosTab = (
+    <div style={{ paddingTop: 16 }}>
+      {!initialValues?.id ? (
+        <Typography.Text type="secondary">
+          Guarda la actividad primero para adjuntar documentos
+        </Typography.Text>
+      ) : (
+        <Spin spinning={docsLoading}>
+          <div style={{ marginBottom: 12 }}>
+            <Upload beforeUpload={handleUpload} showUploadList={false}>
+              <Button icon={<UploadOutlined />} loading={uploadLoading}>
+                Adjuntar archivo
+              </Button>
+            </Upload>
+          </div>
+          {documents.length === 0 && !docsLoading ? (
+            <Typography.Text type="secondary">No hay documentos adjuntos.</Typography.Text>
+          ) : (
+            <List
+              dataSource={documents}
+              renderItem={(doc: any) => (
+                <List.Item
+                  actions={[
+                    <Button
+                      key="delete"
+                      size="small"
+                      danger
+                      icon={<DeleteOutlined />}
+                      onClick={() => handleDeleteDocument(doc)}
+                    />,
+                  ]}
+                >
+                  <Space>
+                    <FileOutlined style={{ fontSize: 18, color: '#8c8c8c' }} />
+                    <div>
+                      <div style={{ fontWeight: 500, fontSize: 13 }}>{doc.fileName}</div>
+                      <div style={{ fontSize: 12, color: '#8c8c8c' }}>
+                        {doc.uploadedBy
+                          ? `${doc.uploadedBy.firstName} ${doc.uploadedBy.lastName} · `
+                          : ''}
+                        {doc.createdAt ? dayjs(doc.createdAt).format('DD/MM/YY HH:mm') : ''}
+                      </div>
+                    </div>
+                  </Space>
+                </List.Item>
+              )}
+            />
+          )}
+        </Spin>
+      )}
+    </div>
+  )
+
   return (
     <Modal
       title={initialValues?.id ? 'Editar actividad' : 'Nueva actividad'}
@@ -93,119 +326,21 @@ export default function ActivityFormModal({
       width={640}
       forceRender
     >
-      <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
-
-        <Form.Item name="title" label="Título" rules={[{ required: true, message: 'El título es requerido' }]}>
-          <Input placeholder="Ej. Montaje de sonido" />
-        </Form.Item>
-
-        <Row gutter={12}>
-          <Col span={8}>
-            <Form.Item name="activityType" label="Tipo">
-              <Select options={ACTIVITY_TYPE_OPTIONS} placeholder="Seleccionar tipo" allowClear />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item name="status" label="Estado">
-              <Select options={STATUS_OPTIONS} placeholder="Pendiente" allowClear />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item name="priority" label="Prioridad">
-              <Select options={PRIORITY_OPTIONS} placeholder="Media" allowClear />
-            </Form.Item>
-          </Col>
-        </Row>
-
-        <Row gutter={12}>
-          <Col span={12}>
-            <Form.Item name="startDate" label="Fecha inicio">
-              <DatePicker
-                showTime
-                format="DD/MM/YY HH:mm"
-                style={{ width: '100%' }}
-                placeholder="DD/MM/YY HH:mm"
-              />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item name="endDate" label="Fecha fin">
-              <DatePicker
-                showTime
-                format="DD/MM/YY HH:mm"
-                style={{ width: '100%' }}
-                placeholder="DD/MM/YY HH:mm"
-              />
-            </Form.Item>
-          </Col>
-        </Row>
-
-        <Form.Item name="durationMins" label="Duración (min)">
-          <InputNumber min={1} style={{ width: '100%' }} placeholder="60" />
-        </Form.Item>
-
-        <Form.Item name="assignedToId" label="Asignado a">
-          <Select
-            showSearch
-            allowClear
-            placeholder="Seleccionar responsable"
-            optionFilterProp="label"
-            options={users.map(u => ({
-              value: u.id,
-              label: `${u.firstName} ${u.lastName}`,
-            }))}
-          />
-        </Form.Item>
-
-        <Form.Item name="spaceId" label="Espacio">
-          <Select
-            allowClear
-            placeholder="Seleccionar espacio"
-            options={spaces.map(s => ({
-              value: s.id,
-              label: `${s.resource?.name ?? '—'} - ${s.phase}`,
-            }))}
-          />
-        </Form.Item>
-
-        <Form.Item name="orderId" label="Orden de servicio">
-          <Select
-            allowClear
-            placeholder="Seleccionar orden"
-            options={orders.map(o => ({
-              value: o.id,
-              label: o.orderNumber,
-            }))}
-          />
-        </Form.Item>
-
-        {showCrmOption && (
-          <Form.Item
-            name="autoCreateCrmTask"
-            label={initialValues?.crmTaskId ? 'Sincronizar con tarea CRM (vinculada)' : 'Crear tarea CRM automáticamente'}
-            valuePropName="checked"
-          >
-            <Switch />
-          </Form.Item>
-        )}
-
-        <Form.Item name="color" label="Color">
-          <Input placeholder="#3B82F6" style={{ width: 160 }} />
-        </Form.Item>
-
-        <Form.Item name="parentId" label="Actividad padre">
-          <Select
-            allowClear
-            placeholder="Sin padre"
-            options={parentOptions}
-          />
-        </Form.Item>
-
-        <Form.Item name="notes" label="Notas">
-          <Input.TextArea rows={3} placeholder="Observaciones adicionales..." />
-        </Form.Item>
-
-      </Form>
+      <Tabs
+        defaultActiveKey="datos"
+        items={[
+          {
+            key: 'datos',
+            label: 'Datos',
+            children: datosTab,
+          },
+          {
+            key: 'documentos',
+            label: `Documentos (${documents.length})`,
+            children: documentosTab,
+          },
+        ]}
+      />
     </Modal>
   )
 }

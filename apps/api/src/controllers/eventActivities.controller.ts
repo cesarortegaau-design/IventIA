@@ -10,9 +10,22 @@ const ACTIVITY_INCLUDE = {
   space:      { select: { id: true, phase: true, startTime: true, endTime: true, resource: { select: { id: true, name: true } } } },
   order:      { select: { id: true, orderNumber: true, status: true } },
   crmTask:    { select: { id: true, title: true, status: true } },
-  children:   {
+  activityDepartments: {
+    include: { department: { select: { id: true, name: true } } },
+  },
+  activityOrders: {
+    include: { order: { select: { id: true, orderNumber: true, status: true } } },
+  },
+  documents: {
+    include: { uploadedBy: { select: { id: true, firstName: true, lastName: true } } },
+    orderBy: { createdAt: 'desc' as const },
+  },
+  children: {
     include: {
-      assignedTo: { select: { id: true, firstName: true, lastName: true } },
+      assignedTo:          { select: { id: true, firstName: true, lastName: true } },
+      order:               { select: { id: true, orderNumber: true, status: true } },
+      activityDepartments: { include: { department: { select: { id: true, name: true } } } },
+      activityOrders:      { include: { order: { select: { id: true, orderNumber: true, status: true } } } },
     },
     orderBy: [{ position: 'asc' as const }, { startDate: 'asc' as const }],
   },
@@ -36,6 +49,8 @@ const createActivitySchema = z.object({
   position:          z.coerce.number().int().default(0),
   parentId:          z.string().uuid().optional().nullable(),
   notes:             z.string().optional().nullable(),
+  departmentIds:     z.array(z.string().uuid()).optional().default([]),
+  orderIds:          z.array(z.string().uuid()).optional().default([]),
 })
 
 const updateActivitySchema = createActivitySchema.partial()
@@ -126,29 +141,49 @@ export async function createEventActivity(req: Request, res: Response, next: Nex
       crmTaskId = task.id
     }
 
-    const activity = await prisma.eventActivity.create({
-      data: {
-        tenantId,
-        eventId,
-        title:        data.title,
-        description:  data.description ?? null,
-        activityType: data.activityType as any,
-        status:       data.status as any,
-        priority:     data.priority as any,
-        startDate:    data.startDate ? new Date(data.startDate) : null,
-        endDate:      data.endDate   ? new Date(data.endDate)   : null,
-        durationMins: data.durationMins ?? null,
-        assignedToId: data.assignedToId ?? null,
-        spaceId:      data.spaceId   ?? null,
-        orderId:      data.orderId   ?? null,
-        crmTaskId,
-        color:        data.color     ?? null,
-        position:     data.position,
-        parentId:     data.parentId  ?? null,
-        notes:        data.notes     ?? null,
-        createdById:  userId,
-      },
-      include: ACTIVITY_INCLUDE,
+    const activity = await prisma.$transaction(async (tx) => {
+      const a = await tx.eventActivity.create({
+        data: {
+          tenantId,
+          eventId,
+          title:        data.title,
+          description:  data.description ?? null,
+          activityType: data.activityType as any,
+          status:       data.status as any,
+          priority:     data.priority as any,
+          startDate:    data.startDate ? new Date(data.startDate) : null,
+          endDate:      data.endDate   ? new Date(data.endDate)   : null,
+          durationMins: data.durationMins ?? null,
+          assignedToId: data.assignedToId ?? null,
+          spaceId:      data.spaceId   ?? null,
+          orderId:      data.orderId   ?? null,
+          crmTaskId,
+          color:        data.color     ?? null,
+          position:     data.position,
+          parentId:     data.parentId  ?? null,
+          notes:        data.notes     ?? null,
+          createdById:  userId,
+        },
+      })
+
+      if (data.departmentIds?.length) {
+        await tx.eventActivityDepartment.createMany({
+          data: data.departmentIds.map(dId => ({ activityId: a.id, departmentId: dId })),
+        })
+      }
+
+      // Merge explicit orderId (backward compat) into orderIds junction
+      const allOrderIds = [...(data.orderIds ?? [])]
+      if (data.orderId && !allOrderIds.includes(data.orderId)) {
+        allOrderIds.push(data.orderId)
+      }
+      if (allOrderIds.length) {
+        await tx.eventActivityOrder.createMany({
+          data: allOrderIds.map(oId => ({ activityId: a.id, orderId: oId })),
+        })
+      }
+
+      return tx.eventActivity.findUniqueOrThrow({ where: { id: a.id }, include: ACTIVITY_INCLUDE })
     })
 
     await auditService.log(tenantId, userId, 'EventActivity', activity.id, 'CREATE', null, {
@@ -216,6 +251,26 @@ export async function updateEventActivity(req: Request, res: Response, next: Nex
       }
       if (Object.keys(crmUpdate).length > 0) {
         await prisma.clientTask.update({ where: { id: resolvedCrmTaskId }, data: crmUpdate })
+      }
+    }
+
+    // Sync departments
+    if (data.departmentIds !== undefined) {
+      await prisma.eventActivityDepartment.deleteMany({ where: { activityId } })
+      if (data.departmentIds.length > 0) {
+        await prisma.eventActivityDepartment.createMany({
+          data: data.departmentIds.map(dId => ({ activityId, departmentId: dId })),
+        })
+      }
+    }
+
+    // Sync orders (junction table)
+    if (data.orderIds !== undefined) {
+      await prisma.eventActivityOrder.deleteMany({ where: { activityId } })
+      if (data.orderIds.length > 0) {
+        await prisma.eventActivityOrder.createMany({
+          data: data.orderIds.map(oId => ({ activityId, orderId: oId })),
+        })
       }
     }
 

@@ -10,6 +10,7 @@ import { uploadEventDocument, deleteEventDocument } from '../controllers/documen
 import { importStands, listStands, createStand, updateStand, deleteStand } from '../controllers/stands.controller'
 import { listFloorPlans, getFloorPlanUploadSignature, createFloorPlanRecord, deleteFloorPlan, getFloorPlanContent } from '../controllers/floorPlans.controller'
 import { listEventActivities, createEventActivity, updateEventActivity, deleteEventActivity, bulkReorderActivities, exportActivitiesCsv, importActivitiesCsv } from '../controllers/eventActivities.controller'
+import activityDocumentsRouter from './activityDocuments.routes'
 
 const DXF_SIZE_LIMIT = 100 * 1024 * 1024  // 100 MB — complex multi-drawing DXF files can be large
 
@@ -78,5 +79,6 @@ router.post('/:eventId/activities/import',        requirePrivilege(PRIVILEGES.EV
 router.patch('/:eventId/activities/reorder',      requirePrivilege(PRIVILEGES.EVENT_TIMELINE_EDIT), bulkReorderActivities)
 router.put('/:eventId/activities/:activityId',    requirePrivilege(PRIVILEGES.EVENT_TIMELINE_EDIT), updateEventActivity)
 router.delete('/:eventId/activities/:activityId', requirePrivilege(PRIVILEGES.EVENT_TIMELINE_EDIT), deleteEventActivity)
+router.use('/:eventId/activities/:activityId/documents', activityDocumentsRouter)
 
 export default router

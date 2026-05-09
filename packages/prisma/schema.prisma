@@ -67,6 +67,7 @@ model Tenant {
   suppliers                 Supplier[]
   ticketAccessCodes         TicketAccessCode[]
   ticketGuests              TicketGuest[]
+  activityDocuments         EventActivityDocument[]
   ticketBuyerUsers          TicketBuyerUser[]
   ticketEvents              TicketEvent[]
   ticketOrders              TicketOrder[]
@@ -136,7 +137,8 @@ model User {
   createdOrders       Order[]                      @relation("OrderCreatedBy")
   createdPortalCodes  PortalAccessCode[]           @relation("PortalCodeCreator")
   createdTicketCodes  TicketAccessCode[]           @relation("TicketCodeCreator")
-  createdTicketGuests TicketGuest[]                @relation("TicketGuestCreator")
+  createdTicketGuests  TicketGuest[]                @relation("TicketGuestCreator")
+  activityDocUploads   EventActivityDocument[]      @relation("ActivityDocUploader")
   poDocuments         PurchaseOrderDocument[]
   poStatusHistory     PurchaseOrderStatusHistory[]
   poConfirmedBy       PurchaseOrder[]              @relation("POConfirmedBy")
@@ -211,9 +213,10 @@ model Department {
   isActive        Boolean                  @default(true) @map("is_active")
   createdAt       DateTime                 @default(now()) @map("created_at")
   updatedAt       DateTime                 @updatedAt @map("updated_at")
-  departmentOrgs  DepartmentOrganization[]
-  tenant          Tenant                   @relation(fields: [tenantId], references: [id])
-  resources       Resource[]
+  departmentOrgs        DepartmentOrganization[]
+  activityDepartments   EventActivityDepartment[]
+  tenant                Tenant                   @relation(fields: [tenantId], references: [id])
+  resources             Resource[]
   userDepartments UserDepartment[]
 
   @@index([tenantId, isActive])
@@ -573,19 +576,60 @@ model EventActivity {
   createdById  String           @map("created_by_id")
   createdAt    DateTime         @default(now()) @map("created_at")
   updatedAt    DateTime         @updatedAt @map("updated_at")
-  assignedTo   User?            @relation("ActivityAssignee", fields: [assignedToId], references: [id])
-  createdBy    User             @relation("ActivityCreatedBy", fields: [createdById], references: [id])
-  crmTask      ClientTask?      @relation(fields: [crmTaskId], references: [id])
-  event        Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  order        Order?           @relation(fields: [orderId], references: [id])
-  parent       EventActivity?   @relation("ActivityChildren", fields: [parentId], references: [id])
-  children     EventActivity[]  @relation("ActivityChildren")
-  space        EventSpace?      @relation(fields: [spaceId], references: [id])
-  tenant       Tenant           @relation(fields: [tenantId], references: [id])
+  assignedTo          User?                     @relation("ActivityAssignee", fields: [assignedToId], references: [id])
+  createdBy           User                      @relation("ActivityCreatedBy", fields: [createdById], references: [id])
+  crmTask             ClientTask?               @relation(fields: [crmTaskId], references: [id])
+  event               Event                     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  order               Order?                    @relation(fields: [orderId], references: [id])
+  parent              EventActivity?            @relation("ActivityChildren", fields: [parentId], references: [id])
+  children            EventActivity[]           @relation("ActivityChildren")
+  space               EventSpace?               @relation(fields: [spaceId], references: [id])
+  tenant              Tenant                    @relation(fields: [tenantId], references: [id])
+  documents           EventActivityDocument[]
+  activityDepartments EventActivityDepartment[]
+  activityOrders      EventActivityOrder[]
 
   @@index([tenantId, eventId])
   @@index([tenantId, assignedToId, status])
   @@map("event_activities")
+}
+
+model EventActivityDocument {
+  id           String        @id @default(uuid())
+  activityId   String        @map("activity_id")
+  tenantId     String        @map("tenant_id") @db.VarChar(50)
+  fileName     String        @map("file_name") @db.VarChar(500)
+  blobKey      String        @map("blob_key") @db.VarChar(1000)
+  uploadedById String        @map("uploaded_by_id")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  activity     EventActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  uploadedBy   User          @relation("ActivityDocUploader", fields: [uploadedById], references: [id])
+
+  @@index([activityId])
+  @@map("event_activity_documents")
+}
+
+model EventActivityDepartment {
+  id           String        @id @default(uuid())
+  activityId   String        @map("activity_id")
+  departmentId String        @map("department_id")
+  activity     EventActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  department   Department    @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@unique([activityId, departmentId])
+  @@map("event_activity_departments")
+}
+
+model EventActivityOrder {
+  id         String        @id @default(uuid())
+  activityId String        @map("activity_id")
+  orderId    String        @map("order_id")
+  activity   EventActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  order      Order         @relation("ActivityOrders", fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([activityId, orderId])
+  @@map("event_activity_orders")
 }
 
 model EventDocument {
@@ -691,6 +735,7 @@ model Order {
   departamento    String?              @map("departamento") @db.VarChar(200)
   organizacionId  String?              @map("organizacion_id")
   activities      EventActivity[]
+  activityOrders  EventActivityOrder[] @relation("ActivityOrders")
   documents       OrderDocument[]
   lineItems       OrderLineItem[]
   payments        OrderPayment[]

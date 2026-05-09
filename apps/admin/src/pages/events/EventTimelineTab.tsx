@@ -2,17 +2,21 @@ import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   App, Button, Table, Tag, Space, Popconfirm, Select, Upload, Modal,
+  DatePicker, Drawer, Tooltip,
 } from 'antd'
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, DownloadOutlined,
-  ImportOutlined, BarChartOutlined,
+  ImportOutlined, BarChartOutlined, AuditOutlined, FilterOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { eventActivitiesApi } from '../../api/eventActivities'
 import { eventSpacesApi } from '../../api/eventSpaces'
 import { eventsApi } from '../../api/events'
 import { usersApi } from '../../api/users'
+import { resourcesApi } from '../../api/resources'
+import { auditApi } from '../../api/audit'
 import ActivityFormModal from './modals/ActivityFormModal'
+import AuditTimeline from '../../components/AuditTimeline'
 import { T } from '../../styles/tokens'
 
 // ── Status config ─────────────────────────────────────────────────────────────
@@ -261,6 +265,16 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
   const [importPreview, setImportPreview]     = useState<any[] | null>(null)
   const [importModalOpen, setImportModalOpen] = useState(false)
 
+  // Filters
+  const [filterDateRange, setFilterDateRange]   = useState<[any, any] | null>(null)
+  const [filterDeptIds, setFilterDeptIds]       = useState<string[]>([])
+  const [filterAssignedId, setFilterAssignedId] = useState<string | undefined>(undefined)
+  const [filtersVisible, setFiltersVisible]     = useState(false)
+
+  // Audit drawer
+  const [auditActivity, setAuditActivity]   = useState<any>(null)
+  const [auditDrawerOpen, setAuditDrawerOpen] = useState(false)
+
   // ── Data fetching ───────────────────────────────────────────────────────────
   const { data: activitiesData, isLoading } = useQuery({
     queryKey: ['event-activities', eventId],
@@ -292,6 +306,19 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
     staleTime: 5 * 60_000,
   })
   const users: any[] = usersData?.data ?? []
+
+  const { data: depsData } = useQuery({
+    queryKey: ['departments'],
+    queryFn: () => resourcesApi.listDepartments(),
+    staleTime: 5 * 60_000,
+  })
+  const departments: any[] = depsData ?? []
+
+  const { data: auditData, isLoading: auditLoading } = useQuery({
+    queryKey: ['activity-audit', auditActivity?.id],
+    queryFn: () => auditApi.getLog('EventActivity', auditActivity!.id),
+    enabled: !!auditActivity?.id && auditDrawerOpen,
+  })
 
   // ── Mutations ───────────────────────────────────────────────────────────────
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['event-activities', eventId] })
@@ -391,9 +418,22 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
   const flatActivities = useMemo(() => flattenActivities(activities), [activities])
 
   const filteredFlat = useMemo(() => {
-    if (!statusFilter) return flatActivities
-    return flatActivities.filter(a => a.status === statusFilter)
-  }, [flatActivities, statusFilter])
+    return flatActivities.filter(a => {
+      if (statusFilter && a.status !== statusFilter) return false
+      if (filterAssignedId && a.assignedToId !== filterAssignedId) return false
+      if (filterDeptIds.length > 0) {
+        const actDeptIds = (a.activityDepartments ?? []).map((d: any) => d.departmentId ?? d.department?.id)
+        if (!filterDeptIds.some(id => actDeptIds.includes(id))) return false
+      }
+      if (filterDateRange?.[0] && filterDateRange?.[1]) {
+        const start = filterDateRange[0]
+        const end   = filterDateRange[1]
+        if (a.startDate && dayjs(a.startDate).isAfter(end))   return false
+        if (a.endDate   && dayjs(a.endDate).isBefore(start))  return false
+      }
+      return true
+    })
+  }, [flatActivities, statusFilter, filterAssignedId, filterDeptIds, filterDateRange])
 
   // ── Table columns ────────────────────────────────────────────────────────────
   const columns = [
@@ -477,17 +517,44 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
         : '—',
     },
     {
-      title: 'Orden',
-      key: 'order',
-      width: 100,
-      render: (_: any, r: any) => r.order?.orderNumber ?? '—',
+      title: 'Órdenes',
+      key: 'orders',
+      render: (_: any, r: any) => {
+        const actOrders = r.activityOrders ?? []
+        if (actOrders.length === 0) return r.order ? <Tag>{r.order.orderNumber}</Tag> : '—'
+        return (
+          <Space size={2} wrap>
+            {actOrders.map((ao: any) => <Tag key={ao.id}>{ao.order?.orderNumber}</Tag>)}
+          </Space>
+        )
+      },
+    },
+    {
+      title: 'Departamentos',
+      key: 'depts',
+      render: (_: any, r: any) => {
+        const depts = r.activityDepartments ?? []
+        if (depts.length === 0) return '—'
+        return (
+          <Space size={2} wrap>
+            {depts.map((d: any) => <Tag key={d.id}>{d.department?.name}</Tag>)}
+          </Space>
+        )
+      },
     },
     {
       title: '',
       key: 'actions',
-      width: 80,
+      width: 100,
       render: (_: any, r: any) => (
         <Space size={4}>
+          <Tooltip title="Auditoría" key="audit">
+            <Button
+              size="small"
+              icon={<AuditOutlined />}
+              onClick={() => { setAuditActivity(r); setAuditDrawerOpen(true) }}
+            />
+          </Tooltip>
           <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)} />
           <Popconfirm
             title="¿Eliminar esta actividad?"
@@ -545,6 +612,13 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
               ...Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label })),
             ]}
           />
+          <Button
+            icon={<FilterOutlined />}
+            onClick={() => setFiltersVisible(v => !v)}
+            type={filtersVisible ? 'primary' : 'default'}
+          >
+            Filtros
+          </Button>
           <Upload
             accept=".csv"
             showUploadList={false}
@@ -560,6 +634,41 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
           </Button>
         </Space>
       </div>
+
+      {/* Filter panel */}
+      {filtersVisible && (
+        <div style={{ background: '#f5f5f5', padding: '12px 16px', borderRadius: 8, marginBottom: 12, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+          <DatePicker.RangePicker
+            placeholder={['Fecha inicio', 'Fecha fin']}
+            onChange={v => setFilterDateRange(v as any)}
+            style={{ minWidth: 240 }}
+            allowClear
+          />
+          <Select
+            mode="multiple"
+            placeholder="Departamentos"
+            allowClear
+            style={{ minWidth: 200 }}
+            options={departments.map(d => ({ value: d.id, label: d.name }))}
+            onChange={v => setFilterDeptIds(v)}
+          />
+          <Select
+            showSearch
+            allowClear
+            placeholder="Asignado a"
+            optionFilterProp="label"
+            style={{ minWidth: 180 }}
+            options={users.map(u => ({ value: u.id, label: `${u.firstName} ${u.lastName}` }))}
+            onChange={v => setFilterAssignedId(v)}
+          />
+          <Button
+            size="small"
+            onClick={() => { setFilterDateRange(null); setFilterDeptIds([]); setFilterAssignedId(undefined) }}
+          >
+            Limpiar
+          </Button>
+        </div>
+      )}
 
       {/* List view */}
       {view === 'list' && (
@@ -601,8 +710,10 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
         spaces={spaces}
         orders={orders}
         users={users}
+        departments={departments}
         activities={flatActivities}
         showCrmOption
+        eventId={eventId}
       />
 
       {/* CSV Import preview modal */}
@@ -638,6 +749,16 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
           ]}
         />
       </Modal>
+
+      {/* Audit drawer */}
+      <Drawer
+        title={`Auditoría: ${auditActivity?.title ?? ''}`}
+        open={auditDrawerOpen}
+        onClose={() => { setAuditDrawerOpen(false); setAuditActivity(null) }}
+        width={480}
+      >
+        <AuditTimeline data={auditData?.data ?? []} loading={auditLoading} />
+      </Drawer>
     </div>
   )
 }

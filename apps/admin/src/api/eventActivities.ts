@@ -15,4 +15,15 @@ export const eventActivitiesApi = {
     apiClient.get(`/events/${eventId}/activities/export`, { responseType: 'blob' }).then(r => r.data),
   importCsv: (eventId: string, rows: any[]) =>
     apiClient.post(`/events/${eventId}/activities/import`, rows).then(r => r.data),
+  listDocuments: (eventId: string, activityId: string) =>
+    apiClient.get(`/events/${eventId}/activities/${activityId}/documents`).then(r => r.data),
+  uploadDocument: (eventId: string, activityId: string, file: File) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return apiClient.post(`/events/${eventId}/activities/${activityId}/documents`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data)
+  },
+  deleteDocument: (eventId: string, activityId: string, docId: string) =>
+    apiClient.delete(`/events/${eventId}/activities/${activityId}/documents/${docId}`).then(r => r.data),
 }
