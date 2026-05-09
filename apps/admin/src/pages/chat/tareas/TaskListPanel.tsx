@@ -1,5 +1,5 @@
 import { List, Badge, Tag, Progress, Typography, Avatar, Space } from 'antd'
-import { UserOutlined } from '@ant-design/icons'
+import { UserOutlined, CalendarOutlined } from '@ant-design/icons'
 
 const { Text } = Typography
 
@@ -69,6 +69,15 @@ export function TaskListPanel({ tasks, selectedTaskId, onSelectTask, statusConfi
                 )}
               </Space>
 
+              {/* Event Activity indicator */}
+              {task._type === 'event_activity' && (
+                <div style={{ marginTop: 6 }}>
+                  <Tag icon={<CalendarOutlined />} color="geekblue" style={{ fontSize: 11 }}>
+                    {task.event?.name || 'Evento'}
+                  </Tag>
+                </div>
+              )}
+
               {/* Departments if any */}
               {task.departments && task.departments.length > 0 && (
                 <div style={{ marginTop: 6 }}>
@@ -77,6 +86,18 @@ export function TaskListPanel({ tasks, selectedTaskId, onSelectTask, statusConfi
                       <Tag key={d.departmentId} color="blue">{d.department.name}</Tag>
                     ))}
                     {task.departments.length > 2 && <Tag>+{task.departments.length - 2}</Tag>}
+                  </Space>
+                </div>
+              )}
+
+              {/* Activity Departments if event activity */}
+              {task._type === 'event_activity' && task.activityDepartments && task.activityDepartments.length > 0 && (
+                <div style={{ marginTop: 6 }}>
+                  <Space size={4} style={{ fontSize: 10 }}>
+                    {task.activityDepartments.slice(0, 2).map((d: any) => (
+                      <Tag key={d.departmentId} color="blue">{d.department.name}</Tag>
+                    ))}
+                    {task.activityDepartments.length > 2 && <Tag>+{task.activityDepartments.length - 2}</Tag>}
                   </Space>
                 </div>
               )}

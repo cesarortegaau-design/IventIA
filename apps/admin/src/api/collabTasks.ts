@@ -16,6 +16,9 @@ export const collabTasksApi = {
   delete: (id: string) =>
     apiClient.delete(`/collab-tasks/${id}`).then(r => r.data),
 
+  listMyEventActivities: () =>
+    apiClient.get('/collab-tasks/my-event-activities').then(r => r.data.data || []),
+
   // Documents
   listDocuments: (taskId: string) =>
     apiClient.get(`/collab-tasks/${taskId}/documents`).then(r => r.data.data || []),

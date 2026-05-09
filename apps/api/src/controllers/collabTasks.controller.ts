@@ -474,3 +474,29 @@ export async function deleteCollabTaskComment(req: Request, res: Response, next:
     next(err)
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Event Activities (Assigned to current user)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function listMyEventActivities(req: Request, res: Response, next: NextFunction) {
+  try {
+    const tenantId = req.user!.tenantId
+    const userId = req.user!.id
+
+    const activities = await prisma.eventActivity.findMany({
+      where: { tenantId, assignedToId: userId },
+      include: {
+        event: { select: { id: true, name: true, code: true } },
+        activityDepartments: {
+          include: { department: { select: { id: true, name: true } } },
+        },
+      },
+      orderBy: [{ endDate: 'asc' }, { startDate: 'asc' }],
+    })
+
+    res.json({ success: true, data: activities })
+  } catch (err) {
+    next(err)
+  }
+}

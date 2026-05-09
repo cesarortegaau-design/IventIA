@@ -12,6 +12,7 @@ import {
   listCollabTaskComments,
   addCollabTaskComment,
   deleteCollabTaskComment,
+  listMyEventActivities,
 } from '../controllers/collabTasks.controller'
 import {
   listCollabTaskDocuments,
@@ -36,6 +37,7 @@ router.use(authenticate)
 
 router.get('/', requirePrivilege(PRIVILEGES.COLLAB_TASK_VIEW), listCollabTasks)
 router.post('/', requirePrivilege(PRIVILEGES.COLLAB_TASK_CREATE), createCollabTask)
+router.get('/my-event-activities', requirePrivilege(PRIVILEGES.COLLAB_TASK_VIEW), listMyEventActivities)
 router.get('/:taskId', requirePrivilege(PRIVILEGES.COLLAB_TASK_VIEW), getCollabTask)
 router.put('/:taskId', requirePrivilege(PRIVILEGES.COLLAB_TASK_EDIT), updateCollabTask)
 router.delete('/:taskId', requirePrivilege(PRIVILEGES.COLLAB_TASK_DELETE), deleteCollabTask)

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Layout, Select, Input, Button, Empty, Spin, Space, message as antMessage } from 'antd'
 import { PlusOutlined, FilterOutlined } from '@ant-design/icons'
@@ -35,16 +35,45 @@ export function TareasTab() {
     search: '',
   })
 
-  const { data: tasks = [], isLoading } = useQuery({
+  const { data: tasks = [], isLoading: tasksLoading } = useQuery({
     queryKey: ['collab-tasks', filters],
     queryFn: () => collabTasksApi.list(filters),
   })
 
-  const { data: selectedTask } = useQuery({
+  const { data: eventActivities = [], isLoading: activitiesLoading } = useQuery({
+    queryKey: ['my-event-activities'],
+    queryFn: () => collabTasksApi.listMyEventActivities(),
+  })
+
+  const isLoading = tasksLoading || activitiesLoading
+
+  const mergedTasks = useMemo(() => {
+    const collabItems = (tasks as any[]).map(t => ({ ...t, _type: 'collab_task' }))
+    const activityItems = (eventActivities as any[]).map(a => ({ ...a, _type: 'event_activity' }))
+    const all = [...collabItems, ...activityItems]
+
+    return all.filter(item => {
+      if (filters.status && item.status !== filters.status) return false
+      if (filters.priority && item.priority !== filters.priority) return false
+      if (filters.search) {
+        const q = filters.search.toLowerCase()
+        if (!item.title?.toLowerCase().includes(q)) return false
+      }
+      return true
+    })
+  }, [tasks, eventActivities, filters])
+
+  const selectedEventActivity = mergedTasks.find(
+    t => t.id === selectedTaskId && t._type === 'event_activity'
+  ) || null
+
+  const { data: selectedCollabTask } = useQuery({
     queryKey: ['collab-task', selectedTaskId],
     queryFn: () => collabTasksApi.get(selectedTaskId!),
-    enabled: !!selectedTaskId,
+    enabled: !!selectedTaskId && !selectedEventActivity,
   })
+
+  const selectedTask = selectedEventActivity || selectedCollabTask
 
   const createMut = useMutation({
     mutationFn: (data: any) => collabTasksApi.create(data),
@@ -169,13 +198,13 @@ export function TareasTab() {
 
           {isLoading ? (
             <div style={{ padding: 32, textAlign: 'center' }}><Spin /></div>
-          ) : tasks.length === 0 ? (
+          ) : mergedTasks.length === 0 ? (
             <div style={{ padding: 32, textAlign: 'center' }}>
               <Empty description="Sin tareas" />
             </div>
           ) : (
             <TaskListPanel
-              tasks={tasks}
+              tasks={mergedTasks}
               selectedTaskId={selectedTaskId}
               onSelectTask={setSelectedTaskId}
               statusConfig={STATUS_CONFIG}
@@ -197,6 +226,7 @@ export function TareasTab() {
               isLoading={!selectedTask}
               statusConfig={STATUS_CONFIG}
               priorityConfig={PRIORITY_CONFIG}
+              isEventActivity={!!selectedEventActivity}
               onEdit={() => handleEditTask(selectedTask)}
               onDelete={() => handleDeleteTask(selectedTaskId)}
               isDeletingis={deleteMut.isPending}

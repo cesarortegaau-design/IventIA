@@ -10,7 +10,7 @@ function formatDateTime(date: string | null | undefined) {
   return new Date(date).toLocaleDateString('es-MX', { month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-export function TaskDetailDrawer({ task, isLoading, statusConfig, priorityConfig, onEdit, onDelete, isDeletingis }: any) {
+export function TaskDetailDrawer({ task, isLoading, statusConfig, priorityConfig, isEventActivity, onEdit, onDelete, isDeletingis }: any) {
   if (isLoading) {
     return <div style={{ padding: 32, textAlign: 'center' }}><Spin /></div>
   }
@@ -39,20 +39,22 @@ export function TaskDetailDrawer({ task, isLoading, statusConfig, priorityConfig
               )}
             </Space>
           </div>
-          <Space>
-            <Button icon={<EditOutlined />} onClick={onEdit}>Editar</Button>
-            <Popconfirm
-              title="Eliminar tarea"
-              description="¿Estás seguro de que deseas eliminar esta tarea?"
-              onConfirm={onDelete}
-              okText="Sí"
-              cancelText="No"
-            >
-              <Button icon={<DeleteOutlined />} danger loading={isDeletingis}>
-                Eliminar
-              </Button>
-            </Popconfirm>
-          </Space>
+          {!isEventActivity && (
+            <Space>
+              <Button icon={<EditOutlined />} onClick={onEdit}>Editar</Button>
+              <Popconfirm
+                title="Eliminar tarea"
+                description="¿Estás seguro de que deseas eliminar esta tarea?"
+                onConfirm={onDelete}
+                okText="Sí"
+                cancelText="No"
+              >
+                <Button icon={<DeleteOutlined />} danger loading={isDeletingis}>
+                  Eliminar
+                </Button>
+              </Popconfirm>
+            </Space>
+          )}
         </Space>
       </div>
 
@@ -105,7 +107,7 @@ export function TaskDetailDrawer({ task, isLoading, statusConfig, priorityConfig
                   </Descriptions.Item>
                 )}
 
-                {task.createdBy && (
+                {task.createdBy && !isEventActivity && (
                   <Descriptions.Item label="Creada por">
                     <Text>{task.createdBy.firstName} {task.createdBy.lastName}</Text>
                   </Descriptions.Item>
@@ -123,7 +125,7 @@ export function TaskDetailDrawer({ task, isLoading, statusConfig, priorityConfig
                   </Descriptions.Item>
                 )}
 
-                {task.departments && task.departments.length > 0 && (
+                {task.departments && task.departments.length > 0 && !isEventActivity && (
                   <Descriptions.Item label="Departamentos">
                     <Space>
                       {task.departments.map((d: any) => (
@@ -133,7 +135,17 @@ export function TaskDetailDrawer({ task, isLoading, statusConfig, priorityConfig
                   </Descriptions.Item>
                 )}
 
-                {task.orders && task.orders.length > 0 && (
+                {task.activityDepartments && task.activityDepartments.length > 0 && isEventActivity && (
+                  <Descriptions.Item label="Departamentos">
+                    <Space>
+                      {task.activityDepartments.map((d: any) => (
+                        <Tag key={d.departmentId} color="geekblue">{d.department.name}</Tag>
+                      ))}
+                    </Space>
+                  </Descriptions.Item>
+                )}
+
+                {task.orders && task.orders.length > 0 && !isEventActivity && (
                   <Descriptions.Item label="Órdenes asociadas">
                     <Space direction="vertical" size="small">
                       {task.orders.map((o: any) => (
@@ -147,22 +159,26 @@ export function TaskDetailDrawer({ task, isLoading, statusConfig, priorityConfig
                   <Text style={{ color: '#94a3b8', fontSize: 12 }}>{formatDateTime(task.createdAt)}</Text>
                 </Descriptions.Item>
 
-                <Descriptions.Item label="Última actualización">
-                  <Text style={{ color: '#94a3b8', fontSize: 12 }}>{formatDateTime(task.updatedAt)}</Text>
-                </Descriptions.Item>
+                {task.updatedAt && !isEventActivity && (
+                  <Descriptions.Item label="Última actualización">
+                    <Text style={{ color: '#94a3b8', fontSize: 12 }}>{formatDateTime(task.updatedAt)}</Text>
+                  </Descriptions.Item>
+                )}
               </Descriptions>
             ),
           },
-          {
-            key: 'documents',
-            label: `Documentos (${task.documents?.length || 0})`,
-            children: <TaskDocumentsPanel taskId={task.id} documents={task.documents} />,
-          },
-          {
-            key: 'comments',
-            label: `Comentarios (${task.comments?.length || 0})`,
-            children: <TaskCommentThread taskId={task.id} comments={task.comments} />,
-          },
+          ...(!isEventActivity ? [
+            {
+              key: 'documents',
+              label: `Documentos (${task.documents?.length || 0})`,
+              children: <TaskDocumentsPanel taskId={task.id} documents={task.documents} />,
+            },
+            {
+              key: 'comments',
+              label: `Comentarios (${task.comments?.length || 0})`,
+              children: <TaskCommentThread taskId={task.id} comments={task.comments} />,
+            },
+          ] : []),
         ]}
       />
     </div>
