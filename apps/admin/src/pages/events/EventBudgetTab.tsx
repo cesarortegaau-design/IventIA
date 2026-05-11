@@ -4,7 +4,7 @@ import {
   Table, Button, Select, Modal, Form, Input, Space, Tag, Typography,
   Spin, Empty, Popconfirm, InputNumber, Tooltip, message as antMessage,
 } from 'antd'
-import { PlusOutlined, DeleteOutlined, FileExcelOutlined, OrderedListOutlined, CheckSquareOutlined } from '@ant-design/icons'
+import { PlusOutlined, DeleteOutlined, FileExcelOutlined, OrderedListOutlined, CheckSquareOutlined, FilePdfOutlined } from '@ant-design/icons'
 import { budgetsApi } from '../../api/budgets'
 import { priceListsApi } from '../../api/priceLists'
 import { eventsApi } from '../../api/events'
@@ -26,6 +26,7 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
   const [directOrderModal, setDirectOrderModal] = useState<{ lineId: string } | null>(null)
   const [indirectOrderModal, setIndirectOrderModal] = useState<{ lineId: string } | null>(null)
   const [taskModal, setTaskModal] = useState<{ lineId: string } | null>(null)
+  const [pdfLoading, setPdfLoading] = useState(false)
   const [form] = Form.useForm()
 
   const { data: budgetsData, isLoading: budgetsLoading } = useQuery({
@@ -175,6 +176,26 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Presupuesto')
     XLSX.writeFile(wb, `presupuesto-${budget.name}.xlsx`)
+  }
+
+  async function handleDownloadPdf() {
+    if (!budget) return
+    setPdfLoading(true)
+    try {
+      const { pdf } = await import('@react-pdf/renderer')
+      const { EventBudgetPdf } = await import('../../components/EventBudgetPdf')
+      const blob = await pdf(<EventBudgetPdf budget={budget} event={event} />).toBlob()
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `presupuesto-${budget.name}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      antMessage.error('Error al generar PDF')
+    } finally {
+      setPdfLoading(false)
+    }
   }
 
   const fmt = (n: number) => `$${n.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
@@ -391,6 +412,9 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
             <>
               <Button icon={<FileExcelOutlined />} onClick={handleExportExcel}>
                 Exportar Excel
+              </Button>
+              <Button icon={<FilePdfOutlined />} loading={pdfLoading} onClick={handleDownloadPdf}>
+                Imprimir PDF
               </Button>
               <Popconfirm
                 title="¿Eliminar este presupuesto?"

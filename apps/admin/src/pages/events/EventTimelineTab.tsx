@@ -6,7 +6,7 @@ import {
 } from 'antd'
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, DownloadOutlined,
-  ImportOutlined, BarChartOutlined, AuditOutlined, FilterOutlined,
+  ImportOutlined, BarChartOutlined, AuditOutlined, FilterOutlined, FilePdfOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { eventActivitiesApi } from '../../api/eventActivities'
@@ -260,6 +260,7 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
   const [view, setView]                       = useState<'list' | 'gantt'>('list')
   const [statusFilter, setStatusFilter]       = useState<string | undefined>(undefined)
   const [modalOpen, setModalOpen]             = useState(false)
+  const [pdfLoading, setPdfLoading]           = useState(false)
   const [editingActivity, setEditingActivity] = useState<any>(null)
   const [expandedRowKeys, setExpandedRowKeys] = useState<string[]>([])
   const [importPreview, setImportPreview]     = useState<any[] | null>(null)
@@ -399,6 +400,25 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
     a.download = 'plantilla-actividades.csv'
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  async function handleDownloadPdf() {
+    setPdfLoading(true)
+    try {
+      const { pdf } = await import('@react-pdf/renderer')
+      const { EventTimelinePdf } = await import('../../components/EventTimelinePdf')
+      const blob = await pdf(<EventTimelinePdf activities={activities} event={event} />).toBlob()
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `timeline-${event?.name ?? eventId}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      message.error('Error al generar PDF')
+    } finally {
+      setPdfLoading(false)
+    }
   }
 
   function handleCsvFile(file: File) {
@@ -626,6 +646,9 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
           >
             <Button icon={<ImportOutlined />}>Importar CSV</Button>
           </Upload>
+          <Button icon={<FilePdfOutlined />} loading={pdfLoading} onClick={handleDownloadPdf}>
+            Imprimir PDF
+          </Button>
           <Button icon={<DownloadOutlined />} onClick={handleExportCsv}>
             Exportar CSV
           </Button>
