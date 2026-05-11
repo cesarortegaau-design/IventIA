@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Table, Button, Card, Select, Space, Tag, Modal, Form, Typography,
@@ -6,10 +6,9 @@ import {
 } from 'antd'
 import {
   PlusOutlined, EditOutlined, PoweroffOutlined, UploadOutlined,
-  DeleteOutlined, DownloadOutlined,
+  DeleteOutlined, DownloadOutlined, ImportOutlined, FileTextOutlined,
 } from '@ant-design/icons'
 import { resourcesApi } from '../../../api/resources'
-import { exportToCsv } from '../../../utils/exportCsv'
 import { PackageComponentsManager } from './PackageComponentsManager'
 import { PageHeader, FilterBar } from '../../../components/ui'
 import { formatPercent } from '../../../utils/format'
@@ -126,9 +125,76 @@ export default function ResourcesPage() {
   const [selectedType, setSelectedType] = useState<string>('')
   const [isPackage, setIsPackage] = useState(false)
   const [packageComponents, setPackageComponents] = useState<any[]>([])
+  const [importing, setImporting] = useState(false)
+  const importInputRef = useRef<HTMLInputElement>(null)
 
   // Sidebar category selection: '' = all, or a type key
   const [sidebarType, setSidebarType] = useState('')
+
+  // CSV template columns (must match import format)
+  const CSV_TEMPLATE_COLS = ['codigo','nombre','tipo','descripcion','unidad','factor','departamento','esPaquete','esSubstituto','stock','ubicacionStock','tiempoRecuperacion','areaSqm','capacidad','checarStock','verificarDuplicado','activo']
+
+  function downloadTemplate() {
+    const header = CSV_TEMPLATE_COLS.join(',')
+    const example = 'REC-001,Silla plegable,CONSUMABLE,Silla blanca plegable,pza,1,Mobiliario,NO,NO,50,,0,,,NO,SI,SI'
+    const blob = new Blob([`${header}\n${example}`], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = 'plantilla_recursos.csv'; a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function handleExportCsv() {
+    try {
+      const res = await resourcesApi.exportCsv(filters.type ? { type: filters.type } : {})
+      const rows = res.data ?? res
+      if (!rows?.length) { message.warning('No hay recursos para exportar'); return }
+      const header = CSV_TEMPLATE_COLS.join(',')
+      const body = rows.map((r: any) =>
+        CSV_TEMPLATE_COLS.map(k => {
+          const v = r[k] ?? ''
+          return String(v).includes(',') ? `"${v}"` : v
+        }).join(',')
+      ).join('\n')
+      const blob = new Blob([`${header}\n${body}`], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = 'recursos.csv'; a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      message.error('Error al exportar')
+    }
+  }
+
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    setImporting(true)
+    try {
+      const text = await file.text()
+      const [headerLine, ...dataLines] = text.split(/\r?\n/).filter(l => l.trim())
+      const headers = headerLine.split(',').map(h => h.trim())
+      const rows = dataLines.map(line => {
+        const vals = line.split(',')
+        const obj: any = {}
+        headers.forEach((h, i) => { obj[h] = vals[i]?.trim() ?? '' })
+        return obj
+      })
+      const res = await resourcesApi.importCsv(rows)
+      const { created, updated, errors } = res.data ?? res
+      queryClient.invalidateQueries({ queryKey: ['resources'] })
+      if (errors?.length) {
+        message.warning(`Importado: ${created} creados, ${updated} actualizados. ${errors.length} errores.`)
+      } else {
+        message.success(`Importado: ${created} creados, ${updated} actualizados`)
+      }
+    } catch {
+      message.error('Error al importar el archivo')
+    } finally {
+      setImporting(false)
+    }
+  }
 
   const { data, isLoading } = useQuery({
     queryKey: ['resources', filters],
@@ -450,18 +516,20 @@ export default function ResourcesPage() {
         meta={`Productos, servicios y personal cotizables · ${data?.meta?.total ?? 0} totales`}
         actions={
           <>
-            <Button
-              icon={<DownloadOutlined />}
-              onClick={() => exportToCsv('recursos', allResources.map((r: any) => ({
-                codigo: r.code, nombre: r.name, tipo: TYPE_LABELS[r.type] ?? r.type,
-                departamento: r.department?.name ?? '', unidad: r.unit ?? '',
-                portal: r.portalVisible ? 'Visible' : 'Oculto', activo: r.isActive ? 'Activo' : 'Inactivo',
-              })), [
-                { header: 'Código', key: 'codigo' }, { header: 'Nombre', key: 'nombre' },
-                { header: 'Tipo', key: 'tipo' }, { header: 'Departamento', key: 'departamento' },
-                { header: 'Unidad', key: 'unidad' }, { header: 'Portal', key: 'portal' }, { header: 'Activo', key: 'activo' },
-              ])}
-            >
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".csv"
+              style={{ display: 'none' }}
+              onChange={handleImportFile}
+            />
+            <Button icon={<FileTextOutlined />} onClick={downloadTemplate}>
+              Plantilla
+            </Button>
+            <Button icon={<ImportOutlined />} loading={importing} onClick={() => importInputRef.current?.click()}>
+              Importar
+            </Button>
+            <Button icon={<DownloadOutlined />} onClick={handleExportCsv}>
               Exportar
             </Button>
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
