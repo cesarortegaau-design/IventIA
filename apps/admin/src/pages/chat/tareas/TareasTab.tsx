@@ -59,27 +59,42 @@ export function TareasTab() {
   // Load reference data
   const { data: users = [] } = useQuery({
     queryKey: ['users-assignable'],
-    queryFn: () => usersApi.listAssignable(),
+    queryFn: async () => {
+      const res = await usersApi.listAssignable()
+      return Array.isArray(res) ? res : res?.data || []
+    },
   })
 
   const { data: events = [] } = useQuery({
     queryKey: ['events-list'],
-    queryFn: () => eventsApi.list({ pageSize: 1000 }),
+    queryFn: async () => {
+      const res = await eventsApi.list({ pageSize: 1000 })
+      return Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : []
+    },
   })
 
   const { data: clients = [] } = useQuery({
     queryKey: ['clients-list'],
-    queryFn: () => clientsApi.list({ pageSize: 1000 }),
+    queryFn: async () => {
+      const res = await clientsApi.list({ pageSize: 1000 })
+      return Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : []
+    },
   })
 
   const { data: departments = [] } = useQuery({
     queryKey: ['departments-list'],
-    queryFn: () => resourcesApi.listDepartments(),
+    queryFn: async () => {
+      const res = await resourcesApi.listDepartments()
+      return Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : []
+    },
   })
 
   const { data: orders = [] } = useQuery({
     queryKey: ['orders-list'],
-    queryFn: () => ordersApi.report({ pageSize: 1000 }),
+    queryFn: async () => {
+      const res = await ordersApi.report({ pageSize: 1000 })
+      return Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : []
+    },
   })
 
   const isLoading = tasksLoading || activitiesLoading

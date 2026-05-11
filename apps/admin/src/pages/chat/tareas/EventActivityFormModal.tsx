@@ -150,7 +150,7 @@ export function EventActivityFormModal({
               allowClear
               placeholder="Seleccionar responsable"
               optionFilterProp="label"
-              options={users.map(u => ({
+              options={(Array.isArray(users) ? users : []).map(u => ({
                 value: u.id,
                 label: `${u.firstName} ${u.lastName}`,
               }))}
@@ -162,7 +162,7 @@ export function EventActivityFormModal({
               mode="multiple"
               allowClear
               placeholder="Seleccionar departamentos"
-              options={departments.map(d => ({ value: d.id, label: d.name }))}
+              options={(Array.isArray(departments) ? departments : []).map(d => ({ value: d.id, label: d.name }))}
             />
           </Form.Item>
 

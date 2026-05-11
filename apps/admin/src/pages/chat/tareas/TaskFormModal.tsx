@@ -118,10 +118,10 @@ export function TaskFormModal({ open, task, onCancel, onSubmit, isLoading, users
             allowClear
             showSearch
             optionFilterProp="label"
-            options={users?.map?.((u: any) => ({
+            options={(Array.isArray(users) ? users : []).map((u: any) => ({
               value: u.id,
               label: `${u.firstName} ${u.lastName}`,
-            })) || []}
+            }))}
           />
         </Form.Item>
 
@@ -133,10 +133,10 @@ export function TaskFormModal({ open, task, onCancel, onSubmit, isLoading, users
               allowClear
               showSearch
               optionFilterProp="label"
-              options={eventsData?.map?.((e: any) => ({
+              options={(Array.isArray(eventsData) ? eventsData : []).map((e: any) => ({
                 value: e.id,
                 label: e.name || e.code,
-              })) || []}
+              }))}
             />
           </Form.Item>
 
@@ -146,10 +146,10 @@ export function TaskFormModal({ open, task, onCancel, onSubmit, isLoading, users
               allowClear
               showSearch
               optionFilterProp="label"
-              options={clientsData?.map?.((c: any) => ({
+              options={(Array.isArray(clientsData) ? clientsData : []).map((c: any) => ({
                 value: c.id,
                 label: c.companyName || `${c.firstName} ${c.lastName}`,
-              })) || []}
+              }))}
             />
           </Form.Item>
         </Space>
@@ -159,10 +159,10 @@ export function TaskFormModal({ open, task, onCancel, onSubmit, isLoading, users
           <Select
             mode="multiple"
             placeholder="Seleccionar departamentos"
-            options={departmentsData?.map?.((d: any) => ({
+            options={(Array.isArray(departmentsData) ? departmentsData : []).map((d: any) => ({
               value: d.id,
               label: d.name,
-            })) || []}
+            }))}
           />
         </Form.Item>
 
@@ -171,10 +171,10 @@ export function TaskFormModal({ open, task, onCancel, onSubmit, isLoading, users
           <Select
             mode="multiple"
             placeholder="Seleccionar órdenes"
-            options={ordersData?.map?.((o: any) => ({
+            options={(Array.isArray(ordersData) ? ordersData : []).map((o: any) => ({
               value: o.id,
               label: o.orderNumber,
-            })) || []}
+            }))}
           />
         </Form.Item>
       </Form>
