@@ -41,8 +41,8 @@ export function TaskDetailDrawer({ task, isLoading, statusConfig, priorityConfig
           </div>
           <Space>
             {isEventActivity ? (
-              <Button icon={<CalendarOutlined />} type="primary" onClick={() => onEditEventActivity?.(task)}>
-                Editar en Timeline
+              <Button icon={<EditOutlined />} type="primary" onClick={() => onEditEventActivity?.(task)}>
+                Editar
               </Button>
             ) : (
               <>

@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Layout, Select, Input, Button, Empty, Spin, Space, message as antMessage } from 'antd'
 import { PlusOutlined, FilterOutlined } from '@ant-design/icons'
 import { collabTasksApi } from '../../../api/collabTasks'
+import { eventActivitiesApi } from '../../../api/eventActivities'
 import { usersApi } from '../../../api/users'
 import { eventsApi } from '../../../api/events'
 import { clientsApi } from '../../../api/clients'
@@ -12,6 +13,7 @@ import { resourcesApi } from '../../../api/resources'
 import { TaskListPanel } from './TaskListPanel'
 import { TaskDetailDrawer } from './TaskDetailDrawer'
 import { TaskFormModal } from './TaskFormModal'
+import { EventActivityFormModal } from './EventActivityFormModal'
 
 const { Sider, Content } = Layout
 
@@ -36,6 +38,8 @@ export function TareasTab() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [showFormModal, setShowFormModal] = useState(false)
   const [editingTask, setEditingTask] = useState<any | null>(null)
+  const [showActivityModal, setShowActivityModal] = useState(false)
+  const [editingActivity, setEditingActivity] = useState<any | null>(null)
   const [filters, setFilters] = useState({
     status: undefined as string | undefined,
     priority: undefined as string | undefined,
@@ -146,6 +150,23 @@ export function TareasTab() {
     },
   })
 
+  const updateActivityMut = useMutation({
+    mutationFn: (data: any) =>
+      eventActivitiesApi.update(editingActivity.event.id, editingActivity.id, data),
+    onSuccess: () => {
+      antMessage.success('Actividad actualizada exitosamente')
+      setShowActivityModal(false)
+      setEditingActivity(null)
+      qc.invalidateQueries({ queryKey: ['my-event-activities'] })
+      if (selectedTaskId) {
+        qc.invalidateQueries({ queryKey: ['collab-task', selectedTaskId] })
+      }
+    },
+    onError: (err: any) => {
+      antMessage.error(err.response?.data?.message || 'Error al actualizar la actividad')
+    },
+  })
+
   const handleCreateTask = () => {
     setEditingTask(null)
     setShowFormModal(true)
@@ -171,9 +192,8 @@ export function TareasTab() {
   }
 
   const handleEditEventActivity = (activity: any) => {
-    if (activity.event?.id) {
-      navigate(`/eventos/${activity.event.id}?tab=timeline`)
-    }
+    setEditingActivity(activity)
+    setShowActivityModal(true)
   }
 
   return (
@@ -287,6 +307,17 @@ export function TareasTab() {
         clients={clients}
         departments={departments}
         orders={orders}
+      />
+
+      {/* ── Event Activity Modal ────────────────────────────────────────────── */}
+      <EventActivityFormModal
+        open={showActivityModal}
+        activity={editingActivity}
+        onClose={() => { setShowActivityModal(false); setEditingActivity(null) }}
+        onSave={(values: any) => updateActivityMut.mutate(values)}
+        loading={updateActivityMut.isPending}
+        users={users}
+        departments={departments}
       />
     </>
   )
