@@ -286,8 +286,13 @@ export default function ResourcesPage() {
     {
       title: 'Tipo',
       dataIndex: 'type',
-      width: 110,
-      render: (v: string) => <Tag color={TYPE_COLORS[v]} style={{ fontSize: 11 }}>{TYPE_LABELS[v]}</Tag>,
+      width: 160,
+      render: (v: string, r: any) => (
+        <Space size={4} wrap>
+          <Tag color={TYPE_COLORS[v]} style={{ fontSize: 11, margin: 0 }}>{TYPE_LABELS[v]}</Tag>
+          {r.isPackage && <Tag color="processing" style={{ fontSize: 11, margin: 0 }}>Paquete</Tag>}
+        </Space>
+      ),
     },
     {
       title: 'Stock',
