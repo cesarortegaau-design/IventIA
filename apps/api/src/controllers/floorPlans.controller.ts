@@ -6,6 +6,7 @@ import zlib from 'zlib'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { deleteFromCloudinary } from '../lib/cloudinary'
+import cloudinary from '../lib/cloudinary'
 
 // GET /events/:eventId/floor-plans
 export async function listFloorPlans(req: Request, res: Response, next: NextFunction) {
@@ -122,10 +123,27 @@ export async function getFloorPlanContent(req: Request, res: Response, next: Nex
     if (!fp) throw new AppError(404, 'NOT_FOUND', 'Plano no encontrado')
 
     // Normalize Cloudinary URL: ensure raw files use /raw/upload/ not /image/upload/
-    const fileUrl = fp.fileUrl.replace(
+    const normalizedUrl = fp.fileUrl.replace(
       /res\.cloudinary\.com\/([^/]+)\/image\/upload\//,
       'res.cloudinary.com/$1/raw/upload/'
     )
+
+    // Generate a signed delivery URL so the server-side fetch works regardless
+    // of the Cloudinary account's access restrictions (avoids 401 on authenticated delivery)
+    let fileUrl = normalizedUrl
+    try {
+      const match = normalizedUrl.match(/\/(?:raw|image)\/upload\/(?:v\d+\/)?(.+)$/)
+      if (match) {
+        fileUrl = cloudinary.url(match[1], {
+          resource_type: 'raw',
+          sign_url: true,
+          secure: true,
+          type: 'upload',
+        })
+      }
+    } catch {
+      // fallback to the normalized URL if signing fails
+    }
 
     let raw: Buffer
     try {
