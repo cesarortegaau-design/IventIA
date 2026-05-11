@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { Table, Button, Space, Modal, Form, Select, InputNumber, Input, App, Popconfirm } from 'antd'
-import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons'
+import { useState, useRef } from 'react'
+import { Table, Button, Space, Modal, Form, Select, InputNumber, App, Popconfirm } from 'antd'
+import { PlusOutlined, DeleteOutlined, EditOutlined, DownloadOutlined, ImportOutlined, FileTextOutlined } from '@ant-design/icons'
 import { resourcesApi } from '../../../api/resources'
 
 interface PackageComponent {
@@ -27,6 +27,8 @@ interface PackageComponentsManagerProps {
   allResources: any[]
 }
 
+const CSV_COLS = ['codigoComponente', 'nombreComponente', 'tipo', 'cantidad', 'unidad', 'orden']
+
 export function PackageComponentsManager({
   packageResourceId,
   isSubstitute,
@@ -39,6 +41,64 @@ export function PackageComponentsManager({
   const [modalOpen, setModalOpen] = useState(false)
   const [editingComponentId, setEditingComponentId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const importInputRef = useRef<HTMLInputElement>(null)
+
+  function downloadTemplate() {
+    const header = CSV_COLS.join(',')
+    const example = 'REC-001,Silla plegable,CONSUMABLE,2,pza,0'
+    const blob = new Blob([`${header}\n${example}`], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = 'plantilla_componentes.csv'; a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function handleExportCsv() {
+    try {
+      const res = await resourcesApi.exportPackageComponentsCsv(packageResourceId)
+      const rows = res.data ?? res
+      if (!rows?.length) { message.warning('No hay componentes para exportar'); return }
+      const header = CSV_COLS.join(',')
+      const body = rows.map((r: any) =>
+        CSV_COLS.map(k => {
+          const v = r[k] ?? ''
+          return String(v).includes(',') ? `"${v}"` : v
+        }).join(',')
+      ).join('\n')
+      const blob = new Blob([`${header}\n${body}`], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a'); a.href = url; a.download = 'componentes_paquete.csv'; a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      message.error('Error al exportar')
+    }
+  }
+
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    setImporting(true)
+    try {
+      const text = await file.text()
+      const [headerLine, ...dataLines] = text.split(/\r?\n/).filter(l => l.trim())
+      const headers = headerLine.split(',').map(h => h.trim())
+      const rows = dataLines.map(line => {
+        const vals = line.split(',')
+        const obj: any = {}
+        headers.forEach((h, i) => { obj[h] = vals[i]?.trim() ?? '' })
+        return obj
+      })
+      const res = await resourcesApi.importPackageComponentsCsv(packageResourceId, rows)
+      message.success(`Importado: ${res.data?.imported ?? rows.length} componentes`)
+      // Reload components from parent
+      window.location.reload()
+    } catch (err: any) {
+      message.error(err.response?.data?.error?.message || 'Error al importar')
+    } finally {
+      setImporting(false)
+    }
+  }
 
   const handleAddComponent = async (values: any) => {
     try {
@@ -176,15 +236,28 @@ export function PackageComponentsManager({
         </div>
       )}
 
-      <Button
-        type="primary"
-        icon={<PlusOutlined />}
-        onClick={handleOpenAdd}
-        disabled={loading}
-        style={{ marginBottom: 16 }}
-      >
-        Agregar Componente
-      </Button>
+      <input
+        ref={importInputRef}
+        type="file"
+        accept=".csv"
+        style={{ display: 'none' }}
+        onChange={handleImportFile}
+      />
+
+      <Space style={{ marginBottom: 16 }}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenAdd} disabled={loading}>
+          Agregar Componente
+        </Button>
+        <Button icon={<FileTextOutlined />} onClick={downloadTemplate}>
+          Plantilla
+        </Button>
+        <Button icon={<ImportOutlined />} loading={importing} onClick={() => importInputRef.current?.click()}>
+          Importar
+        </Button>
+        <Button icon={<DownloadOutlined />} onClick={handleExportCsv} disabled={components.length === 0}>
+          Exportar
+        </Button>
+      </Space>
 
       <Table
         dataSource={components}
@@ -218,10 +291,11 @@ export function PackageComponentsManager({
               rules={[{ required: true, message: 'Selecciona un recurso' }]}
             >
               <Select
+                showSearch
                 placeholder="Busca un recurso..."
                 optionFilterProp="label"
                 options={allResources
-                  .filter(r => r.id !== packageResourceId) // Evitar auto-referencia
+                  .filter(r => r.id !== packageResourceId)
                   .map(r => ({
                     value: r.id,
                     label: `${r.code} - ${r.name}`,
