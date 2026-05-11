@@ -347,7 +347,7 @@ export default function SupplierPriceListsPage() {
           onOk={() => itemForm.submit()}
           confirmLoading={addItemMutation.isPending}
           width={600}
-          forceRender
+          destroyOnClose
           zIndex={1100}
         >
           <Form form={itemForm} layout="vertical" onFinish={addItemMutation.mutate}>
