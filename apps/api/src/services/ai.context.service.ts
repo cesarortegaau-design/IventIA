@@ -128,6 +128,37 @@ export async function buildAIContext(tenantId: string): Promise<string> {
     take: 20,
   })
 
+  // Collab tasks summary
+  const collabTasks = await prisma.collabTask.findMany({
+    where: { tenantId },
+    select: { status: true, priority: true },
+  })
+  const tasksByStatus: Record<string, number> = {}
+  const tasksByPriority: Record<string, number> = {}
+  for (const t of collabTasks) {
+    tasksByStatus[t.status] = (tasksByStatus[t.status] || 0) + 1
+    tasksByPriority[t.priority] = (tasksByPriority[t.priority] || 0) + 1
+  }
+
+  // Budget summary
+  const budgets = await prisma.budget.findMany({
+    where: { tenantId, isActive: true },
+    select: {
+      name: true,
+      event: { select: { code: true, name: true } },
+      lines: { select: { directCost: true, income: true, indirectCost: true, utility: true } },
+    },
+    take: 10,
+    orderBy: { createdAt: 'desc' },
+  })
+
+  // Budget orders summary
+  const budgetOrders = await prisma.order.findMany({
+    where: { tenantId, isBudgetOrder: true },
+    select: { status: true, total: true, event: { select: { code: true } } },
+  })
+  const budgetOrdersTotal = budgetOrders.reduce((s, o) => s + (o.status !== 'CANCELLED' ? Number(o.total) : 0), 0)
+
   // Build context string
   const lines: string[] = []
 
@@ -136,8 +167,11 @@ export async function buildAIContext(tenantId: string): Promise<string> {
     const rev = ordersByEvent[e.id]?.revenue ?? 0
     const costs = costsByEvent[e.id] ?? 0
     const margin = rev - costs
+    const marginPct = rev > 0 ? ((margin / rev) * 100).toFixed(1) : '0'
     const start = e.eventStart ? e.eventStart.toISOString().slice(0, 10) : 'N/A'
-    lines.push(`- [${e.code}] ${e.name} | Estado: ${e.status} | Inicio: ${start} | Ingresos OS: $${rev.toFixed(0)} | Costos OC: $${costs.toFixed(0)} | Margen: $${margin.toFixed(0)}`)
+    const osByStatus = ordersByEvent[e.id]?.byStatus ?? {}
+    const osResumen = Object.entries(osByStatus).map(([s, c]) => `${s}:${c}`).join(', ')
+    lines.push(`- [${e.code}] ${e.name} | Estado: ${e.status} | Inicio: ${start} | Ingresos OS: $${rev.toFixed(0)} | Costos OC: $${costs.toFixed(0)} | Margen: $${margin.toFixed(0)} (${marginPct}%) | OS: ${osResumen || 'sin órdenes'}`)
   }
 
   lines.push('\n=== RESUMEN DE ÓRDENES DE SERVICIO (OS) ===')
@@ -149,6 +183,9 @@ export async function buildAIContext(tenantId: string): Promise<string> {
   lines.push('\n=== ÓRDENES DE COMPRA (OC) ===')
   lines.push(`Total OC confirmadas en el periodo: ${purchaseOrders.length} | Costo total: $${totalCostsPO.toFixed(0)}`)
 
+  lines.push('\n=== ÓRDENES PRESUPUESTALES ===')
+  lines.push(`Total Órdenes Presupuestales: ${budgetOrders.length} | Monto comprometido: $${budgetOrdersTotal.toFixed(0)}`)
+
   lines.push('\n=== TOP 10 RECURSOS MÁS VENDIDOS ===')
   for (const r of topResources) {
     lines.push(`- ${r.name}: ${r.count} apariciones en OS | Total facturado: $${r.total.toFixed(0)}`)
@@ -158,6 +195,25 @@ export async function buildAIContext(tenantId: string): Promise<string> {
   for (const inv of inventory) {
     const available = Number(inv.quantityTotal) - Number(inv.quantityReserved)
     lines.push(`- ${inv.resource.name} (${inv.resource.type}): Total ${Number(inv.quantityTotal).toFixed(0)}, Reservado ${Number(inv.quantityReserved).toFixed(0)}, Disponible ${available.toFixed(0)}`)
+  }
+
+  lines.push('\n=== TAREAS DE COLABORA ===')
+  lines.push(`Total tareas en el sistema: ${collabTasks.length}`)
+  for (const [status, count] of Object.entries(tasksByStatus)) {
+    lines.push(`- ${status}: ${count} tareas`)
+  }
+  const criticalPending = (tasksByPriority['CRITICAL'] || 0) + (tasksByPriority['HIGH'] || 0)
+  if (criticalPending > 0) lines.push(`⚠️ Tareas críticas/altas prioridad pendientes: ${criticalPending}`)
+
+  if (budgets.length > 0) {
+    lines.push('\n=== PRESUPUESTOS DE EVENTOS (recientes) ===')
+    for (const b of budgets) {
+      const totalIncome = b.lines.reduce((s, l) => s + Number(l.income), 0)
+      const totalDirect = b.lines.reduce((s, l) => s + Number(l.directCost), 0)
+      const totalIndirect = b.lines.reduce((s, l) => s + Number(l.indirectCost), 0)
+      const totalUtility = b.lines.reduce((s, l) => s + Number(l.utility), 0)
+      lines.push(`- [${b.event.code}] ${b.name}: Ingreso: $${totalIncome.toFixed(0)} | C.Directo: $${totalDirect.toFixed(0)} | C.Indirecto: $${totalIndirect.toFixed(0)} | Utilidad: $${totalUtility.toFixed(0)}`)
+    }
   }
 
   return lines.join('\n')
