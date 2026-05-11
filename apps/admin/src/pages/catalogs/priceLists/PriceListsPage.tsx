@@ -2,11 +2,11 @@ import { useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Table, Button, Card, Space, Tag, Modal, Form, Input, DatePicker,
-  InputNumber, Typography, Row, Col, App, Select, Empty, Avatar, Divider,
+  InputNumber, Typography, Row, Col, App, Select, Empty, Divider, Switch, Tooltip,
 } from 'antd'
 import {
   PlusOutlined, EditOutlined, DownloadOutlined, UploadOutlined,
-  OrderedListOutlined, MoreOutlined,
+  OrderedListOutlined, MoreOutlined, TagsOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { priceListsApi } from '../../../api/priceLists'
@@ -51,6 +51,7 @@ function parsePriceListItemsCsv(text: string): { rows: any[]; error?: string } {
     const normalPrice = parseFloat(row['P. Normal'])
     const latePrice = parseFloat(row['P. Tardío'])
     const timeUnit = row['Unidad de Tiempo']
+    const cost = row['Costo'] ? parseFloat(row['Costo']) : 0
 
     if (isNaN(earlyPrice) || isNaN(normalPrice) || isNaN(latePrice)) {
       return { rows: [], error: `Fila ${i + 1}: los campos de precio deben ser números válidos` }
@@ -59,7 +60,7 @@ function parsePriceListItemsCsv(text: string): { rows: any[]; error?: string } {
       return { rows: [], error: `Fila ${i + 1}: "Unidad de Tiempo" debe ser uno de: ${VALID_TIME_UNITS.join(', ')}` }
     }
 
-    rows.push({ resourceCode: row['Recurso'], earlyPrice, normalPrice, latePrice, timeUnit, detail: row['Detalle'] ?? '' })
+    rows.push({ resourceCode: row['Recurso'], earlyPrice, normalPrice, latePrice, timeUnit, cost: isNaN(cost) ? 0 : cost, detail: row['Detalle'] ?? '' })
   }
   return { rows }
 }
@@ -93,7 +94,7 @@ export default function PriceListsPage() {
 
   const { data: resourcesData } = useQuery({
     queryKey: ['resources', { active: 'true' }],
-    queryFn: () => resourcesApi.list({ active: true, pageSize: 200 }),
+    queryFn: () => resourcesApi.list({ active: true, pageSize: 500 }),
     enabled: itemModalOpen,
   })
 
@@ -173,12 +174,13 @@ export default function PriceListsPage() {
   }
 
   function downloadTemplate() {
-    const templateRows = [{ resourceCode: 'RECURSO-001', earlyPrice: 100, normalPrice: 120, latePrice: 140, timeUnit: 'no aplica', detail: '' }]
+    const templateRows = [{ resourceCode: 'RECURSO-001', earlyPrice: 100, normalPrice: 120, latePrice: 140, cost: 80, timeUnit: 'no aplica', detail: '' }]
     exportToCsv('plantilla-lista-precios', templateRows, [
       { header: 'Recurso', key: 'resourceCode' },
       { header: 'P. Anticipado', key: 'earlyPrice' },
       { header: 'P. Normal', key: 'normalPrice' },
       { header: 'P. Tardío', key: 'latePrice' },
+      { header: 'Costo', key: 'cost' },
       { header: 'Unidad de Tiempo', key: 'timeUnit' },
       { header: 'Detalle', key: 'detail' },
     ])
@@ -196,6 +198,7 @@ export default function PriceListsPage() {
       earlyPrice: Number(r.earlyPrice).toFixed(2),
       normalPrice: Number(r.normalPrice).toFixed(2),
       latePrice: Number(r.latePrice).toFixed(2),
+      cost: Number(r.cost ?? 0).toFixed(2),
     })), [
       { header: 'Recurso', key: 'recurso' },
       { header: 'Nombre', key: 'nombre' },
@@ -206,18 +209,28 @@ export default function PriceListsPage() {
       { header: 'P. Anticipado', key: 'earlyPrice' },
       { header: 'P. Normal', key: 'normalPrice' },
       { header: 'P. Tardío', key: 'latePrice' },
+      { header: 'Costo', key: 'cost' },
     ])
   }
 
   const allLists: any[] = data?.data ?? []
   const selectedList = allLists.find((l: any) => l.id === selectedId)
+  const viewingList = allLists.find((l: any) => l.id === viewingId)
+
+  // Filter resources to CONCEPT only when viewing a concept list
+  const availableResources = (resourcesData?.data ?? []).filter((r: any) =>
+    viewingList?.isConceptList ? r.type === 'CONCEPT' : true
+  )
 
   const columns = [
     {
       title: 'Lista',
       render: (_: any, r: any) => (
         <div>
-          <Text strong style={{ fontSize: 13 }}>{r.name}</Text>
+          <Space size={6}>
+            <Text strong style={{ fontSize: 13 }}>{r.name}</Text>
+            {r.isConceptList && <Tag color="geekblue" icon={<TagsOutlined />} style={{ fontSize: 11 }}>Conceptos</Tag>}
+          </Space>
           <div style={{ fontSize: 11, color: 'rgba(0,0,0,0.45)', marginTop: 1 }}>
             {r._count?.items ?? 0} artículos · {r.discountPct ?? 0}% desc. máx.
           </div>
@@ -487,6 +500,7 @@ export default function PriceListsPage() {
             { title: 'P. Anticipado', dataIndex: 'earlyPrice', render: (v: number) => formatMoney(Number(v), 'MXN') },
             { title: 'P. Normal', dataIndex: 'normalPrice', render: (v: number) => formatMoney(Number(v), 'MXN') },
             { title: 'P. Tardío', dataIndex: 'latePrice', render: (v: number) => formatMoney(Number(v), 'MXN') },
+            { title: 'Costo', dataIndex: 'cost', render: (v: number) => formatMoney(Number(v ?? 0), 'MXN') },
           ]}
           expandable={{
             expandedRowRender: (r: any) => {
@@ -540,6 +554,7 @@ export default function PriceListsPage() {
             { title: 'P. Anticipado', dataIndex: 'earlyPrice', render: (v: number) => `$${v.toFixed(2)}` },
             { title: 'P. Normal', dataIndex: 'normalPrice', render: (v: number) => `$${v.toFixed(2)}` },
             { title: 'P. Tardío', dataIndex: 'latePrice', render: (v: number) => `$${v.toFixed(2)}` },
+            { title: 'Costo', dataIndex: 'cost', render: (v: number) => `$${(v ?? 0).toFixed(2)}` },
           ]}
         />
       </Modal>
@@ -555,6 +570,10 @@ export default function PriceListsPage() {
       >
         <Form form={form} layout="vertical" onFinish={saveMutation.mutate}>
           <Form.Item name="name" label="Nombre" rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name="isConceptList" label="Lista de Conceptos" valuePropName="checked" initialValue={false}
+            extra="Al activar, solo permite agregar recursos de tipo Concepto a esta lista">
+            <Switch />
+          </Form.Item>
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item name="earlyCutoff" label="Fin Precio Anticipado">
@@ -588,11 +607,11 @@ export default function PriceListsPage() {
         forceRender
       >
         <Form form={itemForm} layout="vertical" onFinish={addItemMutation.mutate}>
-          <Form.Item name="resourceId" label="Recurso" rules={[{ required: true }]}>
+          <Form.Item name="resourceId" label={viewingList?.isConceptList ? 'Concepto' : 'Recurso'} rules={[{ required: true }]}>
             <Select
               showSearch
-              options={(resourcesData?.data ?? []).map((r: any) => ({ value: r.id, label: `${r.name} (${r.code})` }))}
-              filterOption={(i, o) => o?.label?.toLowerCase().includes(i.toLowerCase()) ?? false}
+              options={availableResources.map((r: any) => ({ value: r.id, label: `${r.name} (${r.code})` }))}
+              filterOption={(i, o) => String(o?.label ?? '').toLowerCase().includes(i.toLowerCase())}
               onChange={(value) => {
                 setSelectedResourceId(value)
                 setPackageQty(1)
@@ -652,9 +671,10 @@ export default function PriceListsPage() {
           )}
 
           <Row gutter={8}>
-            <Col span={8}><Form.Item name="earlyPrice" label="Precio Anticipado" rules={[{ required: true }]}><InputNumber min={0} style={{ width: '100%' }} prefix="$" /></Form.Item></Col>
-            <Col span={8}><Form.Item name="normalPrice" label="Precio Normal" rules={[{ required: true }]}><InputNumber min={0} style={{ width: '100%' }} prefix="$" /></Form.Item></Col>
-            <Col span={8}><Form.Item name="latePrice" label="Precio Tardío" rules={[{ required: true }]}><InputNumber min={0} style={{ width: '100%' }} prefix="$" /></Form.Item></Col>
+            <Col span={6}><Form.Item name="earlyPrice" label="Precio Anticipado" rules={[{ required: true }]}><InputNumber min={0} style={{ width: '100%' }} prefix="$" /></Form.Item></Col>
+            <Col span={6}><Form.Item name="normalPrice" label="Precio Normal" rules={[{ required: true }]}><InputNumber min={0} style={{ width: '100%' }} prefix="$" /></Form.Item></Col>
+            <Col span={6}><Form.Item name="latePrice" label="Precio Tardío" rules={[{ required: true }]}><InputNumber min={0} style={{ width: '100%' }} prefix="$" /></Form.Item></Col>
+            <Col span={6}><Form.Item name="cost" label="Costo" initialValue={0}><InputNumber min={0} style={{ width: '100%' }} prefix="$" /></Form.Item></Col>
           </Row>
           <Row gutter={16}>
             <Col span={12}>
