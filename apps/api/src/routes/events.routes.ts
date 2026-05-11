@@ -55,8 +55,8 @@ router.get('/:eventId/spaces/:spaceId/audit', requirePrivilege(PRIVILEGES.EVENT_
 
 // Floor plans
 router.get('/:eventId/floor-plans', requirePrivilege(PRIVILEGES.EVENT_VIEW), listFloorPlans)
-// Server-side upload: file goes browser → API → Cloudinary (handles large files reliably)
-router.post('/:eventId/floor-plans/upload', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), docUpload.single('file'), multerErrorHandler, uploadFloorPlanFile)
+// Server-side upload: streams browser → API → Cloudinary without buffering (handles large files)
+router.post('/:eventId/floor-plans/upload', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), uploadFloorPlanFile)
 // Legacy direct-upload helpers (kept for backwards compat)
 router.get('/:eventId/floor-plans/sign', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), getFloorPlanUploadSignature)
 router.post('/:eventId/floor-plans', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), createFloorPlanRecord)

@@ -3,9 +3,11 @@ import https from 'https'
 import http from 'http'
 import crypto from 'crypto'
 import zlib from 'zlib'
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const busboy = require('busboy') as typeof import('busboy')
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
-import { uploadToCloudinary, deleteFromCloudinary } from '../lib/cloudinary'
+import { deleteFromCloudinary } from '../lib/cloudinary'
 import cloudinary from '../lib/cloudinary'
 
 // GET /events/:eventId/floor-plans
@@ -89,8 +91,8 @@ export async function createFloorPlanRecord(req: Request, res: Response, next: N
 }
 
 // POST /events/:eventId/floor-plans/upload  (multipart/form-data, field: 'file')
-// Receives the DXF file directly — no browser-to-Cloudinary hop needed.
-// Handles large files reliably by streaming the buffer to Cloudinary server-side.
+// Streams the DXF directly from the HTTP request to Cloudinary — no in-memory buffering,
+// so large files (50 MB+) are handled without OOM errors on the API server.
 export async function uploadFloorPlanFile(req: Request, res: Response, next: NextFunction) {
   try {
     const { eventId } = req.params
@@ -100,19 +102,48 @@ export async function uploadFloorPlanFile(req: Request, res: Response, next: Nex
     const event = await prisma.event.findFirst({ where: { id: eventId, tenantId } })
     if (!event) throw new AppError(404, 'NOT_FOUND', 'Evento no encontrado')
 
-    const file = (req as any).file as Express.Multer.File
-    if (!file) throw new AppError(400, 'MISSING_FILE', 'Se requiere un archivo DXF')
+    const floorPlan = await new Promise<any>((resolve, reject) => {
+      const bb = busboy({ headers: req.headers, limits: { fileSize: 200 * 1024 * 1024 } })
+      let fileStarted = false
 
-    const { url } = await uploadToCloudinary(file.buffer, 'iventia/floor-plans', 'raw')
+      bb.on('file', (_field: string, fileStream: NodeJS.ReadableStream, info: { filename: string }) => {
+        if (fileStarted) { (fileStream as NodeJS.ReadableStream & { resume(): void }).resume(); return }
+        fileStarted = true
 
-    const floorPlan = await prisma.floorPlan.create({
-      data: {
-        eventId,
-        name: file.originalname.replace(/\.[^.]+$/, ''),
-        fileUrl: url,
-        fileName: file.originalname,
-        uploadedById: userId,
-      },
+        const originalName = info.filename || 'plano.dxf'
+
+        // Pipe the incoming file stream directly into Cloudinary — zero memory buffer
+        const cloudStream = cloudinary.uploader.upload_stream(
+          { folder: 'iventia/floor-plans', resource_type: 'raw', timeout: 600_000 },
+          (error, result) => {
+            if (error || !result) {
+              console.error('[uploadFloorPlanFile] Cloudinary error:', error)
+              reject(error ?? new Error('Error al subir a Cloudinary'))
+              return
+            }
+            prisma.floorPlan.create({
+              data: {
+                eventId,
+                name: originalName.replace(/\.[^.]+$/, ''),
+                fileUrl: result.secure_url,
+                fileName: originalName,
+                uploadedById: userId,
+              },
+            }).then(resolve).catch(reject)
+          },
+        )
+
+        fileStream.pipe(cloudStream as unknown as NodeJS.WritableStream)
+        fileStream.on('error', reject)
+        cloudStream.on('error', reject)
+      })
+
+      bb.on('error', (err: Error) => { console.error('[uploadFloorPlanFile] Busboy error:', err); reject(err) })
+      bb.on('close', () => {
+        if (!fileStarted) reject(new AppError(400, 'MISSING_FILE', 'Se requiere un archivo DXF en el campo "file"'))
+      })
+
+      ;(req as NodeJS.ReadableStream).pipe(bb as unknown as NodeJS.WritableStream)
     })
 
     res.status(201).json({ success: true, data: floorPlan })
