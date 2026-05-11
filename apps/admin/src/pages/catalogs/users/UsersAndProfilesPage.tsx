@@ -13,6 +13,7 @@ import {
 import { useSearchParams } from 'react-router-dom'
 import dayjs from 'dayjs'
 import { apiClient } from '../../../api/client'
+import { resourcesApi } from '../../../api/resources'
 import { clientsApi } from '../../../api/clients'
 import { exportToCsv } from '../../../utils/exportCsv'
 import { PageHeader } from '../../../components/ui'
@@ -81,9 +82,10 @@ function InternalUsersTab() {
     queryFn: () => apiClient.get('/users').then(r => r.data),
   })
 
-  const { data: deptsData } = useQuery({
-    queryKey: ['departments'],
-    queryFn: () => apiClient.get('/departments').then(r => r.data),
+  const { data: depts = [] } = useQuery({
+    queryKey: ['departments-list'],
+    queryFn: () => resourcesApi.listDepartments(),
+    staleTime: 5 * 60 * 1000,
   })
 
   const { data: profilesData } = useQuery({
@@ -92,9 +94,13 @@ function InternalUsersTab() {
   })
 
   const saveMutation = useMutation({
-    mutationFn: (values: any) => editingId
-      ? apiClient.put(`/users/${editingId}`, values).then(r => r.data)
-      : apiClient.post('/users', values).then(r => r.data),
+    mutationFn: (values: any) => {
+      const payload = { ...values }
+      if (!payload.password) delete payload.password
+      return editingId
+        ? apiClient.put(`/users/${editingId}`, payload).then(r => r.data)
+        : apiClient.post('/users', payload).then(r => r.data)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
       setModalOpen(false)
@@ -107,16 +113,21 @@ function InternalUsersTab() {
   function openEdit(record: any) {
     setEditingId(record.id)
     form.setFieldsValue({
-      ...record,
-      departmentIds: record.userDepartments?.map((ud: any) => ud.department.id),
+      firstName: record.firstName,
+      lastName: record.lastName,
+      email: record.email,
+      phone: record.phone ?? '',
+      role: record.role,
+      isActive: record.isActive,
       profileId: record.profile?.id ?? null,
+      departmentIds: record.userDepartments?.map((ud: any) => ud.department.id) ?? [],
       password: undefined,
     })
     setModalOpen(true)
   }
 
   const users = usersData?.data ?? []
-  const deptOptions = (deptsData?.data ?? []).map((d: any) => ({ value: d.id, label: d.name }))
+  const deptOptions = (depts as any[]).map((d: any) => ({ value: d.id, label: d.name }))
   const profileOptions = (profilesData?.data ?? []).map((p: any) => ({ value: p.id, label: p.name }))
 
   const ROLE_COLOR: Record<string, string> = { ADMIN: 'red', NORMAL: 'blue', READ_ONLY: 'default' }
