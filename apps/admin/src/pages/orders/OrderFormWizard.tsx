@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Steps, Form, Select, Button, Table, InputNumber, Input, Space,
   Typography, Row, Col, Statistic, App, Tag, Modal, DatePicker,
-  Collapse, Descriptions, Divider, Badge,
+  Collapse, Descriptions, Divider, Badge, Checkbox,
 } from 'antd'
 import dayjs from 'dayjs'
 import {
@@ -350,6 +350,7 @@ export default function OrderFormWizard() {
         startDate: h.startDate?.toISOString?.() || h.startDate,
         endDate: h.endDate?.toISOString?.() || h.endDate,
         notes: h.notes || undefined,
+        isBudgetOrder: h.isBudgetOrder ?? false,
       }
       createMutation.mutate({ formValues, items: lineItems })
     }
@@ -408,6 +409,11 @@ export default function OrderFormWizard() {
         <Col span={24}>
           <Form.Item name="notes" label="Notas">
             <Input.TextArea rows={2} />
+          </Form.Item>
+        </Col>
+        <Col span={24}>
+          <Form.Item name="isBudgetOrder" valuePropName="checked">
+            <Checkbox>Orden Presupuestal</Checkbox>
           </Form.Item>
         </Col>
       </Row>

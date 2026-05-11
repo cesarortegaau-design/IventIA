@@ -16,6 +16,7 @@ const createOrderSchema = z.object({
   departamento: z.string().optional(),
   organizacionId: z.string().uuid().optional(),
   isCreditNote: z.boolean().default(false),
+  isBudgetOrder: z.boolean().optional().default(false),
   originalOrderId: z.string().min(1).optional(),
   lineItems: z.array(z.object({
     resourceId: z.string().min(1),
@@ -25,6 +26,8 @@ const createOrderSchema = z.object({
     observations: z.string().optional(),
     sortOrder: z.number().int().optional(),
     deliveryDate: z.string().datetime().optional().nullable(),
+    unitCostRequested: z.number().min(0).optional().nullable(),
+    unitCostReal: z.number().min(0).optional().nullable(),
   })).min(1),
 })
 
@@ -242,6 +245,7 @@ export async function createOrder(req: Request, res: Response, next: NextFunctio
       departamento: input.departamento,
       organizacionId: input.organizacionId,
       isCreditNote: input.isCreditNote,
+      isBudgetOrder: input.isBudgetOrder,
       originalOrderId: input.originalOrderId,
       initialStatus: input.isCreditNote ? 'CREDIT_NOTE' : undefined,
       createdById: req.user!.userId,
@@ -252,6 +256,8 @@ export async function createOrder(req: Request, res: Response, next: NextFunctio
         observations: li.observations,
         sortOrder: li.sortOrder,
         deliveryDate: li.deliveryDate ? new Date(li.deliveryDate) : undefined,
+        unitCostRequested: li.unitCostRequested,
+        unitCostReal: li.unitCostReal,
       })),
     })
     res.status(201).json({ success: true, data: order })
@@ -269,6 +275,7 @@ const updateOrderSchema = z.object({
   notes: z.string().optional().nullable(),
   departamento: z.string().optional().nullable(),
   organizacionId: z.string().uuid().optional().nullable(),
+  isBudgetOrder: z.boolean().optional(),
   lineItems: z.array(z.object({
     resourceId: z.string().min(1),
     priceListItemId: z.string().optional(),
@@ -277,6 +284,8 @@ const updateOrderSchema = z.object({
     observations: z.string().optional(),
     sortOrder: z.number().int().optional(),
     deliveryDate: z.string().datetime().optional().nullable(),
+    unitCostRequested: z.number().min(0).optional().nullable(),
+    unitCostReal: z.number().min(0).optional().nullable(),
   })).min(1).optional(),
 })
 

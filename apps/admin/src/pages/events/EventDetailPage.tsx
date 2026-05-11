@@ -33,6 +33,7 @@ import { standsApi } from '../../api/stands'
 import TicketEventTab from './TicketEventTab'
 import EventSummaryTab from './EventSummaryTab'
 import EventTimelineTab from './EventTimelineTab'
+import EventBudgetTab from './EventBudgetTab'
 import { T } from '../../styles/tokens'
 
 const { Text } = Typography
@@ -113,6 +114,7 @@ export default function EventDetailPage() {
   const [orderFromSpacesOpen, setOrderFromSpacesOpen] = useState(false)
   const [fpUploading, setFpUploading] = useState(false)
   const [selectedFpId, setSelectedFpId] = useState<string | null>(null)
+  const [orderTypeFilter, setOrderTypeFilter] = useState<'all' | 'service' | 'budget'>('all')
 
   // ── Mutations ─────────────────────────────────────────────────────────────
   const deleteDocMutation = useMutation({
@@ -509,6 +511,7 @@ export default function EventDetailPage() {
     { key: 'resumen',    label: 'Resumen' },
     { key: 'espacios',   label: `Espacios (${spaces.length})` },
     { key: 'timeline',   label: 'Timeline' },
+    { key: 'presupuesto', label: 'Presupuesto' },
     { key: 'ordenes',    label: `Órdenes (${event._count?.orders ?? event.orders?.length ?? 0})` },
     ...(eventContracts.length > 0 ? [{ key: 'contratos', label: `Contratos (${eventContracts.length})` }] : []),
     { key: 'documentos', label: `Documentos (${event.documents?.length ?? 0})` },
@@ -538,6 +541,12 @@ export default function EventDetailPage() {
       render: (_: any, r: any) => r.organizacion?.descripcion ?? '—',
     },
     {
+      title: 'Tipo', key: 'tipo', width: 110,
+      render: (_: any, r: any) => r.isBudgetOrder
+        ? <Tag color="purple">Presupuestal</Tag>
+        : <Tag color="default">Servicio</Tag>,
+    },
+    {
       title: 'Estado', dataIndex: 'status', key: 'status',
       render: (v: string) => <OrderStatusChip status={v} />,
     },
@@ -549,6 +558,12 @@ export default function EventDetailPage() {
     { title: 'F. Fin', dataIndex: 'endDate', key: 'endDate', render: (v: string) => v ? dayjs(v).format('DD/MM/YY HH:mm') : '—' },
     { title: 'Fecha', dataIndex: 'createdAt', key: 'createdAt', render: (v: string) => dayjs(v).format('DD/MM/YY') },
   ]
+
+  const filteredEventOrders = orderTypeFilter === 'all'
+    ? fullOrders
+    : orderTypeFilter === 'budget'
+    ? fullOrders.filter((o: any) => o.isBudgetOrder)
+    : fullOrders.filter((o: any) => !o.isBudgetOrder)
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -905,18 +920,34 @@ export default function EventDetailPage() {
           />
         )}
 
+        {/* ── Tab: Presupuesto ── */}
+        {activeTab === 'presupuesto' && <EventBudgetTab eventId={id!} event={event} />}
+
         {/* ── Tab: Órdenes ── */}
         {activeTab === 'ordenes' && (
           <div style={{ background: 'white', borderRadius: 10, padding: 16, border: `1px solid ${T.border}` }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <span style={{ fontSize: 14, fontWeight: 600, color: T.navy }}>Órdenes de servicio</span>
+              <Space>
+                <span style={{ fontSize: 14, fontWeight: 600, color: T.navy }}>Órdenes de servicio</span>
+                <Select
+                  value={orderTypeFilter}
+                  onChange={(v) => setOrderTypeFilter(v)}
+                  style={{ width: 170 }}
+                  options={[
+                    { value: 'all', label: 'Ver: Todas' },
+                    { value: 'service', label: 'Ver: Servicio' },
+                    { value: 'budget', label: 'Ver: Presupuestales' },
+                  ]}
+                />
+              </Space>
               <Space>
                 <Button
                   icon={<DownloadOutlined />}
-                  onClick={() => exportToCsv(`ordenes-${event.code}`, fullOrders.map((o: any) => ({
+                  onClick={() => exportToCsv(`ordenes-${event.code}`, filteredEventOrders.map((o: any) => ({
                     numero: o.orderNumber,
                     cliente: o.client?.companyName || `${o.client?.firstName} ${o.client?.lastName}`,
                     stand: o.stand?.code ?? '',
+                    tipo: o.isBudgetOrder ? 'Presupuestal' : 'Servicio',
                     estado: ORDER_STATUS_LABELS[o.status] ?? o.status,
                     total: Number(o.total).toFixed(2),
                     fecha: dayjs(o.createdAt).format('DD/MM/YYYY'),
@@ -924,6 +955,7 @@ export default function EventDetailPage() {
                     { header: 'Número', key: 'numero' },
                     { header: 'Cliente', key: 'cliente' },
                     { header: 'Stand', key: 'stand' },
+                    { header: 'Tipo', key: 'tipo' },
                     { header: 'Estado', key: 'estado' },
                     { header: 'Total', key: 'total' },
                     { header: 'Fecha', key: 'fecha' },
@@ -937,7 +969,7 @@ export default function EventDetailPage() {
               </Space>
             </div>
             <Table
-              dataSource={fullOrders}
+              dataSource={filteredEventOrders}
               columns={orderColumns}
               rowKey="id"
               size="small"

@@ -1,8 +1,8 @@
 import { apiClient } from './client'
 
 export const priceListsApi = {
-  list: () =>
-    apiClient.get('/price-lists').then(r => r.data),
+  list: (params?: { isConceptList?: boolean }) =>
+    apiClient.get('/price-lists', { params }).then(r => r.data),
   get: (id: string, params?: { departmentIds?: string }) =>
     apiClient.get(`/price-lists/${id}`, { params }).then(r => r.data),
   create: (data: any) =>

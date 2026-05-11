@@ -10,6 +10,7 @@ const priceListSchema = z.object({
   earlyCutoff: z.string().datetime().optional(),
   normalCutoff: z.string().datetime().optional(),
   discountPct: z.number().min(0).max(100).default(0),
+  isConceptList: z.boolean().optional().default(false),
 })
 
 const priceListItemSchema = z.object({
@@ -17,6 +18,7 @@ const priceListItemSchema = z.object({
   earlyPrice: z.number().min(0),
   normalPrice: z.number().min(0),
   latePrice: z.number().min(0),
+  cost: z.number().min(0).optional().default(0),
   timeUnit: z.enum(['no aplica', 'horas', 'días', 'horas sin factor', 'días sin factor']).optional().nullable(),
   detail: z.string().optional().nullable(),
 })
@@ -156,6 +158,14 @@ export async function upsertPriceListItem(req: Request, res: Response, next: Nex
     if (!priceList) throw new AppError(404, 'PRICE_LIST_NOT_FOUND', 'Price list not found')
 
     const { resourceId, ...itemData } = data
+
+    if (priceList.isConceptList) {
+      const resource = await prisma.resource.findFirst({ where: { id: resourceId, tenantId: req.user!.tenantId } })
+      if (!resource || resource.type !== 'CONCEPT') {
+        throw new AppError(400, 'INVALID_RESOURCE_TYPE', 'Las listas de conceptos solo aceptan recursos de tipo CONCEPT')
+      }
+    }
+
     const item = await prisma.priceListItem.upsert({
       where: { priceListId_resourceId: { priceListId: req.params.id, resourceId } },
       create: { priceListId: req.params.id, resourceId, ...itemData },
@@ -189,6 +199,7 @@ const importRowSchema = z.object({
   earlyPrice: z.number().min(0),
   normalPrice: z.number().min(0),
   latePrice: z.number().min(0),
+  cost: z.number().min(0).optional().default(0),
   timeUnit: z.enum(['no aplica', 'horas', 'días', 'horas sin factor', 'días sin factor']),
   detail: z.string().optional().nullable(),
 })
@@ -225,6 +236,7 @@ export async function importPriceListItems(req: Request, res: Response, next: Ne
           earlyPrice: r.earlyPrice,
           normalPrice: r.normalPrice,
           latePrice: r.latePrice,
+          cost: r.cost ?? 0,
           timeUnit: r.timeUnit,
           detail: r.detail ?? null,
         })),

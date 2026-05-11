@@ -76,6 +76,7 @@ model Tenant {
   collabTasks               CollabTask[]
   collabTaskDocuments       CollabTaskDocument[]
   collabTaskComments        CollabTaskComment[]
+  budgets                   Budget[]
 
   @@map("tenants")
 }
@@ -156,6 +157,7 @@ model User {
   createdCollabTasks  CollabTask[]                 @relation("CollabTaskCreator")
   collabTaskDocUploads CollabTaskDocument[]        @relation("CollabTaskDocUploader")
   collabTaskComments  CollabTaskComment[]          @relation("CollabTaskCommentAuthor")
+  budgets             Budget[]                     @relation("BudgetCreatedBy")
 
   @@index([tenantId, isActive])
   @@map("users")
@@ -272,6 +274,7 @@ model Resource {
   tenant             Tenant                  @relation(fields: [tenantId], references: [id])
   supplierPriceItems SupplierPriceListItem[] @relation("SupplierPriceListItems")
   ticketSections     TicketSection[]
+  budgetLines        BudgetLine[]
 
   @@unique([tenantId, code])
   @@index([tenantId, type, isActive])
@@ -303,6 +306,7 @@ model PriceList {
   earlyCutoff  DateTime?       @map("early_cutoff")
   normalCutoff DateTime?       @map("normal_cutoff")
   discountPct  Decimal         @default(0) @map("discount_pct") @db.Decimal(5, 2)
+  isConceptList Boolean        @default(false) @map("is_concept_list")
   isActive     Boolean         @default(true) @map("is_active")
   createdAt    DateTime        @default(now()) @map("created_at")
   updatedAt    DateTime        @updatedAt @map("updated_at")
@@ -311,6 +315,7 @@ model PriceList {
   items        PriceListItem[]
   tenant       Tenant          @relation(fields: [tenantId], references: [id])
   ticketEvents TicketEvent[]
+  budgets      Budget[]
 
   @@index([tenantId, isActive])
   @@map("price_lists")
@@ -323,6 +328,7 @@ model PriceListItem {
   earlyPrice  Decimal   @map("early_price") @db.Decimal(12, 2)
   normalPrice Decimal   @map("normal_price") @db.Decimal(12, 2)
   latePrice   Decimal   @map("late_price") @db.Decimal(12, 2)
+  cost        Decimal   @default(0) @db.Decimal(12, 2)
   unit        String?   @db.VarChar(50)
   isActive    Boolean   @default(true) @map("is_active")
   createdAt   DateTime  @default(now()) @map("created_at")
@@ -540,6 +546,7 @@ model Event {
   stands              Stand[]
   ticketEvent         TicketEvent?
   collabTasks         CollabTask[]
+  budgets             Budget[]
 
   @@unique([tenantId, code])
   @@index([tenantId, status])
@@ -733,6 +740,7 @@ model Order {
   paidAmount      Decimal              @default(0) @map("paid_amount") @db.Decimal(12, 2)
   notes           String?
   isCreditNote    Boolean              @default(false) @map("is_credit_note")
+  isBudgetOrder   Boolean              @default(false) @map("is_budget_order")
   originalOrderId String?              @map("original_order_id")
   startDate       DateTime?            @map("start_date")
   endDate         DateTime?            @map("end_date")
@@ -764,6 +772,8 @@ model Order {
   tenant          Tenant               @relation(fields: [tenantId], references: [id])
   purchaseOrders  PurchaseOrder[]
   collabTaskOrders CollabTaskOrder[]    @relation("CollabTaskOrders")
+  budgetLineDirectOrders   BudgetLineDirectOrder[]   @relation("BudgetLineDirectOrders")
+  budgetLineIndirectOrders BudgetLineIndirectOrder[] @relation("BudgetLineIndirectOrders")
 
   @@index([tenantId, status])
   @@index([tenantId, paymentStatus])
@@ -795,6 +805,8 @@ model OrderLineItem {
   deliveryDate       DateTime?   @map("delivery_date")
   timeUnit           String?     @map("time_unit") @db.VarChar(20)
   detail             String?
+  unitCostRequested  Decimal?    @map("unit_cost_requested") @db.Decimal(12, 2)
+  unitCostReal       Decimal?    @map("unit_cost_real") @db.Decimal(12, 2)
   order              Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
   resource           Resource    @relation(fields: [resourceId], references: [id])
 
@@ -2314,6 +2326,7 @@ model CollabTask {
   orders       CollabTaskOrder[]
   documents    CollabTaskDocument[]
   comments     CollabTaskComment[]
+  budgetLines  CollabTaskBudgetLine[]
 
   @@index([tenantId, status])
   @@index([tenantId, assignedToId, status])
@@ -2374,8 +2387,93 @@ model CollabTaskComment {
   @@map("collab_task_comments")
 }
 
+model Budget {
+  id          String       @id @default(uuid())
+  tenantId    String       @map("tenant_id")
+  eventId     String       @map("event_id")
+  priceListId String       @map("price_list_id")
+  name        String       @db.VarChar(200)
+  notes       String?
+  isActive    Boolean      @default(true) @map("is_active")
+  createdById String       @map("created_by_id")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
+  event       Event        @relation(fields: [eventId], references: [id])
+  priceList   PriceList    @relation(fields: [priceListId], references: [id])
+  createdBy   User         @relation("BudgetCreatedBy", fields: [createdById], references: [id])
+  lines       BudgetLine[]
+
+  @@index([tenantId, eventId])
+  @@map("budgets")
+}
+
+model BudgetLine {
+  id           String      @id @default(uuid())
+  budgetId     String      @map("budget_id")
+  resourceId   String      @map("resource_id")
+  description  String      @db.VarChar(500)
+  directCost   Decimal     @default(0) @map("direct_cost") @db.Decimal(12, 2)
+  income       Decimal     @default(0) @db.Decimal(12, 2)
+  indirectCost Decimal     @default(0) @map("indirect_cost") @db.Decimal(12, 2)
+  utility      Decimal     @default(0) @db.Decimal(12, 2)
+  sortOrder    Int         @default(0) @map("sort_order")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  budget         Budget                   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  resource       Resource                 @relation(fields: [resourceId], references: [id])
+  directOrders   BudgetLineDirectOrder[]
+  indirectOrders BudgetLineIndirectOrder[]
+  collabTasks    CollabTaskBudgetLine[]
+
+  @@index([budgetId])
+  @@map("budget_lines")
+}
+
+model BudgetLineDirectOrder {
+  id           String     @id @default(uuid())
+  budgetLineId String     @map("budget_line_id")
+  orderId      String     @map("order_id")
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  budgetLine BudgetLine @relation(fields: [budgetLineId], references: [id], onDelete: Cascade)
+  order      Order      @relation("BudgetLineDirectOrders", fields: [orderId], references: [id])
+
+  @@unique([budgetLineId, orderId])
+  @@map("budget_line_direct_orders")
+}
+
+model BudgetLineIndirectOrder {
+  id           String     @id @default(uuid())
+  budgetLineId String     @map("budget_line_id")
+  orderId      String     @map("order_id")
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  budgetLine BudgetLine @relation(fields: [budgetLineId], references: [id], onDelete: Cascade)
+  order      Order      @relation("BudgetLineIndirectOrders", fields: [orderId], references: [id])
+
+  @@unique([budgetLineId, orderId])
+  @@map("budget_line_indirect_orders")
+}
+
+model CollabTaskBudgetLine {
+  id           String   @id @default(uuid())
+  collabTaskId String   @map("collab_task_id")
+  budgetLineId String   @map("budget_line_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  collabTask CollabTask @relation(fields: [collabTaskId], references: [id], onDelete: Cascade)
+  budgetLine BudgetLine @relation(fields: [budgetLineId], references: [id], onDelete: Cascade)
+
+  @@unique([collabTaskId, budgetLineId])
+  @@map("collab_task_budget_lines")
+}
+
 enum ResourceType {
   CONSUMABLE
+  CONCEPT
   EQUIPMENT
   SPACE
   FURNITURE

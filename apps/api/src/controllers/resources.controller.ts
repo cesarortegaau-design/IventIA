@@ -23,7 +23,7 @@ const packageComponentSchema = z.object({
 const resourceBaseSchema = z.object({
   code: z.string().min(1).max(50),
   name: z.string().min(1).max(200),
-  type: z.enum(['CONSUMABLE', 'EQUIPMENT', 'SPACE', 'FURNITURE', 'SERVICE', 'DISCOUNT', 'TAX', 'PERSONAL', 'TICKET']),
+  type: z.enum(['CONSUMABLE', 'CONCEPT', 'EQUIPMENT', 'SPACE', 'FURNITURE', 'SERVICE', 'DISCOUNT', 'TAX', 'PERSONAL', 'TICKET']),
   description: z.string().optional().nullable(),
   unit: z.string().max(50).optional().nullable(),
   factor: z.coerce.number().positive().default(1).nullable().transform(v => v ?? 1),
@@ -137,7 +137,7 @@ export async function updateResource(req: Request, res: Response, next: NextFunc
   try {
     // Sanitize before any processing — never let empty string reach UUID validation
     const b = { ...req.body, departmentId: req.body.departmentId || null }
-    const ALLOWED_TYPES = ['CONSUMABLE','EQUIPMENT','SPACE','FURNITURE','SERVICE','DISCOUNT','TAX','PERSONAL','TICKET']
+    const ALLOWED_TYPES = ['CONSUMABLE','CONCEPT','EQUIPMENT','SPACE','FURNITURE','SERVICE','DISCOUNT','TAX','PERSONAL','TICKET']
     const data: any = {}
     if (b.code     !== undefined) data.code          = String(b.code)
     if (b.name     !== undefined) data.name          = String(b.name)
@@ -551,6 +551,171 @@ export async function updatePackageComponent(req: Request, res: Response, next: 
     )
 
     res.json({ success: true, data: updated })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function exportResourcesCsv(req: Request, res: Response, next: NextFunction) {
+  try {
+    const tenantId = req.user!.tenantId
+    const { type, active } = req.query
+    const where: any = { tenantId }
+    if (type) where.type = type
+    if (active !== undefined) where.isActive = active === 'true'
+
+    const resources = await prisma.resource.findMany({
+      where,
+      include: { department: { select: { name: true } } },
+      orderBy: [{ type: 'asc' }, { code: 'asc' }],
+    })
+
+    const rows = resources.map(r => ({
+      codigo: r.code,
+      nombre: r.name,
+      tipo: r.type,
+      descripcion: r.description ?? '',
+      unidad: r.unit ?? '',
+      factor: Number(r.factor),
+      departamento: r.department?.name ?? '',
+      esPaquete: r.isPackage ? 'SI' : 'NO',
+      esSubstituto: r.isSubstitute ? 'SI' : 'NO',
+      stock: r.stock,
+      ubicacionStock: r.stockLocation ?? '',
+      tiempoRecuperacion: r.recoveryTime,
+      areaSqm: r.areaSqm ? Number(r.areaSqm) : '',
+      capacidad: r.capacity ?? '',
+      checarStock: r.checkStock ? 'SI' : 'NO',
+      verificarDuplicado: r.checkDuplicate ? 'SI' : 'NO',
+      activo: r.isActive ? 'SI' : 'NO',
+    }))
+
+    res.json({ success: true, data: rows })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function importResourcesCsv(req: Request, res: Response, next: NextFunction) {
+  try {
+    const tenantId = req.user!.tenantId
+    const rows = req.body.rows
+    if (!Array.isArray(rows)) throw new AppError(400, 'INVALID_DATA', 'Se esperaba un arreglo de filas')
+
+    const VALID_TYPES = ['CONSUMABLE', 'CONCEPT', 'EQUIPMENT', 'SPACE', 'FURNITURE', 'SERVICE', 'DISCOUNT', 'TAX', 'PERSONAL', 'TICKET']
+    let created = 0, updated = 0, errors: string[] = []
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]
+      if (!row.codigo || !row.nombre || !row.tipo) {
+        errors.push(`Fila ${i + 1}: codigo, nombre y tipo son requeridos`)
+        continue
+      }
+      if (!VALID_TYPES.includes(row.tipo)) {
+        errors.push(`Fila ${i + 1}: tipo "${row.tipo}" inválido`)
+        continue
+      }
+
+      const data: any = {
+        name: row.nombre,
+        type: row.tipo,
+        description: row.descripcion || null,
+        unit: row.unidad || null,
+        factor: row.factor ? parseFloat(row.factor) : 1,
+        isPackage: row.esPaquete === 'SI',
+        isSubstitute: row.esSubstituto === 'SI',
+        stock: row.stock ? parseInt(row.stock) : 0,
+        stockLocation: row.ubicacionStock || null,
+        recoveryTime: row.tiempoRecuperacion ? parseInt(row.tiempoRecuperacion) : 0,
+        areaSqm: row.areaSqm ? parseFloat(row.areaSqm) : null,
+        capacity: row.capacidad ? parseInt(row.capacidad) : null,
+        checkStock: row.checarStock === 'SI',
+        checkDuplicate: row.verificarDuplicado !== 'NO',
+        isActive: row.activo !== 'NO',
+      }
+
+      try {
+        const existing = await prisma.resource.findUnique({ where: { tenantId_code: { tenantId, code: row.codigo } } })
+        if (existing) {
+          await prisma.resource.update({ where: { id: existing.id }, data })
+          updated++
+        } else {
+          await prisma.resource.create({ data: { ...data, tenantId, code: row.codigo } })
+          created++
+        }
+      } catch {
+        errors.push(`Fila ${i + 1}: error al procesar recurso "${row.codigo}"`)
+      }
+    }
+
+    res.json({ success: true, data: { created, updated, errors } })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function exportPackageComponentsCsv(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params
+    const resource = await prisma.resource.findFirst({ where: { id, tenantId: req.user!.tenantId } })
+    if (!resource) throw new AppError(404, 'NOT_FOUND', 'Recurso no encontrado')
+
+    const components = await prisma.packageComponent.findMany({
+      where: { packageResourceId: id },
+      include: { componentResource: { select: { code: true, name: true, unit: true, type: true } } },
+      orderBy: { sortOrder: 'asc' },
+    })
+
+    const rows = components.map(c => ({
+      codigoComponente: c.componentResource.code,
+      nombreComponente: c.componentResource.name,
+      tipo: c.componentResource.type,
+      cantidad: Number(c.quantity),
+      unidad: c.componentResource.unit ?? '',
+      orden: c.sortOrder,
+    }))
+
+    res.json({ success: true, data: rows })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function importPackageComponentsCsv(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params
+    const tenantId = req.user!.tenantId
+    const resource = await prisma.resource.findFirst({ where: { id, tenantId, isPackage: true } })
+    if (!resource) throw new AppError(404, 'NOT_FOUND', 'Paquete no encontrado')
+
+    const rows = req.body.rows
+    if (!Array.isArray(rows)) throw new AppError(400, 'INVALID_DATA', 'Se esperaba un arreglo')
+
+    const codes = rows.map((r: any) => r.codigoComponente).filter(Boolean)
+    const components = await prisma.resource.findMany({ where: { tenantId, code: { in: codes } } })
+    const codeMap = new Map(components.map(c => [c.code, c]))
+
+    const missing = codes.filter((c: string) => !codeMap.has(c))
+    if (missing.length > 0) throw new AppError(400, 'INVALID_DATA', `Recursos no encontrados: ${missing.join(', ')}`)
+
+    await prisma.$transaction(async (tx) => {
+      await tx.packageComponent.deleteMany({ where: { packageResourceId: id } })
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i]
+        const comp = codeMap.get(row.codigoComponente)
+        if (!comp) continue
+        await tx.packageComponent.create({
+          data: {
+            packageResourceId: id,
+            componentResourceId: comp.id,
+            quantity: parseFloat(row.cantidad) || 1,
+            sortOrder: row.orden ? parseInt(row.orden) : i,
+          },
+        })
+      }
+    })
+
+    res.json({ success: true, data: { imported: rows.length } })
   } catch (err) {
     next(err)
   }

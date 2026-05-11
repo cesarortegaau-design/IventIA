@@ -30,6 +30,7 @@ export interface CreateOrderInput {
   departamento?: string
   organizacionId?: string
   isCreditNote?: boolean
+  isBudgetOrder?: boolean
   originalOrderId?: string
   createdById: string
   initialStatus?: 'QUOTED' | 'CONFIRMED' | 'CREDIT_NOTE'
@@ -41,6 +42,8 @@ export interface CreateOrderInput {
     observations?: string
     sortOrder?: number
     deliveryDate?: Date
+    unitCostRequested?: number | null
+    unitCostReal?: number | null
   }>
 }
 
@@ -100,6 +103,8 @@ export async function createOrder(input: CreateOrderInput) {
       observations: li.observations,
       sortOrder: li.sortOrder ?? idx,
       deliveryDate: li.deliveryDate,
+      unitCostRequested: li.unitCostRequested ?? null,
+      unitCostReal: li.unitCostReal ?? null,
     }
   })
 
@@ -137,6 +142,7 @@ export async function createOrder(input: CreateOrderInput) {
         departamento: input.departamento,
         organizacionId: input.organizacionId,
         isCreditNote: input.isCreditNote ?? false,
+        isBudgetOrder: input.isBudgetOrder ?? false,
         originalOrderId: input.originalOrderId,
         createdById: input.createdById,
         lineItems: { create: lineItemData },

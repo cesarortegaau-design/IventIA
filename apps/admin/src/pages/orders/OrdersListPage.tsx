@@ -39,6 +39,7 @@ export default function OrdersListPage() {
   const [eventId, setEventId] = useState<string | undefined>(searchParams.get('eventId') ?? undefined)
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null)
   const [responsableId, setResponsableId] = useState<string | undefined>(undefined)
+  const [budgetTypeFilter, setBudgetTypeFilter] = useState<'all' | 'service' | 'budget'>('all')
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
 
   function syncParams(updates: Record<string, string | undefined>) {
@@ -91,10 +92,12 @@ export default function OrdersListPage() {
   const filteredOrders = useMemo(() => {
     let list = statusFilter ? orders.filter((o: any) => o.status === statusFilter) : orders
     if (responsableId) list = list.filter((o: any) => o.assignedTo?.id === responsableId)
+    if (budgetTypeFilter === 'budget') list = list.filter((o: any) => o.isBudgetOrder)
+    if (budgetTypeFilter === 'service') list = list.filter((o: any) => !o.isBudgetOrder)
     return list
-  }, [orders, statusFilter, responsableId])
+  }, [orders, statusFilter, responsableId, budgetTypeFilter])
 
-  const hasFilters = !!(eventId || statusFilter || dateRange || search || responsableId)
+  const hasFilters = !!(eventId || statusFilter || dateRange || search || responsableId || budgetTypeFilter !== 'all')
 
   function clearFilters() {
     setEventId(undefined)
@@ -102,6 +105,7 @@ export default function OrdersListPage() {
     setDateRange(null)
     setSearch('')
     setResponsableId(undefined)
+    setBudgetTypeFilter('all')
     setSearchParams(new URLSearchParams(), { replace: true })
   }
 
@@ -164,6 +168,14 @@ export default function OrdersListPage() {
           {v}
         </Button>
       ),
+    },
+    {
+      title: 'Tipo',
+      key: 'tipo',
+      width: 110,
+      render: (_: any, r: any) => r.isBudgetOrder
+        ? <Tag color="purple">Presupuestal</Tag>
+        : null,
     },
     {
       title: 'Evento',
@@ -406,6 +418,17 @@ export default function OrdersListPage() {
           filterOption={(input, opt) => String(opt?.label ?? '').toLowerCase().includes(input.toLowerCase())}
           options={users.map((u: any) => ({ value: u.id, label: `${u.firstName} ${u.lastName}` }))}
           style={{ minWidth: 160 }}
+        />
+        <Select
+          placeholder="Tipo"
+          value={budgetTypeFilter}
+          onChange={(v) => setBudgetTypeFilter(v)}
+          style={{ minWidth: 160 }}
+          options={[
+            { value: 'all', label: 'Tipo: Todas' },
+            { value: 'service', label: 'Tipo: Servicio' },
+            { value: 'budget', label: 'Tipo: Presupuestales' },
+          ]}
         />
         <RangePicker
           format="DD/MM/YYYY"

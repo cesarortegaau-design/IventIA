@@ -33,4 +33,13 @@ export const resourcesApi = {
     apiClient.put(`/resources/${id}/package-components/${componentId}`, data).then(r => r.data),
   removePackageComponent: (id: string, componentId: string) =>
     apiClient.delete(`/resources/${id}/package-components/${componentId}`).then(r => r.data),
+
+  exportCsv: (params?: Record<string, any>) =>
+    apiClient.get('/resources/export-csv', { params }).then(r => r.data),
+  importCsv: (rows: any[]) =>
+    apiClient.post('/resources/import-csv', { rows }).then(r => r.data),
+  exportPackageComponentsCsv: (id: string) =>
+    apiClient.get(`/resources/${id}/package-components/export-csv`).then(r => r.data),
+  importPackageComponentsCsv: (id: string, rows: any[]) =>
+    apiClient.post(`/resources/${id}/package-components/import-csv`, { rows }).then(r => r.data),
 }
