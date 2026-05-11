@@ -605,6 +605,7 @@ export default function PriceListsPage() {
         confirmLoading={addItemMutation.isPending}
         width={800}
         forceRender
+        zIndex={1100}
       >
         <Form form={itemForm} layout="vertical" onFinish={addItemMutation.mutate}>
           <Form.Item name="resourceId" label={viewingList?.isConceptList ? 'Concepto' : 'Recurso'} rules={[{ required: true }]}>

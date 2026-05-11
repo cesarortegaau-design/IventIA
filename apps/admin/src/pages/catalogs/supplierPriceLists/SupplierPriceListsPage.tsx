@@ -348,6 +348,7 @@ export default function SupplierPriceListsPage() {
           confirmLoading={addItemMutation.isPending}
           width={600}
           forceRender
+          zIndex={1100}
         >
           <Form form={itemForm} layout="vertical" onFinish={addItemMutation.mutate}>
             <Form.Item name="resourceId" label="Recurso" rules={[{ required: true, message: 'Selecciona un recurso' }]}>
