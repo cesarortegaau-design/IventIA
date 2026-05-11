@@ -5,7 +5,7 @@ import crypto from 'crypto'
 import zlib from 'zlib'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
-import { deleteFromCloudinary } from '../lib/cloudinary'
+import { uploadToCloudinary, deleteFromCloudinary } from '../lib/cloudinary'
 import cloudinary from '../lib/cloudinary'
 
 // GET /events/:eventId/floor-plans
@@ -78,6 +78,39 @@ export async function createFloorPlanRecord(req: Request, res: Response, next: N
         name: name?.trim() || fileName.replace(/\.[^.]+$/, ''),
         fileUrl,
         fileName,
+        uploadedById: userId,
+      },
+    })
+
+    res.status(201).json({ success: true, data: floorPlan })
+  } catch (err) {
+    next(err)
+  }
+}
+
+// POST /events/:eventId/floor-plans/upload  (multipart/form-data, field: 'file')
+// Receives the DXF file directly — no browser-to-Cloudinary hop needed.
+// Handles large files reliably by streaming the buffer to Cloudinary server-side.
+export async function uploadFloorPlanFile(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { eventId } = req.params
+    const tenantId = req.user!.tenantId
+    const userId   = req.user!.userId
+
+    const event = await prisma.event.findFirst({ where: { id: eventId, tenantId } })
+    if (!event) throw new AppError(404, 'NOT_FOUND', 'Evento no encontrado')
+
+    const file = (req as any).file as Express.Multer.File
+    if (!file) throw new AppError(400, 'MISSING_FILE', 'Se requiere un archivo DXF')
+
+    const { url } = await uploadToCloudinary(file.buffer, 'iventia/floor-plans', 'raw')
+
+    const floorPlan = await prisma.floorPlan.create({
+      data: {
+        eventId,
+        name: file.originalname.replace(/\.[^.]+$/, ''),
+        fileUrl: url,
+        fileName: file.originalname,
         uploadedById: userId,
       },
     })

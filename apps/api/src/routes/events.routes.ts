@@ -8,7 +8,7 @@ import { createOrder } from '../controllers/orders.controller'
 import { listEventSpaces, createEventSpace, updateEventSpace, deleteEventSpace, getEventSpaceAudit } from '../controllers/eventSpaces.controller'
 import { uploadEventDocument, deleteEventDocument } from '../controllers/documents.controller'
 import { importStands, listStands, createStand, updateStand, deleteStand } from '../controllers/stands.controller'
-import { listFloorPlans, getFloorPlanUploadSignature, createFloorPlanRecord, deleteFloorPlan, getFloorPlanContent } from '../controllers/floorPlans.controller'
+import { listFloorPlans, getFloorPlanUploadSignature, createFloorPlanRecord, deleteFloorPlan, getFloorPlanContent, uploadFloorPlanFile } from '../controllers/floorPlans.controller'
 import { listEventActivities, createEventActivity, updateEventActivity, deleteEventActivity, bulkReorderActivities, exportActivitiesCsv, importActivitiesCsv } from '../controllers/eventActivities.controller'
 import activityDocumentsRouter from './activityDocuments.routes'
 
@@ -53,8 +53,11 @@ router.put('/:eventId/spaces/:spaceId', requirePrivilege(PRIVILEGES.EVENT_EDIT_Q
 router.delete('/:eventId/spaces/:spaceId', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), deleteEventSpace)
 router.get('/:eventId/spaces/:spaceId/audit', requirePrivilege(PRIVILEGES.EVENT_VIEW), getEventSpaceAudit)
 
-// Floor plans — browser uploads directly to Cloudinary, server only signs + records
+// Floor plans
 router.get('/:eventId/floor-plans', requirePrivilege(PRIVILEGES.EVENT_VIEW), listFloorPlans)
+// Server-side upload: file goes browser → API → Cloudinary (handles large files reliably)
+router.post('/:eventId/floor-plans/upload', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), docUpload.single('file'), multerErrorHandler, uploadFloorPlanFile)
+// Legacy direct-upload helpers (kept for backwards compat)
 router.get('/:eventId/floor-plans/sign', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), getFloorPlanUploadSignature)
 router.post('/:eventId/floor-plans', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), createFloorPlanRecord)
 router.get('/:eventId/floor-plans/:fpId/content', requirePrivilege(PRIVILEGES.EVENT_VIEW), getFloorPlanContent)

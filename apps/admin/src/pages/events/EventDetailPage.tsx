@@ -113,6 +113,7 @@ export default function EventDetailPage() {
   const [generateDocOpen, setGenerateDocOpen] = useState(false)
   const [orderFromSpacesOpen, setOrderFromSpacesOpen] = useState(false)
   const [fpUploading, setFpUploading] = useState(false)
+  const [fpProgress, setFpProgress] = useState(0)
   const [selectedFpId, setSelectedFpId] = useState<string | null>(null)
   const [orderTypeFilter, setOrderTypeFilter] = useState<'all' | 'service' | 'budget'>('all')
 
@@ -356,36 +357,18 @@ export default function EventDetailPage() {
 
   async function handleFloorPlanUpload(file: File) {
     setFpUploading(true)
+    setFpProgress(0)
     try {
-      const signRes = await floorPlansApi.getUploadSignature(id!)
-      const { timestamp, signature, apiKey, cloudName, folder } = signRes.data
-      let uploadBlob: Blob = file
-      let uploadFileName = file.name
-      if (typeof CompressionStream !== 'undefined') {
-        const compressed = file.stream().pipeThrough(new CompressionStream('gzip'))
-        uploadBlob = await new Response(compressed).blob()
-        uploadFileName = file.name + '.gz'
-      }
-      const form = new FormData()
-      form.append('file', uploadBlob, uploadFileName)
-      form.append('api_key', apiKey)
-      form.append('timestamp', String(timestamp))
-      form.append('signature', signature)
-      form.append('folder', folder)
-      const cloudRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`, { method: 'POST', body: form })
-      if (!cloudRes.ok) {
-        const errBody = await cloudRes.json().catch(() => ({}))
-        throw new Error(errBody?.error?.message ?? `Cloudinary error ${cloudRes.status}`)
-      }
-      const cloudData = await cloudRes.json()
-      const fp = await floorPlansApi.createRecord(id!, { fileUrl: cloudData.secure_url, fileName: uploadFileName, name: file.name.replace(/\.dxf$/i, '') })
+      const res = await floorPlansApi.upload(id!, file, setFpProgress)
       refetchFloorPlans()
-      setSelectedFpId(fp.data.id)
+      setSelectedFpId(res.data.id)
       message.success('Plano subido correctamente')
     } catch (err: any) {
-      message.error(err?.response?.data?.error?.message ?? err?.message ?? 'Error al subir el plano', 8)
+      const msg = err?.response?.data?.error?.message ?? err?.response?.data?.message ?? err?.message ?? 'Error al subir el plano'
+      message.error(msg, 8)
     } finally {
       setFpUploading(false)
+      setFpProgress(0)
     }
     return false
   }
@@ -819,7 +802,9 @@ export default function EventDetailPage() {
                   <div style={{ background: 'white', borderRadius: 10, padding: 16, border: `1px solid ${T.border}` }}>
                     <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
                       <Upload accept=".dxf" showUploadList={false} beforeUpload={handleFloorPlanUpload}>
-                        <Button icon={<UploadOutlined />} loading={fpUploading} type="primary">Subir DXF</Button>
+                        <Button icon={<UploadOutlined />} loading={fpUploading} type="primary">
+                          {fpUploading && fpProgress > 0 ? `Subiendo ${fpProgress}%` : 'Subir DXF'}
+                        </Button>
                       </Upload>
                       {floorPlans.map((fp: any) => (
                         <Space key={fp.id} size={4}>
