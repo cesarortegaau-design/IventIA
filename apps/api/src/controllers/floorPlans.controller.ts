@@ -186,27 +186,40 @@ export async function getFloorPlanContent(req: Request, res: Response, next: Nex
     const fp = await prisma.floorPlan.findFirst({ where: { id: fpId, eventId } })
     if (!fp) throw new AppError(404, 'NOT_FOUND', 'Plano no encontrado')
 
-    // Normalize Cloudinary URL: ensure raw files use /raw/upload/ not /image/upload/
+    // Extract the public_id from the stored Cloudinary URL.
+    // Raw files may be stored under /raw/upload/ or /image/upload/ — normalise first.
     const normalizedUrl = fp.fileUrl.replace(
       /res\.cloudinary\.com\/([^/]+)\/image\/upload\//,
       'res.cloudinary.com/$1/raw/upload/'
     )
 
-    // Generate a signed delivery URL so the server-side fetch works regardless
-    // of the Cloudinary account's access restrictions (avoids 401 on authenticated delivery)
+    // Use the Cloudinary Upload API's authenticated download endpoint instead of a
+    // signed delivery URL.  Delivery-URL signing is fragile for files with compound
+    // extensions (.dxf.gz) because the SDK strips the last extension when computing
+    // the signature, causing a mismatch → 401.  The /raw/download API endpoint uses
+    // the same Upload-API signature (sha1 of sorted params + secret) and is always
+    // authorised by the API key/secret regardless of account delivery settings.
     let fileUrl = normalizedUrl
     try {
-      const match = normalizedUrl.match(/\/(?:raw|image)\/upload\/(?:v\d+\/)?(.+)$/)
-      if (match) {
-        fileUrl = cloudinary.url(match[1], {
-          resource_type: 'raw',
-          sign_url: true,
-          secure: true,
-          type: 'upload',
-        })
+      const pubMatch = normalizedUrl.match(/\/(?:raw|image)\/upload\/(?:v\d+\/)?(.+)$/)
+      const cloudName = process.env.CLOUDINARY_CLOUD_NAME
+      const apiKey    = process.env.CLOUDINARY_API_KEY
+      const apiSecret = process.env.CLOUDINARY_API_SECRET
+      if (pubMatch && cloudName && apiKey && apiSecret) {
+        const publicId  = pubMatch[1]
+        const timestamp = Math.round(Date.now() / 1000)
+        // Params must be sorted alphabetically before signing (Cloudinary Upload API rule)
+        const paramsToSign = `public_id=${publicId}&timestamp=${timestamp}`
+        const signature = crypto.createHash('sha1').update(paramsToSign + apiSecret).digest('hex')
+        const dlUrl = new URL(`https://api.cloudinary.com/v1_1/${cloudName}/raw/download`)
+        dlUrl.searchParams.set('public_id', publicId)
+        dlUrl.searchParams.set('api_key',   apiKey)
+        dlUrl.searchParams.set('timestamp', String(timestamp))
+        dlUrl.searchParams.set('signature', signature)
+        fileUrl = dlUrl.toString()
       }
     } catch {
-      // fallback to the normalized URL if signing fails
+      // fallback to the normalised URL — may still work on accounts with public delivery
     }
 
     let raw: Buffer
