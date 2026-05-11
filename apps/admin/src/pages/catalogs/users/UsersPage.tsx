@@ -22,6 +22,7 @@ export default function UsersPage() {
   const { data: deptsData } = useQuery({
     queryKey: ['departments'],
     queryFn: () => apiClient.get('/departments').then(r => r.data),
+    staleTime: 5 * 60 * 1000,
   })
 
   const { data: profilesData } = useQuery({
@@ -31,9 +32,12 @@ export default function UsersPage() {
 
   const saveMutation = useMutation({
     mutationFn: (values: any) => {
+      const payload = { ...values }
+      // Don't send password when left blank (API rejects empty string for min-8 rule)
+      if (!payload.password) delete payload.password
       return editingId
-        ? apiClient.put(`/users/${editingId}`, values).then(r => r.data)
-        : apiClient.post('/users', values).then(r => r.data)
+        ? apiClient.put(`/users/${editingId}`, payload).then(r => r.data)
+        : apiClient.post('/users', payload).then(r => r.data)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
@@ -65,7 +69,9 @@ export default function UsersPage() {
     { title: '', key: 'actions', render: (_: any, r: any) => <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)} /> },
   ]
 
-  const deptOptions = (deptsData?.data ?? []).map((d: any) => ({ value: d.id, label: d.name }))
+  const deptOptions = ((deptsData?.data ?? deptsData ?? []) as any[])
+    .filter((d: any) => d.isActive !== false)
+    .map((d: any) => ({ value: d.id, label: d.name }))
   const profileOptions = (profilesData?.data ?? []).map((p: any) => ({ value: p.id, label: p.name }))
 
   return (
