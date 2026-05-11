@@ -177,6 +177,8 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
     XLSX.writeFile(wb, `presupuesto-${budget.name}.xlsx`)
   }
 
+  const fmt = (n: number) => `$${n.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
+
   const columns = [
     {
       title: 'Clave / Descripción',
@@ -194,29 +196,66 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
     {
       title: 'Costo Directo',
       key: 'directCost',
-      width: 130,
-      render: (_: any, r: any) => (
-        <InputNumber
-          size="small"
-          prefix="$"
-          value={Number(r.directCost)}
-          formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-          parser={(v: any) => v!.replace(/\$\s?|(,*)/g, '')}
-          style={{ width: '100%' }}
-          disabled={r.directOrders?.length > 0}
-          onBlur={(e: any) => {
-            const val = parseFloat(e.target.value.replace(/,/g, ''))
-            if (!isNaN(val) && val !== Number(r.directCost)) {
-              updateLineMut.mutate({ lineId: r.id, data: { directCost: val } })
-            }
-          }}
-        />
-      ),
+      width: 200,
+      render: (_: any, r: any) => {
+        const hasOrders = r.directOrders?.length > 0
+        return (
+          <div>
+            {hasOrders ? (
+              // Calculated from assigned orders — show as readonly total
+              <div style={{ marginBottom: 4 }}>
+                <Text strong style={{ color: T.navy }}>{fmt(Number(r.directCost))}</Text>
+                <Text style={{ fontSize: 11, color: T.textMuted, marginLeft: 6 }}>(calculado)</Text>
+              </div>
+            ) : (
+              <InputNumber
+                size="small"
+                prefix="$"
+                value={Number(r.directCost)}
+                formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                parser={(v: any) => v!.replace(/\$\s?|(,*)/g, '')}
+                style={{ width: '100%', marginBottom: 4 }}
+                onBlur={(e: any) => {
+                  const val = parseFloat(e.target.value.replace(/,/g, ''))
+                  if (!isNaN(val) && val !== Number(r.directCost)) {
+                    updateLineMut.mutate({ lineId: r.id, data: { directCost: val } })
+                  }
+                }}
+              />
+            )}
+            {/* Assigned orders chips */}
+            {hasOrders && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, marginBottom: 4 }}>
+                {r.directOrders.map((o: any) => (
+                  <Tag
+                    key={o.orderId}
+                    closable
+                    onClose={() => removeDirectMut.mutate({ lineId: r.id, orderId: o.orderId })}
+                    style={{ fontSize: 11, margin: 0 }}
+                    color="blue"
+                  >
+                    {o.order?.orderNumber}
+                  </Tag>
+                ))}
+              </div>
+            )}
+            <Button
+              type="link"
+              size="small"
+              icon={<OrderedListOutlined />}
+              style={{ padding: 0, fontSize: 11, height: 'auto' }}
+              onClick={() => setDirectOrderModal({ lineId: r.id })}
+            >
+              + Asignar órdenes
+            </Button>
+          </div>
+        )
+      },
     },
     {
       title: 'Ingreso',
       key: 'income',
-      width: 130,
+      width: 140,
       render: (_: any, r: any) => (
         <InputNumber
           size="small"
@@ -237,29 +276,64 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
     {
       title: 'Costo Indirecto',
       key: 'indirectCost',
-      width: 130,
-      render: (_: any, r: any) => (
-        <InputNumber
-          size="small"
-          prefix="$"
-          value={Number(r.indirectCost)}
-          formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-          parser={(v: any) => v!.replace(/\$\s?|(,*)/g, '')}
-          style={{ width: '100%' }}
-          disabled={r.indirectOrders?.length > 0}
-          onBlur={(e: any) => {
-            const val = parseFloat(e.target.value.replace(/,/g, ''))
-            if (!isNaN(val) && val !== Number(r.indirectCost)) {
-              updateLineMut.mutate({ lineId: r.id, data: { indirectCost: val } })
-            }
-          }}
-        />
-      ),
+      width: 200,
+      render: (_: any, r: any) => {
+        const hasOrders = r.indirectOrders?.length > 0
+        return (
+          <div>
+            {hasOrders ? (
+              <div style={{ marginBottom: 4 }}>
+                <Text strong style={{ color: T.navy }}>{fmt(Number(r.indirectCost))}</Text>
+                <Text style={{ fontSize: 11, color: T.textMuted, marginLeft: 6 }}>(calculado)</Text>
+              </div>
+            ) : (
+              <InputNumber
+                size="small"
+                prefix="$"
+                value={Number(r.indirectCost)}
+                formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                parser={(v: any) => v!.replace(/\$\s?|(,*)/g, '')}
+                style={{ width: '100%', marginBottom: 4 }}
+                onBlur={(e: any) => {
+                  const val = parseFloat(e.target.value.replace(/,/g, ''))
+                  if (!isNaN(val) && val !== Number(r.indirectCost)) {
+                    updateLineMut.mutate({ lineId: r.id, data: { indirectCost: val } })
+                  }
+                }}
+              />
+            )}
+            {hasOrders && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, marginBottom: 4 }}>
+                {r.indirectOrders.map((o: any) => (
+                  <Tag
+                    key={o.orderId}
+                    closable
+                    onClose={() => removeIndirectMut.mutate({ lineId: r.id, orderId: o.orderId })}
+                    style={{ fontSize: 11, margin: 0 }}
+                    color="orange"
+                  >
+                    {o.order?.orderNumber}
+                  </Tag>
+                ))}
+              </div>
+            )}
+            <Button
+              type="link"
+              size="small"
+              icon={<OrderedListOutlined />}
+              style={{ padding: 0, fontSize: 11, height: 'auto' }}
+              onClick={() => setIndirectOrderModal({ lineId: r.id })}
+            >
+              + Asignar órdenes
+            </Button>
+          </div>
+        )
+      },
     },
     {
       title: 'Utilidad',
       key: 'utility',
-      width: 130,
+      width: 140,
       render: (_: any, r: any) => (
         <InputNumber
           size="small"
@@ -278,39 +352,19 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
       ),
     },
     {
-      title: 'Asignaciones',
-      key: 'assignments',
-      width: 130,
+      title: 'Tareas',
+      key: 'tasks',
+      width: 90,
       render: (_: any, r: any) => (
-        <Space size={4} wrap>
-          <Tooltip title="Órdenes costo directo">
-            <Button
-              size="small"
-              icon={<OrderedListOutlined />}
-              onClick={() => setDirectOrderModal({ lineId: r.id })}
-            >
-              {r.directOrders?.length ?? 0}D
-            </Button>
-          </Tooltip>
-          <Tooltip title="Órdenes costo indirecto">
-            <Button
-              size="small"
-              icon={<OrderedListOutlined />}
-              onClick={() => setIndirectOrderModal({ lineId: r.id })}
-            >
-              {r.indirectOrders?.length ?? 0}I
-            </Button>
-          </Tooltip>
-          <Tooltip title="Tareas">
-            <Button
-              size="small"
-              icon={<CheckSquareOutlined />}
-              onClick={() => setTaskModal({ lineId: r.id })}
-            >
-              {r.collabTasks?.length ?? 0}
-            </Button>
-          </Tooltip>
-        </Space>
+        <Button
+          size="small"
+          icon={<CheckSquareOutlined />}
+          onClick={() => setTaskModal({ lineId: r.id })}
+          type={r.collabTasks?.length > 0 ? 'primary' : 'default'}
+          style={r.collabTasks?.length > 0 ? { background: T.navy, borderColor: T.navy } : {}}
+        >
+          {r.collabTasks?.length ?? 0}
+        </Button>
       ),
     },
   ]
