@@ -359,12 +359,60 @@ export default function EventDetailPage() {
     setFpUploading(true)
     setFpProgress(0)
     try {
-      const res = await floorPlansApi.upload(id!, file, setFpProgress)
+      // 1. Get a signed upload signature from the server (no file data sent to server)
+      const sigRes = await floorPlansApi.getUploadSignature(id!)
+      const { timestamp, signature, apiKey, cloudName, folder } = sigRes.data
+
+      // 2. Upload directly to Cloudinary in 6 MB chunks
+      const CHUNK = 6 * 1024 * 1024
+      const totalSize = file.size
+      const uploadId = Math.random().toString(36).slice(2) + Date.now().toString(36)
+      let start = 0
+      let lastResponse: any = null
+
+      while (start < totalSize) {
+        const end = Math.min(start + CHUNK, totalSize)
+        const chunk = file.slice(start, end)
+
+        const fd = new FormData()
+        fd.append('file', chunk, file.name)
+        fd.append('api_key', apiKey)
+        fd.append('timestamp', String(timestamp))
+        fd.append('signature', signature)
+        fd.append('folder', folder)
+
+        const resp = await fetch(
+          `https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`,
+          {
+            method: 'POST',
+            headers: {
+              'X-Unique-Upload-Id': uploadId,
+              'Content-Range': `bytes ${start}-${end - 1}/${totalSize}`,
+            },
+            body: fd,
+          },
+        )
+
+        if (!resp.ok) {
+          const errBody = await resp.json().catch(() => ({}))
+          throw new Error(errBody?.error?.message ?? `Error Cloudinary ${resp.status}`)
+        }
+
+        lastResponse = await resp.json()
+        start = end
+        setFpProgress(Math.round((end / totalSize) * 100))
+      }
+
+      // 3. Register the resulting Cloudinary URL in our database
+      const record = await floorPlansApi.createRecord(id!, {
+        fileUrl: lastResponse.secure_url,
+        fileName: file.name,
+      })
       refetchFloorPlans()
-      setSelectedFpId(res.data.id)
+      setSelectedFpId(record.data.id)
       message.success('Plano subido correctamente')
     } catch (err: any) {
-      const msg = err?.response?.data?.error?.message ?? err?.response?.data?.message ?? err?.message ?? 'Error al subir el plano'
+      const msg = err?.message ?? 'Error al subir el plano'
       message.error(msg, 8)
     } finally {
       setFpUploading(false)
