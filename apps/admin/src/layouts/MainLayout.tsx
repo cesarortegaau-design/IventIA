@@ -42,7 +42,7 @@ const TOP_AREAS = [
   { key: 'operaciones',  icon: <ToolOutlined />,     label: 'Operaciones' },
   { key: 'catalogos',    icon: <AppstoreOutlined />, label: 'Catálogos' },
   { key: 'analitica',    icon: <BarChartOutlined />, label: 'Analítica' },
-  { key: 'crm',          icon: <ContactsOutlined />, label: 'CRM' },
+  { key: 'colabora',     icon: <MessageOutlined />,  label: 'Colabora' },
 ]
 
 interface SidebarItem {
@@ -81,7 +81,7 @@ export default function MainLayout() {
     if (p.startsWith('/reportes') || p.startsWith('/catalogos/ordenes-compra') || p.startsWith('/almacen') || p.startsWith('/ordenes')) return 'operaciones'
     if (p.startsWith('/catalogos')) return 'catalogos'
     if (p.startsWith('/analisis') || p.startsWith('/dashboard') || p.startsWith('/produccion')) return 'analitica'
-    if (p.startsWith('/crm') || p.startsWith('/chat')) return 'crm'
+    if (p.startsWith('/crm') || p.startsWith('/chat')) return 'colabora'
     return 'inicio'
   }, [location.pathname])
 
@@ -134,7 +134,7 @@ export default function MainLayout() {
       { key: '/reportes/ordenes', label: 'Reporte de Órdenes', icon: <FileTextOutlined />, route: '/reportes/ordenes', privilege: PRIVILEGES.REPORT_ORDERS },
       { key: '/produccion', label: 'Producción y Costos', icon: <BarChartOutlined />, route: '/produccion', privilege: PRIVILEGES.PRODUCTION_VIEW },
     ],
-    crm: [
+    colabora: [
       { type: 'section', label: 'Comercial' },
       { key: '/crm', label: 'CRM', icon: <ContactsOutlined />, route: '/crm', privilege: PRIVILEGES.CRM_VIEW },
       { type: 'section', label: 'Comunicación' },
@@ -169,7 +169,7 @@ export default function MainLayout() {
       operaciones: '/reportes/ordenes',
       catalogos: '/catalogos/recursos',
       analitica: '/analisis',
-      crm: '/crm',
+      colabora: '/chat',
     }
     const target = defaults[areaKey]
     if (target && activeArea !== areaKey) {
