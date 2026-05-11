@@ -6,7 +6,7 @@ import {
 } from 'antd'
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, DownloadOutlined,
-  ImportOutlined, BarChartOutlined, AuditOutlined, FilterOutlined, FilePdfOutlined,
+  ImportOutlined, BarChartOutlined, AuditOutlined, FilterOutlined, FilePdfOutlined, FileExcelOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { eventActivitiesApi } from '../../api/eventActivities'
@@ -261,6 +261,7 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
   const [statusFilter, setStatusFilter]       = useState<string | undefined>(undefined)
   const [modalOpen, setModalOpen]             = useState(false)
   const [pdfLoading, setPdfLoading]           = useState(false)
+  const [excelLoading, setExcelLoading]       = useState(false)
   const [editingActivity, setEditingActivity] = useState<any>(null)
   const [expandedRowKeys, setExpandedRowKeys] = useState<string[]>([])
   const [importPreview, setImportPreview]     = useState<any[] | null>(null)
@@ -400,6 +401,18 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
     a.download = 'plantilla-actividades.csv'
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  async function handleDownloadExcel() {
+    setExcelLoading(true)
+    try {
+      const { downloadTimelineExcel } = await import('../../utils/timelineExcel')
+      await downloadTimelineExcel(activities, event)
+    } catch {
+      message.error('Error al generar Excel')
+    } finally {
+      setExcelLoading(false)
+    }
   }
 
   async function handleDownloadPdf() {
@@ -646,6 +659,9 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
           >
             <Button icon={<ImportOutlined />}>Importar CSV</Button>
           </Upload>
+          <Button icon={<FileExcelOutlined />} loading={excelLoading} onClick={handleDownloadExcel}>
+            Exportar Excel
+          </Button>
           <Button icon={<FilePdfOutlined />} loading={pdfLoading} onClick={handleDownloadPdf}>
             Imprimir PDF
           </Button>

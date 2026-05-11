@@ -10,7 +10,6 @@ import { priceListsApi } from '../../api/priceLists'
 import { eventsApi } from '../../api/events'
 import { collabTasksApi } from '../../api/collabTasks'
 import { T } from '../../styles/tokens'
-import * as XLSX from 'xlsx'
 
 const { Text } = Typography
 
@@ -26,7 +25,8 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
   const [directOrderModal, setDirectOrderModal] = useState<{ lineId: string } | null>(null)
   const [indirectOrderModal, setIndirectOrderModal] = useState<{ lineId: string } | null>(null)
   const [taskModal, setTaskModal] = useState<{ lineId: string } | null>(null)
-  const [pdfLoading, setPdfLoading] = useState(false)
+  const [pdfLoading, setPdfLoading]     = useState(false)
+  const [excelLoading, setExcelLoading] = useState(false)
   const [form] = Form.useForm()
 
   const { data: budgetsData, isLoading: budgetsLoading } = useQuery({
@@ -144,38 +144,17 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
     onSuccess: () => qc.invalidateQueries({ queryKey: ['budget-detail', selectedBudgetId] }),
   })
 
-  function handleExportExcel() {
-    if (!budget || !lines.length) return
-    const rows: any[] = []
-    lines.forEach((line: any) => {
-      rows.push({
-        'Clave': line.resource?.code ?? '',
-        'Descripción': line.description,
-        'Tipo': line.resource?.type ?? '',
-        'Costo Directo': Number(line.directCost),
-        'Ingreso': Number(line.income),
-        'Costo Indirecto': Number(line.indirectCost),
-        'Utilidad': Number(line.utility),
-      })
-      if (line.resource?.isPackage && line.resource?.packageComponents?.length) {
-        line.resource.packageComponents.forEach((pc: any) => {
-          rows.push({
-            'Clave': `  ${pc.componentResource?.code ?? ''}`,
-            'Descripción': `  ${pc.componentResource?.name ?? ''}`,
-            'Tipo': pc.componentResource?.type ?? '',
-            'Costo Directo': '',
-            'Ingreso': '',
-            'Costo Indirecto': '',
-            'Utilidad': '',
-          })
-        })
-      }
-    })
-
-    const ws = XLSX.utils.json_to_sheet(rows)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Presupuesto')
-    XLSX.writeFile(wb, `presupuesto-${budget.name}.xlsx`)
+  async function handleExportExcel() {
+    if (!budget) return
+    setExcelLoading(true)
+    try {
+      const { downloadBudgetExcel } = await import('../../utils/budgetExcel')
+      await downloadBudgetExcel(budget, event)
+    } catch {
+      antMessage.error('Error al generar Excel')
+    } finally {
+      setExcelLoading(false)
+    }
   }
 
   async function handleDownloadPdf() {
@@ -410,7 +389,7 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
         <Space>
           {selectedBudgetId && budget && (
             <>
-              <Button icon={<FileExcelOutlined />} onClick={handleExportExcel}>
+              <Button icon={<FileExcelOutlined />} loading={excelLoading} onClick={handleExportExcel}>
                 Exportar Excel
               </Button>
               <Button icon={<FilePdfOutlined />} loading={pdfLoading} onClick={handleDownloadPdf}>
