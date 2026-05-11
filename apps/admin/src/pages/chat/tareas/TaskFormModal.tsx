@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Modal, Form, Input, Select, DatePicker, Slider, Space, Button, message as antMessage } from 'antd'
 import dayjs from 'dayjs'
 
-export function TaskFormModal({ open, task, onCancel, onSubmit, isLoading, users = [], events: eventsData = [], clients: clientsData = [], departments: departmentsData = [], orders: ordersData = [] }: any) {
+export function TaskFormModal({ open, task, onCancel, onSubmit, isLoading, users = [], events: eventsData = [], clients: clientsData = [], departments: departmentsData = [], orders: ordersData = [], initialEventId, hideEventField = false }: any) {
   const [form] = Form.useForm()
 
   useEffect(() => {
@@ -22,16 +22,17 @@ export function TaskFormModal({ open, task, onCancel, onSubmit, isLoading, users
         startDate: task.startDate ? dayjs(task.startDate) : null,
         endDate: task.endDate ? dayjs(task.endDate) : null,
         assignedToId: task.assignedToId,
-        eventId: task.eventId,
+        eventId: task.eventId ?? initialEventId,
         clientId: task.clientId,
         departmentIds: task.departments?.map((d: any) => d.departmentId) || [],
         orderIds: task.orders?.map((o: any) => o.orderId) || [],
       })
     } else {
-      // Create mode: reset form
+      // Create mode: reset then apply defaults
       form.resetFields()
+      if (initialEventId) form.setFieldValue('eventId', initialEventId)
     }
-  }, [open, task, form])
+  }, [open, task, form, initialEventId])
 
   const handleSubmit = async (values: any) => {
     const payload = {
@@ -127,18 +128,20 @@ export function TaskFormModal({ open, task, onCancel, onSubmit, isLoading, users
 
         {/* Event, Client, Departments, Orders */}
         <Space style={{ width: '100%' }}>
-          <Form.Item name="eventId" label="Evento" style={{ flex: 1 }}>
-            <Select
-              placeholder="Seleccionar evento"
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              options={(Array.isArray(eventsData) ? eventsData : []).map((e: any) => ({
-                value: e.id,
-                label: e.name || e.code,
-              }))}
-            />
-          </Form.Item>
+          {!hideEventField && (
+            <Form.Item name="eventId" label="Evento" style={{ flex: 1 }}>
+              <Select
+                placeholder="Seleccionar evento"
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                options={(Array.isArray(eventsData) ? eventsData : []).map((e: any) => ({
+                  value: e.id,
+                  label: e.name || e.code,
+                }))}
+              />
+            </Form.Item>
+          )}
 
           <Form.Item name="clientId" label="Cliente" style={{ flex: 1 }}>
             <Select

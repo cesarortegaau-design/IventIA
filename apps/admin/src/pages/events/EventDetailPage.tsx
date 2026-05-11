@@ -34,6 +34,7 @@ import TicketEventTab from './TicketEventTab'
 import EventSummaryTab from './EventSummaryTab'
 import EventTimelineTab from './EventTimelineTab'
 import EventBudgetTab from './EventBudgetTab'
+import EventTasksTab from './EventTasksTab'
 import { T } from '../../styles/tokens'
 
 const { Text } = Typography
@@ -554,6 +555,7 @@ export default function EventDetailPage() {
     { key: 'resumen',    label: 'Resumen' },
     { key: 'espacios',   label: `Espacios (${spaces.length})` },
     { key: 'timeline',   label: 'Timeline' },
+    { key: 'tareas',     label: 'Tareas' },
     { key: 'presupuesto', label: 'Presupuesto' },
     { key: 'ordenes',    label: `Órdenes (${event._count?.orders ?? event.orders?.length ?? 0})` },
     ...(eventContracts.length > 0 ? [{ key: 'contratos', label: `Contratos (${eventContracts.length})` }] : []),
@@ -964,6 +966,9 @@ export default function EventDetailPage() {
             ]}
           />
         )}
+
+        {/* ── Tab: Tareas ── */}
+        {activeTab === 'tareas' && <EventTasksTab eventId={id!} event={event} />}
 
         {/* ── Tab: Presupuesto ── */}
         {activeTab === 'presupuesto' && <EventBudgetTab eventId={id!} event={event} />}
