@@ -357,68 +357,80 @@ export default function EventDetailPage() {
 
   async function handleFloorPlanUpload(file: File) {
     setFpUploading(true)
-    setFpProgress(0)
+    setFpProgress(1) // show spinner immediately
     try {
       // 1. Get a signed upload signature from the server (no file data sent to server)
       const sigRes = await floorPlansApi.getUploadSignature(id!)
       const { timestamp, signature, apiKey, cloudName, folder } = sigRes.data
 
-      // 2. Upload directly to Cloudinary in 6 MB chunks
-      const CHUNK = 6 * 1024 * 1024
-      const totalSize = file.size
-      const uploadId = Math.random().toString(36).slice(2) + Date.now().toString(36)
-      let start = 0
-      let lastResponse: any = null
+      // 2. Gzip-compress the DXF in the browser (text files compress ~85%, 37 MB → ~4 MB)
+      //    This brings the file well under Cloudinary's 10 MB free-plan limit.
+      setFpProgress(5)
+      const compressedBlob = await gzipBlob(file)
+      const compressedName = file.name.replace(/\.dxf$/i, '') + '.dxf.gz'
+      setFpProgress(30) // compression done → start upload
 
-      while (start < totalSize) {
-        const end = Math.min(start + CHUNK, totalSize)
-        const chunk = file.slice(start, end)
+      // 3. Upload compressed blob directly to Cloudinary with XHR (progress tracking)
+      const fd = new FormData()
+      fd.append('file', compressedBlob, compressedName)
+      fd.append('api_key', apiKey)
+      fd.append('timestamp', String(timestamp))
+      fd.append('signature', signature)
+      fd.append('folder', folder)
 
-        const fd = new FormData()
-        fd.append('file', chunk, file.name)
-        fd.append('api_key', apiKey)
-        fd.append('timestamp', String(timestamp))
-        fd.append('signature', signature)
-        fd.append('folder', folder)
+      const uploadResult = await xhrUpload(
+        `https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`,
+        fd,
+        (pct) => setFpProgress(30 + Math.round(pct * 70)), // 30–100 %
+      )
 
-        const resp = await fetch(
-          `https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`,
-          {
-            method: 'POST',
-            headers: {
-              'X-Unique-Upload-Id': uploadId,
-              'Content-Range': `bytes ${start}-${end - 1}/${totalSize}`,
-            },
-            body: fd,
-          },
-        )
-
-        if (!resp.ok) {
-          const errBody = await resp.json().catch(() => ({}))
-          throw new Error(errBody?.error?.message ?? `Error Cloudinary ${resp.status}`)
-        }
-
-        lastResponse = await resp.json()
-        start = end
-        setFpProgress(Math.round((end / totalSize) * 100))
-      }
-
-      // 3. Register the resulting Cloudinary URL in our database
+      // 4. Register the Cloudinary URL in our database
       const record = await floorPlansApi.createRecord(id!, {
-        fileUrl: lastResponse.secure_url,
-        fileName: file.name,
+        fileUrl: uploadResult.secure_url,
+        fileName: compressedName,
       })
       refetchFloorPlans()
       setSelectedFpId(record.data.id)
       message.success('Plano subido correctamente')
     } catch (err: any) {
-      const msg = err?.message ?? 'Error al subir el plano'
-      message.error(msg, 8)
+      message.error(err?.message ?? 'Error al subir el plano', 8)
     } finally {
       setFpUploading(false)
       setFpProgress(0)
     }
     return false
+  }
+
+  /** Gzip-compresses a File using the browser's native CompressionStream API. */
+  async function gzipBlob(file: File): Promise<Blob> {
+    const cs = new CompressionStream('gzip')
+    const writer = cs.writable.getWriter()
+    const reader = cs.readable.getReader()
+    writer.write(await file.arrayBuffer())
+    writer.close()
+    const chunks: Uint8Array[] = []
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      chunks.push(value)
+    }
+    return new Blob(chunks, { type: 'application/gzip' })
+  }
+
+  /** POST a FormData body via XHR so we get real upload-progress events. */
+  function xhrUpload(url: string, body: FormData, onProgress: (frac: number) => void): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', url)
+      xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total) }
+      xhr.onload = () => {
+        const data = JSON.parse(xhr.responseText || '{}')
+        if (xhr.status >= 200 && xhr.status < 300) resolve(data)
+        else reject(new Error(data?.error?.message ?? `Error Cloudinary ${xhr.status}`))
+      }
+      xhr.onerror = () => reject(new Error('Error de red al subir'))
+      xhr.send(body)
+    })
   }
 
   async function handleStandSave(data: StandSaveData) {
@@ -851,7 +863,7 @@ export default function EventDetailPage() {
                     <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
                       <Upload accept=".dxf" showUploadList={false} beforeUpload={handleFloorPlanUpload}>
                         <Button icon={<UploadOutlined />} loading={fpUploading} type="primary">
-                          {fpUploading && fpProgress > 0 ? `Subiendo ${fpProgress}%` : 'Subir DXF'}
+                          {fpUploading && fpProgress >= 30 ? `Subiendo ${fpProgress}%` : fpUploading ? 'Comprimiendo…' : 'Subir DXF'}
                         </Button>
                       </Upload>
                       {floorPlans.map((fp: any) => (
