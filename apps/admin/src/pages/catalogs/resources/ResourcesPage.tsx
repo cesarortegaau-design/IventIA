@@ -17,17 +17,17 @@ import { formatPercent } from '../../../utils/format'
 const { Text } = Typography
 
 const TYPE_LABELS: Record<string, string> = {
-  CONSUMABLE: 'Consumible', EQUIPMENT: 'Equipo', SPACE: 'Espacio',
+  CONSUMABLE: 'Consumible', CONCEPT: 'Concepto', EQUIPMENT: 'Equipo', SPACE: 'Espacio',
   FURNITURE: 'Mobiliario', SERVICE: 'Servicio', DISCOUNT: 'Descuento',
   TAX: 'Impuesto', PERSONAL: 'Personal', TICKET: 'Boleto',
 }
 const TYPE_COLORS: Record<string, string> = {
-  CONSUMABLE: 'orange', EQUIPMENT: 'blue', SPACE: 'green',
+  CONSUMABLE: 'orange', CONCEPT: 'geekblue', EQUIPMENT: 'blue', SPACE: 'green',
   FURNITURE: 'purple', SERVICE: 'cyan', DISCOUNT: 'red',
   TAX: 'gold', PERSONAL: 'magenta', TICKET: 'volcano',
 }
 const TYPE_EMOJI: Record<string, string> = {
-  CONSUMABLE: '📦', EQUIPMENT: '🔧', SPACE: '🏛️',
+  CONSUMABLE: '📦', CONCEPT: '💡', EQUIPMENT: '🔧', SPACE: '🏛️',
   FURNITURE: '🪑', SERVICE: '⚙️', DISCOUNT: '🏷️',
   TAX: '📋', PERSONAL: '👤', TICKET: '🎫',
 }
@@ -541,6 +541,14 @@ export default function ResourcesPage() {
             onSearch={(v) => setFilters(f => ({ ...f, search: v }))}
             placeholder="Buscar por nombre, código…"
           >
+            <Select
+              value={filters.type || undefined}
+              onChange={v => setFilters(f => ({ ...f, type: v || '' }))}
+              allowClear
+              placeholder="Tipo"
+              options={Object.entries(TYPE_LABELS).map(([value, label]) => ({ value, label }))}
+              style={{ width: 140 }}
+            />
             <Select
               value={filters.active}
               onChange={v => setFilters(f => ({ ...f, active: v }))}
