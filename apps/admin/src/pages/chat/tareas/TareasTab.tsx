@@ -216,14 +216,14 @@ export function TareasTab() {
       <Layout style={{ height: '100%', borderRadius: 0, overflow: 'hidden' }}>
         {/* ── Task list sidebar ───────────────────────────────────────────────── */}
         <Sider width={340} style={{ background: '#f8fafc', borderRight: '1px solid #e8f0fe', overflowY: 'auto' }}>
-          <div style={{ padding: '14px 16px', borderBottom: '1px solid #e8f0fe', position: 'sticky', top: 0, background: '#f8fafc', zIndex: 10 }}>
-            <Space direction="vertical" style={{ width: '100%' }} size="small">
+          <div style={{ padding: '16px', borderBottom: '1px solid #e8f0fe', position: 'sticky', top: 0, background: '#fff', zIndex: 10 }}>
+            <Space direction="vertical" style={{ width: '100%' }} size={12}>
               <Button
                 type="primary"
                 block
                 icon={<PlusOutlined />}
                 onClick={handleCreateTask}
-                style={{ background: '#1a3a5c', borderColor: '#1a3a5c', borderRadius: 6 }}
+                style={{ background: '#1a3a5c', borderColor: '#1a3a5c', borderRadius: 6, height: 40 }}
               >
                 Nueva Tarea
               </Button>
@@ -232,18 +232,16 @@ export function TareasTab() {
                 placeholder="Buscar tareas..."
                 value={filters.search}
                 onChange={e => setFilters({ ...filters, search: e.target.value })}
-                size="small"
-                style={{ borderRadius: 6 }}
+                style={{ borderRadius: 6, height: 40 }}
               />
 
-              <Space style={{ width: '100%', justifyContent: 'space-between' }} size="small">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 <Select
                   placeholder="Estado"
                   value={filters.status || undefined}
                   onChange={status => setFilters({ ...filters, status })}
                   allowClear
-                  style={{ flex: 1, minWidth: 0 }}
-                  size="small"
+                  style={{ width: '100%' }}
                   options={[
                     { value: 'PENDING', label: 'Pendiente' },
                     { value: 'IN_PROGRESS', label: 'En Progreso' },
@@ -257,8 +255,7 @@ export function TareasTab() {
                   value={filters.priority || undefined}
                   onChange={priority => setFilters({ ...filters, priority })}
                   allowClear
-                  style={{ flex: 1, minWidth: 0 }}
-                  size="small"
+                  style={{ width: '100%' }}
                   options={[
                     { value: 'LOW', label: 'Baja' },
                     { value: 'MEDIUM', label: 'Media' },
@@ -266,15 +263,27 @@ export function TareasTab() {
                     { value: 'CRITICAL', label: 'Crítica' },
                   ]}
                 />
-              </Space>
+              </div>
+
+              {(filters.status || filters.priority || filters.search) && (
+                <Button
+                  type="link"
+                  style={{ color: '#1a3a5c', paddingLeft: 0, height: 'auto', padding: '4px 0' }}
+                  onClick={() => setFilters({ status: undefined, priority: undefined, search: '' })}
+                >
+                  Limpiar filtros
+                </Button>
+              )}
             </Space>
           </div>
 
           {isLoading ? (
-            <div style={{ padding: 32, textAlign: 'center' }}><Spin /></div>
+            <div style={{ padding: 40, textAlign: 'center' }}><Spin /></div>
           ) : mergedTasks.length === 0 ? (
-            <div style={{ padding: 32, textAlign: 'center' }}>
-              <Empty description="Sin tareas" />
+            <div style={{ padding: 40, textAlign: 'center' }}>
+              <Empty
+                description={(filters.status || filters.priority || filters.search) ? "Sin resultados para los filtros aplicados" : "Sin tareas aún"}
+              />
             </div>
           ) : (
             <TaskListPanel
@@ -288,11 +297,11 @@ export function TareasTab() {
         </Sider>
 
         {/* ── Task detail ───────────────────────────────────────────────────── */}
-        <Content style={{ overflow: 'auto', background: '#fff' }}>
+        <Content style={{ overflow: 'auto', background: '#f8fafc' }}>
           {!selectedTaskId ? (
             <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', flexDirection: 'column', gap: 16 }}>
               <FilterOutlined style={{ fontSize: 48, color: '#cbd5e1' }} />
-              <span>Selecciona una tarea para ver los detalles</span>
+              <span style={{ fontSize: 14 }}>Selecciona una tarea para ver los detalles</span>
             </div>
           ) : (
             <TaskDetailDrawer
