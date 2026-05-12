@@ -18,18 +18,19 @@ const { Text } = Typography
 const fmt = (n: number) => `$${n.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 // ── Header cell styles ────────────────────────────────────────────────────────
-const DIVIDER = '3px solid #1d4ed8'
+// Use boxShadow instead of borderLeft so it renders correctly under border-collapse
+const DIVIDER_SHADOW = 'inset 4px 0 0 #1d4ed8'
 
 const hPres       = { style: { background: '#5b21b6', color: '#fff', fontWeight: 700, textAlign: 'center' as const, fontSize: 12, padding: '8px 6px' } }
 const hPresChild  = { style: { background: '#ede9fe', color: '#4c1d95', fontWeight: 600, fontSize: 11, padding: '5px 6px' } }
-const hReal       = { style: { background: '#1d4ed8', color: '#fff', fontWeight: 700, textAlign: 'center' as const, fontSize: 12, padding: '8px 6px', borderLeft: DIVIDER } }
+const hReal       = { style: { background: '#1d4ed8', color: '#fff', fontWeight: 700, textAlign: 'center' as const, fontSize: 12, padding: '8px 6px', boxShadow: DIVIDER_SHADOW } }
 const hRealChild  = { style: { background: '#1e3a8a', color: '#bfdbfe', fontWeight: 600, fontSize: 11, padding: '5px 6px' } }
-const hRealChildFirst = { style: { background: '#1e3a8a', color: '#bfdbfe', fontWeight: 600, fontSize: 11, padding: '5px 6px', borderLeft: DIVIDER } }
+const hRealChildFirst = { style: { background: '#1e3a8a', color: '#bfdbfe', fontWeight: 600, fontSize: 11, padding: '5px 6px', boxShadow: DIVIDER_SHADOW } }
 const hConcepto   = { style: { background: '#1e293b', color: '#f8fafc', fontWeight: 700, fontSize: 12, padding: '8px 10px' } }
 const hTareas     = { style: { background: '#1e293b', color: '#f8fafc', fontWeight: 700, fontSize: 12, textAlign: 'center' as const, padding: '8px 6px' } }
 
-const REAL_CELL_STYLE: React.CSSProperties = { background: '#f0f4ff', borderLeft: DIVIDER }
-const REAL_CELL_STYLE_NORMAL: React.CSSProperties = { background: '#f0f4ff' }
+const REAL_CELL_STYLE: React.CSSProperties = { background: '#eef2ff', boxShadow: DIVIDER_SHADOW }
+const REAL_CELL_STYLE_NORMAL: React.CSSProperties = { background: '#eef2ff' }
 
 // ── Number cell helpers ───────────────────────────────────────────────────────
 function AmountCell({ value, muted }: { value: number; muted?: boolean }) {
@@ -537,7 +538,7 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
           <Table.Summary.Cell index={3}  style={{ ...cellSt, background: '#e2e8f0' }}><SumNum v={tcP} /></Table.Summary.Cell>
           <Table.Summary.Cell index={4}  style={cellSt}><SumNum v={totTP} color="#4c1d95" /></Table.Summary.Cell>
           <Table.Summary.Cell index={5}  style={cellSt}><SumUtil v={utP} base={totTP} /></Table.Summary.Cell>
-          <Table.Summary.Cell index={6}  style={{ ...cellSt, background: '#e8eeff', borderLeft: DIVIDER }}><SumNum v={totDirR} /></Table.Summary.Cell>
+          <Table.Summary.Cell index={6}  style={{ ...cellSt, background: '#e8eeff', boxShadow: DIVIDER_SHADOW }}><SumNum v={totDirR} /></Table.Summary.Cell>
           <Table.Summary.Cell index={7}  style={{ ...cellSt, background: '#e8eeff' }}><SumNum v={totInrR} /></Table.Summary.Cell>
           <Table.Summary.Cell index={8}  style={{ ...cellSt, background: '#dce3f5' }}><SumNum v={tcR} /></Table.Summary.Cell>
           <Table.Summary.Cell index={9}  style={{ ...cellSt, background: '#e8eeff' }}><SumNum v={totTR} color="#1e3a8a" /></Table.Summary.Cell>
