@@ -158,6 +158,7 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
   const [form] = Form.useForm()
   const [pctPresMap, setPctPresMap] = useState<Record<string, number | undefined>>({})
   const [pctRealMap, setPctRealMap] = useState<Record<string, number | undefined>>({})
+  const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([])
 
   // ── Queries ─────────────────────────────────────────────────────────────────
   const { data: budgetsData } = useQuery({
@@ -594,6 +595,10 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
           pagination={false} scroll={{ x: 2200, y: 'calc(100vh - 340px)' }}
           rowClassName={() => 'budget-row'}
           expandable={{
+            expandedRowKeys,
+            onExpand: (expanded, record) => {
+              setExpandedKeys(expanded ? [...expandedKeys, record.id] : expandedKeys.filter(k => k !== record.id))
+            },
             expandedRowRender: (record) => {
               if (!record.resource?.isPackage || !record.resource?.packageComponents?.length) return null
               return (
