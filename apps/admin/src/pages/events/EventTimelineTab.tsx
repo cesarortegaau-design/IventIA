@@ -453,7 +453,10 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
   const filteredFlat = useMemo(() => {
     return flatActivities.filter(a => {
       if (statusFilter && a.status !== statusFilter) return false
-      if (filterAssignedId && a.assignedToId !== filterAssignedId) return false
+      if (filterAssignedId) {
+        const assigneeIds = a.assignees?.map((x: any) => x.userId ?? x.user?.id) ?? (a.assignedToId ? [a.assignedToId] : [])
+        if (!assigneeIds.includes(filterAssignedId)) return false
+      }
       if (filterDeptIds.length > 0) {
         const actDeptIds = (a.activityDepartments ?? []).map((d: any) => d.departmentId ?? d.department?.id)
         if (!filterDeptIds.some(id => actDeptIds.includes(id))) return false
@@ -537,10 +540,20 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
     {
       title: 'Asignado',
       key: 'assignedTo',
-      width: 130,
-      render: (_: any, r: any) => r.assignedTo
-        ? `${r.assignedTo.firstName} ${r.assignedTo.lastName}`
-        : '—',
+      width: 160,
+      render: (_: any, r: any) => {
+        const list: any[] = r.assignees?.length
+          ? r.assignees.map((a: any) => a.user)
+          : r.assignedTo ? [r.assignedTo] : []
+        if (list.length === 0) return <span style={{ color: '#ccc' }}>—</span>
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {list.map((u: any) => u && (
+              <span key={u.id} style={{ fontSize: 12 }}>{u.firstName} {u.lastName}</span>
+            ))}
+          </div>
+        )
+      },
     },
     {
       title: 'Espacio',

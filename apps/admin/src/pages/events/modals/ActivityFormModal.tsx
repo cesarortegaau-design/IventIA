@@ -69,6 +69,7 @@ export default function ActivityFormModal({
         endDate:   initialValues.endDate   ? dayjs(initialValues.endDate)   : undefined,
         departmentIds: initialValues.activityDepartments?.map((d: any) => d.departmentId ?? d.department?.id) ?? [],
         orderIds: initialValues.activityOrders?.map((o: any) => o.orderId ?? o.order?.id) ?? [],
+        assignedToIds: initialValues.assignees?.map((a: any) => a.userId ?? a.user?.id) ?? (initialValues.assignedToId ? [initialValues.assignedToId] : []),
         autoCreateCrmTask: initialValues.autoCreateCrmTask ?? !!initialValues.crmTaskId,
       })
     } else {
@@ -190,11 +191,12 @@ export default function ActivityFormModal({
         <InputNumber min={1} style={{ width: '100%' }} placeholder="60" />
       </Form.Item>
 
-      <Form.Item name="assignedToId" label="Asignado a">
+      <Form.Item name="assignedToIds" label="Asignado a">
         <Select
+          mode="multiple"
           showSearch
           allowClear
-          placeholder="Seleccionar responsable"
+          placeholder="Seleccionar uno o más responsables"
           optionFilterProp="label"
           options={users.map(u => ({
             value: u.id,

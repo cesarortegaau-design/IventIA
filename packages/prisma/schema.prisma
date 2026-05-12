@@ -130,6 +130,7 @@ model User {
   createdTemplates    DocumentTemplate[]           @relation("TemplateCreatedBy")
   assignedActivities  EventActivity[]              @relation("ActivityAssignee")
   createdActivities   EventActivity[]              @relation("ActivityCreatedBy")
+  activityAssignments EventActivityAssignee[]      @relation("ActivityAssignees")
   createdEvents       Event[]                      @relation("EventCreatedBy")
   footballGames       FootballGame[]
   gameEvents          GameEvent[]
@@ -605,10 +606,24 @@ model EventActivity {
   documents           EventActivityDocument[]
   activityDepartments EventActivityDepartment[]
   activityOrders      EventActivityOrder[]
+  assignees           EventActivityAssignee[]
 
   @@index([tenantId, eventId])
   @@index([tenantId, assignedToId, status])
   @@map("event_activities")
+}
+
+model EventActivityAssignee {
+  id         String   @id @default(uuid())
+  activityId String   @map("activity_id")
+  userId     String   @map("user_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  activity EventActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  user     User          @relation("ActivityAssignees", fields: [userId], references: [id])
+
+  @@unique([activityId, userId])
+  @@map("event_activity_assignees")
 }
 
 model EventActivityDocument {

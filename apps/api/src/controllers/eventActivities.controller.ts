@@ -6,6 +6,7 @@ import { auditService } from '../services/audit.service'
 
 const ACTIVITY_INCLUDE = {
   assignedTo: { select: { id: true, firstName: true, lastName: true } },
+  assignees: { include: { user: { select: { id: true, firstName: true, lastName: true } } } },
   createdBy:  { select: { id: true, firstName: true, lastName: true } },
   space:      { select: { id: true, phase: true, startTime: true, endTime: true, resource: { select: { id: true, name: true } } } },
   order:      { select: { id: true, orderNumber: true, status: true } },
@@ -51,6 +52,7 @@ const createActivitySchema = z.object({
   notes:             z.string().optional().nullable(),
   departmentIds:     z.any().optional().default([]),
   orderIds:          z.any().optional().default([]),
+  assignedToIds:     z.any().optional().default([]),
 })
 
 const updateActivitySchema = createActivitySchema.partial()
@@ -141,13 +143,18 @@ export async function createEventActivity(req: Request, res: Response, next: Nex
       // Validate and sanitize departmentIds and orderIds
       try {
         data.departmentIds = validateUuidArray(data.departmentIds, 'departmentIds')
-        data.orderIds = validateUuidArray(data.orderIds, 'orderIds')
+        data.orderIds      = validateUuidArray(data.orderIds,      'orderIds')
+        data.assignedToIds = validateUuidArray(data.assignedToIds, 'assignedToIds')
       } catch (validationErr: any) {
         return res.status(400).json({
           success: false,
           message: 'Invalid department or order IDs',
           error: validationErr.message,
         })
+      }
+      // Sync assignedToId to first element for backward-compat display
+      if (data.assignedToIds.length > 0 && data.assignedToId === undefined) {
+        data.assignedToId = data.assignedToIds[0]
       }
     } catch (err: any) {
       if (err.errors) {
@@ -212,6 +219,12 @@ export async function createEventActivity(req: Request, res: Response, next: Nex
         })
       }
 
+      if (data.assignedToIds?.length) {
+        await tx.eventActivityAssignee.createMany({
+          data: data.assignedToIds.map((uId: string) => ({ activityId: a.id, userId: uId })),
+        })
+      }
+
       // Merge explicit orderId (backward compat) into orderIds junction
       const allOrderIds = [...(data.orderIds ?? [])]
       if (data.orderId && !allOrderIds.includes(data.orderId)) {
@@ -257,13 +270,18 @@ export async function updateEventActivity(req: Request, res: Response, next: Nex
       // Validate and sanitize departmentIds and orderIds
       try {
         data.departmentIds = validateUuidArray(data.departmentIds, 'departmentIds')
-        data.orderIds = validateUuidArray(data.orderIds, 'orderIds')
+        data.orderIds      = validateUuidArray(data.orderIds,      'orderIds')
+        data.assignedToIds = validateUuidArray(data.assignedToIds, 'assignedToIds')
       } catch (validationErr: any) {
         return res.status(400).json({
           success: false,
           message: 'Invalid department or order IDs',
           error: validationErr.message,
         })
+      }
+      // Sync assignedToId to first element for backward-compat display
+      if (data.assignedToIds !== undefined) {
+        data.assignedToId = data.assignedToIds.length > 0 ? data.assignedToIds[0] : null
       }
     } catch (err: any) {
       if (err.errors) {
@@ -327,6 +345,16 @@ export async function updateEventActivity(req: Request, res: Response, next: Nex
       if (data.departmentIds.length > 0) {
         await prisma.eventActivityDepartment.createMany({
           data: data.departmentIds.map(dId => ({ activityId, departmentId: dId })),
+        })
+      }
+    }
+
+    // Sync assignees (junction table)
+    if (data.assignedToIds !== undefined) {
+      await prisma.eventActivityAssignee.deleteMany({ where: { activityId } })
+      if (data.assignedToIds.length > 0) {
+        await prisma.eventActivityAssignee.createMany({
+          data: data.assignedToIds.map((uId: string) => ({ activityId, userId: uId })),
         })
       }
     }
