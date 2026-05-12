@@ -294,7 +294,7 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
           <Button
             size="small" type="primary"
             disabled={pctInput === undefined || pctInput === null}
-            style={{ fontSize: 10, background: accentColor, borderColor: accentColor, padding: '0 6px' }}
+            style={{ fontSize: 10, background: accentColor, borderColor: accentColor, padding: '0 6px', color: '#fff' }}
             onClick={() => {
               if (pctInput !== undefined && pctInput !== null) {
                 updateLineMut.mutate({ lineId, data: { [saveField]: parseFloat((totalCosto * (1 + pctInput / 100)).toFixed(2)) } })
