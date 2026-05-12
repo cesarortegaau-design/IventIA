@@ -609,7 +609,7 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
                   pagination={false} scroll={{ x: 1100, y: 'calc(100vh - 380px)' }}
                   rowClassName={() => 'budget-row'}
                   expandable={{
-                    expandedRowKeys,
+                    expandedRowKeys: expandedKeys,
                     onExpand: (expanded, record) => {
                       setExpandedKeys(expanded ? [...expandedKeys, record.id] : expandedKeys.filter(k => k !== record.id))
                     },
@@ -646,7 +646,7 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
                   pagination={false} scroll={{ x: 1100, y: 'calc(100vh - 380px)' }}
                   rowClassName={() => 'budget-row'}
                   expandable={{
-                    expandedRowKeys,
+                    expandedRowKeys: expandedKeys,
                     onExpand: (expanded, record) => {
                       setExpandedKeys(expanded ? [...expandedKeys, record.id] : expandedKeys.filter(k => k !== record.id))
                     },
