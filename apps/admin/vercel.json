@@ -1,3 +1,15 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "experimentalServices": {
+    "web": {
+      "routePrefix": "/",
+      "framework": "vite",
+      "buildCommand": "pnpm install --frozen-lockfile && pnpm --filter @iventia/admin build"
+    }
+  }
 }
