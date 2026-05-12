@@ -96,7 +96,7 @@ function InternalUsersTab() {
   const saveMutation = useMutation({
     mutationFn: (values: any) => {
       const payload = { ...values }
-      if (!payload.password) delete payload.password
+      if (!payload.password || payload.password.length === 0) delete payload.password
       return editingId
         ? apiClient.put(`/users/${editingId}`, payload).then(r => r.data)
         : apiClient.post('/users', payload).then(r => r.data)
@@ -107,7 +107,17 @@ function InternalUsersTab() {
       form.resetFields()
       message.success('Usuario guardado')
     },
-    onError: (err: any) => message.error(err?.response?.data?.error?.message ?? 'Error'),
+    onError: (err: any) => {
+      const fieldErrors = err?.response?.data?.error?.details?.fieldErrors
+      if (fieldErrors) {
+        const msgs = Object.entries(fieldErrors)
+          .map(([f, errs]) => `${f}: ${(errs as string[]).join(', ')}`)
+          .join(' | ')
+        message.error(`Validación: ${msgs}`, 6)
+      } else {
+        message.error(err?.response?.data?.error?.message ?? 'Error al guardar usuario')
+      }
+    },
   })
 
   function openEdit(record: any) {
@@ -237,7 +247,17 @@ function InternalUsersTab() {
             <Col span={12}><Form.Item name="email" label="Email" rules={[{ required: true, type: 'email' }]}><Input /></Form.Item></Col>
             <Col span={12}><Form.Item name="phone" label="WhatsApp / Teléfono"><Input /></Form.Item></Col>
             <Col span={12}>
-              <Form.Item name="password" label={editingId ? 'Nueva Contraseña (dejar vacío para no cambiar)' : 'Contraseña'} rules={editingId ? [] : [{ required: true, min: 8 }]}>
+              <Form.Item
+                name="password"
+                label={editingId ? 'Nueva Contraseña (dejar vacío para no cambiar)' : 'Contraseña'}
+                rules={editingId
+                  ? [{ validator: (_: any, value: string) => {
+                      if (!value || value.length === 0) return Promise.resolve()
+                      if (value.length < 8) return Promise.reject(new Error('Mínimo 8 caracteres'))
+                      return Promise.resolve()
+                    }}]
+                  : [{ required: true, min: 8 }]}
+              >
                 <Input.Password />
               </Form.Item>
             </Col>
