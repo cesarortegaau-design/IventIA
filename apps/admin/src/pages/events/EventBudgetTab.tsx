@@ -317,15 +317,15 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
       ),
     },
     {
-      title: 'Costo Directo',
+      title: 'Costo Directo Real',
       key: 'directCost',
-      width: 210,
+      width: 230,
       render: (_: any, r: any) => {
-        const hasOrders = r.directOrders?.length > 0
-        const count = r.directOrders?.length ?? 0
+        const orders: any[] = r.directOrders ?? []
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {hasOrders ? (
+            {/* Total */}
+            {orders.length > 0 ? (
               <Text strong style={{ color: T.navy, fontSize: 13 }}>{fmt(Number(r.directCost))}</Text>
             ) : (
               <InputNumber
@@ -343,13 +343,33 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
                 }}
               />
             )}
+            {/* Inline orders list */}
+            {orders.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {orders.map((o: any) => (
+                  <div
+                    key={o.orderId}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '2px 6px', borderRadius: 4,
+                      background: '#eff6ff', border: '1px solid #bfdbfe',
+                      fontSize: 11,
+                    }}
+                  >
+                    <span style={{ fontWeight: 600, color: '#1d4ed8' }}>{o.order?.orderNumber}</span>
+                    <span style={{ color: '#374151', marginLeft: 6 }}>{fmt(Number(o.order?.total || 0))}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Manage button */}
             <Button
               size="small"
               icon={<OrderedListOutlined />}
               onClick={() => setDirectOrderModal({ lineId: r.id })}
-              style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}
+              style={{ fontSize: 11 }}
             >
-              Órdenes{count > 0 ? <Tag color="blue" style={{ margin: 0, fontSize: 10 }}>{count}</Tag> : null}
+              {orders.length === 0 ? 'Asignar órdenes' : 'Gestionar órdenes'}
             </Button>
           </div>
         )
@@ -377,15 +397,15 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
       ),
     },
     {
-      title: 'Costo Indirecto',
+      title: 'Costo Indirecto Real',
       key: 'indirectCost',
-      width: 210,
+      width: 230,
       render: (_: any, r: any) => {
-        const hasOrders = r.indirectOrders?.length > 0
-        const count = r.indirectOrders?.length ?? 0
+        const orders: any[] = r.indirectOrders ?? []
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {hasOrders ? (
+            {/* Total */}
+            {orders.length > 0 ? (
               <Text strong style={{ color: T.navy, fontSize: 13 }}>{fmt(Number(r.indirectCost))}</Text>
             ) : (
               <InputNumber
@@ -403,13 +423,33 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
                 }}
               />
             )}
+            {/* Inline orders list */}
+            {orders.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {orders.map((o: any) => (
+                  <div
+                    key={o.orderId}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '2px 6px', borderRadius: 4,
+                      background: '#fff7ed', border: '1px solid #fed7aa',
+                      fontSize: 11,
+                    }}
+                  >
+                    <span style={{ fontWeight: 600, color: '#c2410c' }}>{o.order?.orderNumber}</span>
+                    <span style={{ color: '#374151', marginLeft: 6 }}>{fmt(Number(o.order?.total || 0))}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Manage button */}
             <Button
               size="small"
               icon={<OrderedListOutlined />}
               onClick={() => setIndirectOrderModal({ lineId: r.id })}
-              style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}
+              style={{ fontSize: 11 }}
             >
-              Órdenes{count > 0 ? <Tag color="orange" style={{ margin: 0, fontSize: 10 }}>{count}</Tag> : null}
+              {orders.length === 0 ? 'Asignar órdenes' : 'Gestionar órdenes'}
             </Button>
           </div>
         )
