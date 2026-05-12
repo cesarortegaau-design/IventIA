@@ -2,12 +2,16 @@ import {
   Document, Page, View, Text, StyleSheet,
 } from '@react-pdf/renderer'
 
-// ── Palette (same as OrderPdf) ────────────────────────────────────────────────
-const NAVY  = '#1a3a5c'
-const BLUE  = '#2e7fc1'
-const LIGHT = '#f0f6ff'
-const GRAY  = '#64748b'
-const LINE  = '#dde3ec'
+// ── Palette ───────────────────────────────────────────────────────────────────
+const NAVY   = '#1a3a5c'
+const BLUE   = '#2e7fc1'
+const LIGHT  = '#f0f6ff'
+const GRAY   = '#64748b'
+const LINE   = '#dde3ec'
+const PURPLE = '#5b21b6'
+const PURPLEBG = '#ede9fe'
+const ROYALBG  = '#dbeafe'
+const ROYAL    = '#1d4ed8'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmt(v: number | string | null | undefined): string {
@@ -22,73 +26,90 @@ function fmtDate(iso?: string | null): string {
   return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
+function effectiveCost(line: any, orderKey: 'directOrders' | 'indirectOrders', costField: string): number {
+  const orders: any[] = line[orderKey] ?? []
+  if (orders.length > 0) return orders.reduce((sum: number, o: any) => sum + Number(o.order?.total || 0), 0)
+  return Number(line[costField] || 0)
+}
+
 // ── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   page: {
     fontFamily: 'Helvetica',
-    fontSize: 9,
+    fontSize: 8,
     color: '#1e293b',
     backgroundColor: '#ffffff',
-    paddingTop: 36, paddingBottom: 46,
-    paddingLeft: 40, paddingRight: 40,
+    paddingTop: 32, paddingBottom: 46,
+    paddingLeft: 36, paddingRight: 36,
   },
 
   // Header
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
-  brandName: { fontSize: 20, fontFamily: 'Helvetica-Bold', color: NAVY, letterSpacing: 0.4 },
-  brandSub: { fontSize: 8, color: BLUE, marginTop: 2 },
-  docTitle: { fontSize: 13, fontFamily: 'Helvetica-Bold', color: NAVY, textAlign: 'right' },
-  docSub: { fontSize: 10, color: BLUE, fontFamily: 'Helvetica-Bold', textAlign: 'right' },
-  docDate: { fontSize: 7.5, color: GRAY, textAlign: 'right', marginTop: 3 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
+  brandName: { fontSize: 18, fontFamily: 'Helvetica-Bold', color: NAVY, letterSpacing: 0.4 },
+  brandSub: { fontSize: 7.5, color: BLUE, marginTop: 2 },
+  docTitle: { fontSize: 12, fontFamily: 'Helvetica-Bold', color: NAVY, textAlign: 'right' },
+  docSub: { fontSize: 9, color: BLUE, fontFamily: 'Helvetica-Bold', textAlign: 'right' },
+  docDate: { fontSize: 7, color: GRAY, textAlign: 'right', marginTop: 3 },
 
   // Info cards
-  infoRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  card: { flex: 1, backgroundColor: LIGHT, borderRadius: 6, padding: 10 },
-  cardDark: { flex: 1, backgroundColor: NAVY, borderRadius: 6, padding: 10 },
-  cardTitle: { fontSize: 7, fontFamily: 'Helvetica-Bold', color: BLUE, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 },
-  cardTitleLight: { fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#7ea8cc', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 },
+  infoRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
+  card: { flex: 1, backgroundColor: LIGHT, borderRadius: 5, padding: 8 },
+  cardDark: { flex: 1.4, backgroundColor: NAVY, borderRadius: 5, padding: 8 },
+  cardTitle: { fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: BLUE, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
+  cardTitleLight: { fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: '#7ea8cc', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
   infoLine: { flexDirection: 'row', marginBottom: 2 },
-  infoLbl: { fontSize: 7.5, color: GRAY, width: 84 },
-  infoVal: { fontSize: 7.5, color: NAVY, fontFamily: 'Helvetica-Bold', flex: 1 },
-  infoValNorm: { fontSize: 7.5, color: '#1e293b', flex: 1 },
-  infoLblLight: { fontSize: 7.5, color: '#7ea8cc', width: 84 },
-  infoValLight: { fontSize: 7.5, color: '#ffffff', fontFamily: 'Helvetica-Bold', flex: 1 },
-  infoValGreen: { fontSize: 7.5, color: '#4ade80', fontFamily: 'Helvetica-Bold', flex: 1 },
+  infoLbl: { fontSize: 7, color: GRAY, width: 70 },
+  infoVal: { fontSize: 7, color: NAVY, fontFamily: 'Helvetica-Bold', flex: 1 },
+  infoValNorm: { fontSize: 7, color: '#1e293b', flex: 1 },
+  infoLblLight: { fontSize: 7, color: '#7ea8cc', width: 100 },
+  infoValLight: { fontSize: 7, color: '#ffffff', fontFamily: 'Helvetica-Bold', flex: 1, textAlign: 'right' },
+  infoValGreen: { fontSize: 7, color: '#4ade80', fontFamily: 'Helvetica-Bold', flex: 1, textAlign: 'right' },
+  infoValRed:   { fontSize: 7, color: '#f87171', fontFamily: 'Helvetica-Bold', flex: 1, textAlign: 'right' },
 
   // Section header band
   sectionHeader: {
     backgroundColor: NAVY, color: '#ffffff',
-    fontFamily: 'Helvetica-Bold', fontSize: 7.5,
+    fontFamily: 'Helvetica-Bold', fontSize: 7,
     textTransform: 'uppercase', letterSpacing: 0.5,
-    paddingHorizontal: 8, paddingVertical: 4,
-    borderRadius: 4, marginBottom: 0,
+    paddingHorizontal: 6, paddingVertical: 3,
+    borderRadius: 3, marginBottom: 0,
   },
 
-  // Table
-  tableHead: { flexDirection: 'row', backgroundColor: '#e8f0fe', paddingHorizontal: 6, paddingVertical: 4 },
-  tableRow: { flexDirection: 'row', paddingHorizontal: 6, paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: LINE },
-  tableRowAlt: { flexDirection: 'row', paddingHorizontal: 6, paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: LINE, backgroundColor: '#f8faff' },
-  tableRowSub: { flexDirection: 'row', paddingHorizontal: 6, paddingVertical: 2, borderBottomWidth: 1, borderBottomColor: '#eef2ff', backgroundColor: '#fcfcff' },
-  tableRowTotals: { flexDirection: 'row', paddingHorizontal: 6, paddingVertical: 5, backgroundColor: NAVY, marginTop: 1, borderRadius: 2 },
+  // Table — group headers
+  tableGroupRow: { flexDirection: 'row', paddingHorizontal: 4, paddingVertical: 3 },
+  tableHead: { flexDirection: 'row', paddingHorizontal: 4, paddingVertical: 3 },
+  tableRow: { flexDirection: 'row', paddingHorizontal: 4, paddingVertical: 3, borderBottomWidth: 0.5, borderBottomColor: LINE },
+  tableRowAlt: { flexDirection: 'row', paddingHorizontal: 4, paddingVertical: 3, borderBottomWidth: 0.5, borderBottomColor: LINE, backgroundColor: '#f8faff' },
+  tableRowSub: { flexDirection: 'row', paddingHorizontal: 4, paddingVertical: 2, borderBottomWidth: 0.5, borderBottomColor: '#eef2ff', backgroundColor: '#fcfcff' },
+  tableRowTotals: { flexDirection: 'row', paddingHorizontal: 4, paddingVertical: 4, backgroundColor: NAVY, marginTop: 1, borderRadius: 2 },
 
-  th: { fontSize: 7, fontFamily: 'Helvetica-Bold', color: NAVY, textTransform: 'uppercase' },
-  td: { fontSize: 7.5, color: '#1e293b' },
-  tdSub: { fontSize: 7, color: GRAY },
-  tdR: { fontSize: 7.5, color: '#1e293b', textAlign: 'right' },
-  tdTL: { fontSize: 7.5, color: '#ffffff', fontFamily: 'Helvetica-Bold' },
-  tdTV: { fontSize: 7.5, color: '#ffffff', fontFamily: 'Helvetica-Bold', textAlign: 'right' },
+  th: { fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: NAVY },
+  thR: { fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: NAVY, textAlign: 'right' },
+  thPres: { fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: PURPLE, textAlign: 'right' },
+  thReal: { fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: ROYAL, textAlign: 'right' },
+  td: { fontSize: 7, color: '#1e293b' },
+  tdSub: { fontSize: 6.5, color: GRAY },
+  tdR: { fontSize: 7, color: '#1e293b', textAlign: 'right' },
+  tdRB: { fontSize: 7, color: '#1e293b', textAlign: 'right', fontFamily: 'Helvetica-Bold' },
+  tdPres: { fontSize: 7, color: '#4c1d95', textAlign: 'right', fontFamily: 'Helvetica-Bold' },
+  tdReal: { fontSize: 7, color: '#1e3a8a', textAlign: 'right', fontFamily: 'Helvetica-Bold' },
+  tdGreen: { fontSize: 7, color: '#16a34a', textAlign: 'right', fontFamily: 'Helvetica-Bold' },
+  tdRed:   { fontSize: 7, color: '#dc2626', textAlign: 'right', fontFamily: 'Helvetica-Bold' },
+  tdTL: { fontSize: 7, color: '#ffffff', fontFamily: 'Helvetica-Bold' },
+  tdTV: { fontSize: 7, color: '#ffffff', fontFamily: 'Helvetica-Bold', textAlign: 'right' },
 
-  cCode: { width: 72 },
-  cDesc: { flex: 1 },
-  cAmt: { width: 90 },
+  // Column widths
+  cConcepto: { width: 115 },
+  cAmt: { width: 63 },
+  cAmtTC: { width: 60, backgroundColor: '#f1f5f9' },
 
   // Footer
   footer: {
-    position: 'absolute', bottom: 20, left: 40, right: 40,
+    position: 'absolute', bottom: 18, left: 36, right: 36,
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    borderTopWidth: 0.5, borderTopColor: LINE, paddingTop: 5,
+    borderTopWidth: 0.5, borderTopColor: LINE, paddingTop: 4,
   },
-  footerTxt: { fontSize: 7, color: GRAY },
+  footerTxt: { fontSize: 6.5, color: GRAY },
 })
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -100,14 +121,29 @@ export function EventBudgetPdf({ budget, event }: { budget: any; event: any }) {
   })
 
   const totals = lines.reduce(
-    (acc, l) => ({
-      direct:   acc.direct   + Number(l.directCost   ?? 0),
-      income:   acc.income   + Number(l.income       ?? 0),
-      indirect: acc.indirect + Number(l.indirectCost ?? 0),
-      utility:  acc.utility  + Number(l.utility      ?? 0),
-    }),
-    { direct: 0, income: 0, indirect: 0, utility: 0 },
+    (acc, l) => {
+      const dirP  = Number(l.directCostBudgeted   ?? 0)
+      const indP  = Number(l.indirectCostBudgeted  ?? 0)
+      const totP  = Number(l.utility               ?? 0)
+      const dirR  = effectiveCost(l, 'directOrders',   'directCost')
+      const indR  = effectiveCost(l, 'indirectOrders', 'indirectCost')
+      const totR  = Number(l.income                ?? 0)
+      return {
+        dirP:  acc.dirP  + dirP,
+        indP:  acc.indP  + indP,
+        tcP:   acc.tcP   + dirP + indP,
+        totP:  acc.totP  + totP,
+        dirR:  acc.dirR  + dirR,
+        indR:  acc.indR  + indR,
+        tcR:   acc.tcR   + dirR + indR,
+        totR:  acc.totR  + totR,
+      }
+    },
+    { dirP: 0, indP: 0, tcP: 0, totP: 0, dirR: 0, indR: 0, tcR: 0, totR: 0 },
   )
+
+  const utP = totals.totP - totals.tcP
+  const utR = totals.totR - totals.tcR
 
   return (
     <Document title={`Presupuesto – ${budget?.name ?? ''}`}>
@@ -167,21 +203,28 @@ export function EventBudgetPdf({ budget, event }: { budget: any; event: any }) {
           {/* Resumen financiero */}
           <View style={s.cardDark}>
             <Text style={s.cardTitleLight}>Resumen Financiero</Text>
-            <View style={s.infoLine}>
-              <Text style={s.infoLblLight}>Costo Directo</Text>
-              <Text style={s.infoValLight}>{fmt(totals.direct)}</Text>
+            {/* Header row */}
+            <View style={{ flexDirection: 'row', marginBottom: 3, borderBottomWidth: 0.5, borderBottomColor: '#2d5a8a', paddingBottom: 2 }}>
+              <Text style={{ width: 100, fontSize: 6, color: '#7ea8cc' }} />
+              <Text style={{ flex: 1, fontSize: 6, fontFamily: 'Helvetica-Bold', color: '#7ea8cc', textAlign: 'right' }}>PRESUP.</Text>
+              <Text style={{ flex: 1, fontSize: 6, fontFamily: 'Helvetica-Bold', color: '#7ea8cc', textAlign: 'right' }}>REAL</Text>
             </View>
-            <View style={s.infoLine}>
-              <Text style={s.infoLblLight}>Ingreso</Text>
-              <Text style={s.infoValLight}>{fmt(totals.income)}</Text>
-            </View>
-            <View style={s.infoLine}>
-              <Text style={s.infoLblLight}>Costo Indirecto</Text>
-              <Text style={s.infoValLight}>{fmt(totals.indirect)}</Text>
-            </View>
-            <View style={s.infoLine}>
-              <Text style={s.infoLblLight}>Utilidad</Text>
-              <Text style={s.infoValGreen}>{fmt(totals.utility)}</Text>
+            {[
+              ['Costo Directo',   fmt(totals.dirP),  fmt(totals.dirR)],
+              ['Costo Indirecto', fmt(totals.indP),  fmt(totals.indR)],
+              ['Total Costo',     fmt(totals.tcP),   fmt(totals.tcR)],
+              ['Total Ingresos',  fmt(totals.totP),  fmt(totals.totR)],
+            ].map(([lbl, vP, vR]) => (
+              <View key={lbl} style={s.infoLine}>
+                <Text style={[s.infoLblLight, { width: 100 }]}>{lbl}</Text>
+                <Text style={s.infoValLight}>{vP}</Text>
+                <Text style={s.infoValLight}>{vR}</Text>
+              </View>
+            ))}
+            <View style={[s.infoLine, { marginTop: 3, borderTopWidth: 0.5, borderTopColor: '#2d5a8a', paddingTop: 3 }]}>
+              <Text style={[s.infoLblLight, { width: 100 }]}>Utilidad</Text>
+              <Text style={utP >= 0 ? s.infoValGreen : s.infoValRed}>{fmt(utP)}</Text>
+              <Text style={utR >= 0 ? s.infoValGreen : s.infoValRed}>{fmt(utR)}</Text>
             </View>
           </View>
         </View>
@@ -189,74 +232,107 @@ export function EventBudgetPdf({ budget, event }: { budget: any; event: any }) {
         {/* ── Table ───────────────────────────────────────────────────────── */}
         <Text style={s.sectionHeader}>Líneas de Presupuesto</Text>
         <View>
-          {/* Table header */}
-          <View style={s.tableHead}>
-            <Text style={[s.th, s.cCode]}>Clave</Text>
-            <Text style={[s.th, s.cDesc]}>Descripción</Text>
-            <Text style={[s.th, s.cAmt, { textAlign: 'right' }]}>Costo Directo</Text>
-            <Text style={[s.th, s.cAmt, { textAlign: 'right' }]}>Ingreso</Text>
-            <Text style={[s.th, s.cAmt, { textAlign: 'right' }]}>Costo Indirecto</Text>
-            <Text style={[s.th, s.cAmt, { textAlign: 'right' }]}>Utilidad</Text>
+          {/* Group header */}
+          <View style={[s.tableGroupRow, { backgroundColor: '#1e293b' }]}>
+            <View style={s.cConcepto}>
+              <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: '#f8fafc' }}>CONCEPTO</Text>
+            </View>
+            {/* PRESUPUESTADO spans 5 cols */}
+            <View style={{ width: 63 * 5, backgroundColor: PURPLE, paddingVertical: 2, paddingHorizontal: 4, borderRadius: 2, marginRight: 2 }}>
+              <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: '#ede9fe', textAlign: 'center', letterSpacing: 0.5 }}>PRESUPUESTADO</Text>
+            </View>
+            {/* REAL spans 5 cols */}
+            <View style={{ width: 63 * 5, backgroundColor: ROYAL, paddingVertical: 2, paddingHorizontal: 4, borderRadius: 2 }}>
+              <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: '#dbeafe', textAlign: 'center', letterSpacing: 0.5 }}>REAL</Text>
+            </View>
+          </View>
+
+          {/* Sub-header */}
+          <View style={[s.tableHead, { backgroundColor: '#e8f0fe' }]}>
+            <Text style={[s.th, s.cConcepto]}>Clave / Descripción</Text>
+            <Text style={[s.thPres, s.cAmt]}>C. Directo</Text>
+            <Text style={[s.thPres, s.cAmt]}>C. Indirecto</Text>
+            <Text style={[s.thPres, { ...s.cAmtTC }]}>Tot. Costo</Text>
+            <Text style={[s.thPres, s.cAmt]}>Total Pres.</Text>
+            <Text style={[s.thPres, s.cAmt]}>Utilidad</Text>
+            <Text style={[s.thReal, s.cAmt]}>C. Directo</Text>
+            <Text style={[s.thReal, s.cAmt]}>C. Indirecto</Text>
+            <Text style={[s.thReal, { ...s.cAmtTC }]}>Tot. Costo</Text>
+            <Text style={[s.thReal, s.cAmt]}>Total Real</Text>
+            <Text style={[s.thReal, s.cAmt]}>Utilidad</Text>
           </View>
 
           {/* Lines */}
-          {lines.map((line: any, i: number) => (
-            <View key={line.id} wrap={false}>
-              {/* Main row */}
-              <View style={i % 2 === 0 ? s.tableRow : s.tableRowAlt}>
-                <View style={s.cCode}>
-                  <Text style={s.tdSub}>{line.resource?.code ?? ''}</Text>
-                  {line.resource?.isPackage ? (
-                    <Text style={{ fontSize: 6.5, color: BLUE }}>▣ Paquete</Text>
-                  ) : null}
+          {lines.map((line: any, i: number) => {
+            const dirP = Number(line.directCostBudgeted   ?? 0)
+            const indP = Number(line.indirectCostBudgeted  ?? 0)
+            const tcP  = dirP + indP
+            const totP = Number(line.utility               ?? 0)
+            const utlP = totP - tcP
+
+            const dirR = effectiveCost(line, 'directOrders',   'directCost')
+            const indR = effectiveCost(line, 'indirectOrders', 'indirectCost')
+            const tcR  = dirR + indR
+            const totR = Number(line.income                ?? 0)
+            const utlR = totR - tcR
+
+            const directNums  = (line.directOrders ?? []).map((o: any) => o.order?.orderNumber).filter(Boolean).join(', ')
+            const indirectNums = (line.indirectOrders ?? []).map((o: any) => o.order?.orderNumber).filter(Boolean).join(', ')
+
+            return (
+              <View key={line.id} wrap={false}>
+                <View style={i % 2 === 0 ? s.tableRow : s.tableRowAlt}>
+                  {/* Concepto */}
+                  <View style={s.cConcepto}>
+                    <Text style={s.tdSub}>{line.resource?.code ?? ''}{line.resource?.isPackage ? ' ▣' : ''}</Text>
+                    <Text style={s.td}>{line.description}</Text>
+                    {directNums ? <Text style={{ fontSize: 5.5, color: BLUE }}>D: {directNums}</Text> : null}
+                    {indirectNums ? <Text style={{ fontSize: 5.5, color: '#d97706' }}>I: {indirectNums}</Text> : null}
+                  </View>
+
+                  {/* PRESUPUESTADO */}
+                  <Text style={[s.tdR, s.cAmt]}>{fmt(dirP)}</Text>
+                  <Text style={[s.tdR, s.cAmt]}>{fmt(indP)}</Text>
+                  <Text style={[s.tdRB, s.cAmtTC]}>{fmt(tcP)}</Text>
+                  <Text style={[s.tdPres, s.cAmt]}>{fmt(totP)}</Text>
+                  <Text style={[utlP >= 0 ? s.tdGreen : s.tdRed, s.cAmt]}>{fmt(utlP)}</Text>
+
+                  {/* REAL */}
+                  <Text style={[s.tdR, s.cAmt]}>{fmt(dirR)}</Text>
+                  <Text style={[s.tdR, s.cAmt]}>{fmt(indR)}</Text>
+                  <Text style={[s.tdRB, s.cAmtTC]}>{fmt(tcR)}</Text>
+                  <Text style={[s.tdReal, s.cAmt]}>{fmt(totR)}</Text>
+                  <Text style={[utlR >= 0 ? s.tdGreen : s.tdRed, s.cAmt]}>{fmt(utlR)}</Text>
                 </View>
 
-                <View style={s.cDesc}>
-                  <Text style={s.td}>{line.description}</Text>
-                  {line.directOrders?.length > 0 ? (
-                    <Text style={{ fontSize: 6.5, color: BLUE }}>
-                      {'D: ' + line.directOrders.map((o: any) => o.order?.orderNumber).filter(Boolean).join(', ')}
+                {/* Package sub-components */}
+                {line.resource?.isPackage && (line.resource?.packageComponents ?? []).map((pc: any, ci: number) => (
+                  <View key={ci} style={s.tableRowSub}>
+                    <Text style={[s.tdSub, s.cConcepto, { paddingLeft: 10 }]}>
+                      {pc.componentResource?.code ?? ''}{' '}{pc.componentResource?.name ?? ''}{pc.quantity > 1 ? ` ×${pc.quantity}` : ''}
                     </Text>
-                  ) : null}
-                  {line.indirectOrders?.length > 0 ? (
-                    <Text style={{ fontSize: 6.5, color: '#d97706' }}>
-                      {'I: ' + line.indirectOrders.map((o: any) => o.order?.orderNumber).filter(Boolean).join(', ')}
-                    </Text>
-                  ) : null}
-                </View>
-
-                <Text style={[s.tdR, s.cAmt]}>{fmt(line.directCost)}</Text>
-                <Text style={[s.tdR, s.cAmt]}>{fmt(line.income)}</Text>
-                <Text style={[s.tdR, s.cAmt]}>{fmt(line.indirectCost)}</Text>
-                <Text style={[s.tdR, s.cAmt]}>{fmt(line.utility)}</Text>
+                    {[...Array(10)].map((_, k) => (
+                      <Text key={k} style={s.cAmt} />
+                    ))}
+                  </View>
+                ))}
               </View>
-
-              {/* Package sub-components */}
-              {line.resource?.isPackage && (line.resource?.packageComponents ?? []).map((pc: any, ci: number) => (
-                <View key={ci} style={s.tableRowSub}>
-                  <Text style={[s.tdSub, s.cCode, { paddingLeft: 10 }]}>
-                    {pc.componentResource?.code ?? ''}
-                  </Text>
-                  <Text style={[s.td, s.cDesc, { paddingLeft: 10, color: GRAY, fontSize: 7 }]}>
-                    {pc.componentResource?.name ?? ''}{pc.quantity > 1 ? ` (×${pc.quantity})` : ''}
-                  </Text>
-                  <Text style={s.cAmt} />
-                  <Text style={s.cAmt} />
-                  <Text style={s.cAmt} />
-                  <Text style={s.cAmt} />
-                </View>
-              ))}
-            </View>
-          ))}
+            )
+          })}
 
           {/* Totals row */}
           <View style={s.tableRowTotals}>
-            <Text style={[s.tdTL, s.cCode]}>TOTALES</Text>
-            <Text style={[s.tdTL, s.cDesc]} />
-            <Text style={[s.tdTV, s.cAmt]}>{fmt(totals.direct)}</Text>
-            <Text style={[s.tdTV, s.cAmt]}>{fmt(totals.income)}</Text>
-            <Text style={[s.tdTV, s.cAmt]}>{fmt(totals.indirect)}</Text>
-            <Text style={[s.tdTV, s.cAmt]}>{fmt(totals.utility)}</Text>
+            <Text style={[s.tdTL, s.cConcepto]}>TOTALES</Text>
+            <Text style={[s.tdTV, s.cAmt]}>{fmt(totals.dirP)}</Text>
+            <Text style={[s.tdTV, s.cAmt]}>{fmt(totals.indP)}</Text>
+            <Text style={[s.tdTV, s.cAmtTC]}>{fmt(totals.tcP)}</Text>
+            <Text style={[s.tdTV, s.cAmt]}>{fmt(totals.totP)}</Text>
+            <Text style={[{ fontSize: 7, textAlign: 'right', fontFamily: 'Helvetica-Bold' }, s.cAmt, { color: utP >= 0 ? '#4ade80' : '#f87171' }]}>{fmt(utP)}</Text>
+            <Text style={[s.tdTV, s.cAmt]}>{fmt(totals.dirR)}</Text>
+            <Text style={[s.tdTV, s.cAmt]}>{fmt(totals.indR)}</Text>
+            <Text style={[s.tdTV, s.cAmtTC]}>{fmt(totals.tcR)}</Text>
+            <Text style={[s.tdTV, s.cAmt]}>{fmt(totals.totR)}</Text>
+            <Text style={[{ fontSize: 7, textAlign: 'right', fontFamily: 'Helvetica-Bold' }, s.cAmt, { color: utR >= 0 ? '#4ade80' : '#f87171' }]}>{fmt(utR)}</Text>
           </View>
         </View>
 

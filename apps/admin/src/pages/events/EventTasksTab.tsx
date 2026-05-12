@@ -63,11 +63,12 @@ export default function EventTasksTab({ eventId, event }: EventTasksTabProps) {
   const [drawerOpen, setDrawerOpen]   = useState(false)
 
   // ── Queries ─────────────────────────────────────────────────────────────
-  const { data: tasks = [], isLoading } = useQuery({
+  const { data: rawTasks, isLoading } = useQuery({
     queryKey: ['event-collab-tasks', eventId],
     queryFn: () => collabTasksApi.list({ eventId }),
     enabled: !!eventId,
   })
+  const tasks: any[] = Array.isArray(rawTasks) ? rawTasks : []
 
   const { data: users = [] } = useQuery({
     queryKey: ['users-assignable'],
