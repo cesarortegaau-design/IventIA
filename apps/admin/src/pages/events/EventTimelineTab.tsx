@@ -478,6 +478,7 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
       dataIndex: 'position',
       key: 'position',
       width: 48,
+      fixed: 'left' as const,
       render: (v: number) => <span style={{ color: T.textMuted, fontSize: 12 }}>{v ?? '—'}</span>,
     },
     {
@@ -485,6 +486,7 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
       dataIndex: 'title',
       key: 'title',
       width: 220,
+      fixed: 'left' as const,
       render: (v: string, r: any) => (
         <span style={{ paddingLeft: r._isChild || r.parentId ? 16 : 0, fontWeight: r._isChild ? 400 : 500 }}>
           {v}
@@ -736,7 +738,7 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
             loading={isLoading}
             size="small"
             pagination={{ pageSize: 50, showSizeChanger: true }}
-            scroll={{ x: 1500 }}
+            scroll={{ x: 1800 }}
             expandable={{
               expandedRowKeys,
               onExpand: (expanded, record) => {

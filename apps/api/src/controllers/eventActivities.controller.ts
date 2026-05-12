@@ -24,6 +24,7 @@ const ACTIVITY_INCLUDE = {
   children: {
     include: {
       assignedTo:          { select: { id: true, firstName: true, lastName: true } },
+      assignees:           { include: { user: { select: { id: true, firstName: true, lastName: true } } } },
       order:               { select: { id: true, orderNumber: true, status: true } },
       activityDepartments: { include: { department: { select: { id: true, name: true } } } },
       activityOrders:      { include: { order: { select: { id: true, orderNumber: true, status: true } } } },
