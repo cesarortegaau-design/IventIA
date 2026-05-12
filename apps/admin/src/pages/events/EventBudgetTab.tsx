@@ -308,14 +308,23 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
     )
   }
 
+  /** Returns the effective real cost for a line: sum of assigned orders when present, otherwise the stored DB value. */
+  function effectiveCost(r: any, orderKey: 'directOrders' | 'indirectOrders', costField: string): number {
+    const orders: any[] = r[orderKey] ?? []
+    if (orders.length > 0) return orders.reduce((sum, o) => sum + Number(o.order?.total || 0), 0)
+    return Number(r[costField] || 0)
+  }
+
   function orderCostCell(r: any, orderKey: 'directOrders' | 'indirectOrders', costField: string, openModal: () => void, palette: { bg: string; border: string; text: string }) {
     const orders: any[] = r[orderKey] ?? []
+    // Always derive the displayed total from the orders themselves so it's never stale
+    const displayTotal = effectiveCost(r, orderKey, costField)
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         {orders.length > 0 ? (
           <>
             <div style={{ fontWeight: 700, fontSize: 12, color: '#1e293b', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-              {fmt(Number(r[costField]))}
+              {fmt(displayTotal)}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {orders.map((o: any) => (
@@ -428,7 +437,7 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
           key: 'totalCostoReal', width: 115,
           onHeaderCell: () => hRealChild,
           render: (_: any, r: any) => (
-            <TotalCostoCell value={Number(r.directCost) + Number(r.indirectCost)} />
+            <TotalCostoCell value={effectiveCost(r, 'directOrders', 'directCost') + effectiveCost(r, 'indirectOrders', 'indirectCost')} />
           ),
         },
         {
@@ -436,7 +445,7 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
           key: 'totalReal', width: 190,
           onHeaderCell: () => hRealChild,
           render: (_: any, r: any) => {
-            const totalCosto = Number(r.directCost) + Number(r.indirectCost)
+            const totalCosto = effectiveCost(r, 'directOrders', 'directCost') + effectiveCost(r, 'indirectOrders', 'indirectCost')
             return totalWithCalc(totalCosto, Number(r.income), r.id, 'income', pctRealMap, setPctRealMap, '#1d4ed8')
           },
         },
@@ -445,7 +454,7 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
           key: 'utilidadReal', width: 125,
           onHeaderCell: () => hRealChild,
           render: (_: any, r: any) => {
-            const totalCosto = Number(r.directCost) + Number(r.indirectCost)
+            const totalCosto = effectiveCost(r, 'directOrders', 'directCost') + effectiveCost(r, 'indirectOrders', 'indirectCost')
             const total      = Number(r.income)
             return <UtilCell value={total - totalCosto} base={total} />
           },
@@ -480,8 +489,8 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
     const totDirP  = lines.reduce((s, l) => s + Number(l.directCostBudgeted || 0), 0)
     const totInrP  = lines.reduce((s, l) => s + Number(l.indirectCostBudgeted || 0), 0)
     const totTP    = lines.reduce((s, l) => s + Number(l.utility || 0), 0)
-    const totDirR  = lines.reduce((s, l) => s + Number(l.directCost || 0), 0)
-    const totInrR  = lines.reduce((s, l) => s + Number(l.indirectCost || 0), 0)
+    const totDirR  = lines.reduce((s, l) => s + effectiveCost(l, 'directOrders', 'directCost'), 0)
+    const totInrR  = lines.reduce((s, l) => s + effectiveCost(l, 'indirectOrders', 'indirectCost'), 0)
     const totTR    = lines.reduce((s, l) => s + Number(l.income || 0), 0)
 
     const tcP = totDirP + totInrP
