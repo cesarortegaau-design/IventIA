@@ -316,6 +316,7 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
         </div>
       ),
     },
+    // ── REAL ────────────────────────────────────────────────────────────────
     {
       title: 'Costo Directo Real',
       key: 'directCost',
@@ -324,7 +325,6 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
         const orders: any[] = r.directOrders ?? []
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {/* Total */}
             {orders.length > 0 ? (
               <Text strong style={{ color: T.navy, fontSize: 13 }}>{fmt(Number(r.directCost))}</Text>
             ) : (
@@ -343,58 +343,22 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
                 }}
               />
             )}
-            {/* Inline orders list */}
             {orders.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 {orders.map((o: any) => (
-                  <div
-                    key={o.orderId}
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      padding: '2px 6px', borderRadius: 4,
-                      background: '#eff6ff', border: '1px solid #bfdbfe',
-                      fontSize: 11,
-                    }}
-                  >
+                  <div key={o.orderId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 6px', borderRadius: 4, background: '#eff6ff', border: '1px solid #bfdbfe', fontSize: 11 }}>
                     <span style={{ fontWeight: 600, color: '#1d4ed8' }}>{o.order?.orderNumber}</span>
                     <span style={{ color: '#374151', marginLeft: 6 }}>{fmt(Number(o.order?.total || 0))}</span>
                   </div>
                 ))}
               </div>
             )}
-            {/* Manage button */}
-            <Button
-              size="small"
-              icon={<OrderedListOutlined />}
-              onClick={() => setDirectOrderModal({ lineId: r.id })}
-              style={{ fontSize: 11 }}
-            >
+            <Button size="small" icon={<OrderedListOutlined />} onClick={() => setDirectOrderModal({ lineId: r.id })} style={{ fontSize: 11 }}>
               {orders.length === 0 ? 'Asignar órdenes' : 'Gestionar órdenes'}
             </Button>
           </div>
         )
       },
-    },
-    {
-      title: 'Ingreso',
-      key: 'income',
-      width: 140,
-      render: (_: any, r: any) => (
-        <InputNumber
-          size="small"
-          prefix="$"
-          value={Number(r.income)}
-          formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-          parser={(v: any) => v!.replace(/\$\s?|(,*)/g, '')}
-          style={{ width: '100%' }}
-          onBlur={(e: any) => {
-            const val = parseFloat(e.target.value.replace(/,/g, ''))
-            if (!isNaN(val) && val !== Number(r.income)) {
-              updateLineMut.mutate({ lineId: r.id, data: { income: val } })
-            }
-          }}
-        />
-      ),
     },
     {
       title: 'Costo Indirecto Real',
@@ -404,7 +368,6 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
         const orders: any[] = r.indirectOrders ?? []
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {/* Total */}
             {orders.length > 0 ? (
               <Text strong style={{ color: T.navy, fontSize: 13 }}>{fmt(Number(r.indirectCost))}</Text>
             ) : (
@@ -423,32 +386,17 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
                 }}
               />
             )}
-            {/* Inline orders list */}
             {orders.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 {orders.map((o: any) => (
-                  <div
-                    key={o.orderId}
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      padding: '2px 6px', borderRadius: 4,
-                      background: '#fff7ed', border: '1px solid #fed7aa',
-                      fontSize: 11,
-                    }}
-                  >
+                  <div key={o.orderId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 6px', borderRadius: 4, background: '#fff7ed', border: '1px solid #fed7aa', fontSize: 11 }}>
                     <span style={{ fontWeight: 600, color: '#c2410c' }}>{o.order?.orderNumber}</span>
                     <span style={{ color: '#374151', marginLeft: 6 }}>{fmt(Number(o.order?.total || 0))}</span>
                   </div>
                 ))}
               </div>
             )}
-            {/* Manage button */}
-            <Button
-              size="small"
-              icon={<OrderedListOutlined />}
-              onClick={() => setIndirectOrderModal({ lineId: r.id })}
-              style={{ fontSize: 11 }}
-            >
+            <Button size="small" icon={<OrderedListOutlined />} onClick={() => setIndirectOrderModal({ lineId: r.id })} style={{ fontSize: 11 }}>
               {orders.length === 0 ? 'Asignar órdenes' : 'Gestionar órdenes'}
             </Button>
           </div>
@@ -456,25 +404,147 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
       },
     },
     {
-      title: 'Utilidad',
-      key: 'utility',
-      width: 140,
+      title: 'Total Real',
+      key: 'totalReal',
+      width: 280,
+      render: (_: any, r: any) => {
+        const totalCostoReal = Number(r.directCost) + Number(r.indirectCost)
+        const totalReal = Number(r.income)
+        const utilidadReal = totalReal - totalCostoReal
+        const pctCosto = totalReal > 0 ? (totalCostoReal / totalReal * 100) : 0
+        const pctUtilidad = totalReal > 0 ? (utilidadReal / totalReal * 100) : 0
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {/* Total Costo Real */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', borderRadius: 6, background: '#f1f5f9', border: '1px solid #e2e8f0' }}>
+              <Text style={{ fontSize: 11, color: T.textMuted, fontWeight: 500 }}>Total Costo Real</Text>
+              <Space size={4}>
+                <Text style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>{fmt(totalCostoReal)}</Text>
+                <Tag color="default" style={{ fontSize: 10, margin: 0 }}>{pctCosto.toFixed(1)}%</Tag>
+              </Space>
+            </div>
+            {/* Total Real — editable */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Text style={{ fontSize: 11, color: T.textMuted, fontWeight: 500, whiteSpace: 'nowrap' }}>Total Real</Text>
+              <InputNumber
+                size="small"
+                prefix="$"
+                value={totalReal}
+                formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                parser={(v: any) => v!.replace(/\$\s?|(,*)/g, '')}
+                style={{ flex: 1 }}
+                onBlur={(e: any) => {
+                  const val = parseFloat(e.target.value.replace(/,/g, ''))
+                  if (!isNaN(val) && val !== totalReal) {
+                    updateLineMut.mutate({ lineId: r.id, data: { income: val } })
+                  }
+                }}
+              />
+            </div>
+            {/* Utilidad Real */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', borderRadius: 6, background: utilidadReal >= 0 ? '#f0fdf4' : '#fef2f2', border: `1px solid ${utilidadReal >= 0 ? '#bbf7d0' : '#fecaca'}` }}>
+              <Text style={{ fontSize: 11, fontWeight: 500, color: utilidadReal >= 0 ? '#166534' : '#991b1b' }}>Utilidad Real</Text>
+              <Space size={4}>
+                <Text style={{ fontSize: 12, fontWeight: 600, color: utilidadReal >= 0 ? '#16a34a' : '#dc2626' }}>{fmt(utilidadReal)}</Text>
+                <Tag color={utilidadReal >= 0 ? 'success' : 'error'} style={{ fontSize: 10, margin: 0 }}>{pctUtilidad.toFixed(1)}%</Tag>
+              </Space>
+            </div>
+          </div>
+        )
+      },
+    },
+    // ── PRESUPUESTADO ────────────────────────────────────────────────────────
+    {
+      title: 'Costo Directo Presupuestado',
+      key: 'directCostBudgeted',
+      width: 160,
       render: (_: any, r: any) => (
         <InputNumber
           size="small"
           prefix="$"
-          value={Number(r.utility)}
+          value={Number(r.directCostBudgeted ?? 0)}
           formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
           parser={(v: any) => v!.replace(/\$\s?|(,*)/g, '')}
           style={{ width: '100%' }}
           onBlur={(e: any) => {
             const val = parseFloat(e.target.value.replace(/,/g, ''))
-            if (!isNaN(val) && val !== Number(r.utility)) {
-              updateLineMut.mutate({ lineId: r.id, data: { utility: val } })
+            if (!isNaN(val) && val !== Number(r.directCostBudgeted ?? 0)) {
+              updateLineMut.mutate({ lineId: r.id, data: { directCostBudgeted: val } })
             }
           }}
         />
       ),
+    },
+    {
+      title: 'Costo Indirecto Presupuestado',
+      key: 'indirectCostBudgeted',
+      width: 160,
+      render: (_: any, r: any) => (
+        <InputNumber
+          size="small"
+          prefix="$"
+          value={Number(r.indirectCostBudgeted ?? 0)}
+          formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+          parser={(v: any) => v!.replace(/\$\s?|(,*)/g, '')}
+          style={{ width: '100%' }}
+          onBlur={(e: any) => {
+            const val = parseFloat(e.target.value.replace(/,/g, ''))
+            if (!isNaN(val) && val !== Number(r.indirectCostBudgeted ?? 0)) {
+              updateLineMut.mutate({ lineId: r.id, data: { indirectCostBudgeted: val } })
+            }
+          }}
+        />
+      ),
+    },
+    {
+      title: 'Total Presupuestado',
+      key: 'totalBudgeted',
+      width: 280,
+      render: (_: any, r: any) => {
+        const totalCostoPres = Number(r.directCostBudgeted ?? 0) + Number(r.indirectCostBudgeted ?? 0)
+        const totalPres = Number(r.utility)
+        const utilidadPres = totalPres - totalCostoPres
+        const pctCosto = totalPres > 0 ? (totalCostoPres / totalPres * 100) : 0
+        const pctUtilidad = totalPres > 0 ? (utilidadPres / totalPres * 100) : 0
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {/* Total Costo Presupuestado */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', borderRadius: 6, background: '#f1f5f9', border: '1px solid #e2e8f0' }}>
+              <Text style={{ fontSize: 11, color: T.textMuted, fontWeight: 500 }}>Total Costo Pres.</Text>
+              <Space size={4}>
+                <Text style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>{fmt(totalCostoPres)}</Text>
+                <Tag color="default" style={{ fontSize: 10, margin: 0 }}>{pctCosto.toFixed(1)}%</Tag>
+              </Space>
+            </div>
+            {/* Total Presupuestado — editable */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Text style={{ fontSize: 11, color: T.textMuted, fontWeight: 500, whiteSpace: 'nowrap' }}>Total Pres.</Text>
+              <InputNumber
+                size="small"
+                prefix="$"
+                value={totalPres}
+                formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                parser={(v: any) => v!.replace(/\$\s?|(,*)/g, '')}
+                style={{ flex: 1 }}
+                onBlur={(e: any) => {
+                  const val = parseFloat(e.target.value.replace(/,/g, ''))
+                  if (!isNaN(val) && val !== totalPres) {
+                    updateLineMut.mutate({ lineId: r.id, data: { utility: val } })
+                  }
+                }}
+              />
+            </div>
+            {/* Utilidad Presupuestada */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', borderRadius: 6, background: utilidadPres >= 0 ? '#f0fdf4' : '#fef2f2', border: `1px solid ${utilidadPres >= 0 ? '#bbf7d0' : '#fecaca'}` }}>
+              <Text style={{ fontSize: 11, fontWeight: 500, color: utilidadPres >= 0 ? '#166534' : '#991b1b' }}>Utilidad Pres.</Text>
+              <Space size={4}>
+                <Text style={{ fontSize: 12, fontWeight: 600, color: utilidadPres >= 0 ? '#16a34a' : '#dc2626' }}>{fmt(utilidadPres)}</Text>
+                <Tag color={utilidadPres >= 0 ? 'success' : 'error'} style={{ fontSize: 10, margin: 0 }}>{pctUtilidad.toFixed(1)}%</Tag>
+              </Space>
+            </div>
+          </div>
+        )
+      },
     },
     {
       title: 'Tareas',
@@ -558,6 +628,7 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
           rowKey="id"
           size="small"
           pagination={false}
+          scroll={{ x: 1800 }}
           expandable={{
             expandedRowRender: (record) => {
               if (!record.resource?.isPackage || !record.resource?.packageComponents?.length) return null
@@ -586,20 +657,68 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
             rowExpandable: (r) => r.resource?.isPackage && r.resource?.packageComponents?.length > 0,
           }}
           summary={() => {
-            const totalDirect = lines.reduce((s, l) => s + Number(l.directCost || 0), 0)
-            const totalIncome = lines.reduce((s, l) => s + Number(l.income || 0), 0)
-            const totalIndirect = lines.reduce((s, l) => s + Number(l.indirectCost || 0), 0)
-            const totalUtility = lines.reduce((s, l) => s + Number(l.utility || 0), 0)
-            const fmt = (n: number) => `$${n.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
+            const totalDirect    = lines.reduce((s, l) => s + Number(l.directCost || 0), 0)
+            const totalIndirect  = lines.reduce((s, l) => s + Number(l.indirectCost || 0), 0)
+            const totalIncome    = lines.reduce((s, l) => s + Number(l.income || 0), 0)
+            const totalDirectB   = lines.reduce((s, l) => s + Number(l.directCostBudgeted || 0), 0)
+            const totalIndirectB = lines.reduce((s, l) => s + Number(l.indirectCostBudgeted || 0), 0)
+            const totalUtility   = lines.reduce((s, l) => s + Number(l.utility || 0), 0)
+
+            const totalCostoReal = totalDirect + totalIndirect
+            const utilidadReal   = totalIncome - totalCostoReal
+            const pctCRUtilidad  = totalIncome > 0 ? (utilidadReal / totalIncome * 100) : 0
+
+            const totalCostoPres = totalDirectB + totalIndirectB
+            const utilidadPres   = totalUtility - totalCostoPres
+            const pctCPUtilidad  = totalUtility > 0 ? (utilidadPres / totalUtility * 100) : 0
+
             return (
               <Table.Summary fixed>
                 <Table.Summary.Row style={{ fontWeight: 600, background: '#f8fafc' }}>
                   <Table.Summary.Cell index={0}>TOTALES</Table.Summary.Cell>
-                  <Table.Summary.Cell index={1}>{fmt(totalDirect)}</Table.Summary.Cell>
-                  <Table.Summary.Cell index={2}>{fmt(totalIncome)}</Table.Summary.Cell>
-                  <Table.Summary.Cell index={3}>{fmt(totalIndirect)}</Table.Summary.Cell>
-                  <Table.Summary.Cell index={4}>{fmt(totalUtility)}</Table.Summary.Cell>
-                  <Table.Summary.Cell index={5} />
+                  <Table.Summary.Cell index={1}><Text strong>{fmt(totalDirect)}</Text></Table.Summary.Cell>
+                  <Table.Summary.Cell index={2}><Text strong>{fmt(totalIndirect)}</Text></Table.Summary.Cell>
+                  <Table.Summary.Cell index={3}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                        <span style={{ color: T.textMuted }}>Total Costo Real</span>
+                        <Text strong>{fmt(totalCostoReal)}</Text>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                        <span style={{ color: T.textMuted }}>Total Real</span>
+                        <Text strong>{fmt(totalIncome)}</Text>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                        <span style={{ color: utilidadReal >= 0 ? '#16a34a' : '#dc2626' }}>Utilidad Real</span>
+                        <Space size={4}>
+                          <Text strong style={{ color: utilidadReal >= 0 ? '#16a34a' : '#dc2626' }}>{fmt(utilidadReal)}</Text>
+                          <Tag color={utilidadReal >= 0 ? 'success' : 'error'} style={{ fontSize: 10, margin: 0 }}>{pctCRUtilidad.toFixed(1)}%</Tag>
+                        </Space>
+                      </div>
+                    </div>
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell index={4}><Text strong>{fmt(totalDirectB)}</Text></Table.Summary.Cell>
+                  <Table.Summary.Cell index={5}><Text strong>{fmt(totalIndirectB)}</Text></Table.Summary.Cell>
+                  <Table.Summary.Cell index={6}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                        <span style={{ color: T.textMuted }}>Total Costo Pres.</span>
+                        <Text strong>{fmt(totalCostoPres)}</Text>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                        <span style={{ color: T.textMuted }}>Total Pres.</span>
+                        <Text strong>{fmt(totalUtility)}</Text>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                        <span style={{ color: utilidadPres >= 0 ? '#16a34a' : '#dc2626' }}>Utilidad Pres.</span>
+                        <Space size={4}>
+                          <Text strong style={{ color: utilidadPres >= 0 ? '#16a34a' : '#dc2626' }}>{fmt(utilidadPres)}</Text>
+                          <Tag color={utilidadPres >= 0 ? 'success' : 'error'} style={{ fontSize: 10, margin: 0 }}>{pctCPUtilidad.toFixed(1)}%</Tag>
+                        </Space>
+                      </div>
+                    </div>
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell index={7} />
                 </Table.Summary.Row>
               </Table.Summary>
             )

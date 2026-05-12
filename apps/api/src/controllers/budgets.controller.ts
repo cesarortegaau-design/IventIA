@@ -134,6 +134,8 @@ const budgetLineSchema = z.object({
   income: z.number().min(0).optional(),
   indirectCost: z.number().min(0).optional(),
   utility: z.number().min(0).optional(),
+  directCostBudgeted: z.number().min(0).optional(),
+  indirectCostBudgeted: z.number().min(0).optional(),
   description: z.string().optional(),
 })
 

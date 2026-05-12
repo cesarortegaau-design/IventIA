@@ -2418,6 +2418,8 @@ model BudgetLine {
   income       Decimal     @default(0) @db.Decimal(12, 2)
   indirectCost Decimal     @default(0) @map("indirect_cost") @db.Decimal(12, 2)
   utility      Decimal     @default(0) @db.Decimal(12, 2)
+  directCostBudgeted   Decimal  @default(0) @map("direct_cost_budgeted") @db.Decimal(12, 2)
+  indirectCostBudgeted Decimal  @default(0) @map("indirect_cost_budgeted") @db.Decimal(12, 2)
   sortOrder    Int         @default(0) @map("sort_order")
   createdAt    DateTime    @default(now()) @map("created_at")
   updatedAt    DateTime    @updatedAt @map("updated_at")
