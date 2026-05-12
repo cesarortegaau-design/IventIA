@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Table, Button, Select, Modal, Form, Input, Space, Tag, Typography,
-  Spin, Empty, Popconfirm, InputNumber, Divider, message as antMessage,
+  Spin, Empty, Popconfirm, InputNumber, Divider, message as antMessage, Tabs,
 } from 'antd'
 import { PlusOutlined, DeleteOutlined, FileExcelOutlined, EditOutlined, OrderedListOutlined, CheckSquareOutlined, FilePdfOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
 import { budgetsApi } from '../../api/budgets'
@@ -17,20 +17,24 @@ const { Text } = Typography
 // ── Shared helpers ────────────────────────────────────────────────────────────
 const fmt = (n: number) => `$${n.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-// ── Header cell styles ────────────────────────────────────────────────────────
-// Use boxShadow instead of borderLeft so it renders correctly under border-collapse
-const DIVIDER_SHADOW = 'inset 4px 0 0 #1d4ed8'
+// ── Header cell styles — clean and semantic ──────────────────────────────────
+const hFixed = { style: { background: '#1e293b', color: '#f1f5f9', fontWeight: 700, fontSize: 12, padding: '8px 10px' } }
 
-const hPres       = { style: { background: '#5b21b6', color: '#fff', fontWeight: 700, textAlign: 'center' as const, fontSize: 12, padding: '8px 6px' } }
-const hPresChild  = { style: { background: '#ede9fe', color: '#4c1d95', fontWeight: 600, fontSize: 11, padding: '5px 6px' } }
-const hReal       = { style: { background: '#1d4ed8', color: '#fff', fontWeight: 700, textAlign: 'center' as const, fontSize: 12, padding: '8px 6px', boxShadow: DIVIDER_SHADOW } }
-const hRealChild  = { style: { background: '#1e3a8a', color: '#bfdbfe', fontWeight: 600, fontSize: 11, padding: '5px 6px' } }
-const hRealChildFirst = { style: { background: '#1e3a8a', color: '#bfdbfe', fontWeight: 600, fontSize: 11, padding: '5px 6px', boxShadow: DIVIDER_SHADOW } }
-const hConcepto   = { style: { background: '#1e293b', color: '#f8fafc', fontWeight: 700, fontSize: 12, padding: '8px 10px' } }
-const hTareas     = { style: { background: '#1e293b', color: '#f8fafc', fontWeight: 700, fontSize: 12, textAlign: 'center' as const, padding: '8px 6px' } }
+// Presupuestado palette
+const hPres = (center = false) => ({
+  style: {
+    background: '#ede9fe', color: '#4c1d95', fontWeight: 700, fontSize: 12,
+    padding: '7px 8px', ...(center ? { textAlign: 'center' as const } : {}),
+  },
+})
 
-const REAL_CELL_STYLE: React.CSSProperties = { background: '#eef2ff', boxShadow: DIVIDER_SHADOW }
-const REAL_CELL_STYLE_NORMAL: React.CSSProperties = { background: '#eef2ff' }
+// Real palette
+const hReal = (center = false) => ({
+  style: {
+    background: '#dbeafe', color: '#1e3a8a', fontWeight: 700, fontSize: 12,
+    padding: '7px 8px', ...(center ? { textAlign: 'center' as const } : {}),
+  },
+})
 
 // ── Number cell helpers ───────────────────────────────────────────────────────
 function AmountCell({ value, muted }: { value: number; muted?: boolean }) {
@@ -159,6 +163,7 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
   const [pctPresMap, setPctPresMap] = useState<Record<string, number | undefined>>({})
   const [pctRealMap, setPctRealMap] = useState<Record<string, number | undefined>>({})
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([])
+  const [activeTab, setActiveTab] = useState<'presupuestado' | 'real'>('presupuestado')
 
   // ── Queries ─────────────────────────────────────────────────────────────────
   const { data: budgetsData } = useQuery({
@@ -353,180 +358,159 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
     )
   }
 
-  // ── Columns (grouped) ────────────────────────────────────────────────────────
-  const columns: any[] = [
-    {
-      title: 'Concepto',
-      key: 'desc', width: 220, fixed: 'left' as const,
-      onHeaderCell: () => hConcepto,
-      render: (_: any, r: any) => (
-        <div style={{ padding: '2px 0' }}>
-          <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace' }}>{r.resource?.code}</div>
-          <div style={{ fontWeight: r.resource?.isPackage ? 700 : 500, fontSize: 13, color: '#1e293b', lineHeight: 1.3 }}>
-            {r.description}
-            {r.resource?.isPackage && <Tag color="geekblue" style={{ marginLeft: 6, fontSize: 9 }}>Paquete</Tag>}
-          </div>
+  // ── Shared Concepto column ──────────────────────────────────────────────────
+  const conceptoCol = {
+    title: 'Concepto',
+    key: 'desc', width: 220, fixed: 'left' as const,
+    onHeaderCell: () => hFixed,
+    render: (_: any, r: any) => (
+      <div style={{ padding: '2px 0' }}>
+        <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace' }}>{r.resource?.code}</div>
+        <div style={{ fontWeight: r.resource?.isPackage ? 700 : 500, fontSize: 13, color: '#1e293b', lineHeight: 1.3 }}>
+          {r.description}
+          {r.resource?.isPackage && <Tag color="geekblue" style={{ marginLeft: 6, fontSize: 9 }}>Paquete</Tag>}
         </div>
+      </div>
+    ),
+  }
+
+  const tasksCol = {
+    title: 'Tareas',
+    key: 'tasks', width: 75, fixed: 'right' as const,
+    onHeaderCell: () => hFixed,
+    render: (_: any, r: any) => (
+      <div style={{ textAlign: 'center' }}>
+        <Button
+          size="small" icon={<CheckSquareOutlined />}
+          onClick={() => setTaskModal({ lineId: r.id })}
+          type={r.collabTasks?.length > 0 ? 'primary' : 'default'}
+          style={r.collabTasks?.length > 0 ? { background: T.navy, borderColor: T.navy } : {}}
+        >
+          {r.collabTasks?.length ?? 0}
+        </Button>
+      </div>
+    ),
+  }
+
+  // ── Columns for PRESUPUESTADO tab ────────────────────────────────────────────
+  const columnsPres: any[] = [
+    conceptoCol,
+    {
+      title: 'Costo Directo',
+      key: 'directCostBudgeted', width: 130,
+      onHeaderCell: () => hPres(),
+      render: (_: any, r: any) => editableAmount(Number(r.directCostBudgeted ?? 0), 'directCostBudgeted', r.id),
+    },
+    {
+      title: 'Costo Indirecto',
+      key: 'indirectCostBudgeted', width: 130,
+      onHeaderCell: () => hPres(),
+      render: (_: any, r: any) => editableAmount(Number(r.indirectCostBudgeted ?? 0), 'indirectCostBudgeted', r.id),
+    },
+    {
+      title: 'Total Costo',
+      key: 'totalCostoPres', width: 115,
+      onHeaderCell: () => hPres(true),
+      render: (_: any, r: any) => (
+        <TotalCostoCell value={Number(r.directCostBudgeted ?? 0) + Number(r.indirectCostBudgeted ?? 0)} />
       ),
     },
-
-    // ── PRESUPUESTADO ──────────────────────────────────────────────────────────
     {
-      title: 'PRESUPUESTADO',
-      key: 'grp_pres',
-      onHeaderCell: () => hPres,
-      children: [
-        {
-          title: 'Costo Directo',
-          key: 'directCostBudgeted', width: 130,
-          onHeaderCell: () => hPresChild,
-          render: (_: any, r: any) => editableAmount(Number(r.directCostBudgeted ?? 0), 'directCostBudgeted', r.id),
-        },
-        {
-          title: 'Costo Indirecto',
-          key: 'indirectCostBudgeted', width: 130,
-          onHeaderCell: () => hPresChild,
-          render: (_: any, r: any) => editableAmount(Number(r.indirectCostBudgeted ?? 0), 'indirectCostBudgeted', r.id),
-        },
-        {
-          title: 'Total Costo',
-          key: 'totalCostoPres', width: 115,
-          onHeaderCell: () => hPresChild,
-          render: (_: any, r: any) => (
-            <TotalCostoCell value={Number(r.directCostBudgeted ?? 0) + Number(r.indirectCostBudgeted ?? 0)} />
-          ),
-        },
-        {
-          title: 'Total Presupuestado',
-          key: 'totalPres', width: 190,
-          onHeaderCell: () => hPresChild,
-          render: (_: any, r: any) => {
-            const totalCosto = Number(r.directCostBudgeted ?? 0) + Number(r.indirectCostBudgeted ?? 0)
-            return totalWithCalc(totalCosto, Number(r.utility), r.id, 'utility', pctPresMap, setPctPresMap, '#6d28d9')
-          },
-        },
-        {
-          title: 'Utilidad',
-          key: 'utilidadPres', width: 125,
-          onHeaderCell: () => hPresChild,
-          render: (_: any, r: any) => {
-            const totalCosto = Number(r.directCostBudgeted ?? 0) + Number(r.indirectCostBudgeted ?? 0)
-            const total      = Number(r.utility)
-            return <UtilCell value={total - totalCosto} base={total} />
-          },
-        },
-      ],
+      title: 'Total Presupuestado',
+      key: 'totalPres', width: 190,
+      onHeaderCell: () => hPres(true),
+      render: (_: any, r: any) => {
+        const totalCosto = Number(r.directCostBudgeted ?? 0) + Number(r.indirectCostBudgeted ?? 0)
+        return totalWithCalc(totalCosto, Number(r.utility), r.id, 'utility', pctPresMap, setPctPresMap, '#6d28d9')
+      },
     },
-
-    // ── REAL ───────────────────────────────────────────────────────────────────
     {
-      title: 'REAL',
-      key: 'grp_real',
-      onHeaderCell: () => hReal,
-      children: [
-        {
-          title: 'Costo Directo',
-          key: 'directCost', width: 185,
-          onHeaderCell: () => hRealChildFirst,
-          onCell: () => ({ style: REAL_CELL_STYLE }),
-          render: (_: any, r: any) => orderCostCell(r, 'directOrders', 'directCost',
-            () => setDirectOrderModal({ lineId: r.id }),
-            { bg: '#dbeafe', border: '#93c5fd', text: '#1d4ed8' }),
-        },
-        {
-          title: 'Costo Indirecto',
-          key: 'indirectCost', width: 185,
-          onHeaderCell: () => hRealChild,
-          onCell: () => ({ style: REAL_CELL_STYLE_NORMAL }),
-          render: (_: any, r: any) => orderCostCell(r, 'indirectOrders', 'indirectCost',
-            () => setIndirectOrderModal({ lineId: r.id }),
-            { bg: '#fff7ed', border: '#fed7aa', text: '#c2410c' }),
-        },
-        {
-          title: 'Total Costo',
-          key: 'totalCostoReal', width: 115,
-          onHeaderCell: () => hRealChild,
-          onCell: () => ({ style: REAL_CELL_STYLE_NORMAL }),
-          render: (_: any, r: any) => (
-            <TotalCostoCell value={effectiveCost(r, 'directOrders', 'directCost') + effectiveCost(r, 'indirectOrders', 'indirectCost')} />
-          ),
-        },
-        {
-          title: 'Total Real',
-          key: 'totalReal', width: 190,
-          onHeaderCell: () => hRealChild,
-          onCell: () => ({ style: REAL_CELL_STYLE_NORMAL }),
-          render: (_: any, r: any) => {
-            const totalCosto = effectiveCost(r, 'directOrders', 'directCost') + effectiveCost(r, 'indirectOrders', 'indirectCost')
-            return totalWithCalc(totalCosto, Number(r.income), r.id, 'income', pctRealMap, setPctRealMap, '#1d4ed8')
-          },
-        },
-        {
-          title: 'Utilidad',
-          key: 'utilidadReal', width: 125,
-          onHeaderCell: () => hRealChild,
-          onCell: () => ({ style: REAL_CELL_STYLE_NORMAL }),
-          render: (_: any, r: any) => {
-            const totalCosto = effectiveCost(r, 'directOrders', 'directCost') + effectiveCost(r, 'indirectOrders', 'indirectCost')
-            const total      = Number(r.income)
-            return <UtilCell value={total - totalCosto} base={total} />
-          },
-        },
-      ],
+      title: 'Utilidad',
+      key: 'utilidadPres', width: 125,
+      onHeaderCell: () => hPres(true),
+      render: (_: any, r: any) => {
+        const totalCosto = Number(r.directCostBudgeted ?? 0) + Number(r.indirectCostBudgeted ?? 0)
+        const total      = Number(r.utility)
+        return <UtilCell value={total - totalCosto} base={total} />
+      },
     },
-
-    // ── Tareas ─────────────────────────────────────────────────────────────────
-    {
-      title: 'Tareas',
-      key: 'tasks', width: 75, fixed: 'right' as const,
-      onHeaderCell: () => hTareas,
-      render: (_: any, r: any) => (
-        <div style={{ textAlign: 'center' }}>
-          <Button
-            size="small" icon={<CheckSquareOutlined />}
-            onClick={() => setTaskModal({ lineId: r.id })}
-            type={r.collabTasks?.length > 0 ? 'primary' : 'default'}
-            style={r.collabTasks?.length > 0 ? { background: T.navy, borderColor: T.navy } : {}}
-          >
-            {r.collabTasks?.length ?? 0}
-          </Button>
-        </div>
-      ),
-    },
+    tasksCol,
   ]
 
-  // ── Summary totals ───────────────────────────────────────────────────────────
-  // Leaf column order (left→right): Concepto | DirP InrP TCosP TotP UtilP | DirR InrR TCosR TotR UtilR | Tareas
-  // Indices:                              0   |  1    2    3    4    5     |  6    7    8    9    10    |  11
-  function renderSummary() {
+  // ── Columns for REAL tab ─────────────────────────────────────────────────────
+  const columnsReal: any[] = [
+    conceptoCol,
+    {
+      title: 'Costo Directo',
+      key: 'directCost', width: 185,
+      onHeaderCell: () => hReal(),
+      render: (_: any, r: any) => orderCostCell(r, 'directOrders', 'directCost',
+        () => setDirectOrderModal({ lineId: r.id }),
+        { bg: '#dbeafe', border: '#93c5fd', text: '#1d4ed8' }),
+    },
+    {
+      title: 'Costo Indirecto',
+      key: 'indirectCost', width: 185,
+      onHeaderCell: () => hReal(),
+      render: (_: any, r: any) => orderCostCell(r, 'indirectOrders', 'indirectCost',
+        () => setIndirectOrderModal({ lineId: r.id }),
+        { bg: '#fff7ed', border: '#fed7aa', text: '#c2410c' }),
+    },
+    {
+      title: 'Total Costo',
+      key: 'totalCostoReal', width: 115,
+      onHeaderCell: () => hReal(true),
+      render: (_: any, r: any) => (
+        <TotalCostoCell value={effectiveCost(r, 'directOrders', 'directCost') + effectiveCost(r, 'indirectOrders', 'indirectCost')} />
+      ),
+    },
+    {
+      title: 'Total Real',
+      key: 'totalReal', width: 190,
+      onHeaderCell: () => hReal(true),
+      render: (_: any, r: any) => {
+        const totalCosto = effectiveCost(r, 'directOrders', 'directCost') + effectiveCost(r, 'indirectOrders', 'indirectCost')
+        return totalWithCalc(totalCosto, Number(r.income), r.id, 'income', pctRealMap, setPctRealMap, '#1d4ed8')
+      },
+    },
+    {
+      title: 'Utilidad',
+      key: 'utilidadReal', width: 125,
+      onHeaderCell: () => hReal(true),
+      render: (_: any, r: any) => {
+        const totalCosto = effectiveCost(r, 'directOrders', 'directCost') + effectiveCost(r, 'indirectOrders', 'indirectCost')
+        const total      = Number(r.income)
+        return <UtilCell value={total - totalCosto} base={total} />
+      },
+    },
+    tasksCol,
+  ]
+
+  // ── Summary helpers ─────────────────────────────────────────────────────────
+  const cellSt: React.CSSProperties = { background: '#f1f5f9', fontWeight: 700 }
+  const numSt: React.CSSProperties  = { textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, fontSize: 12 }
+
+  function SumNum({ v, color }: { v: number; color?: string }) {
+    return <div style={{ ...numSt, color: color ?? '#1e293b' }}>{fmt(v)}</div>
+  }
+  function SumUtil({ v, base }: { v: number; base: number }) {
+    const pct = base > 0 ? (v / base * 100) : 0
+    const pos = v >= 0
+    return (
+      <div style={{ textAlign: 'right' }}>
+        <div style={{ color: pos ? '#16a34a' : '#dc2626', fontWeight: 700, fontSize: 12 }}>{fmt(v)}</div>
+        <div style={{ fontSize: 10, color: pos ? '#15803d' : '#b91c1c' }}>{pct.toFixed(1)}%</div>
+      </div>
+    )
+  }
+
+  // ── Summary for PRESUPUESTADO tab ────────────────────────────────────────────
+  function renderSummaryPres() {
     const totDirP  = lines.reduce((s, l) => s + Number(l.directCostBudgeted || 0), 0)
     const totInrP  = lines.reduce((s, l) => s + Number(l.indirectCostBudgeted || 0), 0)
     const totTP    = lines.reduce((s, l) => s + Number(l.utility || 0), 0)
-    const totDirR  = lines.reduce((s, l) => s + effectiveCost(l, 'directOrders', 'directCost'), 0)
-    const totInrR  = lines.reduce((s, l) => s + effectiveCost(l, 'indirectOrders', 'indirectCost'), 0)
-    const totTR    = lines.reduce((s, l) => s + Number(l.income || 0), 0)
-
     const tcP = totDirP + totInrP
-    const tcR = totDirR + totInrR
     const utP = totTP - tcP
-    const utR = totTR - tcR
-
-    const cellSt: React.CSSProperties = { background: '#f1f5f9', fontWeight: 700 }
-    const numSt: React.CSSProperties  = { textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, fontSize: 12 }
-
-    function SumNum({ v, color }: { v: number; color?: string }) {
-      return <div style={{ ...numSt, color: color ?? '#1e293b' }}>{fmt(v)}</div>
-    }
-    function SumUtil({ v, base }: { v: number; base: number }) {
-      const pct = base > 0 ? (v / base * 100) : 0
-      const pos = v >= 0
-      return (
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ color: pos ? '#16a34a' : '#dc2626', fontWeight: 700, fontSize: 12 }}>{fmt(v)}</div>
-          <div style={{ fontSize: 10, color: pos ? '#15803d' : '#b91c1c' }}>{pct.toFixed(1)}%</div>
-        </div>
-      )
-    }
 
     return (
       <Table.Summary fixed>
@@ -539,12 +523,32 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
           <Table.Summary.Cell index={3}  style={{ ...cellSt, background: '#e2e8f0' }}><SumNum v={tcP} /></Table.Summary.Cell>
           <Table.Summary.Cell index={4}  style={cellSt}><SumNum v={totTP} color="#4c1d95" /></Table.Summary.Cell>
           <Table.Summary.Cell index={5}  style={cellSt}><SumUtil v={utP} base={totTP} /></Table.Summary.Cell>
-          <Table.Summary.Cell index={6}  style={{ ...cellSt, background: '#e8eeff', boxShadow: DIVIDER_SHADOW }}><SumNum v={totDirR} /></Table.Summary.Cell>
-          <Table.Summary.Cell index={7}  style={{ ...cellSt, background: '#e8eeff' }}><SumNum v={totInrR} /></Table.Summary.Cell>
-          <Table.Summary.Cell index={8}  style={{ ...cellSt, background: '#dce3f5' }}><SumNum v={tcR} /></Table.Summary.Cell>
-          <Table.Summary.Cell index={9}  style={{ ...cellSt, background: '#e8eeff' }}><SumNum v={totTR} color="#1e3a8a" /></Table.Summary.Cell>
-          <Table.Summary.Cell index={10} style={{ ...cellSt, background: '#e8eeff' }}><SumUtil v={utR} base={totTR} /></Table.Summary.Cell>
-          <Table.Summary.Cell index={11} style={cellSt} />
+          <Table.Summary.Cell index={6}  style={cellSt} />
+        </Table.Summary.Row>
+      </Table.Summary>
+    )
+  }
+
+  // ── Summary for REAL tab ─────────────────────────────────────────────────────
+  function renderSummaryReal() {
+    const totDirR  = lines.reduce((s, l) => s + effectiveCost(l, 'directOrders', 'directCost'), 0)
+    const totInrR  = lines.reduce((s, l) => s + effectiveCost(l, 'indirectOrders', 'indirectCost'), 0)
+    const totTR    = lines.reduce((s, l) => s + Number(l.income || 0), 0)
+    const tcR = totDirR + totInrR
+    const utR = totTR - tcR
+
+    return (
+      <Table.Summary fixed>
+        <Table.Summary.Row style={{ background: '#f8fafc', fontWeight: 700 }}>
+          <Table.Summary.Cell index={0} style={cellSt}>
+            <Text strong style={{ color: '#1e293b', fontSize: 11 }}>TOTALES</Text>
+          </Table.Summary.Cell>
+          <Table.Summary.Cell index={1}  style={cellSt}><SumNum v={totDirR} /></Table.Summary.Cell>
+          <Table.Summary.Cell index={2}  style={cellSt}><SumNum v={totInrR} /></Table.Summary.Cell>
+          <Table.Summary.Cell index={3}  style={{ ...cellSt, background: '#e8f0ff' }}><SumNum v={tcR} /></Table.Summary.Cell>
+          <Table.Summary.Cell index={4}  style={cellSt}><SumNum v={totTR} color="#1e3a8a" /></Table.Summary.Cell>
+          <Table.Summary.Cell index={5}  style={cellSt}><SumUtil v={utR} base={totTR} /></Table.Summary.Cell>
+          <Table.Summary.Cell index={6}  style={cellSt} />
         </Table.Summary.Row>
       </Table.Summary>
     )
@@ -584,42 +588,93 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
         </Space>
       </div>
 
-      {/* Table */}
+      {/* Table with Tabs */}
       {!selectedBudgetId ? (
         <Empty description={budgets.length === 0 ? 'Sin presupuestos. Crea uno con el botón de arriba.' : 'Selecciona un presupuesto para ver sus líneas'} style={{ padding: 48 }} />
       ) : detailLoading ? (
         <div style={{ padding: 32, textAlign: 'center' }}><Spin /></div>
       ) : (
-        <Table
-          dataSource={lines} columns={columns} rowKey="id" size="small"
-          pagination={false} scroll={{ x: 2200, y: 'calc(100vh - 340px)' }}
-          rowClassName={() => 'budget-row'}
-          expandable={{
-            expandedRowKeys,
-            onExpand: (expanded, record) => {
-              setExpandedKeys(expanded ? [...expandedKeys, record.id] : expandedKeys.filter(k => k !== record.id))
-            },
-            expandedRowRender: (record) => {
-              if (!record.resource?.isPackage || !record.resource?.packageComponents?.length) return null
-              return (
+        <Tabs
+          activeKey={activeTab}
+          onChange={(k) => setActiveTab(k as 'presupuestado' | 'real')}
+          size="small"
+          style={{ marginTop: 8 }}
+          items={[
+            {
+              key: 'presupuestado',
+              label: '📋 Presupuestado',
+              children: (
                 <Table
-                  dataSource={record.resource.packageComponents} rowKey="id" size="small" pagination={false}
-                  columns={[
-                    { title: 'Componente', render: (_: any, pc: any) => (
-                      <div style={{ paddingLeft: 16 }}>
-                        <Text style={{ fontSize: 11, fontFamily: 'monospace', color: T.textMuted }}>{pc.componentResource?.code}</Text>
-                        <div>{pc.componentResource?.name}</div>
-                      </div>
-                    )},
-                    { title: 'Cantidad', dataIndex: 'quantity', width: 80, render: (v: any) => Number(v) },
-                    { title: 'Unidad', render: (_: any, pc: any) => pc.componentResource?.unit ?? '' },
-                  ]}
+                  dataSource={lines} columns={columnsPres} rowKey="id" size="small"
+                  pagination={false} scroll={{ x: 1100, y: 'calc(100vh - 380px)' }}
+                  rowClassName={() => 'budget-row'}
+                  expandable={{
+                    expandedRowKeys,
+                    onExpand: (expanded, record) => {
+                      setExpandedKeys(expanded ? [...expandedKeys, record.id] : expandedKeys.filter(k => k !== record.id))
+                    },
+                    expandedRowRender: (record) => {
+                      if (!record.resource?.isPackage || !record.resource?.packageComponents?.length) return null
+                      return (
+                        <Table
+                          dataSource={record.resource.packageComponents} rowKey="id" size="small" pagination={false}
+                          columns={[
+                            { title: 'Componente', render: (_: any, pc: any) => (
+                              <div style={{ paddingLeft: 16 }}>
+                                <Text style={{ fontSize: 11, fontFamily: 'monospace', color: T.textMuted }}>{pc.componentResource?.code}</Text>
+                                <div>{pc.componentResource?.name}</div>
+                              </div>
+                            )},
+                            { title: 'Cantidad', dataIndex: 'quantity', width: 80, render: (v: any) => Number(v) },
+                            { title: 'Unidad', render: (_: any, pc: any) => pc.componentResource?.unit ?? '' },
+                          ]}
+                        />
+                      )
+                    },
+                    rowExpandable: (r) => r.resource?.isPackage && r.resource?.packageComponents?.length > 0,
+                  }}
+                  summary={renderSummaryPres}
                 />
-              )
+              ),
             },
-            rowExpandable: (r) => r.resource?.isPackage && r.resource?.packageComponents?.length > 0,
-          }}
-          summary={renderSummary}
+            {
+              key: 'real',
+              label: '💰 Real',
+              children: (
+                <Table
+                  dataSource={lines} columns={columnsReal} rowKey="id" size="small"
+                  pagination={false} scroll={{ x: 1100, y: 'calc(100vh - 380px)' }}
+                  rowClassName={() => 'budget-row'}
+                  expandable={{
+                    expandedRowKeys,
+                    onExpand: (expanded, record) => {
+                      setExpandedKeys(expanded ? [...expandedKeys, record.id] : expandedKeys.filter(k => k !== record.id))
+                    },
+                    expandedRowRender: (record) => {
+                      if (!record.resource?.isPackage || !record.resource?.packageComponents?.length) return null
+                      return (
+                        <Table
+                          dataSource={record.resource.packageComponents} rowKey="id" size="small" pagination={false}
+                          columns={[
+                            { title: 'Componente', render: (_: any, pc: any) => (
+                              <div style={{ paddingLeft: 16 }}>
+                                <Text style={{ fontSize: 11, fontFamily: 'monospace', color: T.textMuted }}>{pc.componentResource?.code}</Text>
+                                <div>{pc.componentResource?.name}</div>
+                              </div>
+                            )},
+                            { title: 'Cantidad', dataIndex: 'quantity', width: 80, render: (v: any) => Number(v) },
+                            { title: 'Unidad', render: (_: any, pc: any) => pc.componentResource?.unit ?? '' },
+                          ]}
+                        />
+                      )
+                    },
+                    rowExpandable: (r) => r.resource?.isPackage && r.resource?.packageComponents?.length > 0,
+                  }}
+                  summary={renderSummaryReal}
+                />
+              ),
+            },
+          ]}
         />
       )}
 
