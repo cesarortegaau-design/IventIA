@@ -151,6 +151,9 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
   const [pdfLoading, setPdfLoading]     = useState(false)
   const [excelLoading, setExcelLoading] = useState(false)
   const [form] = Form.useForm()
+  // Per-row percentage inputs for % calculators
+  const [pctPresMap, setPctPresMap] = useState<Record<string, number | undefined>>({})
+  const [pctRealMap, setPctRealMap] = useState<Record<string, number | undefined>>({})
 
   const { data: budgetsData, isLoading: budgetsLoading } = useQuery({
     queryKey: ['event-budgets', eventId],
@@ -316,6 +319,128 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
         </div>
       ),
     },
+    // ── PRESUPUESTADO ────────────────────────────────────────────────────────
+    {
+      title: 'Costo Directo Presupuestado',
+      key: 'directCostBudgeted',
+      width: 160,
+      render: (_: any, r: any) => (
+        <InputNumber
+          size="small"
+          prefix="$"
+          value={Number(r.directCostBudgeted ?? 0)}
+          formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+          parser={(v: any) => v!.replace(/\$\s?|(,*)/g, '')}
+          style={{ width: '100%' }}
+          onBlur={(e: any) => {
+            const val = parseFloat(e.target.value.replace(/,/g, ''))
+            if (!isNaN(val) && val !== Number(r.directCostBudgeted ?? 0)) {
+              updateLineMut.mutate({ lineId: r.id, data: { directCostBudgeted: val } })
+            }
+          }}
+        />
+      ),
+    },
+    {
+      title: 'Costo Indirecto Presupuestado',
+      key: 'indirectCostBudgeted',
+      width: 160,
+      render: (_: any, r: any) => (
+        <InputNumber
+          size="small"
+          prefix="$"
+          value={Number(r.indirectCostBudgeted ?? 0)}
+          formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+          parser={(v: any) => v!.replace(/\$\s?|(,*)/g, '')}
+          style={{ width: '100%' }}
+          onBlur={(e: any) => {
+            const val = parseFloat(e.target.value.replace(/,/g, ''))
+            if (!isNaN(val) && val !== Number(r.indirectCostBudgeted ?? 0)) {
+              updateLineMut.mutate({ lineId: r.id, data: { indirectCostBudgeted: val } })
+            }
+          }}
+        />
+      ),
+    },
+    {
+      title: 'Total Presupuestado',
+      key: 'totalBudgeted',
+      width: 300,
+      render: (_: any, r: any) => {
+        const totalCostoPres = Number(r.directCostBudgeted ?? 0) + Number(r.indirectCostBudgeted ?? 0)
+        const totalPres      = Number(r.utility)
+        const utilidadPres   = totalPres - totalCostoPres
+        const pctCosto       = totalPres > 0 ? (totalCostoPres / totalPres * 100) : 0
+        const pctUtilidad    = totalPres > 0 ? (utilidadPres   / totalPres * 100) : 0
+        const pctInput       = pctPresMap[r.id]
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {/* Total Costo Pres */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '3px 8px', borderRadius: 6, background: '#f1f5f9', border: '1px solid #e2e8f0' }}>
+              <Text style={{ fontSize: 11, color: T.textMuted, fontWeight: 500 }}>Total Costo Pres.</Text>
+              <Space size={4}>
+                <Text style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>{fmt(totalCostoPres)}</Text>
+                <Tag color="default" style={{ fontSize: 10, margin: 0 }}>{pctCosto.toFixed(1)}%</Tag>
+              </Space>
+            </div>
+            {/* % calculator */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 0' }}>
+              <InputNumber
+                size="small"
+                min={0}
+                max={999}
+                precision={2}
+                value={pctInput}
+                placeholder="% margen"
+                suffix="%"
+                style={{ flex: 1, fontSize: 11 }}
+                onChange={v => setPctPresMap(m => ({ ...m, [r.id]: v ?? undefined }))}
+              />
+              <Button
+                size="small"
+                type="primary"
+                disabled={pctInput === undefined || pctInput === null}
+                style={{ fontSize: 11, background: '#6B46C1', borderColor: '#6B46C1', padding: '0 6px' }}
+                onClick={() => {
+                  if (pctInput !== undefined && pctInput !== null) {
+                    const newTotal = totalCostoPres * (1 + pctInput / 100)
+                    updateLineMut.mutate({ lineId: r.id, data: { utility: parseFloat(newTotal.toFixed(2)) } })
+                  }
+                }}
+              >
+                Calcular
+              </Button>
+            </div>
+            {/* Total Pres — editable */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Text style={{ fontSize: 11, color: T.textMuted, fontWeight: 500, whiteSpace: 'nowrap' }}>Total Pres.</Text>
+              <InputNumber
+                size="small"
+                prefix="$"
+                value={totalPres}
+                formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                parser={(v: any) => v!.replace(/\$\s?|(,*)/g, '')}
+                style={{ flex: 1 }}
+                onBlur={(e: any) => {
+                  const val = parseFloat(e.target.value.replace(/,/g, ''))
+                  if (!isNaN(val) && val !== totalPres) {
+                    updateLineMut.mutate({ lineId: r.id, data: { utility: val } })
+                  }
+                }}
+              />
+            </div>
+            {/* Utilidad Pres */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '3px 8px', borderRadius: 6, background: utilidadPres >= 0 ? '#f0fdf4' : '#fef2f2', border: `1px solid ${utilidadPres >= 0 ? '#bbf7d0' : '#fecaca'}` }}>
+              <Text style={{ fontSize: 11, fontWeight: 500, color: utilidadPres >= 0 ? '#166534' : '#991b1b' }}>Utilidad Pres.</Text>
+              <Space size={4}>
+                <Text style={{ fontSize: 12, fontWeight: 600, color: utilidadPres >= 0 ? '#16a34a' : '#dc2626' }}>{fmt(utilidadPres)}</Text>
+                <Tag color={utilidadPres >= 0 ? 'success' : 'error'} style={{ fontSize: 10, margin: 0 }}>{pctUtilidad.toFixed(1)}%</Tag>
+              </Space>
+            </div>
+          </div>
+        )
+      },
+    },
     // ── REAL ────────────────────────────────────────────────────────────────
     {
       title: 'Costo Directo Real',
@@ -406,22 +531,51 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
     {
       title: 'Total Real',
       key: 'totalReal',
-      width: 280,
+      width: 300,
       render: (_: any, r: any) => {
         const totalCostoReal = Number(r.directCost) + Number(r.indirectCost)
-        const totalReal = Number(r.income)
-        const utilidadReal = totalReal - totalCostoReal
-        const pctCosto = totalReal > 0 ? (totalCostoReal / totalReal * 100) : 0
-        const pctUtilidad = totalReal > 0 ? (utilidadReal / totalReal * 100) : 0
+        const totalReal      = Number(r.income)
+        const utilidadReal   = totalReal - totalCostoReal
+        const pctCosto       = totalReal > 0 ? (totalCostoReal / totalReal * 100) : 0
+        const pctUtilidad    = totalReal > 0 ? (utilidadReal   / totalReal * 100) : 0
+        const pctInput       = pctRealMap[r.id]
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
             {/* Total Costo Real */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', borderRadius: 6, background: '#f1f5f9', border: '1px solid #e2e8f0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '3px 8px', borderRadius: 6, background: '#f1f5f9', border: '1px solid #e2e8f0' }}>
               <Text style={{ fontSize: 11, color: T.textMuted, fontWeight: 500 }}>Total Costo Real</Text>
               <Space size={4}>
                 <Text style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>{fmt(totalCostoReal)}</Text>
                 <Tag color="default" style={{ fontSize: 10, margin: 0 }}>{pctCosto.toFixed(1)}%</Tag>
               </Space>
+            </div>
+            {/* % calculator */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 0' }}>
+              <InputNumber
+                size="small"
+                min={0}
+                max={999}
+                precision={2}
+                value={pctInput}
+                placeholder="% margen"
+                suffix="%"
+                style={{ flex: 1, fontSize: 11 }}
+                onChange={v => setPctRealMap(m => ({ ...m, [r.id]: v ?? undefined }))}
+              />
+              <Button
+                size="small"
+                type="primary"
+                disabled={pctInput === undefined || pctInput === null}
+                style={{ fontSize: 11, background: '#0369a1', borderColor: '#0369a1', padding: '0 6px' }}
+                onClick={() => {
+                  if (pctInput !== undefined && pctInput !== null) {
+                    const newTotal = totalCostoReal * (1 + pctInput / 100)
+                    updateLineMut.mutate({ lineId: r.id, data: { income: parseFloat(newTotal.toFixed(2)) } })
+                  }
+                }}
+              >
+                Calcular
+              </Button>
             </div>
             {/* Total Real — editable */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -442,104 +596,11 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
               />
             </div>
             {/* Utilidad Real */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', borderRadius: 6, background: utilidadReal >= 0 ? '#f0fdf4' : '#fef2f2', border: `1px solid ${utilidadReal >= 0 ? '#bbf7d0' : '#fecaca'}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '3px 8px', borderRadius: 6, background: utilidadReal >= 0 ? '#f0fdf4' : '#fef2f2', border: `1px solid ${utilidadReal >= 0 ? '#bbf7d0' : '#fecaca'}` }}>
               <Text style={{ fontSize: 11, fontWeight: 500, color: utilidadReal >= 0 ? '#166534' : '#991b1b' }}>Utilidad Real</Text>
               <Space size={4}>
                 <Text style={{ fontSize: 12, fontWeight: 600, color: utilidadReal >= 0 ? '#16a34a' : '#dc2626' }}>{fmt(utilidadReal)}</Text>
                 <Tag color={utilidadReal >= 0 ? 'success' : 'error'} style={{ fontSize: 10, margin: 0 }}>{pctUtilidad.toFixed(1)}%</Tag>
-              </Space>
-            </div>
-          </div>
-        )
-      },
-    },
-    // ── PRESUPUESTADO ────────────────────────────────────────────────────────
-    {
-      title: 'Costo Directo Presupuestado',
-      key: 'directCostBudgeted',
-      width: 160,
-      render: (_: any, r: any) => (
-        <InputNumber
-          size="small"
-          prefix="$"
-          value={Number(r.directCostBudgeted ?? 0)}
-          formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-          parser={(v: any) => v!.replace(/\$\s?|(,*)/g, '')}
-          style={{ width: '100%' }}
-          onBlur={(e: any) => {
-            const val = parseFloat(e.target.value.replace(/,/g, ''))
-            if (!isNaN(val) && val !== Number(r.directCostBudgeted ?? 0)) {
-              updateLineMut.mutate({ lineId: r.id, data: { directCostBudgeted: val } })
-            }
-          }}
-        />
-      ),
-    },
-    {
-      title: 'Costo Indirecto Presupuestado',
-      key: 'indirectCostBudgeted',
-      width: 160,
-      render: (_: any, r: any) => (
-        <InputNumber
-          size="small"
-          prefix="$"
-          value={Number(r.indirectCostBudgeted ?? 0)}
-          formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-          parser={(v: any) => v!.replace(/\$\s?|(,*)/g, '')}
-          style={{ width: '100%' }}
-          onBlur={(e: any) => {
-            const val = parseFloat(e.target.value.replace(/,/g, ''))
-            if (!isNaN(val) && val !== Number(r.indirectCostBudgeted ?? 0)) {
-              updateLineMut.mutate({ lineId: r.id, data: { indirectCostBudgeted: val } })
-            }
-          }}
-        />
-      ),
-    },
-    {
-      title: 'Total Presupuestado',
-      key: 'totalBudgeted',
-      width: 280,
-      render: (_: any, r: any) => {
-        const totalCostoPres = Number(r.directCostBudgeted ?? 0) + Number(r.indirectCostBudgeted ?? 0)
-        const totalPres = Number(r.utility)
-        const utilidadPres = totalPres - totalCostoPres
-        const pctCosto = totalPres > 0 ? (totalCostoPres / totalPres * 100) : 0
-        const pctUtilidad = totalPres > 0 ? (utilidadPres / totalPres * 100) : 0
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {/* Total Costo Presupuestado */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', borderRadius: 6, background: '#f1f5f9', border: '1px solid #e2e8f0' }}>
-              <Text style={{ fontSize: 11, color: T.textMuted, fontWeight: 500 }}>Total Costo Pres.</Text>
-              <Space size={4}>
-                <Text style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>{fmt(totalCostoPres)}</Text>
-                <Tag color="default" style={{ fontSize: 10, margin: 0 }}>{pctCosto.toFixed(1)}%</Tag>
-              </Space>
-            </div>
-            {/* Total Presupuestado — editable */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Text style={{ fontSize: 11, color: T.textMuted, fontWeight: 500, whiteSpace: 'nowrap' }}>Total Pres.</Text>
-              <InputNumber
-                size="small"
-                prefix="$"
-                value={totalPres}
-                formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                parser={(v: any) => v!.replace(/\$\s?|(,*)/g, '')}
-                style={{ flex: 1 }}
-                onBlur={(e: any) => {
-                  const val = parseFloat(e.target.value.replace(/,/g, ''))
-                  if (!isNaN(val) && val !== totalPres) {
-                    updateLineMut.mutate({ lineId: r.id, data: { utility: val } })
-                  }
-                }}
-              />
-            </div>
-            {/* Utilidad Presupuestada */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', borderRadius: 6, background: utilidadPres >= 0 ? '#f0fdf4' : '#fef2f2', border: `1px solid ${utilidadPres >= 0 ? '#bbf7d0' : '#fecaca'}` }}>
-              <Text style={{ fontSize: 11, fontWeight: 500, color: utilidadPres >= 0 ? '#166534' : '#991b1b' }}>Utilidad Pres.</Text>
-              <Space size={4}>
-                <Text style={{ fontSize: 12, fontWeight: 600, color: utilidadPres >= 0 ? '#16a34a' : '#dc2626' }}>{fmt(utilidadPres)}</Text>
-                <Tag color={utilidadPres >= 0 ? 'success' : 'error'} style={{ fontSize: 10, margin: 0 }}>{pctUtilidad.toFixed(1)}%</Tag>
               </Space>
             </div>
           </div>
@@ -676,30 +737,10 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
               <Table.Summary fixed>
                 <Table.Summary.Row style={{ fontWeight: 600, background: '#f8fafc' }}>
                   <Table.Summary.Cell index={0}>TOTALES</Table.Summary.Cell>
-                  <Table.Summary.Cell index={1}><Text strong>{fmt(totalDirect)}</Text></Table.Summary.Cell>
-                  <Table.Summary.Cell index={2}><Text strong>{fmt(totalIndirect)}</Text></Table.Summary.Cell>
+                  {/* Presupuestado cols: 1=Dir Pres, 2=Indir Pres, 3=Total Pres */}
+                  <Table.Summary.Cell index={1}><Text strong>{fmt(totalDirectB)}</Text></Table.Summary.Cell>
+                  <Table.Summary.Cell index={2}><Text strong>{fmt(totalIndirectB)}</Text></Table.Summary.Cell>
                   <Table.Summary.Cell index={3}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
-                        <span style={{ color: T.textMuted }}>Total Costo Real</span>
-                        <Text strong>{fmt(totalCostoReal)}</Text>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
-                        <span style={{ color: T.textMuted }}>Total Real</span>
-                        <Text strong>{fmt(totalIncome)}</Text>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
-                        <span style={{ color: utilidadReal >= 0 ? '#16a34a' : '#dc2626' }}>Utilidad Real</span>
-                        <Space size={4}>
-                          <Text strong style={{ color: utilidadReal >= 0 ? '#16a34a' : '#dc2626' }}>{fmt(utilidadReal)}</Text>
-                          <Tag color={utilidadReal >= 0 ? 'success' : 'error'} style={{ fontSize: 10, margin: 0 }}>{pctCRUtilidad.toFixed(1)}%</Tag>
-                        </Space>
-                      </div>
-                    </div>
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell index={4}><Text strong>{fmt(totalDirectB)}</Text></Table.Summary.Cell>
-                  <Table.Summary.Cell index={5}><Text strong>{fmt(totalIndirectB)}</Text></Table.Summary.Cell>
-                  <Table.Summary.Cell index={6}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
                         <span style={{ color: T.textMuted }}>Total Costo Pres.</span>
@@ -714,6 +755,28 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
                         <Space size={4}>
                           <Text strong style={{ color: utilidadPres >= 0 ? '#16a34a' : '#dc2626' }}>{fmt(utilidadPres)}</Text>
                           <Tag color={utilidadPres >= 0 ? 'success' : 'error'} style={{ fontSize: 10, margin: 0 }}>{pctCPUtilidad.toFixed(1)}%</Tag>
+                        </Space>
+                      </div>
+                    </div>
+                  </Table.Summary.Cell>
+                  {/* Real cols: 4=Dir Real, 5=Indir Real, 6=Total Real */}
+                  <Table.Summary.Cell index={4}><Text strong>{fmt(totalDirect)}</Text></Table.Summary.Cell>
+                  <Table.Summary.Cell index={5}><Text strong>{fmt(totalIndirect)}</Text></Table.Summary.Cell>
+                  <Table.Summary.Cell index={6}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                        <span style={{ color: T.textMuted }}>Total Costo Real</span>
+                        <Text strong>{fmt(totalCostoReal)}</Text>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                        <span style={{ color: T.textMuted }}>Total Real</span>
+                        <Text strong>{fmt(totalIncome)}</Text>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                        <span style={{ color: utilidadReal >= 0 ? '#16a34a' : '#dc2626' }}>Utilidad Real</span>
+                        <Space size={4}>
+                          <Text strong style={{ color: utilidadReal >= 0 ? '#16a34a' : '#dc2626' }}>{fmt(utilidadReal)}</Text>
+                          <Tag color={utilidadReal >= 0 ? 'success' : 'error'} style={{ fontSize: 10, margin: 0 }}>{pctCRUtilidad.toFixed(1)}%</Tag>
                         </Space>
                       </div>
                     </div>
