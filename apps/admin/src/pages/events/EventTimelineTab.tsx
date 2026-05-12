@@ -276,6 +276,7 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
   // Audit drawer
   const [auditActivity, setAuditActivity]   = useState<any>(null)
   const [auditDrawerOpen, setAuditDrawerOpen] = useState(false)
+  const [pageSize, setPageSize] = useState(50)
 
   // ── Data fetching ───────────────────────────────────────────────────────────
   const { data: activitiesData, isLoading } = useQuery({
@@ -737,8 +738,13 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
             rowKey="id"
             loading={isLoading}
             size="small"
-            pagination={{ pageSize: 50, showSizeChanger: true }}
-            scroll={{ x: 1800 }}
+            pagination={{
+              pageSize,
+              showSizeChanger: true,
+              pageSizeOptions: [10, 25, 50, 100],
+              onShowSizeChange: (_: number, size: number) => setPageSize(size),
+            }}
+            scroll={{ x: 1800, y: 'calc(100vh - 420px)' }}
             expandable={{
               expandedRowKeys,
               onExpand: (expanded, record) => {

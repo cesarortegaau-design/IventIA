@@ -570,7 +570,7 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
       ) : (
         <Table
           dataSource={lines} columns={columns} rowKey="id" size="small"
-          pagination={false} scroll={{ x: 2200 }}
+          pagination={false} scroll={{ x: 2200, y: 'calc(100vh - 340px)' }}
           rowClassName={() => 'budget-row'}
           expandable={{
             expandedRowRender: (record) => {
