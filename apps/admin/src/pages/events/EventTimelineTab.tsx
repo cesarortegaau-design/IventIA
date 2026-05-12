@@ -481,6 +481,7 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
       title: 'Título',
       dataIndex: 'title',
       key: 'title',
+      width: 220,
       render: (v: string, r: any) => (
         <span style={{ paddingLeft: r._isChild || r.parentId ? 16 : 0, fontWeight: r._isChild ? 400 : 500 }}>
           {v}
@@ -552,6 +553,7 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
     {
       title: 'Órdenes',
       key: 'orders',
+      width: 180,
       render: (_: any, r: any) => {
         const actOrders = r.activityOrders ?? []
         if (actOrders.length === 0) return r.order ? <Tag>{r.order.orderNumber}</Tag> : '—'
@@ -565,6 +567,7 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
     {
       title: 'Departamentos',
       key: 'depts',
+      width: 160,
       render: (_: any, r: any) => {
         const depts = r.activityDepartments ?? []
         if (depts.length === 0) return '—'
@@ -579,6 +582,7 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
       title: '',
       key: 'actions',
       width: 100,
+      fixed: 'right' as const,
       render: (_: any, r: any) => (
         <Space size={4}>
           <Tooltip title="Auditoría" key="audit">
@@ -719,7 +723,7 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
             loading={isLoading}
             size="small"
             pagination={{ pageSize: 50, showSizeChanger: true }}
-            scroll={{ x: 'max-content' }}
+            scroll={{ x: 1500 }}
             expandable={{
               expandedRowKeys,
               onExpand: (expanded, record) => {
