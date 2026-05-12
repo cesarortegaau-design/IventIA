@@ -309,6 +309,8 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
     {
       title: 'Clave / Descripción',
       key: 'desc',
+      width: 220,
+      fixed: 'left' as const,
       render: (_: any, r: any) => (
         <div>
           <Text style={{ fontSize: 12, color: T.textMuted, fontFamily: 'monospace' }}>{r.resource?.code}</Text>
@@ -689,7 +691,7 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
           rowKey="id"
           size="small"
           pagination={false}
-          scroll={{ x: 1800 }}
+          scroll={{ x: 2000 }}
           expandable={{
             expandedRowRender: (record) => {
               if (!record.resource?.isPackage || !record.resource?.packageComponents?.length) return null
