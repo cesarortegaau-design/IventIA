@@ -1,6 +1,4 @@
 {
-  "buildCommand": "cd ../.. && pnpm install --frozen-lockfile && pnpm --filter @iventia/admin build",
-  "outputDirectory": "dist",
   "rewrites": [
     {
       "source": "/(.*)",
