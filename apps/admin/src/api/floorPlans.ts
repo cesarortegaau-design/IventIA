@@ -4,13 +4,14 @@ export const floorPlansApi = {
   list: (eventId: string) =>
     apiClient.get(`/events/${eventId}/floor-plans`).then((r) => r.data),
 
-  /** Get an R2 presigned upload URL (no file data touches the server). */
-  getUploadSignature: (eventId: string, filename: string) =>
-    apiClient.get(`/events/${eventId}/floor-plans/sign`, { params: { filename } }).then((r) => r.data),
-
-  /** Register the R2 URL in the database after a browser-direct upload. */
-  createRecord: (eventId: string, payload: { fileUrl: string; fileName: string; name?: string }) =>
-    apiClient.post(`/events/${eventId}/floor-plans`, payload).then((r) => r.data),
+  /** Upload a DXF file directly to the server (multipart/form-data). Server streams to R2. */
+  uploadFile: (eventId: string, blob: Blob, filename: string) => {
+    const fd = new FormData()
+    fd.append('file', blob, filename)
+    return apiClient.post(`/events/${eventId}/floor-plans/upload`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((r) => r.data)
+  },
 
   getContent: (eventId: string, fpId: string) =>
     apiClient.get(`/events/${eventId}/floor-plans/${fpId}/content`).then((r) => r.data),

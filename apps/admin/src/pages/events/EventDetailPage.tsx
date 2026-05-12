@@ -360,24 +360,17 @@ export default function EventDetailPage() {
     setFpUploading(true)
     setFpProgress(1) // show spinner immediately
     try {
-      // 1. Get a presigned R2 upload URL from the server (no file data sent to server)
-      const sigRes = await floorPlansApi.getUploadSignature(id!, file.name)
-      const { uploadUrl, publicUrl } = sigRes.data
-
-      // 2. Gzip-compress the DXF in the browser (text files compress ~85%, 37 MB → ~4 MB)
+      // 1. Gzip-compress the DXF in the browser (text files compress ~85%, 37 MB → ~4 MB)
       setFpProgress(5)
       const compressedBlob = await gzipBlob(file)
       const compressedName = file.name.replace(/\.dxf$/i, '') + '.dxf.gz'
       setFpProgress(30) // compression done → start upload
 
-      // 3. Upload compressed blob directly to R2 via presigned PUT URL (progress tracking)
-      await putUpload(uploadUrl, compressedBlob, (pct) => setFpProgress(30 + Math.round(pct * 70))) // 30–100 %
+      // 2. Upload compressed blob to the API server via multipart/form-data
+      //    Server streams it to R2 and returns the floor plan record
+      const record = await floorPlansApi.uploadFile(id!, compressedBlob, compressedName)
+      setFpProgress(100)
 
-      // 4. Register the R2 URL in our database
-      const record = await floorPlansApi.createRecord(id!, {
-        fileUrl: publicUrl,
-        fileName: compressedName,
-      })
       refetchFloorPlans()
       setSelectedFpId(record.data.id)
       message.success('Plano subido correctamente')
@@ -404,22 +397,6 @@ export default function EventDetailPage() {
       chunks.push(value)
     }
     return new Blob(chunks, { type: 'application/gzip' })
-  }
-
-  /** PUT a Blob via XHR to a presigned R2 URL with progress tracking. */
-  function putUpload(url: string, blob: Blob, onProgress: (frac: number) => void): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest()
-      xhr.open('PUT', url)
-      xhr.setRequestHeader('Content-Type', 'application/octet-stream')
-      xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total) }
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) resolve()
-        else reject(new Error(`Error R2 ${xhr.status}: ${xhr.statusText}`))
-      }
-      xhr.onerror = () => reject(new Error('Error de red al subir'))
-      xhr.send(blob)
-    })
   }
 
   async function handleStandSave(data: StandSaveData) {
