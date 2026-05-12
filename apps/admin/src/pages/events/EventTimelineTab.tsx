@@ -753,6 +753,23 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
                   : expandedRowKeys.filter(k => k !== record.id)
                 )
               },
+              expandedRowRender: (record) => {
+                const children = record.children ?? []
+                if (children.length === 0) return null
+                return (
+                  <div style={{ paddingLeft: 48 }}>
+                    <Table
+                      dataSource={children}
+                      columns={columns}
+                      rowKey="id"
+                      size="small"
+                      pagination={false}
+                      bordered={false}
+                      scroll={{ x: 1700 }}
+                    />
+                  </div>
+                )
+              },
               rowExpandable: (r) => (r.children?.length ?? 0) > 0,
             }}
           />
