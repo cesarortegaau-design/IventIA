@@ -61,7 +61,12 @@ export default function ActivityFormModal({
   const [docsLoading, setDocsLoading] = useState(false)
   const [uploadLoading, setUploadLoading] = useState(false)
 
+  // Managed outside the Form to guarantee it's always included in the payload
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([])
+
+  // Reset/populate form and selectedUserIds whenever the modal opens or the edited record changes
   useEffect(() => {
+    if (!open) return
     if (initialValues) {
       form.setFieldsValue({
         ...initialValues,
@@ -69,14 +74,18 @@ export default function ActivityFormModal({
         endDate:   initialValues.endDate   ? dayjs(initialValues.endDate)   : undefined,
         departmentIds: initialValues.activityDepartments?.map((d: any) => d.departmentId ?? d.department?.id) ?? [],
         orderIds: initialValues.activityOrders?.map((o: any) => o.orderId ?? o.order?.id) ?? [],
-        assignedToIds: initialValues.assignees?.map((a: any) => a.userId ?? a.user?.id) ?? (initialValues.assignedToId ? [initialValues.assignedToId] : []),
         autoCreateCrmTask: initialValues.autoCreateCrmTask ?? !!initialValues.crmTaskId,
       })
+      const ids: string[] =
+        initialValues.assignees?.map((a: any) => a.userId ?? a.user?.id).filter(Boolean) ??
+        (initialValues.assignedToId ? [initialValues.assignedToId] : [])
+      setSelectedUserIds(ids)
     } else {
       form.resetFields()
+      setSelectedUserIds([])
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialValues?.id])
+  }, [open, initialValues?.id])
 
   useEffect(() => {
     if (open && initialValues?.id) {
@@ -130,6 +139,8 @@ export default function ActivityFormModal({
         ...values,
         startDate: values.startDate ? values.startDate.toISOString() : undefined,
         endDate:   values.endDate   ? values.endDate.toISOString()   : undefined,
+        // Explicitly inject from state — not from the form — so it's always present
+        assignedToIds: selectedUserIds,
       }
       onSave(payload)
     })
@@ -191,13 +202,16 @@ export default function ActivityFormModal({
         <InputNumber min={1} style={{ width: '100%' }} placeholder="60" />
       </Form.Item>
 
-      <Form.Item name="assignedToIds" label="Asignado a">
+      {/* Asignado a — controlled by local state, NOT the Form */}
+      <Form.Item label="Asignado a">
         <Select
           mode="multiple"
           showSearch
           allowClear
           placeholder="Seleccionar uno o más responsables"
           optionFilterProp="label"
+          value={selectedUserIds}
+          onChange={(ids: string[]) => setSelectedUserIds(ids)}
           options={users.map(u => ({
             value: u.id,
             label: `${u.firstName} ${u.lastName}`,
