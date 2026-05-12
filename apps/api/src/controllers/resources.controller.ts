@@ -3,7 +3,7 @@ import { z, ZodError } from 'zod'
 import { Decimal } from '@prisma/client/runtime/library'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
-import { uploadToCloudinary, deleteFromCloudinary } from '../lib/cloudinary'
+import { uploadToCloudinary, deleteFromCloudinary } from '../lib/storage'
 import { auditService } from '../services/audit.service'
 
 import { deptFilterForResource } from '../middleware/departmentScope'

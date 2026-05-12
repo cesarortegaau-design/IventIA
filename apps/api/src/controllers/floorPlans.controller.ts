@@ -7,8 +7,8 @@ import zlib from 'zlib'
 const busboy = require('busboy') as typeof import('busboy')
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
-import { deleteFromCloudinary } from '../lib/cloudinary'
-import cloudinary from '../lib/cloudinary'
+import { deleteFromStorage, uploadToStorage, getPresignedUploadUrl, getPresignedDownloadUrl } from '../lib/storage'
+import { env } from '../config/env'
 
 // GET /events/:eventId/floor-plans
 export async function listFloorPlans(req: Request, res: Response, next: NextFunction) {
@@ -30,31 +30,26 @@ export async function listFloorPlans(req: Request, res: Response, next: NextFunc
   }
 }
 
-// GET /events/:eventId/floor-plans/sign
-// Returns a Cloudinary signed-upload payload so the browser uploads directly (no size bottleneck on the server)
+// GET /events/:eventId/floor-plans/sign?filename=xxx
+// Returns a presigned R2 PUT URL so the browser uploads directly (no size bottleneck on the server)
 export async function getFloorPlanUploadSignature(req: Request, res: Response, next: NextFunction) {
   try {
     const { eventId } = req.params
+    const { filename } = req.query as { filename?: string }
     const tenantId = req.user!.tenantId
 
     const event = await prisma.event.findFirst({ where: { id: eventId, tenantId } })
     if (!event) throw new AppError(404, 'NOT_FOUND', 'Evento no encontrado')
 
-    const apiSecret = process.env.CLOUDINARY_API_SECRET
-    const apiKey    = process.env.CLOUDINARY_API_KEY
-    const cloudName = process.env.CLOUDINARY_CLOUD_NAME
-
-    if (!apiSecret || !apiKey || !cloudName) {
-      throw new AppError(503, 'CLOUDINARY_NOT_CONFIGURED', 'Cloudinary no está configurado en el servidor')
+    if (!env.R2_ACCOUNT_ID || !env.R2_ACCESS_KEY_ID || !env.R2_SECRET_ACCESS_KEY || !env.R2_BUCKET_NAME || !env.R2_PUBLIC_URL) {
+      throw new AppError(503, 'R2_NOT_CONFIGURED', 'R2 no está configurado en el servidor')
     }
 
-    const timestamp = Math.round(Date.now() / 1000)
-    const folder = 'iventia/floor-plans'
-    // Params must be sorted alphabetically before signing
-    const paramsToSign = `folder=${folder}&timestamp=${timestamp}`
-    const signature = crypto.createHash('sha1').update(paramsToSign + apiSecret).digest('hex')
+    const cleanFilename = (filename || 'plano.dxf').replace(/[^a-zA-Z0-9._-]/g, '_')
+    const key = `floor-plans/${tenantId}/${eventId}/${Date.now()}-${cleanFilename}`
+    const uploadUrl = await getPresignedUploadUrl(key, 'application/octet-stream', 300)
 
-    res.json({ success: true, data: { timestamp, signature, apiKey, cloudName, folder } })
+    res.json({ success: true, data: { uploadUrl, key, publicUrl: `${env.R2_PUBLIC_URL}/${key}` } })
   } catch (err) {
     next(err)
   }
@@ -91,7 +86,7 @@ export async function createFloorPlanRecord(req: Request, res: Response, next: N
 }
 
 // POST /events/:eventId/floor-plans/upload  (multipart/form-data, field: 'file')
-// Streams the DXF directly from the HTTP request to Cloudinary — no in-memory buffering,
+// Streams the DXF directly from the HTTP request to R2 — no in-memory buffering,
 // so large files (50 MB+) are handled without OOM errors on the API server.
 export async function uploadFloorPlanFile(req: Request, res: Response, next: NextFunction) {
   try {
@@ -102,6 +97,10 @@ export async function uploadFloorPlanFile(req: Request, res: Response, next: Nex
     const event = await prisma.event.findFirst({ where: { id: eventId, tenantId } })
     if (!event) throw new AppError(404, 'NOT_FOUND', 'Evento no encontrado')
 
+    if (!env.R2_ACCOUNT_ID || !env.R2_ACCESS_KEY_ID || !env.R2_SECRET_ACCESS_KEY || !env.R2_BUCKET_NAME || !env.R2_PUBLIC_URL) {
+      throw new AppError(503, 'R2_NOT_CONFIGURED', 'R2 no está configurado en el servidor')
+    }
+
     const floorPlan = await new Promise<any>((resolve, reject) => {
       const bb = busboy({ headers: req.headers, limits: { fileSize: 200 * 1024 * 1024 } })
       let fileStarted = false
@@ -111,31 +110,36 @@ export async function uploadFloorPlanFile(req: Request, res: Response, next: Nex
         fileStarted = true
 
         const originalName = info.filename || 'plano.dxf'
+        const chunks: Buffer[] = []
 
-        // Pipe the incoming file stream directly into Cloudinary — zero memory buffer
-        const cloudStream = cloudinary.uploader.upload_stream(
-          { folder: 'iventia/floor-plans', resource_type: 'raw', timeout: 600_000 },
-          (error, result) => {
-            if (error || !result) {
-              console.error('[uploadFloorPlanFile] Cloudinary error:', error)
-              reject(error ?? new Error('Error al subir a Cloudinary'))
-              return
-            }
-            prisma.floorPlan.create({
+        fileStream.on('data', (chunk: Buffer) => { chunks.push(chunk) })
+        fileStream.on('end', async () => {
+          try {
+            const buffer = Buffer.concat(chunks)
+            const cleanFilename = originalName.replace(/[^a-zA-Z0-9._-]/g, '_')
+            const key = `floor-plans/${tenantId}/${eventId}/${Date.now()}-${cleanFilename}`
+
+            // Upload to R2
+            await uploadToStorage(buffer, key, 'application/octet-stream')
+            const fileUrl = `${env.R2_PUBLIC_URL}/${key}`
+
+            // Create DB record
+            const fp = await prisma.floorPlan.create({
               data: {
                 eventId,
                 name: originalName.replace(/\.[^.]+$/, ''),
-                fileUrl: result.secure_url,
+                fileUrl,
                 fileName: originalName,
                 uploadedById: userId,
               },
-            }).then(resolve).catch(reject)
-          },
-        )
-
-        fileStream.pipe(cloudStream as unknown as NodeJS.WritableStream)
+            })
+            resolve(fp)
+          } catch (err) {
+            console.error('[uploadFloorPlanFile] R2 upload error:', err)
+            reject(new AppError(502, 'UPLOAD_FAILED', 'Error al subir archivo a R2'))
+          }
+        })
         fileStream.on('error', reject)
-        cloudStream.on('error', reject)
       })
 
       bb.on('error', (err: Error) => { console.error('[uploadFloorPlanFile] Busboy error:', err); reject(err) })
@@ -164,7 +168,7 @@ export async function deleteFloorPlan(req: Request, res: Response, next: NextFun
     const fp = await prisma.floorPlan.findFirst({ where: { id: fpId, eventId } })
     if (!fp) throw new AppError(404, 'NOT_FOUND', 'Plano no encontrado')
 
-    await deleteFromCloudinary(fp.fileUrl, 'raw')
+    await deleteFromStorage(fp.fileUrl)
     await prisma.floorPlan.delete({ where: { id: fpId } })
 
     res.json({ success: true })
@@ -174,7 +178,7 @@ export async function deleteFloorPlan(req: Request, res: Response, next: NextFun
 }
 
 // GET /events/:eventId/floor-plans/:fpId/content
-// Proxies the DXF file content from Cloudinary to avoid browser CORS issues
+// Proxies the DXF file content from R2 (or Cloudinary for backwards compatibility) to avoid browser CORS issues
 export async function getFloorPlanContent(req: Request, res: Response, next: NextFunction) {
   try {
     const { eventId, fpId } = req.params
@@ -186,59 +190,56 @@ export async function getFloorPlanContent(req: Request, res: Response, next: Nex
     const fp = await prisma.floorPlan.findFirst({ where: { id: fpId, eventId } })
     if (!fp) throw new AppError(404, 'NOT_FOUND', 'Plano no encontrado')
 
-    // Extract the public_id from the stored Cloudinary URL.
-    // Raw files may be stored under /raw/upload/ or /image/upload/ — normalise first.
-    const normalizedUrl = fp.fileUrl.replace(
-      /res\.cloudinary\.com\/([^/]+)\/image\/upload\//,
-      'res.cloudinary.com/$1/raw/upload/'
-    )
+    let fileUrl: string
 
-    // Use the Cloudinary Upload API's authenticated download endpoint instead of a
-    // signed delivery URL.  Delivery-URL signing is fragile for files with compound
-    // extensions (.dxf.gz) because the SDK strips the last extension when computing
-    // the signature, causing a mismatch → 401.  The /raw/download API endpoint uses
-    // the same Upload-API signature (sha1 of sorted params + secret) and is always
-    // authorised by the API key/secret regardless of account delivery settings.
-    let fileUrl = normalizedUrl
-    try {
-      const pubMatch = normalizedUrl.match(/\/(?:raw|image)\/upload\/(?:v\d+\/)?(.+)$/)
-      const cloudName = process.env.CLOUDINARY_CLOUD_NAME
-      const apiKey    = process.env.CLOUDINARY_API_KEY
-      const apiSecret = process.env.CLOUDINARY_API_SECRET
-      if (pubMatch && cloudName && apiKey && apiSecret) {
-        const publicId  = pubMatch[1]
-        const timestamp = Math.round(Date.now() / 1000)
-        // Params must be sorted alphabetically before signing (Cloudinary Upload API rule)
-        const paramsToSign = `public_id=${publicId}&timestamp=${timestamp}`
-        const signature = crypto.createHash('sha1').update(paramsToSign + apiSecret).digest('hex')
-        // Build query string manually — URLSearchParams encodes '/' as '%2F' which causes
-        // Cloudinary to return 404 because it can't resolve the nested folder path.
-        // Slashes in the public_id must remain as literal '/' for the API to resolve correctly.
-        const qs = `public_id=${encodeURIComponent(publicId).replace(/%2F/gi, '/')}&api_key=${encodeURIComponent(apiKey)}&timestamp=${timestamp}&signature=${signature}`
-        fileUrl = `https://api.cloudinary.com/v1_1/${cloudName}/raw/download?${qs}`
+    // Detect if this is an R2 URL or Cloudinary URL
+    const isCloudinary = fp.fileUrl.includes('cloudinary.com')
+    const isR2 = fp.fileUrl.includes('.r2.dev') || (env.R2_PUBLIC_URL && fp.fileUrl.startsWith(env.R2_PUBLIC_URL))
+
+    if (isR2) {
+      // R2 URL: extract key from URL and get presigned download URL
+      try {
+        const key = fp.fileUrl.replace(`${env.R2_PUBLIC_URL}/`, '')
+        fileUrl = await getPresignedDownloadUrl(key, 3600)
+      } catch (signErr: any) {
+        console.error('[getFloorPlanContent] R2 presigned URL generation failed:', signErr?.message)
+        throw new AppError(502, 'FILE_FETCH_FAILED', `No se pudo generar URL de descarga: ${signErr?.message ?? 'error desconocido'}`)
       }
-    } catch {
-      // fallback to the normalised URL — may still work on accounts with public delivery
+    } else if (isCloudinary) {
+      // Backwards compatibility: Cloudinary URL
+      const normalizedUrl = fp.fileUrl.replace(
+        /res\.cloudinary\.com\/([^/]+)\/image\/upload\//,
+        'res.cloudinary.com/$1/raw/upload/'
+      )
+
+      fileUrl = normalizedUrl
+      try {
+        const pubMatch = normalizedUrl.match(/\/(?:raw|image)\/upload\/(?:v\d+\/)?(.+)$/)
+        const cloudName = process.env.CLOUDINARY_CLOUD_NAME
+        const apiKey    = process.env.CLOUDINARY_API_KEY
+        const apiSecret = process.env.CLOUDINARY_API_SECRET
+        if (pubMatch && cloudName && apiKey && apiSecret) {
+          const publicId  = pubMatch[1]
+          const timestamp = Math.round(Date.now() / 1000)
+          const paramsToSign = `public_id=${publicId}&timestamp=${timestamp}`
+          const signature = crypto.createHash('sha1').update(paramsToSign + apiSecret).digest('hex')
+          const qs = `public_id=${encodeURIComponent(publicId).replace(/%2F/gi, '/')}&api_key=${encodeURIComponent(apiKey)}&timestamp=${timestamp}&signature=${signature}`
+          fileUrl = `https://api.cloudinary.com/v1_1/${cloudName}/raw/download?${qs}`
+        }
+      } catch {
+        // fallback to normalised URL
+      }
+    } else {
+      throw new AppError(400, 'UNKNOWN_STORAGE', 'URL de almacenamiento desconocida')
     }
 
     let raw: Buffer
     try {
       raw = await fetchUrlAsBuffer(fileUrl)
     } catch (fetchErr: any) {
-      // If the signed download URL failed and it differs from the direct URL, retry with the
-      // direct Cloudinary delivery URL (works on accounts with public/authenticated delivery).
-      if (fileUrl !== normalizedUrl) {
-        console.warn('[getFloorPlanContent] Signed download URL failed, retrying with direct URL:', fetchErr?.message)
-        try {
-          raw = await fetchUrlAsBuffer(normalizedUrl)
-        } catch (directErr: any) {
-          console.error('[getFloorPlanContent] Direct URL also failed:', directErr?.message, 'URL:', normalizedUrl.slice(0, 120))
-          throw new AppError(502, 'FILE_FETCH_FAILED', `No se pudo obtener el archivo desde Cloudinary: ${fetchErr?.message ?? 'error desconocido'}`)
-        }
-      } else {
-        console.error('[getFloorPlanContent] Failed to fetch from Cloudinary:', fetchErr?.message, 'URL:', fileUrl.slice(0, 100))
-        throw new AppError(502, 'FILE_FETCH_FAILED', `No se pudo obtener el archivo desde Cloudinary: ${fetchErr?.message ?? 'error desconocido'}`)
-      }
+      const source = isR2 ? 'R2' : 'Cloudinary'
+      console.error(`[getFloorPlanContent] Failed to fetch from ${source}:`, fetchErr?.message)
+      throw new AppError(502, 'FILE_FETCH_FAILED', `No se pudo obtener el archivo: ${fetchErr?.message ?? 'error desconocido'}`)
     }
 
     let buffer: Buffer

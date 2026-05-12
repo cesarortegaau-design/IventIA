@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
-import { uploadToCloudinary } from '../lib/cloudinary'
+import { uploadToCloudinary } from '../lib/storage'
 
 // ── Supplier Portal (supplier-side) handlers ──────────────────────────────────
 
