@@ -211,12 +211,11 @@ export async function getFloorPlanContent(req: Request, res: Response, next: Nex
         // Params must be sorted alphabetically before signing (Cloudinary Upload API rule)
         const paramsToSign = `public_id=${publicId}&timestamp=${timestamp}`
         const signature = crypto.createHash('sha1').update(paramsToSign + apiSecret).digest('hex')
-        const dlUrl = new URL(`https://api.cloudinary.com/v1_1/${cloudName}/raw/download`)
-        dlUrl.searchParams.set('public_id', publicId)
-        dlUrl.searchParams.set('api_key',   apiKey)
-        dlUrl.searchParams.set('timestamp', String(timestamp))
-        dlUrl.searchParams.set('signature', signature)
-        fileUrl = dlUrl.toString()
+        // Build query string manually — URLSearchParams encodes '/' as '%2F' which causes
+        // Cloudinary to return 404 because it can't resolve the nested folder path.
+        // Slashes in the public_id must remain as literal '/' for the API to resolve correctly.
+        const qs = `public_id=${encodeURIComponent(publicId).replace(/%2F/gi, '/')}&api_key=${encodeURIComponent(apiKey)}&timestamp=${timestamp}&signature=${signature}`
+        fileUrl = `https://api.cloudinary.com/v1_1/${cloudName}/raw/download?${qs}`
       }
     } catch {
       // fallback to the normalised URL — may still work on accounts with public delivery
@@ -226,8 +225,20 @@ export async function getFloorPlanContent(req: Request, res: Response, next: Nex
     try {
       raw = await fetchUrlAsBuffer(fileUrl)
     } catch (fetchErr: any) {
-      console.error('[getFloorPlanContent] Failed to fetch from Cloudinary:', fetchErr?.message, 'URL:', fileUrl.slice(0, 100))
-      throw new AppError(502, 'FILE_FETCH_FAILED', `No se pudo obtener el archivo desde Cloudinary: ${fetchErr?.message ?? 'error desconocido'}`)
+      // If the signed download URL failed and it differs from the direct URL, retry with the
+      // direct Cloudinary delivery URL (works on accounts with public/authenticated delivery).
+      if (fileUrl !== normalizedUrl) {
+        console.warn('[getFloorPlanContent] Signed download URL failed, retrying with direct URL:', fetchErr?.message)
+        try {
+          raw = await fetchUrlAsBuffer(normalizedUrl)
+        } catch (directErr: any) {
+          console.error('[getFloorPlanContent] Direct URL also failed:', directErr?.message, 'URL:', normalizedUrl.slice(0, 120))
+          throw new AppError(502, 'FILE_FETCH_FAILED', `No se pudo obtener el archivo desde Cloudinary: ${fetchErr?.message ?? 'error desconocido'}`)
+        }
+      } else {
+        console.error('[getFloorPlanContent] Failed to fetch from Cloudinary:', fetchErr?.message, 'URL:', fileUrl.slice(0, 100))
+        throw new AppError(502, 'FILE_FETCH_FAILED', `No se pudo obtener el archivo desde Cloudinary: ${fetchErr?.message ?? 'error desconocido'}`)
+      }
     }
 
     let buffer: Buffer
