@@ -1,10 +1,11 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Table, Button, Select, Modal, Form, Input, Space, Tag, Typography,
-  Spin, Empty, Popconfirm, InputNumber, Tooltip, message as antMessage,
+  Spin, Empty, Popconfirm, InputNumber, Divider, message as antMessage,
 } from 'antd'
-import { PlusOutlined, DeleteOutlined, FileExcelOutlined, OrderedListOutlined, CheckSquareOutlined, FilePdfOutlined } from '@ant-design/icons'
+import { PlusOutlined, DeleteOutlined, FileExcelOutlined, EditOutlined, OrderedListOutlined, CheckSquareOutlined, FilePdfOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
 import { budgetsApi } from '../../api/budgets'
 import { priceListsApi } from '../../api/priceLists'
 import { eventsApi } from '../../api/events'
@@ -12,6 +13,128 @@ import { collabTasksApi } from '../../api/collabTasks'
 import { T } from '../../styles/tokens'
 
 const { Text } = Typography
+
+// ── Order management panel (shared by direct & indirect) ─────────────────────
+function OrdersPanel({
+  title,
+  lineLabel,
+  assignedOrders,
+  availableOrders,
+  color,
+  onAdd,
+  onRemove,
+  addLoading,
+  removeLoading,
+}: {
+  title: string
+  lineLabel: string
+  assignedOrders: any[]
+  availableOrders: any[]
+  color: string
+  onAdd: (orderId: string) => void
+  onRemove: (orderId: string) => void
+  addLoading: boolean
+  removeLoading: boolean
+}) {
+  const navigate = useNavigate()
+  const [selectedOrderId, setSelectedOrderId] = useState<string | undefined>()
+  const fmt = (n: number) => `$${n.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
+
+  return (
+    <div>
+      {/* Concept name */}
+      <div style={{ marginBottom: 16, padding: '8px 12px', background: '#f8fafc', borderRadius: 6, borderLeft: `3px solid ${color}` }}>
+        <Text type="secondary" style={{ fontSize: 11 }}>Concepto</Text>
+        <div style={{ fontWeight: 600, color: '#1a3a5c' }}>{lineLabel}</div>
+      </div>
+
+      {/* Assigned orders */}
+      <Text strong style={{ fontSize: 13 }}>{title}</Text>
+      {assignedOrders.length === 0 ? (
+        <div style={{ padding: '16px 0', textAlign: 'center', color: '#999', fontSize: 13 }}>
+          <ExclamationCircleOutlined style={{ marginRight: 6 }} />
+          Sin órdenes asignadas
+        </div>
+      ) : (
+        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {assignedOrders.map((o: any) => (
+            <div
+              key={o.orderId}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '10px 12px', borderRadius: 8,
+                border: `1px solid #e8e8e8`, background: '#fff',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Tag color={color} style={{ margin: 0, fontWeight: 600 }}>{o.order?.orderNumber}</Tag>
+                <Text style={{ fontSize: 13, color: '#1a3a5c', fontWeight: 500 }}>
+                  {fmt(Number(o.order?.total || 0))}
+                </Text>
+                {o.order?.client && (
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    · {o.order.client.companyName || `${o.order.client.firstName ?? ''} ${o.order.client.lastName ?? ''}`.trim()}
+                  </Text>
+                )}
+              </div>
+              <Space size={4}>
+                <Button
+                  size="small"
+                  icon={<EditOutlined />}
+                  title="Ir a la orden"
+                  onClick={() => navigate(`/ordenes/${o.orderId}`)}
+                />
+                <Popconfirm
+                  title="¿Quitar esta orden del concepto?"
+                  okText="Sí, quitar"
+                  cancelText="No"
+                  onConfirm={() => onRemove(o.orderId)}
+                >
+                  <Button size="small" danger icon={<DeleteOutlined />} loading={removeLoading} />
+                </Popconfirm>
+              </Space>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Divider style={{ margin: '16px 0' }} />
+
+      {/* Add order */}
+      <Text strong style={{ fontSize: 13 }}>Agregar orden</Text>
+      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+        <Select
+          placeholder="Buscar y seleccionar orden presupuestal…"
+          style={{ flex: 1 }}
+          showSearch
+          allowClear
+          optionFilterProp="label"
+          value={selectedOrderId}
+          onChange={setSelectedOrderId}
+          options={availableOrders.map((o: any) => ({
+            value: o.id,
+            label: `${o.orderNumber} — ${fmt(Number(o.total || 0))}`,
+          }))}
+        />
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          loading={addLoading}
+          disabled={!selectedOrderId}
+          style={{ background: '#1a3a5c', borderColor: '#1a3a5c' }}
+          onClick={() => {
+            if (selectedOrderId) {
+              onAdd(selectedOrderId)
+              setSelectedOrderId(undefined)
+            }
+          }}
+        >
+          Agregar
+        </Button>
+      </div>
+    </div>
+  )
+}
 
 interface EventBudgetTabProps {
   eventId: string
@@ -196,17 +319,14 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
     {
       title: 'Costo Directo',
       key: 'directCost',
-      width: 200,
+      width: 210,
       render: (_: any, r: any) => {
         const hasOrders = r.directOrders?.length > 0
+        const count = r.directOrders?.length ?? 0
         return (
-          <div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             {hasOrders ? (
-              // Calculated from assigned orders — show as readonly total
-              <div style={{ marginBottom: 4 }}>
-                <Text strong style={{ color: T.navy }}>{fmt(Number(r.directCost))}</Text>
-                <Text style={{ fontSize: 11, color: T.textMuted, marginLeft: 6 }}>(calculado)</Text>
-              </div>
+              <Text strong style={{ color: T.navy, fontSize: 13 }}>{fmt(Number(r.directCost))}</Text>
             ) : (
               <InputNumber
                 size="small"
@@ -214,7 +334,7 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
                 value={Number(r.directCost)}
                 formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                 parser={(v: any) => v!.replace(/\$\s?|(,*)/g, '')}
-                style={{ width: '100%', marginBottom: 4 }}
+                style={{ width: '100%' }}
                 onBlur={(e: any) => {
                   const val = parseFloat(e.target.value.replace(/,/g, ''))
                   if (!isNaN(val) && val !== Number(r.directCost)) {
@@ -223,30 +343,13 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
                 }}
               />
             )}
-            {/* Assigned orders chips */}
-            {hasOrders && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, marginBottom: 4 }}>
-                {r.directOrders.map((o: any) => (
-                  <Tag
-                    key={o.orderId}
-                    closable
-                    onClose={() => removeDirectMut.mutate({ lineId: r.id, orderId: o.orderId })}
-                    style={{ fontSize: 11, margin: 0 }}
-                    color="blue"
-                  >
-                    {o.order?.orderNumber}
-                  </Tag>
-                ))}
-              </div>
-            )}
             <Button
-              type="link"
               size="small"
               icon={<OrderedListOutlined />}
-              style={{ padding: 0, fontSize: 11, height: 'auto' }}
               onClick={() => setDirectOrderModal({ lineId: r.id })}
+              style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}
             >
-              + Asignar órdenes
+              Órdenes{count > 0 ? <Tag color="blue" style={{ margin: 0, fontSize: 10 }}>{count}</Tag> : null}
             </Button>
           </div>
         )
@@ -276,16 +379,14 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
     {
       title: 'Costo Indirecto',
       key: 'indirectCost',
-      width: 200,
+      width: 210,
       render: (_: any, r: any) => {
         const hasOrders = r.indirectOrders?.length > 0
+        const count = r.indirectOrders?.length ?? 0
         return (
-          <div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             {hasOrders ? (
-              <div style={{ marginBottom: 4 }}>
-                <Text strong style={{ color: T.navy }}>{fmt(Number(r.indirectCost))}</Text>
-                <Text style={{ fontSize: 11, color: T.textMuted, marginLeft: 6 }}>(calculado)</Text>
-              </div>
+              <Text strong style={{ color: T.navy, fontSize: 13 }}>{fmt(Number(r.indirectCost))}</Text>
             ) : (
               <InputNumber
                 size="small"
@@ -293,7 +394,7 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
                 value={Number(r.indirectCost)}
                 formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                 parser={(v: any) => v!.replace(/\$\s?|(,*)/g, '')}
-                style={{ width: '100%', marginBottom: 4 }}
+                style={{ width: '100%' }}
                 onBlur={(e: any) => {
                   const val = parseFloat(e.target.value.replace(/,/g, ''))
                   if (!isNaN(val) && val !== Number(r.indirectCost)) {
@@ -302,29 +403,13 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
                 }}
               />
             )}
-            {hasOrders && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, marginBottom: 4 }}>
-                {r.indirectOrders.map((o: any) => (
-                  <Tag
-                    key={o.orderId}
-                    closable
-                    onClose={() => removeIndirectMut.mutate({ lineId: r.id, orderId: o.orderId })}
-                    style={{ fontSize: 11, margin: 0 }}
-                    color="orange"
-                  >
-                    {o.order?.orderNumber}
-                  </Tag>
-                ))}
-              </div>
-            )}
             <Button
-              type="link"
               size="small"
               icon={<OrderedListOutlined />}
-              style={{ padding: 0, fontSize: 11, height: 'auto' }}
               onClick={() => setIndirectOrderModal({ lineId: r.id })}
+              style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}
             >
-              + Asignar órdenes
+              Órdenes{count > 0 ? <Tag color="orange" style={{ margin: 0, fontSize: 10 }}>{count}</Tag> : null}
             </Button>
           </div>
         )
@@ -511,96 +596,60 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
       </Modal>
 
       {/* Direct Order Assignment Modal */}
-      <Modal
-        title="Asignar Órdenes a Costo Directo"
-        open={!!directOrderModal}
-        onCancel={() => setDirectOrderModal(null)}
-        footer={null}
-        width={600}
-      >
-        {directOrderModal && (() => {
-          const line = lines.find(l => l.id === directOrderModal.lineId)
-          const assignedIds = new Set(line?.directOrders?.map((o: any) => o.orderId) ?? [])
-          return (
-            <>
-              <div style={{ marginBottom: 12 }}>
-                <Text style={{ color: T.textMuted }}>Órdenes presupuestales asignadas:</Text>
-              </div>
-              {line?.directOrders?.map((o: any) => (
-                <div key={o.orderId} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid ${T.border}` }}>
-                  <Text>{o.order?.orderNumber}</Text>
-                  <Space>
-                    <Text style={{ color: T.textMuted }}>${Number(o.order?.total || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</Text>
-                    <Button size="small" danger onClick={() => removeDirectMut.mutate({ lineId: directOrderModal.lineId, orderId: o.orderId })}>
-                      Quitar
-                    </Button>
-                  </Space>
-                </div>
-              ))}
-              <div style={{ marginTop: 16 }}>
-                <Text style={{ color: T.textMuted }}>Agregar orden:</Text>
-                <Select
-                  placeholder="Seleccionar orden presupuestal"
-                  style={{ width: '100%', marginTop: 8 }}
-                  showSearch
-                  optionFilterProp="label"
-                  options={budgetOrders.filter((o: any) => !assignedIds.has(o.id)).map((o: any) => ({
-                    value: o.id,
-                    label: `${o.orderNumber} - $${Number(o.total || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
-                  }))}
-                  onChange={(orderId) => {
-                    if (orderId) assignDirectMut.mutate({ lineId: directOrderModal.lineId, orderId })
-                  }}
-                />
-              </div>
-            </>
-          )
-        })()}
-      </Modal>
+      {directOrderModal && (() => {
+        const line = lines.find(l => l.id === directOrderModal.lineId)
+        const assignedIds = new Set(line?.directOrders?.map((o: any) => o.orderId) ?? [])
+        return (
+          <Modal
+            title={<Space><OrderedListOutlined />Órdenes — Costo Directo</Space>}
+            open
+            onCancel={() => setDirectOrderModal(null)}
+            footer={<Button onClick={() => setDirectOrderModal(null)}>Cerrar</Button>}
+            width={620}
+            styles={{ body: { paddingTop: 8 } }}
+          >
+            <OrdersPanel
+              title="Órdenes asignadas a costo directo"
+              lineLabel={line?.description ?? '—'}
+              assignedOrders={line?.directOrders ?? []}
+              availableOrders={budgetOrders.filter((o: any) => !assignedIds.has(o.id))}
+              color="blue"
+              onAdd={(orderId) => assignDirectMut.mutate({ lineId: directOrderModal.lineId, orderId })}
+              onRemove={(orderId) => removeDirectMut.mutate({ lineId: directOrderModal.lineId, orderId })}
+              addLoading={assignDirectMut.isPending}
+              removeLoading={removeDirectMut.isPending}
+            />
+          </Modal>
+        )
+      })()}
 
       {/* Indirect Order Assignment Modal */}
-      <Modal
-        title="Asignar Órdenes a Costo Indirecto"
-        open={!!indirectOrderModal}
-        onCancel={() => setIndirectOrderModal(null)}
-        footer={null}
-        width={600}
-      >
-        {indirectOrderModal && (() => {
-          const line = lines.find(l => l.id === indirectOrderModal.lineId)
-          const assignedIds = new Set(line?.indirectOrders?.map((o: any) => o.orderId) ?? [])
-          return (
-            <>
-              {line?.indirectOrders?.map((o: any) => (
-                <div key={o.orderId} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid ${T.border}` }}>
-                  <Text>{o.order?.orderNumber}</Text>
-                  <Space>
-                    <Text style={{ color: T.textMuted }}>${Number(o.order?.total || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</Text>
-                    <Button size="small" danger onClick={() => removeIndirectMut.mutate({ lineId: indirectOrderModal.lineId, orderId: o.orderId })}>
-                      Quitar
-                    </Button>
-                  </Space>
-                </div>
-              ))}
-              <div style={{ marginTop: 16 }}>
-                <Select
-                  placeholder="Seleccionar orden presupuestal"
-                  style={{ width: '100%', marginTop: 8 }}
-                  showSearch
-                  optionFilterProp="label"
-                  options={budgetOrders.filter((o: any) => !assignedIds.has(o.id)).map((o: any) => ({
-                    value: o.id,
-                    label: `${o.orderNumber} - $${Number(o.total || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
-                  }))}
-                  onChange={(orderId) => {
-                    if (orderId) assignIndirectMut.mutate({ lineId: indirectOrderModal.lineId, orderId })
-                  }}
-                />
-              </div>
-            </>
-          )
-        })()}
-      </Modal>
+      {indirectOrderModal && (() => {
+        const line = lines.find(l => l.id === indirectOrderModal.lineId)
+        const assignedIds = new Set(line?.indirectOrders?.map((o: any) => o.orderId) ?? [])
+        return (
+          <Modal
+            title={<Space><OrderedListOutlined />Órdenes — Costo Indirecto</Space>}
+            open
+            onCancel={() => setIndirectOrderModal(null)}
+            footer={<Button onClick={() => setIndirectOrderModal(null)}>Cerrar</Button>}
+            width={620}
+            styles={{ body: { paddingTop: 8 } }}
+          >
+            <OrdersPanel
+              title="Órdenes asignadas a costo indirecto"
+              lineLabel={line?.description ?? '—'}
+              assignedOrders={line?.indirectOrders ?? []}
+              availableOrders={budgetOrders.filter((o: any) => !assignedIds.has(o.id))}
+              color="orange"
+              onAdd={(orderId) => assignIndirectMut.mutate({ lineId: indirectOrderModal.lineId, orderId })}
+              onRemove={(orderId) => removeIndirectMut.mutate({ lineId: indirectOrderModal.lineId, orderId })}
+              addLoading={assignIndirectMut.isPending}
+              removeLoading={removeIndirectMut.isPending}
+            />
+          </Modal>
+        )
+      })()}
 
       {/* Task Assignment Modal */}
       <Modal
