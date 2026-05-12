@@ -67,6 +67,7 @@ export async function createPublicOrder(req: Request, res: Response, next: NextF
     if (!slug || !buyerEmail || !buyerName || !items?.length) {
       throw new AppError(400, 'MISSING_FIELDS', 'slug, buyerEmail, buyerName e items son requeridos')
     }
+    const normalizedEmail = buyerEmail.toLowerCase()
 
     const te = await prisma.ticketEvent.findUnique({
       where: { slug },
@@ -127,14 +128,20 @@ export async function createPublicOrder(req: Request, res: Response, next: NextF
       throw new AppError(400, 'INVALID_PAYMENT_METHOD', 'Método de pago inválido')
     }
 
+    // Link order to existing buyer account (if any) so it appears in Mis Boletos immediately
+    const existingBuyerUser = await prisma.ticketBuyerUser.findUnique({
+      where: { tenantId_email: { tenantId: te.tenantId, email: normalizedEmail } },
+    })
+
     // Create PENDING/PAID order
     const order = await prisma.ticketOrder.create({
       data: {
         tenantId: te.tenantId,
         ticketEventId: te.id,
-        buyerEmail,
+        buyerEmail: normalizedEmail,
         buyerName,
         buyerPhone,
+        ticketBuyerUserId: existingBuyerUser?.id ?? undefined,
         status: total === 0 || paymentMethod === 'CODE' || paymentMethod === 'FREE' ? 'PAID' : 'PENDING',
         total,
         expiresAt: total === 0 || paymentMethod !== 'STRIPE' ? undefined : expiresAt,

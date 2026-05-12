@@ -26,8 +26,8 @@ export const emailService = {
     const whatsappText = `Mis boletos para ${params.eventName} 🎟️ ${orderUrl}`
     const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(whatsappText)}`
 
-    // Generate QR as base64 data URL
-    const qrDataUrl = await QRCode.toDataURL(orderUrl, {
+    // Generate QR as PNG buffer — base64 data URLs are blocked by Gmail/Outlook
+    const qrBuffer = await QRCode.toBuffer(orderUrl, {
       width: 220,
       margin: 1,
       color: { dark: '#1a1a2e', light: '#ffffff' },
@@ -90,7 +90,7 @@ export const emailService = {
           <!-- QR code -->
           <div style="text-align: center; margin: 28px 0;">
             <div style="display: inline-block; border: 3px solid #6B46C1; border-radius: 16px; padding: 16px; background: #fff;">
-              <img src="${qrDataUrl}" alt="QR Boleto" width="180" height="180" style="display: block;" />
+              <img src="cid:qr-ticket" alt="QR Boleto" width="180" height="180" style="display: block;" />
             </div>
             <div style="font-size: 12px; color: #888; margin-top: 8px;">
               Presenta este código en la entrada del evento
@@ -131,15 +131,23 @@ export const emailService = {
       to: params.to,
       subject: `🎟️ Tus boletos para ${params.eventName} — Confirmado`,
       html,
-      attachments: params.pdfAttachment
-        ? [
-            {
-              filename: `boleto-${params.orderToken.slice(0, 8)}.pdf`,
-              content: params.pdfAttachment,
-              contentType: 'application/pdf',
-            },
-          ]
-        : [],
+      attachments: [
+        {
+          filename: 'qr.png',
+          content: qrBuffer,
+          cid: 'qr-ticket',
+          contentType: 'image/png',
+        },
+        ...(params.pdfAttachment
+          ? [
+              {
+                filename: `boleto-${params.orderToken.slice(0, 8)}.pdf`,
+                content: params.pdfAttachment,
+                contentType: 'application/pdf',
+              },
+            ]
+          : []),
+      ],
     })
   },
 
