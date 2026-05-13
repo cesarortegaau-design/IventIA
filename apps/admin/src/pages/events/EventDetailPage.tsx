@@ -35,6 +35,7 @@ import EventSummaryTab from './EventSummaryTab'
 import EventTimelineTab from './EventTimelineTab'
 import EventBudgetTab from './EventBudgetTab'
 import EventTasksTab from './EventTasksTab'
+import TournamentTab from './TournamentTab'
 import { T } from '../../styles/tokens'
 
 const { Text } = Typography
@@ -1177,42 +1178,8 @@ export default function EventDetailPage() {
 
         {/* ── Tab: Portal Deportivo ── */}
         {activeTab === 'deporte' && (
-          <div style={{ background: 'white', borderRadius: 10, padding: 16, border: `1px solid ${T.border}`, maxWidth: 520 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: T.navy, marginBottom: 16 }}>Equipos del partido</div>
-            <Form
-              layout="vertical"
-              initialValues={{
-                sportLocalTeamId: event.sportLocalTeamId ?? undefined,
-                sportVisitingTeamId: event.sportVisitingTeamId ?? undefined,
-              }}
-              onFinish={(vals) => updateEventMutation.mutate(vals)}
-            >
-              <Form.Item name="sportLocalTeamId" label="Equipo Local">
-                <Select
-                  allowClear showSearch optionFilterProp="label"
-                  placeholder="Seleccionar equipo local..."
-                  options={teamClients.map((c: any) => ({
-                    value: c.id,
-                    label: c.companyName || `${c.firstName} ${c.lastName}`,
-                  }))}
-                />
-              </Form.Item>
-              <Form.Item name="sportVisitingTeamId" label="Equipo Visitante">
-                <Select
-                  allowClear showSearch optionFilterProp="label"
-                  placeholder="Seleccionar equipo visitante..."
-                  options={teamClients.map((c: any) => ({
-                    value: c.id,
-                    label: c.companyName || `${c.firstName} ${c.lastName}`,
-                  }))}
-                />
-              </Form.Item>
-              <Form.Item>
-                <Button type="primary" htmlType="submit" loading={updateEventMutation.isPending}>
-                  Guardar equipos
-                </Button>
-              </Form.Item>
-            </Form>
+          <div style={{ background: 'white', borderRadius: 10, padding: 16, border: `1px solid ${T.border}` }}>
+            <TournamentTab eventId={id!} />
           </div>
         )}
 
