@@ -386,6 +386,9 @@ model Client {
   portalUserClients PortalUserClient[]
   stands            Stand[]
   collabTasks       CollabTask[]
+  teamRegistrations TeamEventRegistration[] @relation("TeamRegistrations")
+  homeMatches       SportMatchData[]        @relation("HomeMatches")
+  visitingMatches   SportMatchData[]        @relation("VisitingMatches")
 
   @@index([tenantId, isActive])
   @@map("clients")
@@ -548,6 +551,9 @@ model Event {
   ticketEvent         TicketEvent?
   collabTasks         CollabTask[]
   budgets             Budget[]
+  teamRegistrations   TeamEventRegistration[]
+  tournamentConfig    TournamentConfig?
+  tournamentVenues    TournamentVenue[]
 
   @@unique([tenantId, code])
   @@index([tenantId, status])
@@ -607,6 +613,7 @@ model EventActivity {
   activityDepartments EventActivityDepartment[]
   activityOrders      EventActivityOrder[]
   assignees           EventActivityAssignee[]
+  matchData           SportMatchData?
 
   @@index([tenantId, eventId])
   @@index([tenantId, assignedToId, status])
@@ -2628,6 +2635,81 @@ enum PurchaseOrderStatus {
   CANCELLED
 }
 
+model TournamentConfig {
+  id                  String   @id @default(uuid())
+  tenantId            String   @map("tenant_id")
+  eventId             String   @unique @map("event_id")
+  numRounds           Int      @default(1) @map("num_rounds")
+  hasPlayoffs         Boolean  @default(false) @map("has_playoffs")
+  qualificationSystem String?  @map("qualification_system") @db.VarChar(200)
+  regFeePerPerson     Decimal? @map("reg_fee_per_person") @db.Decimal(12, 2)
+  regFeePerTeam       Decimal? @map("reg_fee_per_team") @db.Decimal(12, 2)
+  settings            Json     @default("{}") @map("settings")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@map("tournament_configs")
+}
+
+model TournamentVenue {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  eventId   String   @map("event_id")
+  name      String   @db.VarChar(200)
+  address   String?  @db.VarChar(400)
+  capacity  Int?
+  notes     String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  event      Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  matchData  SportMatchData[]
+
+  @@index([tenantId, eventId])
+  @@map("tournament_venues")
+}
+
+model TeamEventRegistration {
+  id           String        @id @default(uuid())
+  tenantId     String        @map("tenant_id")
+  eventId      String        @map("event_id")
+  teamClientId String        @map("team_client_id")
+  category     SportCategory @map("category")
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  event      Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  teamClient Client @relation("TeamRegistrations", fields: [teamClientId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, teamClientId, category])
+  @@index([tenantId, eventId])
+  @@map("team_event_registrations")
+}
+
+model SportMatchData {
+  id             String        @id @default(uuid())
+  activityId     String        @unique @map("activity_id")
+  homeTeamId     String        @map("home_team_id")
+  visitingTeamId String        @map("visiting_team_id")
+  category       SportCategory @map("category")
+  venueId        String?       @map("venue_id")
+  round          Int           @default(1) @map("round")
+  homeScore      Int?          @map("home_score")
+  visitingScore  Int?          @map("visiting_score")
+  stats          Json          @default("{}") @map("stats")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  activity      EventActivity    @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  homeTeam      Client           @relation("HomeMatches", fields: [homeTeamId], references: [id])
+  visitingTeam  Client           @relation("VisitingMatches", fields: [visitingTeamId], references: [id])
+  venue         TournamentVenue? @relation(fields: [venueId], references: [id])
+
+  @@index([homeTeamId])
+  @@index([visitingTeamId])
+  @@map("sport_match_data")
+}
+
 enum AvailabilityStatus {
   AVAILABLE
   BY_ORDER
@@ -2646,6 +2728,8 @@ enum ActivityType {
   TECHNICAL
   SECURITY
   CUSTOM
+  ROUND
+  GAME
 }
 
 enum ActivityStatus {
@@ -2661,6 +2745,12 @@ enum ActivityPriority {
   MEDIUM
   HIGH
   CRITICAL
+}
+
+enum SportCategory {
+  FEMENIL
+  VARONIL
+  MIXTO
 }
 
 enum CollabTaskStatus {
