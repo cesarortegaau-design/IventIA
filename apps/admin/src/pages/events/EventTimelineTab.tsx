@@ -15,7 +15,9 @@ import { eventsApi } from '../../api/events'
 import { usersApi } from '../../api/users'
 import { resourcesApi } from '../../api/resources'
 import { auditApi } from '../../api/audit'
+import { tournamentApi } from '../../api/tournament'
 import ActivityFormModal from './modals/ActivityFormModal'
+import GameFormModal from './modals/GameFormModal'
 import AuditTimeline from '../../components/AuditTimeline'
 import { T } from '../../styles/tokens'
 
@@ -47,6 +49,8 @@ const ACTIVITY_TYPE_LABELS: Record<string, string> = {
   CATERING:  'Catering',
   TECHNICAL: 'Técnico',
   SECURITY:  'Seguridad',
+  ROUND:     'Ronda',
+  GAME:      'Juego',
   CUSTOM:    'Personalizado',
 }
 
@@ -260,6 +264,7 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
   const [view, setView]                       = useState<'list' | 'gantt'>('list')
   const [statusFilter, setStatusFilter]       = useState<string | undefined>(undefined)
   const [modalOpen, setModalOpen]             = useState(false)
+  const [gameModalOpen, setGameModalOpen]     = useState(false)
   const [pdfLoading, setPdfLoading]           = useState(false)
   const [excelLoading, setExcelLoading]       = useState(false)
   const [editingActivity, setEditingActivity] = useState<any>(null)
@@ -338,6 +343,13 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
     onError: () => message.error('Error al actualizar actividad'),
   })
 
+  const updateMatchScoreMutation = useMutation({
+    mutationFn: ({ activityId, data }: { activityId: string; data: any }) =>
+      tournamentApi.updateMatchScore(eventId, activityId, data),
+    onSuccess: () => { invalidate(); setGameModalOpen(false); setEditingActivity(null); message.success('Juego actualizado') },
+    onError: () => message.error('Error al actualizar juego'),
+  })
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => eventActivitiesApi.remove(eventId, id),
     onSuccess: () => { invalidate(); message.success('Actividad eliminada') },
@@ -364,6 +376,33 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
     }
   }
 
+  function handleGameSave(values: any) {
+    const { homeTeamId, visitingTeamId, venueId, homeScore, visitingScore, category, ...activityData } = values
+
+    if (editingActivity?.id) {
+      // Update activity basic info
+      updateMutation.mutate({
+        id: editingActivity.id,
+        data: activityData,
+      })
+      // Update match scores
+      updateMatchScoreMutation.mutate({
+        activityId: editingActivity.id,
+        data: {
+          homeScore: homeScore ?? null,
+          visitingScore: visitingScore ?? null,
+        },
+      })
+    } else {
+      // For new games, first create the activity
+      const newActivityData = {
+        ...activityData,
+        activityType: 'GAME',
+      }
+      createMutation.mutate(newActivityData)
+    }
+  }
+
   function openCreate() {
     setEditingActivity(null)
     setModalOpen(true)
@@ -371,11 +410,20 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
 
   function openEdit(record: any) {
     setEditingActivity(record)
-    setModalOpen(true)
+    if (record.activityType === 'GAME') {
+      setGameModalOpen(true)
+    } else {
+      setModalOpen(true)
+    }
   }
 
   function handleModalClose() {
     setModalOpen(false)
+    setEditingActivity(null)
+  }
+
+  function handleGameModalClose() {
+    setGameModalOpen(false)
     setEditingActivity(null)
   }
 
@@ -500,6 +548,24 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
       key: 'activityType',
       width: 110,
       render: (v: string) => v ? <Tag>{ACTIVITY_TYPE_LABELS[v] ?? v}</Tag> : '—',
+    },
+    {
+      title: 'Detalles',
+      key: 'details',
+      width: 240,
+      render: (_: any, r: any) => {
+        if (r.activityType === 'GAME' && r.matchData) {
+          const { homeTeam, visitingTeam, homeScore, visitingScore } = r.matchData
+          const homeTeamName = homeTeam?.companyName || `Equipo ${homeTeam?.id?.slice(0, 4)}`
+          const visitingTeamName = visitingTeam?.companyName || `Equipo ${visitingTeam?.id?.slice(0, 4)}`
+          return (
+            <span style={{ fontSize: 12 }}>
+              <strong>{homeTeamName}</strong> {homeScore ?? '—'} - {visitingScore ?? '—'} <strong>{visitingTeamName}</strong>
+            </span>
+          )
+        }
+        return '—'
+      },
     },
     {
       title: 'Estado',
@@ -794,6 +860,16 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
         departments={departments}
         activities={flatActivities}
         showCrmOption
+        eventId={eventId}
+      />
+
+      {/* Game form modal */}
+      <GameFormModal
+        open={gameModalOpen}
+        onClose={handleGameModalClose}
+        onSave={handleGameSave}
+        initialValues={editingActivity}
+        loading={createMutation.isPending || updateMutation.isPending || updateMatchScoreMutation.isPending}
         eventId={eventId}
       />
 

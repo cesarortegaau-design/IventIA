@@ -98,4 +98,12 @@ export const tournamentApi = {
     matchesPerDay?: number
   }) =>
     apiClient.post(`/events/${eventId}/tournament/generate-schedule`, data).then((r) => r.data),
+
+  // Match Scoring
+  updateMatchScore: (eventId: string, activityId: string, data: {
+    homeScore?: number | null
+    visitingScore?: number | null
+    stats?: Record<string, any>
+  }) =>
+    apiClient.patch(`/events/${eventId}/activities/${activityId}/match`, data).then((r) => r.data),
 }
