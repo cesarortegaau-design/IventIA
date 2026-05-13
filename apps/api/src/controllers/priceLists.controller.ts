@@ -7,9 +7,9 @@ import { getUserDepartmentIds } from '../middleware/departmentScope'
 
 const priceListSchema = z.object({
   name: z.string().min(1).max(200),
-  earlyCutoff: z.string().datetime().optional(),
-  normalCutoff: z.string().datetime().optional(),
-  discountPct: z.number().min(0).max(100).default(0),
+  earlyCutoff: z.string().datetime().optional().nullable(),
+  normalCutoff: z.string().datetime().optional().nullable(),
+  discountPct: z.coerce.number().min(0).max(100).default(0),
   isConceptList: z.boolean().optional().default(false),
 })
 
@@ -133,8 +133,8 @@ export async function updatePriceList(req: Request, res: Response, next: NextFun
       where: { id: req.params.id },
       data: {
         ...data,
-        earlyCutoff: data.earlyCutoff ? new Date(data.earlyCutoff) : undefined,
-        normalCutoff: data.normalCutoff ? new Date(data.normalCutoff) : undefined,
+        earlyCutoff: data.earlyCutoff ? new Date(data.earlyCutoff) : data.earlyCutoff === null ? null : undefined,
+        normalCutoff: data.normalCutoff ? new Date(data.normalCutoff) : data.normalCutoff === null ? null : undefined,
       },
     })
 

@@ -313,7 +313,7 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
     queryFn: () => usersApi.listAssignable(),
     staleTime: 5 * 60_000,
   })
-  const users: any[] = usersData?.data ?? []
+  const users: any[] = Array.isArray(usersData) ? usersData : []
 
   const { data: depsData } = useQuery({
     queryKey: ['departments'],

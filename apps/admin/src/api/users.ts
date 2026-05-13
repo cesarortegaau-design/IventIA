@@ -2,5 +2,5 @@ import { apiClient } from './client'
 
 export const usersApi = {
   listAssignable: () =>
-    apiClient.get('/users/assignable').then(r => r.data),
+    apiClient.get('/users/assignable').then(r => r.data?.data ?? r.data ?? []),
 }
