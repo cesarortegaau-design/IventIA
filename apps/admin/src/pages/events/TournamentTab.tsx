@@ -7,11 +7,12 @@ import {
 } from 'antd'
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, CalendarOutlined, TrophyOutlined,
-  TeamOutlined, EnvironmentOutlined, SettingOutlined,
+  TeamOutlined, EnvironmentOutlined, SettingOutlined, BarChartOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { tournamentApi } from '../../api/tournament'
 import { clientsApi } from '../../api/clients'
+import TournamentReportsTab from './TournamentReportsTab'
 import { T } from '../../styles/tokens'
 
 const { Text } = Typography
@@ -323,6 +324,11 @@ export default function TournamentTab({ eventId }: Props) {
                 </div>
               </Card>
             ),
+          },
+          {
+            key: 'reports',
+            label: <span><BarChartOutlined /> Reportes</span>,
+            children: <TournamentReportsTab eventId={eventId} />,
           },
         ]}
       />
