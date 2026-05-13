@@ -142,26 +142,24 @@ async function main() {
   const internet = resources.find(r => r.code === 'SVC-INTERNET')!
   const limpieza = resources.find(r => r.code === 'SVC-LIMPIEZA')!
 
+  // Delete existing price list items for this price list
+  await prisma.priceListItem.deleteMany({
+    where: { priceListId: priceList.id },
+  })
+
+  // Create price list items
   await Promise.all([
-    prisma.priceListItem.upsert({
-      where: { priceListId_resourceId: { priceListId: priceList.id, resourceId: mesa.id } },
-      update: {},
-      create: { priceListId: priceList.id, resourceId: mesa.id, earlyPrice: 350, normalPrice: 420, latePrice: 550, unit: 'pza' },
+    prisma.priceListItem.create({
+      data: { priceListId: priceList.id, resourceId: mesa.id, earlyPrice: 350, normalPrice: 420, latePrice: 550, unit: 'pza' },
     }),
-    prisma.priceListItem.upsert({
-      where: { priceListId_resourceId: { priceListId: priceList.id, resourceId: silla.id } },
-      update: {},
-      create: { priceListId: priceList.id, resourceId: silla.id, earlyPrice: 80, normalPrice: 100, latePrice: 130, unit: 'pza' },
+    prisma.priceListItem.create({
+      data: { priceListId: priceList.id, resourceId: silla.id, earlyPrice: 80, normalPrice: 100, latePrice: 130, unit: 'pza' },
     }),
-    prisma.priceListItem.upsert({
-      where: { priceListId_resourceId: { priceListId: priceList.id, resourceId: internet.id } },
-      update: {},
-      create: { priceListId: priceList.id, resourceId: internet.id, earlyPrice: 900, normalPrice: 1100, latePrice: 1400, unit: 'Mbps' },
+    prisma.priceListItem.create({
+      data: { priceListId: priceList.id, resourceId: internet.id, earlyPrice: 900, normalPrice: 1100, latePrice: 1400, unit: 'Mbps' },
     }),
-    prisma.priceListItem.upsert({
-      where: { priceListId_resourceId: { priceListId: priceList.id, resourceId: limpieza.id } },
-      update: {},
-      create: { priceListId: priceList.id, resourceId: limpieza.id, earlyPrice: 2500, normalPrice: 3000, latePrice: 3800, unit: 'turno' },
+    prisma.priceListItem.create({
+      data: { priceListId: priceList.id, resourceId: limpieza.id, earlyPrice: 2500, normalPrice: 3000, latePrice: 3800, unit: 'turno' },
     }),
   ])
   console.log(`✅ Price list: ${priceList.name}`)
