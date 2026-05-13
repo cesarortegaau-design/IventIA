@@ -114,8 +114,9 @@ export default function PriceListsPage() {
     mutationFn: (values: any) => {
       const payload = {
         ...values,
-        earlyCutoff: values.earlyCutoff?.toISOString(),
-        normalCutoff: values.normalCutoff?.toISOString(),
+        discountPct: values.discountPct != null ? Number(values.discountPct) : 0,
+        earlyCutoff: values.earlyCutoff ? values.earlyCutoff.toISOString() : null,
+        normalCutoff: values.normalCutoff ? values.normalCutoff.toISOString() : null,
       }
       return editingId ? priceListsApi.update(editingId, payload) : priceListsApi.create(payload)
     },
