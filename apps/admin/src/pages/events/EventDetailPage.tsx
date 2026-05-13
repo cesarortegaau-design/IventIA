@@ -360,36 +360,17 @@ export default function EventDetailPage() {
     setFpUploading(true)
     setFpProgress(1) // show spinner immediately
     try {
-      // 1. Get a signed upload signature from the server (no file data sent to server)
-      const sigRes = await floorPlansApi.getUploadSignature(id!)
-      const { timestamp, signature, apiKey, cloudName, folder } = sigRes.data
-
-      // 2. Gzip-compress the DXF in the browser (text files compress ~85%, 37 MB → ~4 MB)
-      //    This brings the file well under Cloudinary's 10 MB free-plan limit.
+      // 1. Gzip-compress the DXF in the browser (text files compress ~85%, 37 MB → ~4 MB)
       setFpProgress(5)
       const compressedBlob = await gzipBlob(file)
       const compressedName = file.name.replace(/\.dxf$/i, '') + '.dxf.gz'
       setFpProgress(30) // compression done → start upload
 
-      // 3. Upload compressed blob directly to Cloudinary with XHR (progress tracking)
-      const fd = new FormData()
-      fd.append('file', compressedBlob, compressedName)
-      fd.append('api_key', apiKey)
-      fd.append('timestamp', String(timestamp))
-      fd.append('signature', signature)
-      fd.append('folder', folder)
+      // 2. Upload compressed blob to the API server via multipart/form-data
+      //    Server streams it to R2 and returns the floor plan record
+      const record = await floorPlansApi.uploadFile(id!, compressedBlob, compressedName)
+      setFpProgress(100)
 
-      const uploadResult = await xhrUpload(
-        `https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`,
-        fd,
-        (pct) => setFpProgress(30 + Math.round(pct * 70)), // 30–100 %
-      )
-
-      // 4. Register the Cloudinary URL in our database
-      const record = await floorPlansApi.createRecord(id!, {
-        fileUrl: uploadResult.secure_url,
-        fileName: compressedName,
-      })
       refetchFloorPlans()
       setSelectedFpId(record.data.id)
       message.success('Plano subido correctamente')
@@ -416,22 +397,6 @@ export default function EventDetailPage() {
       chunks.push(value)
     }
     return new Blob(chunks, { type: 'application/gzip' })
-  }
-
-  /** POST a FormData body via XHR so we get real upload-progress events. */
-  function xhrUpload(url: string, body: FormData, onProgress: (frac: number) => void): Promise<any> {
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest()
-      xhr.open('POST', url)
-      xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total) }
-      xhr.onload = () => {
-        const data = JSON.parse(xhr.responseText || '{}')
-        if (xhr.status >= 200 && xhr.status < 300) resolve(data)
-        else reject(new Error(data?.error?.message ?? `Error Cloudinary ${xhr.status}`))
-      }
-      xhr.onerror = () => reject(new Error('Error de red al subir'))
-      xhr.send(body)
-    })
   }
 
   async function handleStandSave(data: StandSaveData) {
