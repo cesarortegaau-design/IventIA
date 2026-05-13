@@ -19,6 +19,8 @@ const ACTIVITY_TYPE_OPTIONS = [
   { value: 'CATERING',  label: 'Catering' },
   { value: 'TECHNICAL', label: 'Técnico' },
   { value: 'SECURITY',  label: 'Seguridad' },
+  { value: 'ROUND',     label: 'Ronda (Torneo)' },
+  { value: 'GAME',      label: 'Juego (Torneo)' },
   { value: 'CUSTOM',    label: 'Personalizado' },
 ]
 
