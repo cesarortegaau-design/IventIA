@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
-import { uploadToCloudinary, deleteFromCloudinary } from '../lib/cloudinary'
+import { uploadToCloudinary, deleteFromCloudinary } from '../lib/storage'
 import { auditService } from '../services/audit.service'
 
 export async function listActivityDocuments(req: Request, res: Response, next: NextFunction) {

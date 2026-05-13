@@ -4,12 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node22 --external:@prisma/client --external:bcryptjs --external:bullmq --external:cors --external:dayjs --external:decimal.js --external:dotenv --external:express --external:express-rate-limit --external:helmet --external:ioredis --external:jsonwebtoken --external:morgan --external:multer --external:nodemailer --external:stripe --external:twilio --external:uuid --external:zod --external:prisma-generated --external:socket.io --external:pdfkit --outfile=dist/index.js",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node22 --external:@prisma/client --external:@aws-sdk/client-s3 --external:@aws-sdk/s3-request-presigner --external:bcryptjs --external:bullmq --external:cors --external:dayjs --external:decimal.js --external:dotenv --external:express --external:express-rate-limit --external:helmet --external:ioredis --external:jsonwebtoken --external:morgan --external:multer --external:nodemailer --external:stripe --external:twilio --external:uuid --external:zod --external:prisma-generated --external:socket.io --external:pdfkit --outfile=dist/index.js",
     "start": "node dist/index.js",
     "lint": "eslint src/**/*.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
+    "@aws-sdk/client-s3": "^3.500.0",
+    "@aws-sdk/s3-request-presigner": "^3.500.0",
     "@iventia/prisma": "workspace:*",
     "@iventia/shared": "workspace:*",
     "@prisma/client": "^5.13.0",

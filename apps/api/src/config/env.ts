@@ -26,6 +26,11 @@ const envSchema = z.object({
   TICKETS_APP_URL: z.string().default('http://localhost:5175'),
   API_BASE_URL: z.string().default('http://localhost:3001'),
   HCAPTCHA_SECRET_KEY: z.string().optional(),
+  R2_ACCOUNT_ID: z.string().optional(),
+  R2_ACCESS_KEY_ID: z.string().optional(),
+  R2_SECRET_ACCESS_KEY: z.string().optional(),
+  R2_BUCKET_NAME: z.string().optional(),
+  R2_PUBLIC_URL: z.string().optional(),
 })
 
 const parsed = envSchema.safeParse(process.env)

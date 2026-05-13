@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
-import { uploadToCloudinary } from '../lib/cloudinary'
+import { uploadToCloudinary } from '../lib/storage'
 
 // List all documents for the supplier (both admin-uploaded and supplier-uploaded)
 export async function supplierPortalListDocuments(req: Request, res: Response, next: NextFunction) {
