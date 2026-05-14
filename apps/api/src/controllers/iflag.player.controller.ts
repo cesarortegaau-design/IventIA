@@ -7,6 +7,7 @@ import { env } from '../config/env'
 import { AppError } from '../middleware/errorHandler'
 import { PortalTokenPayload } from '../middleware/portalAuth.middleware'
 import { stripe } from '../lib/stripe'
+import { uploadToStorage } from '../lib/storage'
 
 function signPlayerTokens(portalUserId: string, tenantId: string, email: string) {
   const payload: PortalTokenPayload = { portalUserId, tenantId, email, type: 'portal' }
@@ -402,6 +403,7 @@ export async function playerUpdateMe(req: Request, res: Response, next: NextFunc
       firstName: z.string().min(1).optional(),
       lastName: z.string().min(1).optional(),
       phone: z.string().nullish(),
+      photoUrl: z.string().url().nullish(),
     })
     const data = schema.parse(req.body)
 
@@ -412,8 +414,37 @@ export async function playerUpdateMe(req: Request, res: Response, next: NextFunc
 
     res.json({
       success: true,
-      data: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, phone: user.phone },
+      data: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, phone: user.phone, photoUrl: (user as any).photoUrl ?? null },
     })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function playerUploadPhoto(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.file) throw new AppError(400, 'NO_FILE', 'No se proporcionó imagen')
+
+    const portalUserId = req.portalUser!.portalUserId
+
+    // Delete old photo if exists
+    const existing = await prisma.portalUser.findUnique({
+      where: { id: portalUserId },
+      select: { id: true },
+    })
+    if (!existing) throw new AppError(404, 'NOT_FOUND', 'Usuario no encontrado')
+
+    const ext = req.file.mimetype === 'image/png' ? 'png' : 'jpg'
+    const key = `players/${portalUserId}/avatar.${ext}`
+
+    const { url } = await uploadToStorage(req.file.buffer, key, req.file.mimetype)
+
+    await prisma.portalUser.update({
+      where: { id: portalUserId },
+      data: { photoUrl: url } as any,
+    })
+
+    res.json({ success: true, data: { photoUrl: url } })
   } catch (err) {
     next(err)
   }
@@ -453,7 +484,7 @@ export async function playerStats(req: Request, res: Response, next: NextFunctio
     const events = gameIds.length
       ? await prisma.gameEvent.findMany({
           where: { gameId: { in: gameIds }, playerId: { in: clientIds } },
-          select: { type: true, gameId: true, points: true },
+          select: { type: true, gameId: true, points: true, description: true, createdAt: true },
         })
       : []
 

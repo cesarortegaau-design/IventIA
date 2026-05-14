@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import multer from 'multer'
 import { authenticate } from '../middleware/authenticate'
 import { authenticatePortal } from '../middleware/portalAuth.middleware'
 import {
@@ -13,11 +14,20 @@ import {
 import {
   publicListTournaments, publicGetTournament, publicGetCalendar,
   playerVerifyCode, playerSignup, playerLogin, playerRefresh,
-  playerMe, playerUpdateMe, playerStats,
+  playerMe, playerUpdateMe, playerUploadPhoto, playerStats,
   playerPayTournament, playerVerifyPayment,
 } from '../controllers/iflag.player.controller'
 
 const router = Router()
+
+const photoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true)
+    else cb(new Error('Solo se permiten imágenes'))
+  },
+})
 
 // ── Public (no auth) ──────────────────────────────────────────────────────────
 router.get('/public/games', publicListGames)
@@ -35,6 +45,7 @@ router.post('/player/refresh', playerRefresh)
 // ── Player protected (portal JWT) ────────────────────────────────────────────
 router.get('/player/me', authenticatePortal, playerMe)
 router.patch('/player/me', authenticatePortal, playerUpdateMe)
+router.post('/player/me/photo', authenticatePortal, photoUpload.single('file'), playerUploadPhoto)
 router.get('/player/stats', authenticatePortal, playerStats)
 router.post('/player/tournaments/:eventId/pay', authenticatePortal, playerPayTournament)
 router.post('/player/tournaments/:eventId/verify-payment', authenticatePortal, playerVerifyPayment)

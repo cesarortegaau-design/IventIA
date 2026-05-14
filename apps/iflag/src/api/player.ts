@@ -29,8 +29,15 @@ export const playerApi = {
 
   // Player (requires portal JWT)
   getMe: () => playerClient.get('/iflag/player/me').then((r) => r.data),
-  updateMe: (data: { firstName?: string; lastName?: string; phone?: string | null }) =>
+  updateMe: (data: { firstName?: string; lastName?: string; phone?: string | null; photoUrl?: string | null }) =>
     playerClient.patch('/iflag/player/me', data).then((r) => r.data),
+  uploadPhoto: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return playerClient.post('/iflag/player/me/photo', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((r) => r.data)
+  },
   getStats: (eventId?: string) =>
     playerClient.get('/iflag/player/stats', { params: eventId ? { eventId } : undefined }).then((r) => r.data),
   payTournament: (eventId: string) =>
