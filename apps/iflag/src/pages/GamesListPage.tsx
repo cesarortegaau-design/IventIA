@@ -15,8 +15,19 @@ const STATUS_LABELS: Record<string, string> = {
   FINISHED: 'Finalizado',
 }
 
+const CATEGORY_COLORS: Record<string, string> = {
+  FEMENIL: '#e91e63',
+  VARONIL: '#1976d2',
+  MIXTO: '#7b1fa2',
+}
+
 function playerName(c: any) {
   return c?.companyName || `${c?.firstName ?? ''} ${c?.lastName ?? ''}`.trim() || '—'
+}
+
+function StatusPill({ status }: { status?: string }) {
+  if (!status) return <span className="status-pill PENDING" style={{ fontSize: 10 }}>Sin iniciar</span>
+  return <span className={`status-pill ${status}`} style={{ fontSize: 10 }}>{STATUS_LABELS[status] ?? status}</span>
 }
 
 export default function GamesListPage() {
@@ -26,11 +37,17 @@ export default function GamesListPage() {
   const clearAuth = useAuthStore(s => s.clearAuth)
   const user = useAuthStore(s => s.user)
 
-  const [createOpen, setCreateOpen] = useState(false)
-  const [logOpen, setLogOpen] = useState(false)
+  // Drawer state
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [selectedEventId, setSelectedEventId] = useState<string | undefined>()
+
+  // Free game modal state
+  const [freeGameOpen, setFreeGameOpen] = useState(false)
   const [localTeamId, setLocalTeamId] = useState<string | undefined>()
   const [visitingTeamId, setVisitingTeamId] = useState<string | undefined>()
-  const [eventId, setEventId] = useState<string | undefined>()
+  const [freeEventId, setFreeEventId] = useState<string | undefined>()
+
+  const [logOpen, setLogOpen] = useState(false)
 
   const { data: gamesData, isLoading } = useQuery({
     queryKey: ['iflag-games'],
@@ -41,31 +58,69 @@ export default function GamesListPage() {
 
   const { data: eventsData } = useQuery({
     queryKey: ['iflag-events'],
-    queryFn: () => iflagApi.listEvents({ pageSize: 50, status: 'CONFIRMED,IN_EXECUTION', eventType: 'Deportivo' }),
-    enabled: createOpen,
+    queryFn: () => iflagApi.listEvents({ pageSize: 50, status: 'CONFIRMED,IN_EXECUTION' }),
+    enabled: drawerOpen || freeGameOpen,
   })
   const events = eventsData?.data ?? []
+
+  const { data: scheduleData, isLoading: scheduleLoading } = useQuery({
+    queryKey: ['iflag-schedule', selectedEventId],
+    queryFn: () => iflagApi.listScheduleGames({ eventId: selectedEventId! }),
+    enabled: !!selectedEventId,
+  })
+  const scheduleGames = scheduleData?.data ?? []
 
   const { data: teamsData } = useQuery({
     queryKey: ['iflag-teams'],
     queryFn: () => iflagApi.listTeams(),
-    enabled: createOpen,
+    enabled: freeGameOpen,
   })
   const teams = (teamsData?.data ?? []).filter((c: any) => c.isTeam)
 
-  const createMutation = useMutation({
-    mutationFn: () => iflagApi.createGame({ eventId, localTeamId, visitingTeamId }),
+  // Create from schedule activity
+  const createFromScheduleMutation = useMutation({
+    mutationFn: (activity: any) => iflagApi.createGame({
+      eventId: activity.eventId,
+      activityId: activity.id,
+    }),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['iflag-games'] })
-      setCreateOpen(false)
+      qc.invalidateQueries({ queryKey: ['iflag-schedule', selectedEventId] })
+      setDrawerOpen(false)
+      message.success('Partido iniciado')
+      navigate(`/games/${res.data.id}/attendance`)
+    },
+    onError: (err: any) => message.error(err?.response?.data?.error?.message ?? 'Error al crear partido'),
+  })
+
+  // Create free game
+  const createFreeMutation = useMutation({
+    mutationFn: () => iflagApi.createGame({ eventId: freeEventId, localTeamId, visitingTeamId }),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['iflag-games'] })
+      setFreeGameOpen(false)
       setLocalTeamId(undefined)
       setVisitingTeamId(undefined)
-      setEventId(undefined)
+      setFreeEventId(undefined)
       message.success('Partido creado')
       navigate(`/games/${res.data.id}/attendance`)
     },
     onError: (err: any) => message.error(err?.response?.data?.error?.message ?? 'Error al crear partido'),
   })
+
+  function handleScheduleGameTap(activity: any) {
+    if (activity.footballGame) {
+      setDrawerOpen(false)
+      const g = activity.footballGame
+      if (g.status === 'PENDING' || g.status === 'ATTENDANCE') {
+        navigate(`/games/${g.id}/attendance`)
+      } else {
+        navigate(`/games/${g.id}`)
+      }
+    } else {
+      createFromScheduleMutation.mutate(activity)
+    }
+  }
 
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--bg)' }}>
@@ -95,7 +150,7 @@ export default function GamesListPage() {
             <div style={{ fontSize: 13, marginTop: 4 }}>Crea el primer partido</div>
           </div>
         )}
-        {games.map((game: any) => (
+        {games.filter((g: any) => g.status !== 'FINISHED').map((game: any) => (
           <div
             key={game.id}
             className="game-card"
@@ -141,7 +196,7 @@ export default function GamesListPage() {
 
       {/* FAB */}
       <button
-        onClick={() => setCreateOpen(true)}
+        onClick={() => setDrawerOpen(true)}
         style={{
           position: 'fixed', bottom: 24, right: 20,
           width: 56, height: 56,
@@ -159,16 +214,133 @@ export default function GamesListPage() {
         <PlusOutlined />
       </button>
 
-      {/* Create game modal */}
-      <Modal
-        open={createOpen}
+      {/* Tournament schedule drawer */}
+      <Drawer
         title={<span style={{ color: 'var(--text)' }}>Nuevo Partido</span>}
-        onCancel={() => setCreateOpen(false)}
-        onOk={() => createMutation.mutate()}
+        placement="bottom"
+        height="80vh"
+        open={drawerOpen}
+        onClose={() => { setDrawerOpen(false); setSelectedEventId(undefined) }}
+        destroyOnClose
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Torneo / Evento</div>
+            <Select
+              style={{ width: '100%' }}
+              placeholder="Seleccionar torneo..."
+              showSearch
+              optionFilterProp="label"
+              value={selectedEventId}
+              onChange={setSelectedEventId}
+              options={events.map((e: any) => ({ value: e.id, label: `${e.code} — ${e.name}` }))}
+            />
+          </div>
+
+          {selectedEventId && (
+            <div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Partidos del Calendario
+              </div>
+              {scheduleLoading && (
+                <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>Cargando...</div>
+              )}
+              {!scheduleLoading && scheduleGames.length === 0 && (
+                <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>
+                  Sin partidos programados en este torneo
+                </div>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: '50vh', overflowY: 'auto' }}>
+                {scheduleGames.map((activity: any) => {
+                  const md = activity.matchData
+                  if (!md) return null
+                  const hasGame = !!activity.footballGame
+                  const isFinished = activity.footballGame?.status === 'FINISHED'
+                  return (
+                    <div
+                      key={activity.id}
+                      className="game-card"
+                      style={{ opacity: isFinished ? 0.6 : 1, cursor: createFromScheduleMutation.isPending ? 'wait' : 'pointer' }}
+                      onClick={() => !createFromScheduleMutation.isPending && handleScheduleGameTap(activity)}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                          <span style={{
+                            fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+                            background: 'var(--surface2)', padding: '2px 6px', borderRadius: 4,
+                            color: 'var(--text-muted)',
+                          }}>
+                            J{md.round}
+                          </span>
+                          <span style={{
+                            fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+                            color: CATEGORY_COLORS[md.category] ?? 'var(--text-muted)',
+                            background: `${CATEGORY_COLORS[md.category] ?? '#888'}22`,
+                            padding: '2px 6px', borderRadius: 4,
+                          }}>
+                            {md.category}
+                          </span>
+                          {md.venue && (
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{md.venue.name}</span>
+                          )}
+                        </div>
+                        <StatusPill status={activity.footballGame?.status} />
+                      </div>
+                      <div className="game-card-teams">
+                        <div>
+                          {md.homeTeam?.logoUrl && (
+                            <img src={md.homeTeam.logoUrl} height={20} style={{ borderRadius: 4, marginBottom: 2, display: 'block' }} alt="" />
+                          )}
+                          <div className="game-card-team" style={{ fontSize: 12 }}>{playerName(md.homeTeam)}</div>
+                        </div>
+                        <div className="game-card-score" style={{ fontSize: 14 }}>
+                          {hasGame
+                            ? `${activity.footballGame.localScore} — ${activity.footballGame.visitingScore}`
+                            : 'vs'}
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          {md.visitingTeam?.logoUrl && (
+                            <img src={md.visitingTeam.logoUrl} height={20} style={{ borderRadius: 4, marginBottom: 2, display: 'block', marginLeft: 'auto' }} alt="" />
+                          )}
+                          <div className="game-card-team right" style={{ fontSize: 12 }}>{playerName(md.visitingTeam)}</div>
+                        </div>
+                      </div>
+                      {activity.startDate && (
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                          {dayjs(activity.startDate).format('DD/MM HH:mm')}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, textAlign: 'center' }}>
+            <button
+              onClick={() => { setDrawerOpen(false); setFreeGameOpen(true) }}
+              style={{
+                background: 'none', border: '1px solid var(--border)', borderRadius: 8,
+                padding: '8px 20px', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 13,
+              }}
+            >
+              + Partido libre (sin torneo)
+            </button>
+          </div>
+        </div>
+      </Drawer>
+
+      {/* Free game modal */}
+      <Modal
+        open={freeGameOpen}
+        title={<span style={{ color: 'var(--text)' }}>Partido Libre</span>}
+        onCancel={() => setFreeGameOpen(false)}
+        onOk={() => createFreeMutation.mutate()}
         okText="Crear Partido"
         okButtonProps={{
-          disabled: !localTeamId || !visitingTeamId || !eventId,
-          loading: createMutation.isPending,
+          disabled: !localTeamId || !visitingTeamId || !freeEventId,
+          loading: createFreeMutation.isPending,
           style: { background: 'var(--green)', borderColor: 'var(--green)', color: '#000', fontWeight: 700 },
         }}
         cancelButtonProps={{ style: { color: 'var(--text-muted)' } }}
@@ -182,8 +354,8 @@ export default function GamesListPage() {
               placeholder="Seleccionar evento..."
               showSearch
               optionFilterProp="label"
-              value={eventId}
-              onChange={setEventId}
+              value={freeEventId}
+              onChange={setFreeEventId}
               options={events.map((e: any) => ({ value: e.id, label: `${e.code} — ${e.name}` }))}
             />
           </div>

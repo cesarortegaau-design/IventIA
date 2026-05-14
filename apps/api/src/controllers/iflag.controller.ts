@@ -80,6 +80,35 @@ export async function publicListGames(req: Request, res: Response, next: NextFun
   }
 }
 
+// ── Schedule games (from tournament activities) ───────────────────────────────
+
+export async function listScheduleGames(req: Request, res: Response, next: NextFunction) {
+  try {
+    const tenantId = req.user!.tenantId
+    const { eventId } = req.query as Record<string, string>
+    if (!eventId) throw new AppError(400, 'EVENT_ID_REQUIRED', 'eventId es requerido')
+
+    const activities = await prisma.eventActivity.findMany({
+      where: { tenantId, eventId, activityType: 'GAME', matchData: { isNot: null } },
+      orderBy: { startDate: 'asc' },
+      include: {
+        matchData: {
+          include: {
+            homeTeam: { select: { id: true, companyName: true, logoUrl: true } },
+            visitingTeam: { select: { id: true, companyName: true, logoUrl: true } },
+            venue: { select: { id: true, name: true } },
+          },
+        },
+        footballGame: { select: { id: true, status: true, localScore: true, visitingScore: true } },
+      },
+    })
+
+    res.json({ success: true, data: activities })
+  } catch (err) {
+    next(err)
+  }
+}
+
 // ── List / Get ─────────────────────────────────────────────────────────────────
 
 export async function listGames(req: Request, res: Response, next: NextFunction) {
@@ -155,8 +184,9 @@ export async function getGame(req: Request, res: Response, next: NextFunction) {
 
 const createGameSchema = z.object({
   eventId: z.string().uuid(),
-  localTeamId: z.string().uuid(),
-  visitingTeamId: z.string().uuid(),
+  localTeamId: z.string().uuid().optional(),
+  visitingTeamId: z.string().uuid().optional(),
+  activityId: z.string().uuid().optional(),
   notes: z.string().optional(),
 })
 
@@ -166,14 +196,38 @@ export async function createGame(req: Request, res: Response, next: NextFunction
     const userId = req.user!.userId
     const data = createGameSchema.parse(req.body)
 
-    if (data.localTeamId === data.visitingTeamId) {
+    let localTeamId = data.localTeamId
+    let visitingTeamId = data.visitingTeamId
+    let resolvedActivityId = data.activityId
+
+    // If activityId is provided, resolve teams from SportMatchData
+    if (data.activityId) {
+      const activity = await prisma.eventActivity.findFirst({
+        where: { id: data.activityId, eventId: data.eventId, tenantId },
+        include: { matchData: true, footballGame: { select: { id: true } } },
+      })
+      if (!activity || !activity.matchData) {
+        throw new AppError(404, 'ACTIVITY_NOT_FOUND', 'Actividad de partido no encontrada')
+      }
+      if (activity.footballGame) {
+        throw new AppError(409, 'GAME_ALREADY_LINKED', 'Este partido ya tiene un juego de I-Flag asociado')
+      }
+      localTeamId = activity.matchData.homeTeamId
+      visitingTeamId = activity.matchData.visitingTeamId
+    } else {
+      if (!localTeamId || !visitingTeamId) {
+        throw new AppError(400, 'TEAMS_REQUIRED', 'Se requieren equipos local y visitante')
+      }
+    }
+
+    if (localTeamId === visitingTeamId) {
       throw new AppError(400, 'SAME_TEAM', 'El equipo local y visitante deben ser diferentes')
     }
 
     const [event, localTeam, visitingTeam] = await Promise.all([
       prisma.event.findFirst({ where: { id: data.eventId, tenantId } }),
-      prisma.client.findFirst({ where: { id: data.localTeamId, tenantId, isTeam: true } }),
-      prisma.client.findFirst({ where: { id: data.visitingTeamId, tenantId, isTeam: true } }),
+      prisma.client.findFirst({ where: { id: localTeamId, tenantId, isTeam: true } }),
+      prisma.client.findFirst({ where: { id: visitingTeamId, tenantId, isTeam: true } }),
     ])
     if (!event) throw new AppError(404, 'EVENT_NOT_FOUND', 'Evento no encontrado')
     if (!localTeam) throw new AppError(404, 'LOCAL_TEAM_NOT_FOUND', 'Equipo local no encontrado')
@@ -182,11 +236,11 @@ export async function createGame(req: Request, res: Response, next: NextFunction
     // Pre-populate attendance from JUGADOR relations
     const [localPlayers, visitingPlayers] = await Promise.all([
       prisma.clientRelation.findMany({
-        where: { clientId: data.localTeamId, relationType: 'JUGADOR', isActive: true },
+        where: { clientId: localTeamId, relationType: 'JUGADOR', isActive: true },
         select: { relatedClientId: true },
       }),
       prisma.clientRelation.findMany({
-        where: { clientId: data.visitingTeamId, relationType: 'JUGADOR', isActive: true },
+        where: { clientId: visitingTeamId, relationType: 'JUGADOR', isActive: true },
         select: { relatedClientId: true },
       }),
     ])
@@ -196,16 +250,17 @@ export async function createGame(req: Request, res: Response, next: NextFunction
         data: {
           tenantId,
           eventId: data.eventId,
-          localTeamId: data.localTeamId,
-          visitingTeamId: data.visitingTeamId,
+          localTeamId,
+          visitingTeamId,
+          activityId: resolvedActivityId ?? null,
           notes: data.notes,
           createdById: userId,
         },
       })
 
       const attendanceRows = [
-        ...localPlayers.map(p => ({ gameId: game.id, playerId: p.relatedClientId, teamId: data.localTeamId })),
-        ...visitingPlayers.map(p => ({ gameId: game.id, playerId: p.relatedClientId, teamId: data.visitingTeamId })),
+        ...localPlayers.map(p => ({ gameId: game.id, playerId: p.relatedClientId, teamId: localTeamId! })),
+        ...visitingPlayers.map(p => ({ gameId: game.id, playerId: p.relatedClientId, teamId: visitingTeamId! })),
       ]
       if (attendanceRows.length > 0) {
         await tx.playerAttendance.createMany({ data: attendanceRows, skipDuplicates: true })
@@ -226,8 +281,9 @@ export async function createGame(req: Request, res: Response, next: NextFunction
 
     await auditService.log(tenantId, userId, 'FootballGame', game.id, 'CREATE', null, {
       eventId: data.eventId,
-      localTeamId: data.localTeamId,
-      visitingTeamId: data.visitingTeamId,
+      localTeamId,
+      visitingTeamId,
+      activityId: resolvedActivityId ?? null,
     })
 
     res.status(201).json({ success: true, data: game })
@@ -330,6 +386,23 @@ export async function resetTimer(req: Request, res: Response, next: NextFunction
     })
 
     res.json({ success: true, data: { ...updated, timerSeconds: 0 } })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function setTimer(req: Request, res: Response, next: NextFunction) {
+  try {
+    const tenantId = req.user!.tenantId
+    const game = await getGameForTenant(req.params.gameId, tenantId)
+    const { seconds } = z.object({ seconds: z.number().int().min(0) }).parse(req.body)
+
+    const updated = await prisma.footballGame.update({
+      where: { id: game.id },
+      data: { timerRunning: false, timerSeconds: seconds, timerLastStarted: null },
+    })
+
+    res.json({ success: true, data: { ...updated, timerSeconds: seconds } })
   } catch (err) {
     next(err)
   }
@@ -507,6 +580,15 @@ export async function recordGameEvent(req: Request, res: Response, next: NextFun
 
     // Return fresh game state
     const freshGame = await prisma.footballGame.findUnique({ where: { id: game.id } })
+
+    // Sync scores to SportMatchData when game ends
+    if (data.type === 'GAME_END' && game.activityId && freshGame) {
+      await prisma.sportMatchData.update({
+        where: { activityId: game.activityId },
+        data: { homeScore: freshGame.localScore, visitingScore: freshGame.visitingScore },
+      }).catch(() => { /* ignore if no match data */ })
+    }
+
     res.status(201).json({
       success: true,
       data: {

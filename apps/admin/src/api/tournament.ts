@@ -106,4 +106,8 @@ export const tournamentApi = {
     stats?: Record<string, any>
   }) =>
     apiClient.patch(`/events/${eventId}/activities/${activityId}/match`, data).then((r) => r.data),
+
+  // I-Flag schedule (uses /iflag/schedule endpoint)
+  listIFlagGames: (eventId: string) =>
+    apiClient.get('/iflag/schedule', { params: { eventId } }).then((r) => r.data),
 }

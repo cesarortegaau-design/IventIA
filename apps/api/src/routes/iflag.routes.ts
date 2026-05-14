@@ -2,11 +2,12 @@ import { Router } from 'express'
 import { authenticate } from '../middleware/authenticate'
 import {
   listGames, getGame, createGame, updateGame,
-  startTimer, stopTimer, resetTimer,
+  startTimer, stopTimer, resetTimer, setTimer,
   getAttendance, upsertAttendance,
   recordGameEvent, listGameEvents,
   getTeamPlayers,
   publicGetGame, publicListGames,
+  listScheduleGames,
 } from '../controllers/iflag.controller'
 
 const router = Router()
@@ -16,6 +17,9 @@ router.get('/public/games', publicListGames)
 router.get('/public/games/:gameId', publicGetGame)
 
 router.use(authenticate)
+
+// Tournament schedule
+router.get('/schedule', listScheduleGames)
 
 // Games
 router.get('/games', listGames)
@@ -27,6 +31,7 @@ router.patch('/games/:gameId', updateGame)
 router.post('/games/:gameId/timer/start', startTimer)
 router.post('/games/:gameId/timer/stop', stopTimer)
 router.post('/games/:gameId/timer/reset', resetTimer)
+router.post('/games/:gameId/timer/set', setTimer)
 
 // Attendance
 router.get('/games/:gameId/attendance', getAttendance)

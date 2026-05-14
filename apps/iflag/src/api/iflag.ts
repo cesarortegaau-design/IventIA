@@ -32,6 +32,10 @@ export const iflagApi = {
     apiClient.get('/events', { params }).then(r => r.data),
   listTeams: () =>
     apiClient.get('/clients', { params: { isTeam: true, pageSize: 100 } }).then(r => r.data),
+  listScheduleGames: (params: { eventId: string }) =>
+    apiClient.get('/iflag/schedule', { params }).then(r => r.data),
+  setTimer: (gameId: string, seconds: number) =>
+    apiClient.post(`/iflag/games/${gameId}/timer/set`, { seconds }).then(r => r.data),
 
   // Public (no auth)
   publicGetGame: (gameId: string) =>

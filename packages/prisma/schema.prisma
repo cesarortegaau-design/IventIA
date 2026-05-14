@@ -614,6 +614,7 @@ model EventActivity {
   activityOrders      EventActivityOrder[]
   assignees           EventActivityAssignee[]
   matchData           SportMatchData?
+  footballGame        FootballGame?
 
   @@index([tenantId, eventId])
   @@index([tenantId, assignedToId, status])
@@ -2057,11 +2058,13 @@ model FootballGame {
   localTimeoutsH2    Int                @default(0) @map("local_timeouts_h2")
   visitingTimeoutsH1 Int                @default(0) @map("visiting_timeouts_h1")
   visitingTimeoutsH2 Int                @default(0) @map("visiting_timeouts_h2")
+  activityId         String?            @unique @map("activity_id")
   createdBy          User               @relation(fields: [createdById], references: [id])
   event              Event              @relation(fields: [eventId], references: [id])
   localTeam          Client             @relation("GameLocalTeam", fields: [localTeamId], references: [id])
   tenant             Tenant             @relation(fields: [tenantId], references: [id])
   visitingTeam       Client             @relation("GameVisitingTeam", fields: [visitingTeamId], references: [id])
+  activity           EventActivity?     @relation(fields: [activityId], references: [id])
   gameEvents         GameEvent[]
   attendance         PlayerAttendance[]
 

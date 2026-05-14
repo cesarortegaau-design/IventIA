@@ -7,7 +7,7 @@ import {
 } from 'antd'
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, CalendarOutlined, TrophyOutlined,
-  TeamOutlined, EnvironmentOutlined, SettingOutlined, BarChartOutlined,
+  TeamOutlined, EnvironmentOutlined, SettingOutlined, BarChartOutlined, MobileOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { tournamentApi } from '../../api/tournament'
@@ -19,6 +19,97 @@ const { Text } = Typography
 
 interface Props {
   eventId: string
+}
+
+const GAME_STATUS_LABELS: Record<string, string> = {
+  PENDING: 'Pendiente',
+  ATTENDANCE: 'Pase de lista',
+  IN_PROGRESS: 'En juego',
+  HALFTIME: 'Medio tiempo',
+  FINISHED: 'Finalizado',
+}
+const GAME_STATUS_COLORS: Record<string, string> = {
+  PENDING: 'default',
+  ATTENDANCE: 'processing',
+  IN_PROGRESS: 'success',
+  HALFTIME: 'warning',
+  FINISHED: 'default',
+}
+const CATEGORY_LABELS: Record<string, string> = { FEMENIL: 'Femenil', VARONIL: 'Varonil', MIXTO: 'Mixto' }
+const CATEGORY_COLORS: Record<string, string> = { FEMENIL: 'pink', VARONIL: 'blue', MIXTO: 'purple' }
+
+function IFlagStatusSection({ eventId }: { eventId: string }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['iflag-schedule', eventId],
+    queryFn: () => tournamentApi.listIFlagGames(eventId),
+    enabled: !!eventId,
+  })
+  const activities = data?.data ?? []
+
+  const columns = [
+    {
+      title: 'Jornada',
+      key: 'round',
+      width: 80,
+      render: (_: any, r: any) => <Text strong>J{r.matchData?.round ?? '—'}</Text>,
+    },
+    {
+      title: 'Categoría',
+      key: 'category',
+      width: 100,
+      render: (_: any, r: any) => (
+        <Badge color={CATEGORY_COLORS[r.matchData?.category] ?? 'default'} text={CATEGORY_LABELS[r.matchData?.category] ?? r.matchData?.category} />
+      ),
+    },
+    {
+      title: 'Local',
+      key: 'home',
+      render: (_: any, r: any) => r.matchData?.homeTeam?.companyName ?? '—',
+    },
+    {
+      title: 'Visitante',
+      key: 'visiting',
+      render: (_: any, r: any) => r.matchData?.visitingTeam?.companyName ?? '—',
+    },
+    {
+      title: 'Venue',
+      key: 'venue',
+      render: (_: any, r: any) => r.matchData?.venue?.name ?? '—',
+    },
+    {
+      title: 'Hora',
+      key: 'time',
+      render: (_: any, r: any) => r.startDate ? dayjs(r.startDate).format('DD/MM HH:mm') : '—',
+    },
+    {
+      title: 'I-Flag',
+      key: 'iflag',
+      render: (_: any, r: any) => {
+        const g = r.footballGame
+        if (!g) return <Badge color="default" text="Sin partido" />
+        const label = GAME_STATUS_LABELS[g.status] ?? g.status
+        const color = GAME_STATUS_COLORS[g.status] ?? 'default'
+        const score = g.status !== 'PENDING' ? ` (${g.localScore}–${g.visitingScore})` : ''
+        return <Badge status={color as any} text={`${label}${score}`} />
+      },
+    },
+  ]
+
+  return (
+    <Card loading={isLoading}>
+      <div style={{ marginBottom: 12, fontSize: 13, color: T.textDim }}>
+        Estado de los partidos del calendario en la app I-Flag.
+      </div>
+      <Table
+        columns={columns}
+        dataSource={activities}
+        rowKey="id"
+        pagination={false}
+        size="small"
+        locale={{ emptyText: <Empty description="Sin partidos programados" /> }}
+      />
+    </Card>
+  )
 }
 
 export default function TournamentTab({ eventId }: Props) {
@@ -329,6 +420,11 @@ export default function TournamentTab({ eventId }: Props) {
             key: 'reports',
             label: <span><BarChartOutlined /> Reportes</span>,
             children: <TournamentReportsTab eventId={eventId} />,
+          },
+          {
+            key: 'iflag',
+            label: <span><MobileOutlined /> I-Flag</span>,
+            children: <IFlagStatusSection eventId={eventId} />,
           },
         ]}
       />

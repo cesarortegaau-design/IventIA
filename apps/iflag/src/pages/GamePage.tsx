@@ -121,41 +121,110 @@ function PlayerGrid({
   )
 }
 
-// Circular countdown timer with SVG progress ring
-function CircularTimer({ elapsed, total, running, warning, size = 148 }: { elapsed: number; total: number; running: boolean; warning: boolean; size?: number }) {
+// Circular countdown timer with SVG progress ring + drag scrub
+function CircularTimer({
+  elapsed, total, running, warning, size = 148,
+  onScrub, onScrubEnd,
+}: {
+  elapsed: number; total: number; running: boolean; warning: boolean; size?: number
+  onScrub?: (seconds: number) => void
+  onScrubEnd?: (seconds: number) => void
+}) {
+  const svgRef = useRef<SVGSVGElement>(null)
+  const [dragging, setDragging] = useState(false)
+
   const cx = size / 2
-  const r = size * 0.392  // ~58 at size=148, ~46 at size=118
-  const sw = size * 0.068 // stroke width
+  const r = size * 0.392
+  const sw = size * 0.068
   const circ = 2 * Math.PI * r
   const progress = Math.min(elapsed / total, 1)
   const offset = circ * (1 - progress)
-  const color = warning ? 'var(--orange)' : 'var(--green)'
+  const color = warning ? 'var(--orange)' : (dragging ? '#fff' : 'var(--green)')
   const shadow = warning ? 'rgba(255,152,0,0.4)' : 'rgba(0,230,118,0.4)'
   const displaySec = Math.max(0, total - elapsed)
-  const fontSize = size * 0.257  // ~38 at size=148, ~30 at size=118
+  const fontSize = size * 0.257
+
+  // Handle dot position on ring
+  const handleAngle = progress * 2 * Math.PI - Math.PI / 2
+  const hx = cx + r * Math.cos(handleAngle)
+  const hy = cx + r * Math.sin(handleAngle)
+
+  function angleFromPointer(e: React.PointerEvent): number {
+    const svg = svgRef.current
+    if (!svg) return 0
+    const rect = svg.getBoundingClientRect()
+    const x = e.clientX - rect.left - cx
+    const y = e.clientY - rect.top - cx
+    let angle = Math.atan2(x, -y)
+    if (angle < 0) angle += 2 * Math.PI
+    return angle
+  }
+
+  function secondsFromAngle(angle: number): number {
+    return Math.min(total, Math.max(0, Math.round((angle / (2 * Math.PI)) * total)))
+  }
+
+  function handlePointerDown(e: React.PointerEvent) {
+    if (!onScrub) return
+    e.preventDefault()
+    setDragging(true)
+    svgRef.current?.setPointerCapture(e.pointerId)
+    onScrub(secondsFromAngle(angleFromPointer(e)))
+  }
+
+  function handlePointerMove(e: React.PointerEvent) {
+    if (!dragging || !onScrub) return
+    onScrub(secondsFromAngle(angleFromPointer(e)))
+  }
+
+  function handlePointerUp(e: React.PointerEvent) {
+    if (!dragging) return
+    setDragging(false)
+    onScrubEnd?.(secondsFromAngle(angleFromPointer(e)))
+  }
 
   return (
     <div style={{ position: 'relative', width: size, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <svg width={size} height={size} style={{ position: 'absolute', top: 0, left: 0 }}>
+      <svg
+        ref={svgRef}
+        width={size} height={size}
+        style={{ position: 'absolute', top: 0, left: 0, cursor: onScrub ? 'grab' : 'default', touchAction: 'none' }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+      >
         <circle cx={cx} cy={cx} r={r} fill="none" stroke="var(--surface2)" strokeWidth={sw} />
         <circle
           cx={cx} cy={cx} r={r} fill="none"
           stroke={color} strokeWidth={sw} strokeLinecap="round"
           strokeDasharray={circ} strokeDashoffset={offset}
           transform={`rotate(-90 ${cx} ${cx})`}
-          style={{ transition: 'stroke-dashoffset 0.8s linear, stroke 0.3s' }}
+          style={{ transition: dragging ? 'none' : 'stroke-dashoffset 0.8s linear, stroke 0.3s' }}
         />
+        {onScrub && (
+          <circle
+            cx={hx} cy={hy} r={sw * 0.9}
+            fill={color}
+            style={{ filter: `drop-shadow(0 0 ${sw * 0.5}px ${color})` }}
+          />
+        )}
       </svg>
-      <div style={{ textAlign: 'center', zIndex: 1 }}>
+      <div style={{ textAlign: 'center', zIndex: 1, pointerEvents: 'none' }}>
         <div
-          className={running ? 'timer-pulse' : ''}
+          className={running && !dragging ? 'timer-pulse' : ''}
           style={{ fontFamily: "'Bebas Neue','Inter',sans-serif", fontSize, color, letterSpacing: '0.04em', lineHeight: 1, textShadow: `0 0 20px ${shadow}` }}
         >
           {formatTimer(displaySec)}
         </div>
-        {warning && (
+        {warning && !dragging && (
           <div style={{ fontSize: 9, color: 'var(--orange)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2 }}>
             EXTRA
+          </div>
+        )}
+        {dragging && (
+          <div style={{ fontSize: 9, color: '#fff', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2 }}>
+            AJUSTAR
           </div>
         )}
       </div>
@@ -248,6 +317,12 @@ export default function GamePage() {
   const timerResetMutation = useMutation({
     mutationFn: () => iflagApi.resetTimer(gameId!),
     onSuccess: () => { setTimerRunning(false); setLocalSeconds(0) },
+  })
+
+  const timerSetMutation = useMutation({
+    mutationFn: (seconds: number) => iflagApi.setTimer(gameId!, seconds),
+    onSuccess: (res) => { setTimerRunning(false); setLocalSeconds(res.data.timerSeconds ?? 0) },
+    onError: () => message.error('Error al ajustar cronómetro'),
   })
 
   const recordEventMutation = useMutation({
@@ -581,36 +656,44 @@ export default function GamePage() {
           {/* Swipe panels */}
           <div ref={swipeRef} className="swipe-container" onScroll={handleSwipeScroll}>
 
-            {/* Panel 1 — Timer + Down (compact, no vertical scroll) */}
+            {/* Panel 1 — Timer (large) + Down */}
             <div className="swipe-panel">
               <div style={{ padding: '8px 12px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
 
-                {/* Timer + controls side by side */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16, width: '100%', justifyContent: 'center' }}>
-                  <CircularTimer elapsed={localSeconds} total={HALF_DURATION} running={timerRunning} warning={overTime} size={116} />
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'stretch', minWidth: 110 }}>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700 }}>
-                      {halfLabel}{isHalftime ? ' · Medio Tiempo' : ''}
-                    </div>
-                    {!isSpectator && !isHalftime && (
-                      <>
-                        {timerRunning ? (
-                          <button className="timer-btn stop" style={{ padding: '14px 16px', fontSize: 16, minWidth: 0 }} onClick={() => timerStopMutation.mutate()} disabled={timerStopMutation.isPending}>
-                            <PauseCircleOutlined style={{ marginRight: 5 }} /> Detener
-                          </button>
-                        ) : (
-                          <button className="timer-btn start" style={{ padding: '14px 16px', fontSize: 16, minWidth: 0 }} onClick={() => timerStartMutation.mutate()} disabled={timerStartMutation.isPending}>
-                            <PlayCircleOutlined style={{ marginRight: 5 }} /> Iniciar
-                          </button>
-                        )}
-                        <button className="timer-btn reset" style={{ padding: '10px 14px', fontSize: 14, minWidth: 0 }} onClick={() => timerResetMutation.mutate()} disabled={timerResetMutation.isPending}>
-                          Reset
-                        </button>
-                      </>
-                    )}
-                    {isHalftime && <div style={{ color: 'var(--gold)', fontWeight: 700, fontSize: 13, textTransform: 'uppercase' }}>⏸ En pausa</div>}
-                  </div>
+                {/* Half label */}
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700 }}>
+                  {halfLabel}{isHalftime ? ' · Medio Tiempo' : ''}
                 </div>
+
+                {/* Large centered timer with drag scrub */}
+                <CircularTimer
+                  elapsed={localSeconds}
+                  total={HALF_DURATION}
+                  running={timerRunning}
+                  warning={overTime}
+                  size={240}
+                  onScrub={!isSpectator && !isHalftime ? (s) => setLocalSeconds(s) : undefined}
+                  onScrubEnd={!isSpectator && !isHalftime ? (s) => timerSetMutation.mutate(s) : undefined}
+                />
+
+                {/* Timer controls — horizontal row */}
+                {!isSpectator && !isHalftime && (
+                  <div style={{ display: 'flex', gap: 8, width: '100%' }}>
+                    {timerRunning ? (
+                      <button className="timer-btn stop" style={{ flex: 2, padding: '14px 0', fontSize: 16 }} onClick={() => timerStopMutation.mutate()} disabled={timerStopMutation.isPending}>
+                        <PauseCircleOutlined style={{ marginRight: 5 }} /> Detener
+                      </button>
+                    ) : (
+                      <button className="timer-btn start" style={{ flex: 2, padding: '14px 0', fontSize: 16 }} onClick={() => timerStartMutation.mutate()} disabled={timerStartMutation.isPending}>
+                        <PlayCircleOutlined style={{ marginRight: 5 }} /> Iniciar
+                      </button>
+                    )}
+                    <button className="timer-btn reset" style={{ flex: 1, padding: '14px 0', fontSize: 14 }} onClick={() => timerResetMutation.mutate()} disabled={timerResetMutation.isPending}>
+                      Reset
+                    </button>
+                  </div>
+                )}
+                {isHalftime && <div style={{ color: 'var(--gold)', fontWeight: 700, fontSize: 13, textTransform: 'uppercase' }}>⏸ En pausa</div>}
 
                 {/* Compact down card */}
                 {!isHalftime && (
