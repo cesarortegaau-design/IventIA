@@ -37,10 +37,12 @@ import budgetsRoutes from './budgets.routes'
 
 const router = Router()
 
-// Public ticket routes MUST be registered first — budgetsRoutes is mounted on '/'
-// with a global authenticate middleware that would otherwise intercept all paths.
+// Public/mixed-auth routes MUST be registered before budgetsRoutes —
+// budgetsRoutes is mounted on '/' with a global authenticate middleware that
+// would otherwise intercept all paths including public endpoints.
 router.use('/public/tickets', ticketsPublicRoutes)
 router.use('/public/tickets', ticketBuyerRoutes)
+router.use('/iflag', iflagRoutes)
 
 router.use('/auth', authRoutes)
 router.use('/events', eventRoutes)
@@ -72,7 +74,6 @@ router.use('/templates', templatesRoutes)
 router.use('/production', productionRoutes)
 router.use('/supplier-portal', supplierPortalRoutes)
 router.use('/suppliers/:supplierId/portal-codes', supplierPortalCodesRoutes)
-router.use('/iflag', iflagRoutes)
 router.use('/ai', aiRoutes)
 router.use('/events', ticketEventsRoutes)
 
