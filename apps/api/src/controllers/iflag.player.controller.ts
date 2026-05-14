@@ -215,6 +215,64 @@ export async function playerVerifyCode(req: Request, res: Response, next: NextFu
   }
 }
 
+// ── Helper: ensure a Client record + JUGADOR relation + attendance exists ─────
+
+async function ensurePlayerClient(
+  portalUserId: string,
+  tenantId: string,
+  firstName: string,
+  lastName: string,
+  email: string,
+  phone: string | undefined,
+  teamClientId: string,
+  eventId: string,
+) {
+  // Check if Client already exists for this portal user
+  const existing = await prisma.client.findUnique({ where: { portalUserId } })
+  const playerClientId = existing?.id ?? (await (async () => {
+    const created = await prisma.client.create({
+      data: {
+        tenantId,
+        personType: 'PHYSICAL',
+        firstName,
+        lastName,
+        email: email.toLowerCase(),
+        phone: phone ?? null,
+        portalUserId,
+      },
+    })
+    return created.id
+  })())
+
+  // Ensure JUGADOR relation from team → player
+  await prisma.clientRelation.upsert({
+    where: { clientId_relatedClientId_relationType: { clientId: teamClientId, relatedClientId: playerClientId, relationType: 'JUGADOR' } },
+    create: { tenantId, clientId: teamClientId, relatedClientId: playerClientId, relationType: 'JUGADOR' },
+    update: { isActive: true },
+  })
+
+  // Add to PlayerAttendance for any active games in this event that involve the team
+  const activeGames = await prisma.footballGame.findMany({
+    where: {
+      eventId,
+      status: { in: ['PENDING', 'ATTENDANCE'] },
+      OR: [{ localTeamId: teamClientId }, { visitingTeamId: teamClientId }],
+    },
+    select: { id: true, localTeamId: true, visitingTeamId: true },
+  })
+
+  if (activeGames.length > 0) {
+    await prisma.playerAttendance.createMany({
+      data: activeGames.map((g) => ({
+        gameId: g.id,
+        playerId: playerClientId,
+        teamId: teamClientId,
+      })),
+      skipDuplicates: true,
+    })
+  }
+}
+
 export async function playerSignup(req: Request, res: Response, next: NextFunction) {
   try {
     const schema = z.object({
@@ -276,6 +334,15 @@ export async function playerSignup(req: Request, res: Response, next: NextFuncti
           })
         }
       }
+      // Always ensure Client + JUGADOR relation + attendance for this user/team combo
+      if (accessCode.clientId) {
+        await ensurePlayerClient(
+          existing.id, existing.tenantId,
+          existing.firstName, existing.lastName,
+          existing.email, existing.phone ?? undefined,
+          accessCode.clientId, accessCode.eventId,
+        ).catch(() => {}) // non-fatal
+      }
       const tokens = signPlayerTokens(existing.id, existing.tenantId, existing.email)
       return res.json({
         success: true,
@@ -317,6 +384,16 @@ export async function playerSignup(req: Request, res: Response, next: NextFuncti
         data: { usedCount: { increment: 1 } },
       }),
     ])
+
+    // Create Client + JUGADOR relation + pre-populate attendance
+    if (accessCode.clientId) {
+      await ensurePlayerClient(
+        portalUser.id, portalUser.tenantId,
+        portalUser.firstName, portalUser.lastName,
+        portalUser.email, portalUser.phone ?? undefined,
+        accessCode.clientId, accessCode.eventId,
+      ).catch(() => {}) // non-fatal
+    }
 
     const tokens = signPlayerTokens(portalUser.id, portalUser.tenantId, portalUser.email)
     res.status(201).json({
@@ -404,17 +481,28 @@ export async function playerUpdateMe(req: Request, res: Response, next: NextFunc
       lastName: z.string().min(1).optional(),
       phone: z.string().nullish(),
       photoUrl: z.string().url().nullish(),
+      playerNumber: z.string().max(10).nullish(),
     })
     const data = schema.parse(req.body)
 
+    const portalUserId = req.portalUser!.portalUserId
     const user = await prisma.portalUser.update({
-      where: { id: req.portalUser!.portalUserId },
+      where: { id: portalUserId },
       data,
     })
 
+    // Sync playerNumber to linked Client record if it exists
+    if (data.playerNumber !== undefined) {
+      await prisma.client.updateMany({
+        where: { portalUserId },
+        data: { playerNumber: data.playerNumber ?? null },
+      }).catch(() => {})
+    }
+
+    const u = user as any
     res.json({
       success: true,
-      data: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, phone: user.phone, photoUrl: (user as any).photoUrl ?? null },
+      data: { id: u.id, email: u.email, firstName: u.firstName, lastName: u.lastName, phone: u.phone, photoUrl: u.photoUrl ?? null, playerNumber: u.playerNumber ?? null },
     })
   } catch (err) {
     next(err)

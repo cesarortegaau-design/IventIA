@@ -29,7 +29,7 @@ export const playerApi = {
 
   // Player (requires portal JWT)
   getMe: () => playerClient.get('/iflag/player/me').then((r) => r.data),
-  updateMe: (data: { firstName?: string; lastName?: string; phone?: string | null; photoUrl?: string | null }) =>
+  updateMe: (data: { firstName?: string; lastName?: string; phone?: string | null; photoUrl?: string | null; playerNumber?: string | null }) =>
     playerClient.patch('/iflag/player/me', data).then((r) => r.data),
   uploadPhoto: (file: File) => {
     const form = new FormData()

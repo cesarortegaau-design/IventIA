@@ -28,7 +28,7 @@ export default function PlayerProfilePage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [editing, setEditing] = useState(false)
-  const [form, setForm] = useState({ firstName: '', lastName: '', phone: '' })
+  const [form, setForm] = useState({ firstName: '', lastName: '', phone: '', playerNumber: '' })
   const [activeTab, setActiveTab] = useState<'perfil' | 'pagos' | 'stats'>('perfil')
 
   const { data: meData, isLoading } = useQuery({
@@ -47,7 +47,7 @@ export default function PlayerProfilePage() {
 
   function startEdit() {
     if (!me) return
-    setForm({ firstName: me.firstName, lastName: me.lastName, phone: me.phone ?? '' })
+    setForm({ firstName: me.firstName, lastName: me.lastName, phone: me.phone ?? '', playerNumber: me.playerNumber ?? '' })
     setEditing(true)
   }
 
@@ -73,7 +73,7 @@ export default function PlayerProfilePage() {
   })
 
   function handleSave() {
-    updateMutation.mutate({ firstName: form.firstName, lastName: form.lastName, phone: form.phone || null })
+    updateMutation.mutate({ firstName: form.firstName, lastName: form.lastName, phone: form.phone || null, playerNumber: form.playerNumber || null })
   }
 
   function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -128,7 +128,14 @@ export default function PlayerProfilePage() {
               <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handlePhotoSelect} />
             </div>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 17, color: 'var(--text)' }}>{me?.firstName} {me?.lastName}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontWeight: 700, fontSize: 17, color: 'var(--text)' }}>{me?.firstName} {me?.lastName}</span>
+                {me?.playerNumber && (
+                  <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 18, color: 'var(--green)', background: 'rgba(0,230,118,0.1)', padding: '1px 8px', borderRadius: 8, border: '1px solid var(--green)' }}>
+                    #{me.playerNumber}
+                  </span>
+                )}
+              </div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{me?.email}</div>
               {me?.clients?.length > 0 && (
                 <div style={{ fontSize: 12, color: 'var(--blue)', marginTop: 4, fontWeight: 600 }}>
@@ -177,9 +184,15 @@ export default function PlayerProfilePage() {
                         <input type="text" className="ant-input" value={form.lastName} onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))} style={inputStyle} />
                       </div>
                     </div>
-                    <div>
-                      <label style={labelStyle}>Teléfono</label>
-                      <input type="tel" className="ant-input" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} style={inputStyle} />
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <div>
+                        <label style={labelStyle}>Teléfono</label>
+                        <input type="tel" className="ant-input" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} style={inputStyle} />
+                      </div>
+                      <div>
+                        <label style={labelStyle}># Dorsal</label>
+                        <input type="text" className="ant-input" value={form.playerNumber} maxLength={10} onChange={(e) => setForm((f) => ({ ...f, playerNumber: e.target.value }))} style={inputStyle} placeholder="Ej. 7" />
+                      </div>
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button onClick={handleSave} disabled={updateMutation.isPending} style={{ ...saveBtnStyle, flex: 1 }}>
@@ -193,6 +206,7 @@ export default function PlayerProfilePage() {
                     <InfoRow label="Nombre" value={`${me?.firstName} ${me?.lastName}`} />
                     <InfoRow label="Correo" value={me?.email} />
                     {me?.phone && <InfoRow label="Teléfono" value={me.phone} />}
+                    {me?.playerNumber && <InfoRow label="# Dorsal" value={`#${me.playerNumber}`} />}
                   </div>
                 )}
               </div>
