@@ -30,6 +30,7 @@ export default function PlayerProfilePage() {
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({ firstName: '', lastName: '', phone: '', playerNumber: '' })
   const [activeTab, setActiveTab] = useState<'perfil' | 'pagos' | 'stats'>('perfil')
+  const [statsEventId, setStatsEventId] = useState<string>('')
 
   const { data: meData, isLoading } = useQuery({
     queryKey: ['player-me'],
@@ -37,8 +38,8 @@ export default function PlayerProfilePage() {
   })
 
   const { data: statsData } = useQuery({
-    queryKey: ['player-stats'],
-    queryFn: () => playerApi.getStats(),
+    queryKey: ['player-stats', statsEventId || 'all'],
+    queryFn: () => playerApi.getStats(statsEventId || undefined),
     enabled: activeTab === 'stats',
   })
 
@@ -277,6 +278,19 @@ export default function PlayerProfilePage() {
             {/* ── Stats tab ── */}
             {activeTab === 'stats' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {/* Tournament filter */}
+                {(me?.events?.length ?? 0) > 0 && (
+                  <select
+                    value={statsEventId}
+                    onChange={(e) => setStatsEventId(e.target.value)}
+                    style={{ width: '100%', padding: '9px 10px', borderRadius: 8, fontSize: 13, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)' }}
+                  >
+                    <option value="">Todos los torneos</option>
+                    {me.events.map((ev: any) => (
+                      <option key={ev.eventId} value={ev.eventId}>{ev.event?.name}</option>
+                    ))}
+                  </select>
+                )}
                 {!stats ? (
                   <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 32, fontSize: 13 }}>Cargando estadísticas...</div>
                 ) : stats.gamesPlayed === 0 ? (

@@ -37,7 +37,7 @@ export default function PlayerTournamentPage() {
 
   const playerToken = usePlayerStore((s) => s.accessToken)
   const [activeCategory, setActiveCategory] = useState<string>('')
-  const [activeView, setActiveView] = useState<'standings' | 'calendar'>('standings')
+  const [activeView, setActiveView] = useState<'standings' | 'calendar' | 'stats'>('standings')
 
   // Verify payment after redirect
   const paymentSuccess = searchParams.get('payment') === 'success'
@@ -61,6 +61,13 @@ export default function PlayerTournamentPage() {
     queryFn: playerApi.getMe,
     enabled: !!playerToken,
   })
+
+  const { data: myStatsData } = useQuery({
+    queryKey: ['player-stats', eventId],
+    queryFn: () => playerApi.getStats(eventId),
+    enabled: !!playerToken && activeView === 'stats',
+  })
+  const myStats = myStatsData?.data
 
   const payMutation = useMutation({
     mutationFn: () => playerApi.payTournament(eventId!),
@@ -208,10 +215,14 @@ export default function PlayerTournamentPage() {
 
       {/* View toggle */}
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
-        {(['standings', 'calendar'] as const).map((v) => (
+        {([
+          { key: 'standings', label: 'Clasificación' },
+          { key: 'calendar', label: 'Calendario' },
+          ...(playerToken ? [{ key: 'stats', label: 'Mis Stats' }] : []),
+        ] as { key: 'standings' | 'calendar' | 'stats'; label: string }[]).map((v) => (
           <button
-            key={v}
-            onClick={() => setActiveView(v)}
+            key={v.key}
+            onClick={() => setActiveView(v.key)}
             style={{
               flex: 1,
               background: 'none',
@@ -219,12 +230,12 @@ export default function PlayerTournamentPage() {
               padding: '10px',
               fontSize: 13,
               fontWeight: 600,
-              color: activeView === v ? 'var(--green)' : 'var(--text-muted)',
-              borderBottom: activeView === v ? '2px solid var(--green)' : '2px solid transparent',
+              color: activeView === v.key ? 'var(--green)' : 'var(--text-muted)',
+              borderBottom: activeView === v.key ? '2px solid var(--green)' : '2px solid transparent',
               cursor: 'pointer',
             }}
           >
-            {v === 'standings' ? 'Clasificación' : 'Calendario'}
+            {v.label}
           </button>
         ))}
       </div>
@@ -235,6 +246,8 @@ export default function PlayerTournamentPage() {
           <StandingsTable rows={standings[activeCategory].standings} />
         ) : activeView === 'calendar' ? (
           <CalendarList games={filteredCalendar} eventId={eventId} />
+        ) : activeView === 'stats' ? (
+          <TournamentStats stats={myStats} />
         ) : (
           <div style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13, textAlign: 'center' }}>
             Sin datos disponibles
@@ -359,6 +372,111 @@ function CalendarList({ games, eventId }: { games: any[]; eventId?: string }) {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+const EVENT_LABELS: Record<string, { label: string; color: string; icon: string }> = {
+  TOUCHDOWN:         { label: 'Touchdown',       color: 'var(--green)',      icon: '🏈' },
+  EXTRA_POINT:       { label: 'Punto extra',     color: '#1a9c50',           icon: '✔' },
+  SAFETY:            { label: 'Safety',          color: 'var(--blue)',       icon: '🛡' },
+  FLAG_PENALTY:      { label: 'Castigo',         color: 'var(--orange)',     icon: '🚩' },
+  INTERCEPTION:      { label: 'Intercepción',    color: '#e91e63',           icon: '🙌' },
+  POSSESSION_CHANGE: { label: 'Cambio posesión', color: 'var(--blue)',       icon: '🔄' },
+  TIMEOUT:           { label: 'Tiempo fuera',    color: '#faad14',           icon: '⏱' },
+  SCORE_ADJUST:      { label: 'Ajuste marcador', color: '#9c27b0',           icon: '✏️' },
+  DOWN_UPDATE:       { label: 'Down',            color: 'var(--text-muted)', icon: '📋' },
+}
+
+function TournamentStats({ stats }: { stats: any }) {
+  if (!stats) {
+    return <div style={{ padding: 32, color: 'var(--text-muted)', textAlign: 'center', fontSize: 13 }}>Cargando estadísticas...</div>
+  }
+  if (stats.gamesPlayed === 0) {
+    return <div style={{ padding: 32, color: 'var(--text-muted)', textAlign: 'center', fontSize: 13 }}>Sin partidos registrados en este torneo</div>
+  }
+  return (
+    <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Totals */}
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px' }}>
+        <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 12 }}>
+          Mis estadísticas — {stats.gamesPlayed} partido{stats.gamesPlayed !== 1 ? 's' : ''}
+        </div>
+        {Object.keys(stats.totals).length === 0 ? (
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Sin incidencias registradas</div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+            {Object.entries(stats.totals).map(([type, count]) => {
+              const meta = EVENT_LABELS[type]
+              return (
+                <div key={type} style={{ background: 'var(--surface2)', borderRadius: 8, padding: '10px 8px', textAlign: 'center', border: `1px solid ${meta?.color ?? 'var(--border)'}33` }}>
+                  <div style={{ fontSize: 18 }}>{meta?.icon ?? '•'}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: meta?.color ?? 'var(--green)', fontFamily: "'Bebas Neue', sans-serif", lineHeight: 1, marginTop: 2 }}>
+                    {String(count)}
+                  </div>
+                  <div style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: 2, lineHeight: 1.2 }}>
+                    {meta?.label ?? type}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Game history */}
+      {stats.games?.length > 0 && (
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px' }}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 12 }}>Partidos</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {stats.games.map((g: any) => (
+              <StatsGameCard key={g.gameId} game={g} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function StatsGameCard({ game }: { game: any }) {
+  const [expanded, setExpanded] = useState(false)
+  const hasEvents = game.events?.length > 0
+  return (
+    <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+      <div
+        onClick={() => hasEvents && setExpanded((v) => !v)}
+        style={{ padding: '10px 12px', background: 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: hasEvents ? 'pointer' : 'default' }}
+      >
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>
+          {game.homeTeam} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>vs</span> {game.visitingTeam}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {game.localScore !== null && game.localScore !== undefined && (
+            <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 16, color: 'var(--green)' }}>
+              {game.localScore}–{game.visitingScore}
+            </span>
+          )}
+          {hasEvents && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{expanded ? '▲' : '▼'}</span>}
+        </div>
+      </div>
+      {expanded && hasEvents && (
+        <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {game.events.map((ev: any, i: number) => {
+            const meta = EVENT_LABELS[ev.type]
+            return (
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '6px 0', borderBottom: i < game.events.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                <span style={{ fontSize: 14, flexShrink: 0 }}>{meta?.icon ?? '•'}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: meta?.color ?? 'var(--text)' }}>{meta?.label ?? ev.type}</span>
+                  {ev.description && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{ev.description}</div>}
+                </div>
+                {ev.points > 0 && <span style={{ fontSize: 11, color: 'var(--green)', fontWeight: 700, flexShrink: 0 }}>+{ev.points}pts</span>}
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

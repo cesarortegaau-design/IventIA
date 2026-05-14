@@ -11,6 +11,12 @@ const ACTIVITY_INCLUDE = {
   space:      { select: { id: true, phase: true, startTime: true, endTime: true, resource: { select: { id: true, name: true } } } },
   order:      { select: { id: true, orderNumber: true, status: true } },
   crmTask:    { select: { id: true, title: true, status: true } },
+  matchData: {
+    include: {
+      homeTeam:     { select: { id: true, companyName: true } },
+      visitingTeam: { select: { id: true, companyName: true } },
+    },
+  },
   activityDepartments: {
     include: { department: { select: { id: true, name: true } } },
   },
