@@ -29,6 +29,7 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '../stores/authStore'
 import { chatApi } from '../api/chat'
+import { collabTasksApi } from '../api/collabTasks'
 import { PRIVILEGES } from '@iventia/shared'
 import { T } from '../styles/tokens'
 
@@ -73,6 +74,18 @@ export default function MainLayout() {
     refetchInterval: 15000,
   })
   const unread = unreadData?.unread ?? 0
+
+  const { data: myTasksData = [] } = useQuery({
+    queryKey: ['collab-tasks-mine-pending'],
+    queryFn: () => collabTasksApi.list({ status: 'PENDING' }),
+    refetchInterval: 60000,
+    select: (data: any[]) => data.filter((t: any) => {
+      const uid = user?.id ?? ''
+      return t.assignedTo?.id === uid || t.assignees?.some((a: any) => a.userId === uid || a.user?.id === uid)
+    }),
+  })
+  const pendingTaskCount = (myTasksData as any[]).length
+  const bellCount = unread + pendingTaskCount
 
   // Determine active area from current route
   const activeArea = useMemo(() => {
@@ -349,7 +362,7 @@ export default function MainLayout() {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         position: 'relative',
       }}>
-        <Badge count={unread} size="small" offset={[0, 0]}>
+        <Badge count={bellCount} size="small" offset={[0, 0]}>
           <BellOutlined style={{ fontSize: 16, color: 'white' }} />
         </Badge>
       </button>

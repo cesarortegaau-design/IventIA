@@ -8,8 +8,8 @@ import { TareasTab } from './tareas/TareasTab'
 const { Text } = Typography
 
 const TABS = [
-  { key: 'conversaciones', label: 'Conversaciones', icon: <MessageOutlined /> },
-  { key: 'tareas', label: 'Tareas', icon: <CheckSquareOutlined /> },
+  { key: 'tareas',         label: 'Tareas',          icon: <CheckSquareOutlined /> },
+  { key: 'conversaciones', label: 'Conversaciones',  icon: <MessageOutlined /> },
 ]
 
 const BTN_SECONDARY: React.CSSProperties = {
@@ -19,7 +19,7 @@ const BTN_SECONDARY: React.CSSProperties = {
 }
 
 export default function ColaboraPage() {
-  const [activeTab, setActiveTab] = useState('conversaciones')
+  const [activeTab, setActiveTab] = useState('tareas')
 
   return (
     <div style={{ height: 'calc(100vh - 112px)', display: 'flex', flexDirection: 'column', background: T.bg }}>
