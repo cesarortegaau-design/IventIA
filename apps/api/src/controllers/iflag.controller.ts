@@ -608,13 +608,33 @@ export async function listGameEvents(req: Request, res: Response, next: NextFunc
 
     const events = await prisma.gameEvent.findMany({
       where: { gameId: req.params.gameId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'asc' },
       include: {
         createdBy: { select: { id: true, firstName: true, lastName: true } },
       },
     })
 
-    res.json({ success: true, data: events })
+    // Manually resolve player and team names (no Prisma relation defined)
+    const playerIds = [...new Set(events.filter((e) => e.playerId).map((e) => e.playerId!))]
+    const teamIds   = [...new Set(events.filter((e) => e.teamId).map((e) => e.teamId!))]
+    const [players, teams] = await Promise.all([
+      playerIds.length
+        ? prisma.client.findMany({ where: { id: { in: playerIds } }, select: { id: true, firstName: true, lastName: true, companyName: true, playerNumber: true } })
+        : Promise.resolve([]),
+      teamIds.length
+        ? prisma.client.findMany({ where: { id: { in: teamIds } }, select: { id: true, companyName: true } })
+        : Promise.resolve([]),
+    ])
+    const playerMap = Object.fromEntries(players.map((p) => [p.id, p]))
+    const teamMap   = Object.fromEntries(teams.map((t) => [t.id, t]))
+
+    const enriched = events.map((e) => ({
+      ...e,
+      player: e.playerId ? (playerMap[e.playerId] ?? null) : null,
+      team:   e.teamId   ? (teamMap[e.teamId]   ?? null) : null,
+    }))
+
+    res.json({ success: true, data: enriched })
   } catch (err) {
     next(err)
   }

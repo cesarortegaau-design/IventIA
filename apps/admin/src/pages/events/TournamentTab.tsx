@@ -39,7 +39,109 @@ const GAME_STATUS_COLORS: Record<string, string> = {
 const CATEGORY_LABELS: Record<string, string> = { FEMENIL: 'Femenil', VARONIL: 'Varonil', MIXTO: 'Mixto' }
 const CATEGORY_COLORS: Record<string, string> = { FEMENIL: 'pink', VARONIL: 'blue', MIXTO: 'purple' }
 
+const GAME_EVENT_LABELS: Record<string, { label: string; color: string }> = {
+  TOUCHDOWN:         { label: 'Touchdown',        color: '#52c41a' },
+  EXTRA_POINT:       { label: 'Punto extra',      color: '#389e0d' },
+  SAFETY:            { label: 'Safety',           color: '#1677ff' },
+  FLAG_PENALTY:      { label: 'Castigo',          color: '#fa8c16' },
+  INTERCEPTION:      { label: 'Intercepción',     color: '#eb2f96' },
+  POSSESSION_CHANGE: { label: 'Cambio posesión',  color: '#1677ff' },
+  TIMEOUT:           { label: 'Tiempo fuera',     color: '#faad14' },
+  SCORE_ADJUST:      { label: 'Ajuste marcador',  color: '#722ed1' },
+  DOWN_UPDATE:       { label: 'Down',             color: '#8c8c8c' },
+}
+
+function GameEventsStats({ gameId }: { gameId: string }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['iflag-game-events', gameId],
+    queryFn: () => tournamentApi.getGameEvents(gameId),
+    enabled: !!gameId,
+  })
+  const events: any[] = data?.data ?? []
+
+  if (isLoading) return <div style={{ padding: 16, color: T.textDim, fontSize: 13 }}>Cargando...</div>
+  if (!events.length) return <div style={{ padding: 16, color: T.textDim, fontSize: 13 }}>Sin eventos registrados</div>
+
+  // Aggregate by type
+  const byType: Record<string, number> = {}
+  for (const e of events) byType[e.type] = (byType[e.type] ?? 0) + 1
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* Type totals */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {Object.entries(byType).map(([type, count]) => {
+          const meta = GAME_EVENT_LABELS[type]
+          return (
+            <div key={type} style={{ background: '#f5f5f5', border: `1px solid ${meta?.color ?? '#d9d9d9'}44`, borderRadius: 8, padding: '6px 12px', minWidth: 90, textAlign: 'center' }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: meta?.color ?? T.navy }}>{count}</div>
+              <div style={{ fontSize: 11, color: T.textDim }}>{meta?.label ?? type}</div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Event timeline */}
+      <Table
+        size="small"
+        pagination={{ pageSize: 20, size: 'small' }}
+        dataSource={events}
+        rowKey="id"
+        columns={[
+          {
+            title: 'Q',
+            dataIndex: 'quarter',
+            key: 'quarter',
+            width: 40,
+            render: (v: any) => v ?? '—',
+          },
+          {
+            title: 'Tipo',
+            dataIndex: 'type',
+            key: 'type',
+            width: 140,
+            render: (v: string) => {
+              const meta = GAME_EVENT_LABELS[v]
+              return <Badge color={meta?.color ?? 'default'} text={meta?.label ?? v} />
+            },
+          },
+          {
+            title: 'Equipo',
+            key: 'team',
+            width: 160,
+            render: (_: any, r: any) => r.team?.companyName ?? '—',
+          },
+          {
+            title: 'Jugador',
+            key: 'player',
+            render: (_: any, r: any) => {
+              if (!r.player) return '—'
+              const name = r.player.companyName || `${r.player.firstName ?? ''} ${r.player.lastName ?? ''}`.trim()
+              return r.player.playerNumber ? `#${r.player.playerNumber} ${name}` : name
+            },
+          },
+          {
+            title: 'Pts',
+            dataIndex: 'points',
+            key: 'points',
+            width: 50,
+            render: (v: number) => v > 0 ? <Text strong style={{ color: T.navy }}>+{v}</Text> : '—',
+          },
+          {
+            title: 'Nota',
+            dataIndex: 'description',
+            key: 'description',
+            render: (v: string) => v ?? '—',
+          },
+        ]}
+      />
+    </div>
+  )
+}
+
 function IFlagStatusSection({ eventId }: { eventId: string }) {
+  const [selectedGameId, setSelectedGameId] = useState<string | null>(null)
+
   const { data, isLoading } = useQuery({
     queryKey: ['iflag-schedule', eventId],
     queryFn: () => tournamentApi.listIFlagGames(eventId),
@@ -47,7 +149,10 @@ function IFlagStatusSection({ eventId }: { eventId: string }) {
   })
   const activities = data?.data ?? []
 
-  const columns = [
+  // Games with a FootballGame record (can have stats)
+  const gamesWithIflag = activities.filter((a: any) => !!a.footballGame)
+
+  const statusColumns = [
     {
       title: 'Jornada',
       key: 'round',
@@ -98,16 +203,59 @@ function IFlagStatusSection({ eventId }: { eventId: string }) {
 
   return (
     <Card loading={isLoading}>
-      <div style={{ marginBottom: 12, fontSize: 13, color: T.textDim }}>
-        Estado de los partidos del calendario en la app I-Flag.
-      </div>
-      <Table
-        columns={columns}
-        dataSource={activities}
-        rowKey="id"
-        pagination={false}
+      <Tabs
         size="small"
-        locale={{ emptyText: <Empty description="Sin partidos programados" /> }}
+        items={[
+          {
+            key: 'estado',
+            label: 'Estado de partidos',
+            children: (
+              <>
+                <div style={{ marginBottom: 12, fontSize: 13, color: T.textDim }}>
+                  Estado de los partidos del calendario en la app I-Flag.
+                </div>
+                <Table
+                  columns={statusColumns}
+                  dataSource={activities}
+                  rowKey="id"
+                  pagination={false}
+                  size="small"
+                  locale={{ emptyText: <Empty description="Sin partidos programados" /> }}
+                />
+              </>
+            ),
+          },
+          {
+            key: 'stats',
+            label: `Estadísticas (${gamesWithIflag.length})`,
+            children: (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {gamesWithIflag.length === 0 ? (
+                  <Empty description="No hay partidos I-Flag iniciados aún" />
+                ) : (
+                  <>
+                    <Select
+                      style={{ width: '100%', maxWidth: 500 }}
+                      placeholder="Seleccionar partido…"
+                      value={selectedGameId}
+                      onChange={setSelectedGameId}
+                      options={gamesWithIflag.map((a: any) => {
+                        const home = a.matchData?.homeTeam?.companyName ?? '—'
+                        const visit = a.matchData?.visitingTeam?.companyName ?? '—'
+                        const status = GAME_STATUS_LABELS[a.footballGame?.status] ?? ''
+                        return {
+                          value: a.footballGame.id,
+                          label: `J${a.matchData?.round ?? '?'} · ${home} vs ${visit} — ${status}`,
+                        }
+                      })}
+                    />
+                    {selectedGameId && <GameEventsStats gameId={selectedGameId} />}
+                  </>
+                )}
+              </div>
+            ),
+          },
+        ]}
       />
     </Card>
   )
