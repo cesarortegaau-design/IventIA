@@ -27,10 +27,24 @@ const createCollabTaskSchema = z.object({
   orderIds: z.array(z.string().uuid()).default([]),
 })
 
-const updateCollabTaskSchema = createCollabTaskSchema.partial().extend({
-  departmentIds: z.array(z.string().uuid()).nullable().optional(),
-  orderIds: z.array(z.string().uuid()).nullable().optional(),
-})
+const en = (v: unknown) => (v === '' ? null : v)
+
+// Update schema — permissive: no strict format checks, allows null/empty for all fields
+const updateCollabTaskSchema = z.object({
+  title: z.string().min(1).max(300).optional(),
+  description: z.preprocess(en, z.string().optional().nullable()),
+  startDate: z.preprocess(en, z.string().optional().nullable()),
+  endDate: z.preprocess(en, z.string().optional().nullable()),
+  status: z.enum(['PENDING', 'IN_PROGRESS', 'ON_HOLD', 'DONE', 'CANCELLED']).optional(),
+  priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional(),
+  progress: z.coerce.number().int().min(0).max(100).optional(),
+  assignedToId: z.preprocess(en, z.string().optional().nullable()),
+  assignedToIds: z.array(z.string()).optional().nullable(),
+  eventId: z.preprocess(en, z.string().optional().nullable()),
+  clientId: z.preprocess(en, z.string().optional().nullable()),
+  departmentIds: z.array(z.string()).nullable().optional(),
+  orderIds: z.array(z.string()).nullable().optional(),
+}).strip()
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Include Objects
@@ -325,8 +339,8 @@ export async function updateCollabTask(req: Request, res: Response, next: NextFu
         data: {
           title: validated.title,
           description: validated.description,
-          startDate: validated.startDate ? new Date(validated.startDate) : undefined,
-          endDate: validated.endDate ? new Date(validated.endDate) : undefined,
+          startDate: validated.startDate === null ? null : (validated.startDate ? new Date(validated.startDate) : undefined),
+          endDate: validated.endDate === null ? null : (validated.endDate ? new Date(validated.endDate) : undefined),
           status: validated.status,
           priority: validated.priority,
           progress: validated.progress,
