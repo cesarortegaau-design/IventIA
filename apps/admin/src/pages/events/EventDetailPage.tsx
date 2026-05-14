@@ -1120,7 +1120,13 @@ export default function EventDetailPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
               <Space>
                 <Text>Portal habilitado:</Text>
-                <Switch checked={!!event.portalEnabled} disabled checkedChildren="Sí" unCheckedChildren="No" />
+                <Switch
+                  checked={!!event.portalEnabled}
+                  checkedChildren="Sí"
+                  unCheckedChildren="No"
+                  onChange={(val) => updateEventMutation.mutate({ portalEnabled: val })}
+                  loading={updateEventMutation.isPending}
+                />
                 {event.portalEnabled && <Tag color="purple">Visible para expositores</Tag>}
               </Space>
               <Button
