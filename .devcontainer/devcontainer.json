@@ -1,0 +1,53 @@
+{
+  "name": "IventIA Dev",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspaces/IventIA",
+
+  // Extensiones de VS Code que se instalan automáticamente
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "Prisma.prisma",
+        "bradlc.vscode-tailwindcss",
+        "ms-azuretools.vscode-docker",
+        "ckolkman.vscode-postgres",
+        "ms-vscode.vscode-typescript-next",
+        "eamodio.gitlens",
+        "usernamehw.errorlens",
+        "formulahendry.auto-rename-tag",
+        "PKief.material-icon-theme"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "typescript.tsdk": "node_modules/typescript/lib",
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+
+  // Puertos que se exponen automáticamente
+  "forwardPorts": [3001, 5173, 5174, 5175, 5176, 5555],
+  "portsAttributes": {
+    "3001": { "label": "API",              "onAutoForward": "silent" },
+    "5173": { "label": "Admin",            "onAutoForward": "notify" },
+    "5174": { "label": "Portal",           "onAutoForward": "silent" },
+    "5175": { "label": "Portales varios",  "onAutoForward": "silent" },
+    "5176": { "label": "Community",        "onAutoForward": "silent" },
+    "5555": { "label": "Prisma Studio",    "onAutoForward": "silent" }
+  },
+
+  // Comandos que corren al crear el Codespace por primera vez
+  "onCreateCommand": "bash .devcontainer/setup.sh",
+
+  // Comando que corre cada vez que se inicia el Codespace
+  "postStartCommand": "pnpm db:migrate 2>/dev/null || true",
+
+  // Variables de entorno (los secrets se configuran en GitHub, no aquí)
+  "remoteEnv": {
+    "NODE_ENV": "development"
+  }
+}
