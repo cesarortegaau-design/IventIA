@@ -570,11 +570,23 @@ export async function playerStats(req: Request, res: Response, next: NextFunctio
     const portalUserId = req.portalUser!.portalUserId
     const { eventId } = z.object({ eventId: z.string().uuid().optional() }).parse(req.query)
 
-    const links = await prisma.portalUserClient.findMany({
-      where: { portalUserId, isActive: true },
-      select: { clientId: true },
-    })
-    const clientIds = links.map((l) => l.clientId)
+    const [links, ownClient] = await Promise.all([
+      prisma.portalUserClient.findMany({
+        where: { portalUserId, isActive: true },
+        select: { clientId: true },
+      }),
+      // The player's individual Client record (created by ensurePlayerClient)
+      prisma.client.findUnique({
+        where: { portalUserId },
+        select: { id: true },
+      }),
+    ])
+
+    // clientIds = team IDs (for PortalUserClient) + own player Client ID (for attendance/events)
+    const clientIds = [
+      ...links.map((l) => l.clientId),
+      ...(ownClient ? [ownClient.id] : []),
+    ]
 
     if (clientIds.length === 0) {
       return res.json({ success: true, data: { totals: {}, gamesPlayed: 0, games: [] } })
