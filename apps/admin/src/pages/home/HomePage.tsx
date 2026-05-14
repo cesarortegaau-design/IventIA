@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query' // v2
 import { Row, Col, Card, Typography, Tag, Space, Button } from 'antd'
 import {
   CalendarOutlined, TeamOutlined, FileTextOutlined, DollarOutlined,
