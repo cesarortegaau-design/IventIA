@@ -115,6 +115,10 @@ export const tournamentApi = {
   getGameEvents: (gameId: string) =>
     apiClient.get(`/iflag/games/${gameId}/events`).then((r) => r.data),
 
+  // FootballGame list for an event (direct I-Flag games)
+  listFootballGames: (eventId: string) =>
+    apiClient.get('/iflag/games', { params: { eventId } }).then((r) => r.data),
+
   // Player Portal Codes
   generatePlayerCodes: (eventId: string, data?: { maxUses?: number; expiresAt?: string }) =>
     apiClient.post(`/events/${eventId}/tournament/player-codes`, data ?? {}).then((r) => r.data),

@@ -1,16 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
 import {
-  App, Button, Table, Card, Row, Col, Tag, Space, Tabs, Empty, Spin, Select, DatePicker,
-  Divider, Typography, Tooltip, message as antMessage,
+  App, Button, Table, Card, Tag, Tabs, Empty, Typography, Badge,
 } from 'antd'
 import {
-  DownloadOutlined, FileExcelOutlined, FilePdfOutlined, CalendarOutlined, TrophyOutlined,
+  FileExcelOutlined, CalendarOutlined, TrophyOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import * as XLSX from 'xlsx'
 import { eventActivitiesApi } from '../../api/eventActivities'
 import { tournamentApi } from '../../api/tournament'
-import { clientsApi } from '../../api/clients'
 import { T } from '../../styles/tokens'
 
 const { Text, Title } = Typography
@@ -19,223 +17,310 @@ interface Props {
   eventId: string
 }
 
+// Unified game record shape used throughout the tab
+interface GameRow {
+  id: string
+  startDate: string | null
+  round: number | null
+  category: string | null
+  homeTeamId: string
+  homeTeamName: string
+  homeScore: number | null
+  visitingTeamId: string
+  visitingTeamName: string
+  visitingScore: number | null
+  source: 'schedule' | 'iflag'
+}
+
 export default function TournamentReportsTab({ eventId }: Props) {
   const { message } = App.useApp()
 
-  // Fetch tournament data
+  // ── Data sources ─────────────────────────────────────────────────────────
+
+  // Source 1: EventActivity GAME records (schedule-based)
   const { data: activitiesData, isLoading: activitiesLoading } = useQuery({
     queryKey: ['tournament-activities', eventId],
     queryFn: () => eventActivitiesApi.list(eventId),
     enabled: !!eventId,
   })
-  const allActivities = activitiesData?.data ?? []
+  const allActivities: any[] = activitiesData?.data ?? []
 
+  // Source 2: FootballGame records (direct I-Flag games, may lack activityId)
+  const { data: footballData, isLoading: footballLoading } = useQuery({
+    queryKey: ['iflag-football-games', eventId],
+    queryFn: () => tournamentApi.listFootballGames(eventId),
+    enabled: !!eventId,
+  })
+  const footballGames: any[] = footballData?.data ?? []
+
+  // Team registrations (for category lookup)
   const { data: teamsData } = useQuery({
     queryKey: ['tournament-teams', eventId],
     queryFn: () => tournamentApi.listTeams(eventId),
     enabled: !!eventId,
   })
-  const teams = teamsData?.data ?? []
+  const teams: any[] = teamsData?.data ?? []
 
-  const { data: clientsData } = useQuery({
-    queryKey: ['clients'],
-    queryFn: () => clientsApi.list(),
-  })
-  const allClients = clientsData?.data ?? []
+  const isLoading = activitiesLoading || footballLoading
 
-  const getTeamName = (teamId: string) => {
-    const client = allClients.find((c: any) => c.id === teamId)
-    return client?.companyName || `${client?.firstName ?? ''} ${client?.lastName ?? ''}`.trim() || teamId
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  const getTeamName = (teamId: string, fallback?: string) => {
+    if (!teamId) return fallback ?? '—'
+    // Check team registrations first (has companyName)
+    const reg = teams.find((t: any) => t.teamClientId === teamId)
+    if (reg?.teamClient) {
+      return reg.teamClient.companyName || `${reg.teamClient.firstName ?? ''} ${reg.teamClient.lastName ?? ''}`.trim()
+    }
+    return fallback ?? teamId
   }
 
-  // Filter GAME activities
-  const games = allActivities.filter((a: any) => a.activityType === 'GAME' && a.matchData)
+  const getTeamCategory = (teamId: string): string | null => {
+    const reg = teams.find((t: any) => t.teamClientId === teamId)
+    return reg?.category ?? null
+  }
 
-  // Group games by round
-  const gamesByRound = games.reduce((acc: Record<number, any[]>, game: any) => {
-    const round = game.matchData?.round ?? 1
-    if (!acc[round]) acc[round] = []
-    acc[round].push(game)
-    return acc
-  }, {})
+  // ── Build unified game list ───────────────────────────────────────────────
 
-  const roundNumbers = Object.keys(gamesByRound)
-    .map(Number)
-    .sort((a, b) => a - b)
+  // Schedule-based games (EventActivity + SportMatchData)
+  const scheduleGames: GameRow[] = allActivities
+    .filter((a: any) => a.activityType === 'GAME' && a.matchData)
+    .map((a: any) => ({
+      id: a.id,
+      startDate: a.startDate,
+      round: a.matchData?.round ?? null,
+      category: a.matchData?.category ?? null,
+      homeTeamId: a.matchData?.homeTeamId,
+      homeTeamName: a.matchData?.homeTeam?.companyName ?? getTeamName(a.matchData?.homeTeamId),
+      homeScore: a.matchData?.homeScore ?? null,
+      visitingTeamId: a.matchData?.visitingTeamId,
+      visitingTeamName: a.matchData?.visitingTeam?.companyName ?? getTeamName(a.matchData?.visitingTeamId),
+      visitingScore: a.matchData?.visitingScore ?? null,
+      source: 'schedule' as const,
+    }))
 
-  // Scoreboard data
-  const scoreboardData = games.map((game: any) => ({
-    id: game.id,
-    title: game.title,
-    startDate: game.startDate,
-    round: game.matchData?.round ?? 1,
-    category: game.matchData?.category,
-    homeTeamId: game.matchData?.homeTeamId,
-    homeTeamName: getTeamName(game.matchData?.homeTeamId),
-    homeScore: game.matchData?.homeScore,
-    visitingTeamId: game.matchData?.visitingTeamId,
-    visitingTeamName: getTeamName(game.matchData?.visitingTeamId),
-    visitingScore: game.matchData?.visitingScore,
-  }))
+  // I-Flag direct games (FootballGame without schedule link, or as score fallback)
+  // Only include games NOT already represented by a schedule game (via activityId)
+  const scheduledActivityIds = new Set(
+    allActivities
+      .filter((a: any) => a.activityType === 'GAME')
+      .map((a: any) => a.id)
+  )
 
-  // Calculate standings
-  const standings = teams.map((team: any) => {
-    const teamGames = scoreboardData.filter(
-      (g: any) => g.homeTeamId === team.teamClientId || g.visitingTeamId === team.teamClientId
-    )
-    let wins = 0, draws = 0, losses = 0, goalsFor = 0, goalsAgainst = 0
+  const iflagGames: GameRow[] = footballGames
+    .filter((fg: any) => !fg.activityId || !scheduledActivityIds.has(fg.activityId))
+    .map((fg: any) => ({
+      id: fg.id,
+      startDate: fg.startedAt ?? fg.createdAt ?? null,
+      round: null,
+      category: getTeamCategory(fg.localTeamId) ?? getTeamCategory(fg.visitingTeamId),
+      homeTeamId: fg.localTeamId,
+      homeTeamName: fg.localTeam?.companyName ?? getTeamName(fg.localTeamId),
+      homeScore: fg.status === 'FINISHED' ? fg.localScore : null,
+      visitingTeamId: fg.visitingTeamId,
+      visitingTeamName: fg.visitingTeam?.companyName ?? getTeamName(fg.visitingTeamId),
+      visitingScore: fg.status === 'FINISHED' ? fg.visitingScore : null,
+      source: 'iflag' as const,
+    }))
 
-    teamGames.forEach((game: any) => {
-      if (game.homeScore === null || game.visitingScore === null) return // Skip unfinished games
-
-      const isHome = game.homeTeamId === team.teamClientId
-      const scored = isHome ? game.homeScore : game.visitingScore
-      const conceded = isHome ? game.visitingScore : game.homeScore
-
-      goalsFor += scored
-      goalsAgainst += conceded
-
-      if (scored > conceded) wins++
-      else if (scored === conceded) draws++
-      else losses++
-    })
-
-    const played = wins + draws + losses
-    const points = wins * 3 + draws
-
-    return {
-      teamId: team.teamClientId,
-      teamName: getTeamName(team.teamClientId),
-      category: team.category,
-      played,
-      wins,
-      draws,
-      losses,
-      goalsFor,
-      goalsAgainst,
-      goalDiff: goalsFor - goalsAgainst,
-      points,
+  // Also: for schedule games without scores yet, pull score from linked FootballGame
+  const footballGameByActivity: Record<string, any> = {}
+  for (const fg of footballGames) {
+    if (fg.activityId) footballGameByActivity[fg.activityId] = fg
+  }
+  const enrichedScheduleGames = scheduleGames.map((g) => {
+    if (g.homeScore !== null) return g
+    const linked = footballGameByActivity[g.id]
+    if (linked?.status === 'FINISHED') {
+      return { ...g, homeScore: linked.localScore, visitingScore: linked.visitingScore }
     }
+    return g
   })
 
-  // Group standings by category
-  const standingsByCategory = standings.reduce((acc: Record<string, any[]>, standing: any) => {
-    if (!acc[standing.category]) acc[standing.category] = []
-    acc[standing.category].push(standing)
+  const allGames: GameRow[] = [...enrichedScheduleGames, ...iflagGames]
+
+  // ── Standings ────────────────────────────────────────────────────────────
+
+  const standingsByCategory: Record<string, any[]> = {}
+
+  if (teams.length > 0) {
+    const finishedGames = allGames.filter((g) => g.homeScore !== null && g.visitingScore !== null)
+    const standings = teams.map((team: any) => {
+      const tid = team.teamClientId
+      const teamGames = finishedGames.filter((g) => g.homeTeamId === tid || g.visitingTeamId === tid)
+      let wins = 0, draws = 0, losses = 0, gf = 0, ga = 0
+      for (const g of teamGames) {
+        const scored = g.homeTeamId === tid ? g.homeScore! : g.visitingScore!
+        const conceded = g.homeTeamId === tid ? g.visitingScore! : g.homeScore!
+        gf += scored; ga += conceded
+        if (scored > conceded) wins++
+        else if (scored === conceded) draws++
+        else losses++
+      }
+      return {
+        teamId: tid,
+        teamName: getTeamName(tid),
+        category: team.category,
+        played: teamGames.length,
+        wins, draws, losses, gf, ga,
+        gd: gf - ga,
+        points: wins * 3 + draws,
+      }
+    })
+    for (const s of standings) {
+      if (!standingsByCategory[s.category]) standingsByCategory[s.category] = []
+      standingsByCategory[s.category].push(s)
+    }
+    for (const cat of Object.keys(standingsByCategory)) {
+      standingsByCategory[cat].sort((a, b) => b.points - a.points || b.gd - a.gd || b.gf - a.gf)
+    }
+  } else {
+    // No team registrations — group directly from game data
+    const allTeamIds = [...new Set(allGames.flatMap((g) => [g.homeTeamId, g.visitingTeamId]))]
+    const finishedGames = allGames.filter((g) => g.homeScore !== null && g.visitingScore !== null)
+    const statsMap: Record<string, any> = {}
+    for (const tid of allTeamIds) {
+      const teamGames = finishedGames.filter((g) => g.homeTeamId === tid || g.visitingTeamId === tid)
+      let wins = 0, draws = 0, losses = 0, gf = 0, ga = 0
+      for (const g of teamGames) {
+        const scored = g.homeTeamId === tid ? g.homeScore! : g.visitingScore!
+        const conceded = g.homeTeamId === tid ? g.visitingScore! : g.homeScore!
+        gf += scored; ga += conceded
+        if (scored > conceded) wins++
+        else if (scored === conceded) draws++
+        else losses++
+      }
+      statsMap[tid] = {
+        teamId: tid,
+        teamName: getTeamName(tid, tid.slice(0, 8)),
+        category: allGames.find((g) => g.homeTeamId === tid || g.visitingTeamId === tid)?.category ?? 'SIN_CAT',
+        played: teamGames.length,
+        wins, draws, losses, gf, ga,
+        gd: gf - ga,
+        points: wins * 3 + draws,
+      }
+    }
+    for (const s of Object.values(statsMap)) {
+      if (!standingsByCategory[s.category]) standingsByCategory[s.category] = []
+      standingsByCategory[s.category].push(s)
+    }
+    for (const cat of Object.keys(standingsByCategory)) {
+      standingsByCategory[cat].sort((a: any, b: any) => b.points - a.points || b.gd - a.gd || b.gf - a.gf)
+    }
+  }
+
+  // ── Group calendar by round ───────────────────────────────────────────────
+
+  const gamesByRound = allGames.reduce((acc: Record<string, GameRow[]>, g) => {
+    const key = g.round != null ? `Jornada ${g.round}` : 'Sin jornada'
+    if (!acc[key]) acc[key] = []
+    acc[key].push(g)
     return acc
   }, {})
 
-  // Sort within each category
-  Object.keys(standingsByCategory).forEach((category) => {
-    standingsByCategory[category].sort((a: any, b: any) => {
-      if (b.points !== a.points) return b.points - a.points
-      if (b.goalDiff !== a.goalDiff) return b.goalDiff - a.goalDiff
-      return b.goalsFor - a.goalsFor
-    })
+  const roundKeys = Object.keys(gamesByRound).sort((a, b) => {
+    const na = parseInt(a.replace(/\D/g, '')) || 999
+    const nb = parseInt(b.replace(/\D/g, '')) || 999
+    return na - nb
   })
 
-  const handleExportCalendarExcel = async () => {
-    try {
-      const rows = games.map((game: any) => ({
-        'Ronda': game.matchData?.round ?? 1,
-        'Fecha': dayjs(game.startDate).format('DD/MM/YYYY HH:mm'),
-        'Categoría': game.matchData?.category,
-        'Equipo Local': getTeamName(game.matchData?.homeTeamId),
-        'Equipo Visitante': getTeamName(game.matchData?.visitingTeamId),
-        'Goles Local': game.matchData?.homeScore ?? '—',
-        'Goles Visitante': game.matchData?.visitingScore ?? '—',
-      }))
+  // ── Export ────────────────────────────────────────────────────────────────
 
-      const worksheet = XLSX.utils.json_to_sheet(rows)
-      const workbook = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Calendario')
-      XLSX.writeFile(workbook, `calendario-torneo-${eventId}.xlsx`)
-      message.success('Calendario exportado')
+  const handleExportExcel = () => {
+    try {
+      const rows = allGames.map((g) => ({
+        'Jornada': g.round ?? '—',
+        'Fecha': g.startDate ? dayjs(g.startDate).format('DD/MM/YYYY HH:mm') : '—',
+        'Categoría': g.category ?? '—',
+        'Local': g.homeTeamName,
+        'Visitante': g.visitingTeamName,
+        'Goles Local': g.homeScore ?? '—',
+        'Goles Visitante': g.visitingScore ?? '—',
+        'Fuente': g.source === 'iflag' ? 'I-Flag' : 'Calendario',
+      }))
+      const ws = XLSX.utils.json_to_sheet(rows)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'Calendario')
+      XLSX.writeFile(wb, `reportes-torneo-${eventId}.xlsx`)
+      message.success('Exportado')
     } catch {
       message.error('Error al exportar')
     }
   }
 
-  // Calendar columns
+  // ── Column definitions ────────────────────────────────────────────────────
+
+  const catColors: Record<string, string> = { FEMENIL: 'pink', VARONIL: 'blue', MIXTO: 'purple', SIN_CAT: 'default' }
+  const catLabels: Record<string, string> = { FEMENIL: 'Femenil', VARONIL: 'Varonil', MIXTO: 'Mixto', SIN_CAT: 'Sin cat.' }
+
   const calendarColumns = [
     {
-      title: 'Ronda',
+      title: 'Jornada',
       dataIndex: 'round',
       key: 'round',
       width: 80,
-      render: (v: number) => <Tag>{v}</Tag>,
+      render: (v: number | null) => v != null ? <Tag>J{v}</Tag> : <Tag color="default">—</Tag>,
     },
     {
       title: 'Fecha',
       dataIndex: 'startDate',
       key: 'startDate',
-      width: 160,
-      render: (v: string) => dayjs(v).format('DD/MM/YYYY HH:mm'),
+      width: 140,
+      render: (v: string | null) => v ? dayjs(v).format('DD/MM/YY HH:mm') : '—',
     },
     {
-      title: 'Categoría',
+      title: 'Cat.',
       dataIndex: 'category',
       key: 'category',
-      width: 100,
-      render: (v: string) => {
-        const colors: Record<string, string> = { FEMENIL: 'pink', VARONIL: 'blue', MIXTO: 'purple' }
-        const labels: Record<string, string> = { FEMENIL: 'Femenil', VARONIL: 'Varonil', MIXTO: 'Mixto' }
-        return <Tag color={colors[v]}>{labels[v]}</Tag>
-      },
+      width: 90,
+      render: (v: string | null) => v ? <Tag color={catColors[v] ?? 'default'}>{catLabels[v] ?? v}</Tag> : '—',
     },
     {
       title: 'Partido',
       key: 'match',
-      render: (_: any, record: any) => (
-        <span>
-          <strong>{record.homeTeamName}</strong> vs <strong>{record.visitingTeamName}</strong>
-        </span>
+      render: (_: any, r: GameRow) => (
+        <span><strong>{r.homeTeamName}</strong> <Text type="secondary">vs</Text> <strong>{r.visitingTeamName}</strong></span>
       ),
     },
     {
       title: 'Resultado',
       key: 'result',
-      width: 120,
-      render: (_: any, record: any) => {
-        if (record.homeScore === null || record.visitingScore === null) {
-          return <span style={{ color: T.textMuted }}>Pendiente</span>
+      width: 110,
+      render: (_: any, r: GameRow) => {
+        if (r.homeScore === null || r.visitingScore === null) {
+          return <Text type="secondary">Pendiente</Text>
         }
-        const winner =
-          record.homeScore > record.visitingScore ? 'home' :
-          record.visitingScore > record.homeScore ? 'away' : 'draw'
-
+        const winner = r.homeScore > r.visitingScore ? 'home' : r.visitingScore > r.homeScore ? 'away' : 'draw'
         return (
-          <span style={{
-            fontSize: 14,
-            fontWeight: 600,
-            color: winner === 'draw' ? T.textMuted : T.text,
-          }}>
-            {record.homeScore} - {record.visitingScore}
+          <span style={{ fontWeight: 700, fontSize: 14, color: winner === 'draw' ? T.textMuted : T.text }}>
+            {r.homeScore} – {r.visitingScore}
           </span>
         )
       },
     },
-  ]
-
-  // Standings columns
-  const standingsColumns = [
-    { title: 'Pos', dataIndex: 'pos', key: 'pos', width: 50, render: (_: any, __: any, idx: number) => idx + 1 },
-    { title: 'Equipo', dataIndex: 'teamName', key: 'teamName' },
-    { title: 'PJ', dataIndex: 'played', key: 'played', width: 50 },
-    { title: 'G', dataIndex: 'wins', key: 'wins', width: 50 },
-    { title: 'E', dataIndex: 'draws', key: 'draws', width: 50 },
-    { title: 'P', dataIndex: 'losses', key: 'losses', width: 50 },
-    { title: 'GF', dataIndex: 'goalsFor', key: 'goalsFor', width: 50 },
-    { title: 'GC', dataIndex: 'goalsAgainst', key: 'goalsAgainst', width: 50 },
-    { title: 'DG', dataIndex: 'goalDiff', key: 'goalDiff', width: 50 },
     {
-      title: 'Pts',
-      dataIndex: 'points',
-      key: 'points',
-      width: 60,
-      render: (v: number) => <strong style={{ color: T.navy }}>{v}</strong>,
+      title: 'Fuente',
+      dataIndex: 'source',
+      key: 'source',
+      width: 90,
+      render: (v: string) => <Tag color={v === 'iflag' ? 'green' : 'blue'}>{v === 'iflag' ? 'I-Flag' : 'Calendario'}</Tag>,
     },
   ]
+
+  const standingsColumns = [
+    { title: '#', key: 'pos', width: 40, render: (_: any, __: any, i: number) => i + 1 },
+    { title: 'Equipo', dataIndex: 'teamName', key: 'teamName' },
+    { title: 'PJ', dataIndex: 'played', key: 'played', width: 45 },
+    { title: 'G',  dataIndex: 'wins',   key: 'wins',   width: 45, render: (v: number) => <Text style={{ color: '#52c41a' }}>{v}</Text> },
+    { title: 'E',  dataIndex: 'draws',  key: 'draws',  width: 45 },
+    { title: 'P',  dataIndex: 'losses', key: 'losses', width: 45, render: (v: number) => <Text style={{ color: '#ff4d4f' }}>{v}</Text> },
+    { title: 'GF', dataIndex: 'gf',     key: 'gf',     width: 45 },
+    { title: 'GC', dataIndex: 'ga',     key: 'ga',     width: 45 },
+    { title: 'DG', dataIndex: 'gd',     key: 'gd',     width: 45, render: (v: number) => <span style={{ color: v >= 0 ? '#52c41a' : '#ff4d4f' }}>{v > 0 ? '+' : ''}{v}</span> },
+    { title: 'Pts', dataIndex: 'points', key: 'points', width: 50, render: (v: number) => <strong style={{ color: T.navy }}>{v}</strong> },
+  ]
+
+  const finishedCount = allGames.filter((g) => g.homeScore !== null).length
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -243,32 +328,29 @@ export default function TournamentReportsTab({ eventId }: Props) {
         items={[
           {
             key: 'calendar',
-            label: <span><CalendarOutlined /> Calendario de Juegos ({games.length})</span>,
+            label: <span><CalendarOutlined /> Calendario de Juegos ({allGames.length})</span>,
             children: (
-              <Card loading={activitiesLoading}>
+              <Card loading={isLoading}>
                 <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    {games.length === 0 && <Text type="secondary">No hay juegos programados</Text>}
-                  </div>
-                  {games.length > 0 && (
-                    <Button icon={<FileExcelOutlined />} onClick={handleExportCalendarExcel}>
-                      Descargar Excel
-                    </Button>
+                  <Text type="secondary" style={{ fontSize: 13 }}>
+                    {allGames.length} partido{allGames.length !== 1 ? 's' : ''} totales
+                    {iflagGames.length > 0 && scheduleGames.length > 0 && ` (${scheduleGames.length} del calendario, ${iflagGames.length} de I-Flag)`}
+                    {iflagGames.length > 0 && scheduleGames.length === 0 && ` — fuente: I-Flag`}
+                  </Text>
+                  {allGames.length > 0 && (
+                    <Button icon={<FileExcelOutlined />} size="small" onClick={handleExportExcel}>Excel</Button>
                   )}
                 </div>
-
-                {roundNumbers.length === 0 ? (
-                  <Empty description="Sin juegos programados" />
+                {allGames.length === 0 ? (
+                  <Empty description="Sin partidos. Genera el calendario o inicia partidos en I-Flag." />
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    {roundNumbers.map((round) => (
-                      <div key={round}>
-                        <Title level={5} style={{ marginBottom: 12, color: T.navy }}>
-                          Ronda {round}
-                        </Title>
+                    {roundKeys.map((rk) => (
+                      <div key={rk}>
+                        <Title level={5} style={{ marginBottom: 10, color: T.navy }}>{rk}</Title>
                         <Table
                           columns={calendarColumns}
-                          dataSource={gamesByRound[round]}
+                          dataSource={gamesByRound[rk]}
                           rowKey="id"
                           pagination={false}
                           size="small"
@@ -285,38 +367,26 @@ export default function TournamentReportsTab({ eventId }: Props) {
             key: 'standings',
             label: <span><TrophyOutlined /> Posiciones</span>,
             children: (
-              <Card loading={activitiesLoading}>
+              <Card loading={isLoading}>
                 {Object.keys(standingsByCategory).length === 0 ? (
-                  <Empty description="Sin datos de posiciones" />
+                  <Empty description="Sin datos de posiciones. Se calculan a partir de partidos finalizados." />
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-                    {Object.entries(standingsByCategory).map(([category, categoryStandings]: [string, any]) => {
-                      const categoryLabels: Record<string, string> = {
-                        FEMENIL: 'Femenil',
-                        VARONIL: 'Varonil',
-                        MIXTO: 'Mixto',
-                      }
-                      const categoryColors: Record<string, string> = {
-                        FEMENIL: 'pink',
-                        VARONIL: 'blue',
-                        MIXTO: 'purple',
-                      }
-                      return (
-                        <div key={category}>
-                          <Title level={5} style={{ marginBottom: 12, color: T.navy }}>
-                            <Tag color={categoryColors[category]}>{categoryLabels[category]}</Tag>
-                          </Title>
-                          <Table
-                            columns={standingsColumns}
-                            dataSource={categoryStandings}
-                            rowKey="teamId"
-                            pagination={false}
-                            size="small"
-                            scroll={{ x: 'max-content' }}
-                          />
-                        </div>
-                      )
-                    })}
+                    {Object.entries(standingsByCategory).map(([cat, rows]: [string, any]) => (
+                      <div key={cat}>
+                        <Title level={5} style={{ marginBottom: 10, color: T.navy }}>
+                          <Tag color={catColors[cat] ?? 'default'}>{catLabels[cat] ?? cat}</Tag>
+                        </Title>
+                        <Table
+                          columns={standingsColumns}
+                          dataSource={rows}
+                          rowKey="teamId"
+                          pagination={false}
+                          size="small"
+                          scroll={{ x: 'max-content' }}
+                        />
+                      </div>
+                    ))}
                   </div>
                 )}
               </Card>
@@ -324,15 +394,15 @@ export default function TournamentReportsTab({ eventId }: Props) {
           },
           {
             key: 'results',
-            label: <span>Resultados ({games.filter((g: any) => g.matchData?.homeScore !== null).length})</span>,
+            label: <span>Resultados ({finishedCount})</span>,
             children: (
-              <Card loading={activitiesLoading}>
-                {games.length === 0 ? (
-                  <Empty description="Sin resultados" />
+              <Card loading={isLoading}>
+                {finishedCount === 0 ? (
+                  <Empty description="Sin resultados finalizados aún" />
                 ) : (
                   <Table
                     columns={calendarColumns}
-                    dataSource={games.filter((g: any) => g.matchData?.homeScore !== null)}
+                    dataSource={allGames.filter((g) => g.homeScore !== null)}
                     rowKey="id"
                     pagination={{ pageSize: 20 }}
                     size="small"
