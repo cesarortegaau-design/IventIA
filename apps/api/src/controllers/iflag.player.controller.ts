@@ -227,9 +227,28 @@ async function ensurePlayerClient(
   teamClientId: string,
   eventId: string,
 ) {
+  // Fetch latest portal user data (photo + number) for syncing
+  const portalUser = await prisma.portalUser.findUnique({
+    where: { id: portalUserId },
+    select: { photoUrl: true, playerNumber: true },
+  })
+  const latestPhotoUrl = (portalUser as any)?.photoUrl ?? null
+  const latestPlayerNumber = (portalUser as any)?.playerNumber ?? null
+
   // Check if Client already exists for this portal user
   const existing = await prisma.client.findUnique({ where: { portalUserId } })
-  const playerClientId = existing?.id ?? (await (async () => {
+
+  let playerClientId: string
+  if (existing) {
+    playerClientId = existing.id
+    // Sync latest photo and number to the existing Client
+    const syncData: any = {}
+    if (latestPhotoUrl) syncData.logoUrl = latestPhotoUrl
+    if (latestPlayerNumber) syncData.playerNumber = latestPlayerNumber
+    if (Object.keys(syncData).length > 0) {
+      await prisma.client.update({ where: { id: existing.id }, data: syncData }).catch(() => {})
+    }
+  } else {
     const created = await prisma.client.create({
       data: {
         tenantId,
@@ -239,10 +258,12 @@ async function ensurePlayerClient(
         email: email.toLowerCase(),
         phone: phone ?? null,
         portalUserId,
+        logoUrl: latestPhotoUrl,
+        playerNumber: latestPlayerNumber,
       },
     })
-    return created.id
-  })())
+    playerClientId = created.id
+  }
 
   // Ensure JUGADOR relation from team → player
   await prisma.clientRelation.upsert({
