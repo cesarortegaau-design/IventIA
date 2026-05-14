@@ -120,7 +120,7 @@ export default function HomePage() {
   const totalClients    = clients.filter((c: any) => c.isActive).length
   const upcomingEvents  = events
     .filter((e: any) => ['DRAFT', 'CONFIRMED'].includes(e.status))
-    .sort((a: any, b: any) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
+    .sort((a: any, b: any) => new Date(a.eventStart ?? a.setupStart ?? 0).getTime() - new Date(b.eventStart ?? b.setupStart ?? 0).getTime())
     .slice(0, 5)
 
   const totalOrders = events.reduce((sum: number, e: any) => sum + (e._count?.orders ?? 0), 0)
@@ -267,9 +267,20 @@ export default function HomePage() {
                   <Space direction="vertical" size={2}>
                     <Text strong style={{ color: NAVY, fontSize: 14 }}>{event.name}</Text>
                     <Text style={{ color: '#94a3b8', fontSize: 12 }}>
-                      {new Date(event.startDate).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
-                      {event.endDate ? ` → ${new Date(event.endDate).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}` : ''}
+                      {event.eventStart
+                        ? new Date(event.eventStart).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
+                        : event.setupStart
+                          ? new Date(event.setupStart).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
+                          : '—'}
+                      {(event.eventEnd ?? event.teardownEnd)
+                        ? ` → ${new Date(event.eventEnd ?? event.teardownEnd).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}`
+                        : ''}
                     </Text>
+                    {event.primaryClient && (
+                      <Text style={{ color: '#64748b', fontSize: 11 }}>
+                        {event.primaryClient.companyName || `${event.primaryClient.firstName ?? ''} ${event.primaryClient.lastName ?? ''}`.trim()}
+                      </Text>
+                    )}
                   </Space>
                   <Space>
                     <Tag color={STATUS_COLOR[event.status] ?? 'default'}>
