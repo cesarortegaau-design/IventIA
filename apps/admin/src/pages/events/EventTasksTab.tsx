@@ -129,7 +129,10 @@ export default function EventTasksTab({ eventId, event }: EventTasksTabProps) {
     return (tasks as any[]).filter(t => {
       if (filterStatus && t.status !== filterStatus) return false
       if (filterPriority && t.priority !== filterPriority) return false
-      if (filterAssignee && t.assignedToId !== filterAssignee) return false
+      if (filterAssignee) {
+        const assigneeIds = t.assignees?.map((a: any) => a.userId) ?? (t.assignedToId ? [t.assignedToId] : [])
+        if (!assigneeIds.includes(filterAssignee)) return false
+      }
       if (search) {
         const q = search.toLowerCase()
         if (!t.title?.toLowerCase().includes(q) && !t.description?.toLowerCase().includes(q)) return false

@@ -21,7 +21,7 @@ export function TaskFormModal({ open, task, onCancel, onSubmit, isLoading, users
         progress: task.progress || 0,
         startDate: task.startDate ? dayjs(task.startDate) : null,
         endDate: task.endDate ? dayjs(task.endDate) : null,
-        assignedToId: task.assignedToId,
+        assignedToIds: task.assignees?.map((a: any) => a.userId) ?? (task.assignedToId ? [task.assignedToId] : []),
         eventId: task.eventId ?? initialEventId,
         clientId: task.clientId,
         departmentIds: task.departments?.map((d: any) => d.departmentId) || [],
@@ -112,10 +112,11 @@ export function TaskFormModal({ open, task, onCancel, onSubmit, isLoading, users
           <Slider marks={{ 0: '0%', 50: '50%', 100: '100%' }} />
         </Form.Item>
 
-        {/* Assigned User */}
-        <Form.Item name="assignedToId" label="Asignar a">
+        {/* Assigned Users */}
+        <Form.Item name="assignedToIds" label="Asignar a">
           <Select
-            placeholder="Seleccionar usuario"
+            mode="multiple"
+            placeholder="Seleccionar usuarios"
             allowClear
             showSearch
             optionFilterProp="label"

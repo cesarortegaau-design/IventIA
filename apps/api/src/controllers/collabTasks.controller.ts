@@ -20,13 +20,17 @@ const createCollabTaskSchema = z.object({
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).default('MEDIUM'),
   progress: z.coerce.number().int().min(0).max(100).default(0),
   assignedToId: z.string().uuid().optional().nullable(),
+  assignedToIds: z.array(z.string().uuid()).optional().nullable(),
   eventId: z.string().uuid().optional().nullable(),
   clientId: z.string().uuid().optional().nullable(),
   departmentIds: z.array(z.string().uuid()).default([]),
   orderIds: z.array(z.string().uuid()).default([]),
 })
 
-const updateCollabTaskSchema = createCollabTaskSchema.partial()
+const updateCollabTaskSchema = createCollabTaskSchema.partial().extend({
+  departmentIds: z.array(z.string().uuid()).nullable().optional(),
+  orderIds: z.array(z.string().uuid()).nullable().optional(),
+})
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Include Objects
@@ -34,6 +38,7 @@ const updateCollabTaskSchema = createCollabTaskSchema.partial()
 
 const COLLAB_TASK_INCLUDE = {
   assignedTo: { select: { id: true, firstName: true, lastName: true, phone: true, email: true } },
+  assignees: { include: { user: { select: { id: true, firstName: true, lastName: true, phone: true, email: true } } } },
   createdBy: { select: { id: true, firstName: true, lastName: true } },
   event: { select: { id: true, name: true, code: true } },
   client: { select: { id: true, companyName: true, firstName: true, lastName: true } },
@@ -77,15 +82,14 @@ async function notifyCollabTask(
       // Collect recipients
       const recipients = new Map<string, { email?: string; phone?: string; firstName: string; lastName: string }>()
 
-      // Add assigned user if any
-      if (task.assignedToId) {
-        const user = await prisma.user.findUnique({
-          where: { id: task.assignedToId },
+      // Add all assigned users (multi-assignee)
+      const assigneeUserIds: string[] = task.assignees?.map((a: any) => a.userId) ?? (task.assignedToId ? [task.assignedToId] : [])
+      if (assigneeUserIds.length > 0) {
+        const users = await prisma.user.findMany({
+          where: { id: { in: assigneeUserIds } },
           select: { id: true, firstName: true, lastName: true, email: true, phone: true },
         })
-        if (user) {
-          recipients.set(user.id, user)
-        }
+        users.forEach(u => recipients.set(u.id, u))
       }
 
       // Add all users in assigned departments
@@ -192,6 +196,12 @@ export async function createCollabTask(req: Request, res: Response, next: NextFu
 
     const validated = createCollabTaskSchema.parse(req.body)
 
+    // Resolve assignee ids: prefer assignedToIds array, fall back to single assignedToId
+    const assigneeIds = validated.assignedToIds?.length
+      ? validated.assignedToIds
+      : (validated.assignedToId ? [validated.assignedToId] : [])
+    const primaryAssigneeId = assigneeIds[0] ?? null
+
     const task = await prisma.$transaction(async tx => {
       // Create task
       const newTask = await tx.collabTask.create({
@@ -204,12 +214,20 @@ export async function createCollabTask(req: Request, res: Response, next: NextFu
           status: validated.status,
           priority: validated.priority,
           progress: validated.progress,
-          assignedToId: validated.assignedToId,
+          assignedToId: primaryAssigneeId,
           createdById: userId,
           eventId: validated.eventId,
           clientId: validated.clientId,
         },
       })
+
+      // Create assignee links
+      if (assigneeIds.length > 0) {
+        await tx.collabTaskAssignee.createMany({
+          data: assigneeIds.map(uid => ({ taskId: newTask.id, userId: uid })),
+          skipDuplicates: true,
+        })
+      }
 
       // Create department links
       if (validated.departmentIds.length > 0) {
@@ -291,6 +309,15 @@ export async function updateCollabTask(req: Request, res: Response, next: NextFu
 
     if (!existingTask) throw new AppError(404, 'TASK_NOT_FOUND', 'Task not found')
 
+    // Resolve assignee ids: prefer assignedToIds array, fall back to single assignedToId
+    const hasAssigneeUpdate = validated.assignedToIds !== undefined || validated.assignedToId !== undefined
+    const assigneeIds = validated.assignedToIds?.length
+      ? validated.assignedToIds
+      : (validated.assignedToId ? [validated.assignedToId] : (validated.assignedToIds === null ? [] : undefined))
+    const primaryAssigneeId = assigneeIds !== undefined
+      ? (assigneeIds.length > 0 ? assigneeIds[0] : null)
+      : undefined
+
     const updatedTask = await prisma.$transaction(async tx => {
       // Update task
       const updated = await tx.collabTask.update({
@@ -303,35 +330,42 @@ export async function updateCollabTask(req: Request, res: Response, next: NextFu
           status: validated.status,
           priority: validated.priority,
           progress: validated.progress,
-          assignedToId: validated.assignedToId,
+          assignedToId: primaryAssigneeId,
           eventId: validated.eventId,
           clientId: validated.clientId,
           completedAt: validated.status === 'DONE' && !existingTask.completedAt ? new Date() : undefined,
         },
       })
 
-      // Update department links if provided
-      if (validated.departmentIds) {
-        await tx.collabTaskDepartment.deleteMany({ where: { taskId } })
-        if (validated.departmentIds.length > 0) {
-          await tx.collabTaskDepartment.createMany({
-            data: validated.departmentIds.map(deptId => ({
-              taskId,
-              departmentId: deptId,
-            })),
+      // Update assignee links if provided
+      if (assigneeIds !== undefined) {
+        await tx.collabTaskAssignee.deleteMany({ where: { taskId } })
+        if (assigneeIds.length > 0) {
+          await tx.collabTaskAssignee.createMany({
+            data: assigneeIds.map(uid => ({ taskId, userId: uid })),
+            skipDuplicates: true,
           })
         }
       }
 
-      // Update order links if provided
-      if (validated.orderIds) {
+      // Update department links if provided (null or array = reset)
+      const deptIds = validated.departmentIds
+      if (deptIds !== undefined) {
+        await tx.collabTaskDepartment.deleteMany({ where: { taskId } })
+        if (deptIds && deptIds.length > 0) {
+          await tx.collabTaskDepartment.createMany({
+            data: deptIds.map(deptId => ({ taskId, departmentId: deptId })),
+          })
+        }
+      }
+
+      // Update order links if provided (null or array = reset)
+      const oIds = validated.orderIds
+      if (oIds !== undefined) {
         await tx.collabTaskOrder.deleteMany({ where: { taskId } })
-        if (validated.orderIds.length > 0) {
+        if (oIds && oIds.length > 0) {
           await tx.collabTaskOrder.createMany({
-            data: validated.orderIds.map(orderId => ({
-              taskId,
-              orderId,
-            })),
+            data: oIds.map(orderId => ({ taskId, orderId })),
           })
         }
       }
@@ -348,8 +382,8 @@ export async function updateCollabTask(req: Request, res: Response, next: NextFu
     // Audit
     await auditService.log(tenantId, userId, 'CollabTask', taskId, 'UPDATE', existingTask, updatedTask, req?.ip)
 
-    // Notify if assigned user changed
-    if (validated.assignedToId && validated.assignedToId !== existingTask.assignedToId) {
+    // Notify if assignees changed
+    if (assigneeIds !== undefined && assigneeIds.length > 0) {
       await notifyCollabTask('assigned', fullTask, req)
     }
 

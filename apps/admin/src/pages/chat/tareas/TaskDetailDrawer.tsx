@@ -103,12 +103,19 @@ export function TaskDetailDrawer({ task, isLoading, statusConfig, priorityConfig
                   </Descriptions.Item>
                 )}
 
-                {task.assignedTo && (
+                {(task.assignees?.length > 0 || task.assignedTo) && (
                   <Descriptions.Item label="Asignado a">
-                    <Space>
-                      <Avatar size={24} icon={<Text>👤</Text>} style={{ background: '#4A90E2' }} />
-                      <Text>{task.assignedTo.firstName} {task.assignedTo.lastName}</Text>
-                      {task.assignedTo.email && <Text style={{ color: '#94a3b8' }}>({task.assignedTo.email})</Text>}
+                    <Space direction="vertical" size={4}>
+                      {(task.assignees?.length > 0
+                        ? task.assignees.map((a: any) => a.user)
+                        : [task.assignedTo]
+                      ).map((u: any) => u && (
+                        <Space key={u.id}>
+                          <Avatar size={24} icon={<Text>👤</Text>} style={{ background: '#4A90E2' }} />
+                          <Text>{u.firstName} {u.lastName}</Text>
+                          {u.email && <Text style={{ color: '#94a3b8' }}>({u.email})</Text>}
+                        </Space>
+                      ))}
                     </Space>
                   </Descriptions.Item>
                 )}

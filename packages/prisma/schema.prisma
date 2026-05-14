@@ -155,6 +155,7 @@ model User {
   tenant              Tenant                       @relation(fields: [tenantId], references: [id])
   managedWarehouses   Warehouse[]
   assignedCollabTasks CollabTask[]                 @relation("CollabTaskAssignee")
+  collabTaskAssignees CollabTaskAssignee[]         @relation("CollabTaskAssignees")
   createdCollabTasks  CollabTask[]                 @relation("CollabTaskCreator")
   collabTaskDocUploads CollabTaskDocument[]        @relation("CollabTaskDocUploader")
   collabTaskComments  CollabTaskComment[]          @relation("CollabTaskCommentAuthor")
@@ -2354,6 +2355,7 @@ model CollabTask {
   event        Event?                  @relation(fields: [eventId], references: [id])
   client       Client?                 @relation(fields: [clientId], references: [id])
   departments  CollabTaskDepartment[]
+  assignees    CollabTaskAssignee[]
   orders       CollabTaskOrder[]
   documents    CollabTaskDocument[]
   comments     CollabTaskComment[]
@@ -2362,6 +2364,16 @@ model CollabTask {
   @@index([tenantId, status])
   @@index([tenantId, assignedToId, status])
   @@map("collab_tasks")
+}
+
+model CollabTaskAssignee {
+  taskId String     @map("task_id")
+  userId String     @map("user_id")
+  task   CollabTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user   User       @relation("CollabTaskAssignees", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
+  @@map("collab_task_assignees")
 }
 
 model CollabTaskDepartment {
