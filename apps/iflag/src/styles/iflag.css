@@ -38,11 +38,11 @@ html, body {
 .scoreboard {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
-  padding: 10px 14px;
+  padding: 6px 12px;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   z-index: 10;
 }
 
@@ -73,7 +73,7 @@ html, body {
 
 .score-number {
   font-family: 'Bebas Neue', 'Inter', sans-serif;
-  font-size: 46px;
+  font-size: 36px;
   line-height: 1;
   color: var(--text);
   letter-spacing: 0.02em;
@@ -99,7 +99,7 @@ html, body {
 
 .score-separator {
   font-family: 'Bebas Neue', 'Inter', sans-serif;
-  font-size: 40px;
+  font-size: 30px;
   color: var(--text-muted);
   line-height: 1;
 }

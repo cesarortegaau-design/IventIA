@@ -627,11 +627,11 @@ export default function GamePage() {
       {/* Possession bar */}
       {!isFinished && !isHalftime && (
         <div style={{
-          background: 'rgba(0,230,118,0.08)', borderBottom: '2px solid var(--green)',
-          padding: '5px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, flexShrink: 0,
+          background: 'rgba(0,230,118,0.08)', borderBottom: '1px solid var(--green)',
+          padding: '3px 14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexShrink: 0,
         }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            🏈 Posesión: <TeamTag team={offenseTeam} size={20} />
+          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            🏈 <TeamTag team={offenseTeam} size={18} />
           </span>
         </div>
       )}
@@ -658,7 +658,7 @@ export default function GamePage() {
 
             {/* Panel 1 — Timer (large) + Down */}
             <div className="swipe-panel">
-              <div style={{ padding: '8px 12px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+              <div style={{ padding: '4px 12px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
 
                 {/* Half label */}
                 <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700 }}>
@@ -671,7 +671,7 @@ export default function GamePage() {
                   total={HALF_DURATION}
                   running={timerRunning}
                   warning={overTime}
-                  size={240}
+                  size={190}
                   onScrub={!isSpectator && !isHalftime ? (s) => setLocalSeconds(s) : undefined}
                   onScrubEnd={!isSpectator && !isHalftime ? (s) => timerSetMutation.mutate(s) : undefined}
                 />
@@ -680,15 +680,15 @@ export default function GamePage() {
                 {!isSpectator && !isHalftime && (
                   <div style={{ display: 'flex', gap: 8, width: '100%' }}>
                     {timerRunning ? (
-                      <button className="timer-btn stop" style={{ flex: 2, padding: '14px 0', fontSize: 16 }} onClick={() => timerStopMutation.mutate()} disabled={timerStopMutation.isPending}>
+                      <button className="timer-btn stop" style={{ flex: 2, padding: '10px 0', fontSize: 15 }} onClick={() => timerStopMutation.mutate()} disabled={timerStopMutation.isPending}>
                         <PauseCircleOutlined style={{ marginRight: 5 }} /> Detener
                       </button>
                     ) : (
-                      <button className="timer-btn start" style={{ flex: 2, padding: '14px 0', fontSize: 16 }} onClick={() => timerStartMutation.mutate()} disabled={timerStartMutation.isPending}>
+                      <button className="timer-btn start" style={{ flex: 2, padding: '10px 0', fontSize: 15 }} onClick={() => timerStartMutation.mutate()} disabled={timerStartMutation.isPending}>
                         <PlayCircleOutlined style={{ marginRight: 5 }} /> Iniciar
                       </button>
                     )}
-                    <button className="timer-btn reset" style={{ flex: 1, padding: '14px 0', fontSize: 14 }} onClick={() => timerResetMutation.mutate()} disabled={timerResetMutation.isPending}>
+                    <button className="timer-btn reset" style={{ flex: 1, padding: '10px 0', fontSize: 14 }} onClick={() => timerResetMutation.mutate()} disabled={timerResetMutation.isPending}>
                       Reset
                     </button>
                   </div>
@@ -749,7 +749,7 @@ export default function GamePage() {
 
               {/* Timeout strip — always visible on Panel 1 */}
               {!isHalftime && (
-                <div style={{ width: '100%', padding: '6px 4px 0' }}>
+                <div style={{ width: '100%', padding: '4px 4px 0' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface2)', borderRadius: 10, padding: '7px 12px', border: '1px solid var(--border)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                       {[1, 2].map(i => (
@@ -771,11 +771,11 @@ export default function GamePage() {
               )}
 
               {!isSpectator && (
-                <div style={{ padding: '6px 12px 0' }}>
+                <div style={{ padding: '4px 12px 0' }}>
                   <button
                     onClick={() => goToPanel(1)}
                     style={{
-                      width: '100%', padding: '10px 0',
+                      width: '100%', padding: '8px 0',
                       background: 'var(--surface2)', border: '1px solid var(--border)',
                       borderRadius: 10, cursor: 'pointer',
                       fontSize: 13, fontWeight: 700, color: 'var(--text-muted)',
