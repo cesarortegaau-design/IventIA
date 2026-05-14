@@ -14,6 +14,8 @@ import {
   unregisterTeam,
   getTeamPlayers,
   generateTournamentSchedule,
+  generatePlayerCodes,
+  listPlayerCodes,
 } from '../controllers/tournament.controller'
 
 const router = Router({ mergeParams: true })
@@ -40,5 +42,9 @@ router.get('/teams/:teamId/players', requirePrivilege(PRIVILEGES.EVENT_VIEW), ge
 
 // Schedule Generation
 router.post('/generate-schedule', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), generateTournamentSchedule)
+
+// Player Portal Codes
+router.get('/player-codes', requirePrivilege(PRIVILEGES.EVENT_VIEW), listPlayerCodes)
+router.post('/player-codes', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), generatePlayerCodes)
 
 export default router

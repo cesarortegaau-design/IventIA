@@ -110,4 +110,10 @@ export const tournamentApi = {
   // I-Flag schedule (uses /iflag/schedule endpoint)
   listIFlagGames: (eventId: string) =>
     apiClient.get('/iflag/schedule', { params: { eventId } }).then((r) => r.data),
+
+  // Player Portal Codes
+  generatePlayerCodes: (eventId: string, data?: { maxUses?: number; expiresAt?: string }) =>
+    apiClient.post(`/events/${eventId}/tournament/player-codes`, data ?? {}).then((r) => r.data),
+  listPlayerCodes: (eventId: string) =>
+    apiClient.get(`/events/${eventId}/tournament/player-codes`).then((r) => r.data),
 }

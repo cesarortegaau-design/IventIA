@@ -445,3 +445,90 @@ export async function generateTournamentSchedule(req: Request, res: Response, ne
     })
   } catch (err) { next(err) }
 }
+
+// ── Player Codes (for player portal signup) ───────────────────────────────────
+
+function generateCode(length = 8): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  let code = ''
+  for (let i = 0; i < length; i++) code += chars[Math.floor(Math.random() * chars.length)]
+  return code
+}
+
+export async function generatePlayerCodes(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { eventId } = req.params
+    const tenantId = req.user!.tenantId
+
+    const schema = z.object({
+      maxUses: z.number().int().min(1).default(50),
+      expiresAt: z.string().datetime().optional(),
+    })
+    const { maxUses, expiresAt } = schema.parse(req.body)
+
+    const event = await prisma.event.findFirst({ where: { id: eventId, tenantId } })
+    if (!event) throw new AppError(404, 'NOT_FOUND', 'Evento no encontrado')
+
+    const registrations = await prisma.teamEventRegistration.findMany({ where: { eventId } })
+    if (registrations.length === 0) throw new AppError(400, 'NO_TEAMS', 'No hay equipos registrados en el torneo')
+
+    let created = 0
+    for (const reg of registrations) {
+      const existing = await prisma.portalAccessCode.findFirst({
+        where: { eventId, clientId: reg.teamClientId, category: reg.category } as any,
+      })
+      if (existing) continue
+
+      let code = generateCode()
+      while (await prisma.portalAccessCode.findUnique({ where: { code } })) code = generateCode()
+
+      await prisma.portalAccessCode.create({
+        data: {
+          tenantId,
+          eventId,
+          code,
+          clientId: reg.teamClientId,
+          category: reg.category,
+          maxUses,
+          expiresAt: expiresAt ? new Date(expiresAt) : null,
+          createdById: req.user!.userId,
+        } as any,
+      })
+      created++
+    }
+
+    const allCodes = await prisma.portalAccessCode.findMany({
+      where: { eventId, tenantId, category: { not: null } } as any,
+      include: {
+        client: { select: { id: true, companyName: true } },
+        usages: { select: { id: true } },
+      },
+      orderBy: [{ category: 'asc' }, { createdAt: 'asc' }],
+    })
+
+    res.status(201).json({ success: true, data: allCodes, meta: { created } })
+  } catch (err) { next(err) }
+}
+
+export async function listPlayerCodes(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { eventId } = req.params
+    const tenantId = req.user!.tenantId
+
+    const event = await prisma.event.findFirst({ where: { id: eventId, tenantId } })
+    if (!event) throw new AppError(404, 'NOT_FOUND', 'Evento no encontrado')
+
+    const codes = await prisma.portalAccessCode.findMany({
+      where: { eventId, tenantId, category: { not: null } } as any,
+      include: {
+        client: { select: { id: true, companyName: true } },
+        usages: {
+          include: { portalUser: { select: { id: true, email: true, firstName: true, lastName: true } } },
+        },
+      },
+      orderBy: [{ category: 'asc' }, { createdAt: 'asc' }],
+    })
+
+    res.json({ success: true, data: codes })
+  } catch (err) { next(err) }
+}

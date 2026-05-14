@@ -3,11 +3,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   App, Button, Form, Input, InputNumber, Modal, Popconfirm, Select,
   Space, Table, Tabs, Typography, Divider, Card, Row, Col, DatePicker,
-  Empty, Badge, Tooltip,
+  Empty, Badge, Tooltip, Switch,
 } from 'antd'
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, CalendarOutlined, TrophyOutlined,
   TeamOutlined, EnvironmentOutlined, SettingOutlined, BarChartOutlined, MobileOutlined,
+  KeyOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { tournamentApi } from '../../api/tournament'
@@ -129,6 +130,7 @@ export default function TournamentTab({ eventId }: Props) {
 
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false)
   const [scheduleForm] = Form.useForm()
+  const [codesModalOpen, setCodesModalOpen] = useState(false)
 
   // ── Queries ──────────────────────────────────────────────────────────────
   const { data: configData, isLoading: configLoading } = useQuery({
@@ -233,6 +235,35 @@ export default function TournamentTab({ eventId }: Props) {
     onError: (err: any) => message.error(err.response?.data?.error?.message || 'Error al generar calendario'),
   })
 
+  const togglePortalMutation = useMutation({
+    mutationFn: (enabled: boolean) =>
+      tournamentApi.upsertConfig(eventId, {
+        settings: { ...((config?.settings as any) ?? {}), portalEnabled: enabled },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tournament-config', eventId] })
+      message.success('Portal actualizado')
+    },
+    onError: () => message.error('Error al actualizar portal'),
+  })
+
+  const generateCodesMutation = useMutation({
+    mutationFn: () => tournamentApi.generatePlayerCodes(eventId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['player-codes', eventId] })
+      message.success('Códigos generados')
+      setCodesModalOpen(true)
+    },
+    onError: (err: any) => message.error(err.response?.data?.error?.message || 'Error al generar códigos'),
+  })
+
+  const { data: codesData } = useQuery({
+    queryKey: ['player-codes', eventId],
+    queryFn: () => tournamentApi.listPlayerCodes(eventId),
+    enabled: !!eventId,
+  })
+  const playerCodes = codesData?.data ?? []
+
   // ── Handlers ─────────────────────────────────────────────────────────────
   const handleOpenConfigModal = () => {
     if (config) {
@@ -334,7 +365,7 @@ export default function TournamentTab({ eventId }: Props) {
               <Card loading={configLoading}>
                 <Row gutter={[16, 16]}>
                   <Col span={24}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
                       <div>
                         <div style={{ fontSize: 14, fontWeight: 600, color: T.navy, marginBottom: 8 }}>
                           Configuración del Torneo
@@ -349,9 +380,21 @@ export default function TournamentTab({ eventId }: Props) {
                           </div>
                         )}
                       </div>
-                      <Button type="primary" onClick={handleOpenConfigModal}>
-                        {config ? 'Editar' : 'Crear'} Configuración
-                      </Button>
+                      <Space wrap>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <Text style={{ fontSize: 13, color: T.textDim }}>Portal jugador:</Text>
+                          <Switch
+                            checked={(config?.settings as any)?.portalEnabled ?? false}
+                            loading={togglePortalMutation.isPending}
+                            onChange={(checked) => togglePortalMutation.mutate(checked)}
+                            checkedChildren="Habilitado"
+                            unCheckedChildren="Deshabilitado"
+                          />
+                        </div>
+                        <Button type="primary" onClick={handleOpenConfigModal}>
+                          {config ? 'Editar' : 'Crear'} Configuración
+                        </Button>
+                      </Space>
                     </div>
                   </Col>
                 </Row>
@@ -384,10 +427,22 @@ export default function TournamentTab({ eventId }: Props) {
             label: <span><TeamOutlined /> Equipos ({teams.length})</span>,
             children: (
               <Card loading={teamsLoading}>
-                <div style={{ marginBottom: 16 }}>
+                <div style={{ marginBottom: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <Button icon={<PlusOutlined />} type="primary" onClick={() => setTeamModalOpen(true)}>
                     Registrar Equipo
                   </Button>
+                  <Button
+                    icon={<KeyOutlined />}
+                    loading={generateCodesMutation.isPending}
+                    onClick={() => generateCodesMutation.mutate()}
+                  >
+                    Generar Códigos
+                  </Button>
+                  {playerCodes.length > 0 && (
+                    <Button onClick={() => setCodesModalOpen(true)}>
+                      Ver Códigos ({playerCodes.length})
+                    </Button>
+                  )}
                 </div>
                 <Table
                   columns={teamColumns}
@@ -541,6 +596,54 @@ export default function TournamentTab({ eventId }: Props) {
             />
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* Player Codes Modal */}
+      <Modal
+        title="Códigos de Jugador"
+        open={codesModalOpen}
+        onCancel={() => setCodesModalOpen(false)}
+        footer={null}
+        width={680}
+      >
+        <div style={{ marginBottom: 12, fontSize: 13, color: T.textDim }}>
+          Comparte cada código con los jugadores del equipo correspondiente para que puedan registrarse en el portal.
+        </div>
+        <Table
+          columns={[
+            {
+              title: 'Equipo',
+              key: 'team',
+              render: (_: any, r: any) => r.client?.companyName ?? '—',
+            },
+            {
+              title: 'Categoría',
+              key: 'category',
+              width: 100,
+              render: (_: any, r: any) => <Badge color={CATEGORY_COLORS[r.category] ?? 'default'} text={CATEGORY_LABELS[r.category] ?? r.category} />,
+            },
+            {
+              title: 'Código',
+              key: 'code',
+              render: (_: any, r: any) => (
+                <Typography.Text code copyable style={{ fontSize: 14, letterSpacing: '0.1em' }}>
+                  {r.code}
+                </Typography.Text>
+              ),
+            },
+            {
+              title: 'Usos',
+              key: 'uses',
+              width: 80,
+              render: (_: any, r: any) => `${r.usedCount} / ${r.maxUses}`,
+            },
+          ]}
+          dataSource={playerCodes}
+          rowKey="id"
+          size="small"
+          pagination={false}
+          locale={{ emptyText: <Empty description="Sin códigos generados" /> }}
+        />
       </Modal>
 
       {/* Schedule Generation Modal */}
