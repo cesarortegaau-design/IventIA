@@ -19,12 +19,14 @@ export async function getTournamentConfig(req: Request, res: Response, next: Nex
   } catch (err) { next(err) }
 }
 
+const en = (v: unknown) => (v === null || v === undefined || v === '' ? null : Number(v))
+
 const tournamentConfigSchema = z.object({
-  numRounds: z.number().int().min(1).optional(),
+  numRounds: z.coerce.number().int().min(1).optional(),
   hasPlayoffs: z.boolean().optional(),
   qualificationSystem: z.string().max(200).nullable().optional(),
-  regFeePerPerson: z.number().positive().nullable().optional(),
-  regFeePerTeam: z.number().positive().nullable().optional(),
+  regFeePerPerson: z.preprocess(en, z.number().min(0).nullable().optional()),
+  regFeePerTeam: z.preprocess(en, z.number().min(0).nullable().optional()),
   settings: z.record(z.any()).optional(),
 })
 
