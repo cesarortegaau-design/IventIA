@@ -491,12 +491,12 @@ export async function playerUpdateMe(req: Request, res: Response, next: NextFunc
       data,
     })
 
-    // Sync playerNumber to linked Client record if it exists
-    if (data.playerNumber !== undefined) {
-      await prisma.client.updateMany({
-        where: { portalUserId },
-        data: { playerNumber: data.playerNumber ?? null },
-      }).catch(() => {})
+    // Sync playerNumber and photoUrl to linked Client so they appear in game attendance
+    const clientSync: any = {}
+    if (data.playerNumber !== undefined) clientSync.playerNumber = data.playerNumber ?? null
+    if ((data as any).photoUrl !== undefined) clientSync.logoUrl = (data as any).photoUrl ?? null
+    if (Object.keys(clientSync).length > 0) {
+      await prisma.client.updateMany({ where: { portalUserId }, data: clientSync }).catch(() => {})
     }
 
     const u = user as any
@@ -531,6 +531,12 @@ export async function playerUploadPhoto(req: Request, res: Response, next: NextF
       where: { id: portalUserId },
       data: { photoUrl: url } as any,
     })
+
+    // Sync photo to linked Client so it appears in game attendance
+    await prisma.client.updateMany({
+      where: { portalUserId },
+      data: { logoUrl: url },
+    }).catch(() => {})
 
     res.json({ success: true, data: { photoUrl: url } })
   } catch (err) {
