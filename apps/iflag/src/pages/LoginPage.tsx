@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { App } from 'antd'
 import { authApi } from '../api/auth'
 import { useAuthStore } from '../stores/authStore'
@@ -88,6 +88,20 @@ export default function LoginPage() {
             {loading ? 'Ingresando...' : 'Ingresar'}
           </button>
         </form>
+        <div style={{ marginTop: 20, textAlign: 'center', fontSize: 13, color: 'var(--text-muted)' }}>
+          ¿Eres jugador?{' '}
+          <Link to="/player/signup" style={{ color: 'var(--green)', fontWeight: 600 }}>
+            Regístrate
+          </Link>
+          {' '}o{' '}
+          <Link to="/player/login" style={{ color: 'var(--green)' }}>
+            Inicia sesión
+          </Link>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 20, fontSize: 12, color: 'var(--text-muted)' }}>
+        <Link to="/" style={{ color: 'var(--text-muted)' }}>← Volver</Link>
       </div>
     </div>
   )
