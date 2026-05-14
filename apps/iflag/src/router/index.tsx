@@ -14,6 +14,7 @@ import PlayerTournamentsPage from '../pages/player/PlayerTournamentsPage'
 import PlayerTournamentPage from '../pages/player/PlayerTournamentPage'
 import PlayerProfilePage from '../pages/player/PlayerProfilePage'
 import SpectatorPage from '../pages/spectator/SpectatorPage'
+import SpectatorGamePage from '../pages/spectator/SpectatorGamePage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.accessToken)
@@ -40,6 +41,7 @@ export default function AppRouter() {
       {/* Spectator (no auth) */}
       <Route path="/spectator" element={<SpectatorPage />} />
       <Route path="/spectator/:eventId" element={<SpectatorPage />} />
+      <Route path="/spectator/:eventId/game/:gameId" element={<SpectatorGamePage />} />
 
       {/* Referee auth */}
       <Route path="/login" element={<LoginPage />} />

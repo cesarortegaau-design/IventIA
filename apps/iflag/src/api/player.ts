@@ -24,6 +24,8 @@ export const playerApi = {
     publicClient.get(`/iflag/public/tournaments/${eventId}`).then((r) => r.data),
   getCalendar: (eventId: string) =>
     publicClient.get(`/iflag/public/tournaments/${eventId}/calendar`).then((r) => r.data),
+  getPublicGame: (gameId: string) =>
+    publicClient.get(`/iflag/public/games/${gameId}`).then((r) => r.data),
 
   // Player (requires portal JWT)
   getMe: () => playerClient.get('/iflag/player/me').then((r) => r.data),

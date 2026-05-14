@@ -168,7 +168,7 @@ function TournamentDetail({ eventId }: { eventId: string }) {
         {activeView === 'standings' && activeCategory && standings[activeCategory] ? (
           <StandingsTable rows={standings[activeCategory].standings} />
         ) : activeView === 'calendar' ? (
-          <CalendarList games={filteredCalendar} />
+          <CalendarList games={filteredCalendar} eventId={eventId} />
         ) : (
           <div style={{ padding: 24, color: 'var(--text-muted)', textAlign: 'center', fontSize: 13 }}>Sin datos disponibles</div>
         )}
@@ -210,7 +210,8 @@ function StandingsTable({ rows }: { rows: any[] }) {
   )
 }
 
-function CalendarList({ games }: { games: any[] }) {
+function CalendarList({ games, eventId }: { games: any[]; eventId?: string }) {
+  const navigate = useNavigate()
   if (!games.length) return <div style={{ padding: 24, color: 'var(--text-muted)', textAlign: 'center', fontSize: 13 }}>Sin partidos programados</div>
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -219,8 +220,13 @@ function CalendarList({ games }: { games: any[] }) {
         const g = a.footballGame
         const hasScore = m?.homeScore !== null && m?.visitingScore !== null
         const iflagStatus = g?.status
+        const clickable = !!g?.id && !!eventId
         return (
-          <div key={a.id} style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '12px 16px' }}>
+          <div
+            key={a.id}
+            onClick={clickable ? () => navigate(`/spectator/${eventId}/game/${g.id}`) : undefined}
+            style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '12px 16px', cursor: clickable ? 'pointer' : 'default' }}
+          >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', background: 'var(--surface2)', borderRadius: 4, padding: '1px 6px' }}>J{m?.round ?? '?'}</span>
@@ -243,9 +249,12 @@ function CalendarList({ games }: { games: any[] }) {
               </div>
               <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)', textAlign: 'right' }}>{m?.visitingTeam?.companyName ?? '—'}</div>
             </div>
-            <div style={{ display: 'flex', gap: 12, marginTop: 6, fontSize: 11, color: 'var(--text-muted)' }}>
-              {a.startDate && <span>{new Date(a.startDate).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>}
-              {m?.venue?.name && <span>📍 {m.venue.name}</span>}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+              <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--text-muted)' }}>
+                {a.startDate && <span>{new Date(a.startDate).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>}
+                {m?.venue?.name && <span>📍 {m.venue.name}</span>}
+              </div>
+              {clickable && <span style={{ fontSize: 16, color: 'var(--text-muted)' }}>›</span>}
             </div>
           </div>
         )
