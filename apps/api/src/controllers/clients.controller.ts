@@ -4,9 +4,9 @@ import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { auditService } from '../services/audit.service'
 
-const eu = (v: unknown) => (v === '' ? undefined : v)
 const en = (v: unknown) => (v === '' ? null : v)
 
+// Create schema — strict format validation
 const clientSchema = z.object({
   personType: z.enum(['PHYSICAL', 'MORAL']),
   companyName: z.string().optional(),
@@ -14,7 +14,7 @@ const clientSchema = z.object({
   lastName: z.string().optional(),
   rfc: z.string().optional(),
   taxRegime: z.string().optional(),
-  email: z.preprocess(eu, z.string().email().optional().nullable()),
+  email: z.string().email().optional().nullable(),
   phone: z.string().optional(),
   whatsapp: z.string().optional(),
   addressStreet: z.string().optional(),
@@ -22,7 +22,28 @@ const clientSchema = z.object({
   addressState: z.string().optional(),
   addressZip: z.string().optional(),
   addressCountry: z.string().default('MX'),
-  logoUrl: z.preprocess(en, z.string().url().optional().nullable()),
+  logoUrl: z.string().url().optional().nullable(),
+  playerNumber: z.preprocess(en, z.string().max(10).optional().nullable()),
+  isTeam: z.boolean().optional(),
+}).strip()
+
+// Update schema — permissive (existing data may predate format rules)
+const updateClientSchema = z.object({
+  personType: z.enum(['PHYSICAL', 'MORAL']).optional(),
+  companyName: z.preprocess(en, z.string().optional().nullable()),
+  firstName: z.preprocess(en, z.string().optional().nullable()),
+  lastName: z.preprocess(en, z.string().optional().nullable()),
+  rfc: z.preprocess(en, z.string().optional().nullable()),
+  taxRegime: z.preprocess(en, z.string().optional().nullable()),
+  email: z.preprocess(en, z.string().optional().nullable()),
+  phone: z.preprocess(en, z.string().optional().nullable()),
+  whatsapp: z.preprocess(en, z.string().optional().nullable()),
+  addressStreet: z.preprocess(en, z.string().optional().nullable()),
+  addressCity: z.preprocess(en, z.string().optional().nullable()),
+  addressState: z.preprocess(en, z.string().optional().nullable()),
+  addressZip: z.preprocess(en, z.string().optional().nullable()),
+  addressCountry: z.preprocess(en, z.string().optional().nullable()),
+  logoUrl: z.preprocess(en, z.string().optional().nullable()),
   playerNumber: z.preprocess(en, z.string().max(10).optional().nullable()),
   isTeam: z.boolean().optional(),
 }).strip()
@@ -110,7 +131,7 @@ export async function createClient(req: Request, res: Response, next: NextFuncti
 
 export async function updateClient(req: Request, res: Response, next: NextFunction) {
   try {
-    const data = clientSchema.partial().parse(req.body)
+    const data = updateClientSchema.parse(req.body)
     const tenantId = req.user!.tenantId
     const client = await prisma.client.findFirst({
       where: { id: req.params.id, tenantId },
