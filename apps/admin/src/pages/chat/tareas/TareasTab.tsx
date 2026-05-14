@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Layout, Select, Input, Button, Empty, Spin, Space, message as antMessage } from 'antd'
-import { PlusOutlined, FilterOutlined } from '@ant-design/icons'
+import { Layout, Select, Input, Button, Empty, Spin, Space, Segmented, Badge, message as antMessage } from 'antd'
+import { PlusOutlined, FilterOutlined, UserOutlined, FireOutlined, TeamOutlined } from '@ant-design/icons'
 import { collabTasksApi } from '../../../api/collabTasks'
 import { eventActivitiesApi } from '../../../api/eventActivities'
 import { usersApi } from '../../../api/users'
@@ -10,36 +10,43 @@ import { eventsApi } from '../../../api/events'
 import { clientsApi } from '../../../api/clients'
 import { ordersApi } from '../../../api/orders'
 import { resourcesApi } from '../../../api/resources'
+import { useAuthStore } from '../../../stores/authStore'
 import { TaskListPanel } from './TaskListPanel'
 import { TaskDetailDrawer } from './TaskDetailDrawer'
 import { TaskFormModal } from './TaskFormModal'
 import { EventActivityFormModal } from './EventActivityFormModal'
-
-const { Sider, Content } = Layout
+import { T } from '../../../styles/tokens'
 
 const STATUS_CONFIG = {
-  PENDING: { color: 'default', label: 'Pendiente' },
+  PENDING:     { color: 'default',    label: 'Pendiente' },
   IN_PROGRESS: { color: 'processing', label: 'En Progreso' },
-  ON_HOLD: { color: 'warning', label: 'En Espera' },
-  DONE: { color: 'success', label: 'Completada' },
-  CANCELLED: { color: 'error', label: 'Cancelada' },
+  ON_HOLD:     { color: 'warning',    label: 'En Espera' },
+  DONE:        { color: 'success',    label: 'Completada' },
+  CANCELLED:   { color: 'error',      label: 'Cancelada' },
 }
 
 const PRIORITY_CONFIG = {
-  LOW: { color: 'default', label: 'Baja' },
-  MEDIUM: { color: 'blue', label: 'Media' },
-  HIGH: { color: 'orange', label: 'Alta' },
-  CRITICAL: { color: 'red', label: 'Crítica' },
+  LOW:      { color: 'default', label: 'Baja' },
+  MEDIUM:   { color: 'blue',    label: 'Media' },
+  HIGH:     { color: 'orange',  label: 'Alta' },
+  CRITICAL: { color: 'red',     label: 'Crítica' },
 }
+
+const { Sider, Content } = Layout
+
 
 export function TareasTab() {
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const currentUser = useAuthStore((s) => s.user)
+  const currentUserId = currentUser?.id ?? ''
+
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [showFormModal, setShowFormModal] = useState(false)
   const [editingTask, setEditingTask] = useState<any | null>(null)
   const [showActivityModal, setShowActivityModal] = useState(false)
   const [editingActivity, setEditingActivity] = useState<any | null>(null)
+  const [viewFilter, setViewFilter] = useState<'all' | 'mine' | 'urgent'>('all')
   const [filters, setFilters] = useState({
     status: undefined as string | undefined,
     priority: undefined as string | undefined,
@@ -99,6 +106,19 @@ export function TareasTab() {
 
   const isLoading = tasksLoading || activitiesLoading
 
+  const isAssignedToMe = (item: any) => {
+    if (item.assignedTo?.id === currentUserId) return true
+    if (item.assignees?.some((a: any) => a.userId === currentUserId || a.user?.id === currentUserId)) return true
+    return false
+  }
+
+  const isUrgent = (item: any) => {
+    if (item.status === 'DONE' || item.status === 'CANCELLED') return false
+    if (!item.endDate) return false
+    const days = Math.ceil((new Date(item.endDate).getTime() - Date.now()) / 864e5)
+    return days <= 1
+  }
+
   const mergedTasks = useMemo(() => {
     const collabItems = (tasks as any[]).map(t => ({ ...t, _type: 'collab_task' }))
     const activityItems = (eventActivities as any[]).map(a => ({ ...a, _type: 'event_activity' }))
@@ -111,9 +131,21 @@ export function TareasTab() {
         const q = filters.search.toLowerCase()
         if (!item.title?.toLowerCase().includes(q)) return false
       }
+      if (viewFilter === 'mine' && !isAssignedToMe(item)) return false
+      if (viewFilter === 'urgent' && !isUrgent(item)) return false
       return true
     })
-  }, [tasks, eventActivities, filters])
+  }, [tasks, eventActivities, filters, viewFilter, currentUserId])
+
+  // Counts for view filter badges
+  const allTasks = useMemo(() => {
+    const collabItems = (tasks as any[]).map(t => ({ ...t, _type: 'collab_task' }))
+    const activityItems = (eventActivities as any[]).map(a => ({ ...a, _type: 'event_activity' }))
+    return [...collabItems, ...activityItems]
+  }, [tasks, eventActivities])
+
+  const mineCount = allTasks.filter(isAssignedToMe).length
+  const urgentCount = allTasks.filter(isUrgent).length
 
   const selectedEventActivity = mergedTasks.find(
     t => t.id === selectedTaskId && t._type === 'event_activity'
@@ -216,65 +248,111 @@ export function TareasTab() {
       <Layout style={{ height: '100%', borderRadius: 0, overflow: 'hidden' }}>
         {/* ── Task list sidebar ───────────────────────────────────────────────── */}
         <Sider width={340} style={{ background: '#f8fafc', borderRight: '1px solid #e8f0fe', overflowY: 'auto' }}>
-          <div style={{ padding: '16px', borderBottom: '1px solid #e8f0fe', position: 'sticky', top: 0, background: '#fff', zIndex: 10 }}>
-            <Space direction="vertical" style={{ width: '100%' }} size={12}>
-              <Button
-                type="primary"
+          <div style={{ borderBottom: `1px solid ${T.border}`, position: 'sticky', top: 0, background: '#fff', zIndex: 10 }}>
+            {/* View filter */}
+            <div style={{ padding: '12px 14px 0' }}>
+              <Segmented
                 block
-                icon={<PlusOutlined />}
-                onClick={handleCreateTask}
-                style={{ background: '#1a3a5c', borderColor: '#1a3a5c', borderRadius: 6, height: 40 }}
-              >
-                Nueva Tarea
-              </Button>
-
-              <Input
-                placeholder="Buscar tareas..."
-                value={filters.search}
-                onChange={e => setFilters({ ...filters, search: e.target.value })}
-                style={{ borderRadius: 6, height: 40 }}
+                size="small"
+                value={viewFilter}
+                onChange={(v) => setViewFilter(v as any)}
+                options={[
+                  {
+                    value: 'all',
+                    label: (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 5, justifyContent: 'center' }}>
+                        <TeamOutlined /> Todo
+                      </span>
+                    ),
+                  },
+                  {
+                    value: 'mine',
+                    label: (
+                      <Badge count={mineCount} size="small" offset={[6, -2]} color={T.navy}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <UserOutlined /> Mías
+                        </span>
+                      </Badge>
+                    ),
+                  },
+                  {
+                    value: 'urgent',
+                    label: (
+                      <Badge count={urgentCount} size="small" offset={[6, -2]} color="#ef4444">
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <FireOutlined /> Urgentes
+                        </span>
+                      </Badge>
+                    ),
+                  },
+                ]}
               />
+            </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <Select
-                  placeholder="Estado"
-                  value={filters.status || undefined}
-                  onChange={status => setFilters({ ...filters, status })}
-                  allowClear
-                  style={{ width: '100%' }}
-                  options={[
-                    { value: 'PENDING', label: 'Pendiente' },
-                    { value: 'IN_PROGRESS', label: 'En Progreso' },
-                    { value: 'ON_HOLD', label: 'En Espera' },
-                    { value: 'DONE', label: 'Completada' },
-                    { value: 'CANCELLED', label: 'Cancelada' },
-                  ]}
-                />
-                <Select
-                  placeholder="Prioridad"
-                  value={filters.priority || undefined}
-                  onChange={priority => setFilters({ ...filters, priority })}
-                  allowClear
-                  style={{ width: '100%' }}
-                  options={[
-                    { value: 'LOW', label: 'Baja' },
-                    { value: 'MEDIUM', label: 'Media' },
-                    { value: 'HIGH', label: 'Alta' },
-                    { value: 'CRITICAL', label: 'Crítica' },
-                  ]}
-                />
-              </div>
-
-              {(filters.status || filters.priority || filters.search) && (
+            <div style={{ padding: '10px 14px 12px' }}>
+              <Space direction="vertical" style={{ width: '100%' }} size={8}>
                 <Button
-                  type="link"
-                  style={{ color: '#1a3a5c', paddingLeft: 0, height: 'auto', padding: '4px 0' }}
-                  onClick={() => setFilters({ status: undefined, priority: undefined, search: '' })}
+                  type="primary"
+                  block
+                  icon={<PlusOutlined />}
+                  onClick={handleCreateTask}
+                  style={{ background: T.navy, borderColor: T.navy, borderRadius: 6, height: 36 }}
                 >
-                  Limpiar filtros
+                  Nueva Tarea
                 </Button>
-              )}
-            </Space>
+
+                <Input
+                  placeholder="Buscar tareas..."
+                  value={filters.search}
+                  onChange={e => setFilters({ ...filters, search: e.target.value })}
+                  style={{ borderRadius: 6, height: 32 }}
+                  allowClear
+                />
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <Select
+                    placeholder="Estado"
+                    size="small"
+                    value={filters.status || undefined}
+                    onChange={status => setFilters({ ...filters, status })}
+                    allowClear
+                    style={{ width: '100%' }}
+                    options={[
+                      { value: 'PENDING',     label: 'Pendiente' },
+                      { value: 'IN_PROGRESS', label: 'En Progreso' },
+                      { value: 'ON_HOLD',     label: 'En Espera' },
+                      { value: 'DONE',        label: 'Completada' },
+                      { value: 'CANCELLED',   label: 'Cancelada' },
+                    ]}
+                  />
+                  <Select
+                    placeholder="Prioridad"
+                    size="small"
+                    value={filters.priority || undefined}
+                    onChange={priority => setFilters({ ...filters, priority })}
+                    allowClear
+                    style={{ width: '100%' }}
+                    options={[
+                      { value: 'LOW',      label: 'Baja' },
+                      { value: 'MEDIUM',   label: 'Media' },
+                      { value: 'HIGH',     label: 'Alta' },
+                      { value: 'CRITICAL', label: 'Crítica' },
+                    ]}
+                  />
+                </div>
+
+                {(filters.status || filters.priority || filters.search) && (
+                  <Button
+                    type="link"
+                    size="small"
+                    style={{ color: T.navy, padding: '0', height: 'auto' }}
+                    onClick={() => setFilters({ status: undefined, priority: undefined, search: '' })}
+                  >
+                    Limpiar filtros
+                  </Button>
+                )}
+              </Space>
+            </div>
           </div>
 
           {isLoading ? (
@@ -290,8 +368,8 @@ export function TareasTab() {
               tasks={mergedTasks}
               selectedTaskId={selectedTaskId}
               onSelectTask={setSelectedTaskId}
-              statusConfig={STATUS_CONFIG}
-              priorityConfig={PRIORITY_CONFIG}
+              currentUserId={currentUserId}
+              viewFilter={viewFilter}
             />
           )}
         </Sider>
