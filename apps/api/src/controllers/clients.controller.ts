@@ -4,6 +4,9 @@ import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { auditService } from '../services/audit.service'
 
+const eu = (v: unknown) => (v === '' ? undefined : v)
+const en = (v: unknown) => (v === '' ? null : v)
+
 const clientSchema = z.object({
   personType: z.enum(['PHYSICAL', 'MORAL']),
   companyName: z.string().optional(),
@@ -11,7 +14,7 @@ const clientSchema = z.object({
   lastName: z.string().optional(),
   rfc: z.string().optional(),
   taxRegime: z.string().optional(),
-  email: z.string().email().optional(),
+  email: z.preprocess(eu, z.string().email().optional().nullable()),
   phone: z.string().optional(),
   whatsapp: z.string().optional(),
   addressStreet: z.string().optional(),
@@ -19,8 +22,8 @@ const clientSchema = z.object({
   addressState: z.string().optional(),
   addressZip: z.string().optional(),
   addressCountry: z.string().default('MX'),
-  logoUrl: z.string().url().optional().nullable(),
-  playerNumber: z.string().max(10).optional().nullable(),
+  logoUrl: z.preprocess(en, z.string().url().optional().nullable()),
+  playerNumber: z.preprocess(en, z.string().max(10).optional().nullable()),
   isTeam: z.boolean().optional(),
 }).strip()
 
