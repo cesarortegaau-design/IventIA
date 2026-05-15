@@ -154,7 +154,7 @@ interface EventBudgetTabProps { eventId: string; event?: any }
 export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) {
   const qc = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [selectedBudgetId, setSelectedBudgetId] = useState<string | null>(() => searchParams.get('budgetId'))
+  const selectedBudgetId = searchParams.get('budgetId')
   const [createModalOpen, setCreateModalOpen]   = useState(false)
   const [directOrderModal, setDirectOrderModal] = useState<{ lineId: string } | null>(null)
   const [indirectOrderModal, setIndirectOrderModal] = useState<{ lineId: string } | null>(null)
@@ -222,7 +222,7 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['event-budgets', eventId] })
       setCreateModalOpen(false); form.resetFields()
-      setSelectedBudgetId(res.data?.id ?? null)
+      if (res.data?.id) setSearchParams({ tab: 'presupuesto', budgetId: res.data.id }, { replace: true })
       antMessage.success('Presupuesto creado')
     },
     onError: (e: any) => antMessage.error(e.response?.data?.message || 'Error al crear presupuesto'),
@@ -232,7 +232,7 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
     mutationFn: (id: string) => budgetsApi.delete(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['event-budgets', eventId] })
-      setSelectedBudgetId(null); antMessage.success('Presupuesto eliminado')
+      setSearchParams({ tab: 'presupuesto' }, { replace: true }); antMessage.success('Presupuesto eliminado')
     },
     onError: () => antMessage.error('Error al eliminar'),
   })
@@ -576,7 +576,6 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
               placeholder="Seleccionar presupuesto"
               value={selectedBudgetId}
               onChange={(v) => {
-                setSelectedBudgetId(v)
                 if (v) setSearchParams({ tab: 'presupuesto', budgetId: v }, { replace: true })
                 else setSearchParams({ tab: 'presupuesto' }, { replace: true })
               }}

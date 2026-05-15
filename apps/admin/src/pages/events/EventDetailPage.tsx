@@ -101,7 +101,7 @@ export default function EventDetailPage() {
   const queryClient = useQueryClient()
   const { message } = App.useApp()
 
-  const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') ?? 'resumen')
+  const activeTab = searchParams.get('tab') ?? 'resumen'
 
   // ── Modal / UI state ──────────────────────────────────────────────────────
   const [genModalOpen, setGenModalOpen] = useState(false)
@@ -686,7 +686,7 @@ export default function EventDetailPage() {
           {TABS.map(tab => (
             <button
               key={tab.key}
-              onClick={() => { setActiveTab(tab.key); setSearchParams({ tab: tab.key }, { replace: true }) }}
+              onClick={() => setSearchParams({ tab: tab.key }, { replace: true })}
               style={{
                 padding: '10px 14px', background: 'none', border: 'none',
                 borderBottom: activeTab === tab.key ? `2px solid ${T.blue}` : '2px solid transparent',
