@@ -245,10 +245,11 @@ export default function MainLayout() {
 
   // Track visited routes in the recent screens store
   const pushRecent = useRecentScreensStore((s) => s.push)
+  const fullPath = location.pathname + location.search
   useEffect(() => {
     const entry = getLabelForPath(location.pathname)
-    if (entry) pushRecent({ path: location.pathname, ...entry })
-  }, [location.pathname]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (entry) pushRecent({ path: fullPath, ...entry })
+  }, [fullPath]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Sidebar renderer (shared between desktop and mobile drawer) ──
   const renderSidebar = () => (

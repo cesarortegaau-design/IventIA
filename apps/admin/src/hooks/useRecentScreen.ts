@@ -8,11 +8,12 @@ import { useRecentScreensStore } from '../stores/recentScreensStore'
  * Pass an empty string while data is loading — the push is skipped until label is truthy.
  */
 export function useRecentScreen(label: string, section = 'general') {
-  const { pathname } = useLocation()
+  const { pathname, search } = useLocation()
   const push = useRecentScreensStore((s) => s.push)
+  const fullPath = pathname + search
 
   useEffect(() => {
     if (!label) return
-    push({ path: pathname, label, section })
-  }, [label]) // eslint-disable-line react-hooks/exhaustive-deps
+    push({ path: fullPath, label, section })
+  }, [label, fullPath]) // eslint-disable-line react-hooks/exhaustive-deps
 }
