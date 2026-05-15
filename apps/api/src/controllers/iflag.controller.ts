@@ -546,8 +546,19 @@ export async function recordGameEvent(req: Request, res: Response, next: NextFun
         if (data.newVisitingScore !== undefined) gameUpdates.visitingScore = data.newVisitingScore
       }
 
-      if (data.type === 'HALFTIME_START') gameUpdates.status = 'HALFTIME'
-      if (data.type === 'HALFTIME_END') gameUpdates.status = 'IN_PROGRESS'
+      if (data.type === 'HALFTIME_START') {
+        gameUpdates.status = 'HALFTIME'
+        gameUpdates.timerRunning = false
+        gameUpdates.timerSeconds = elapsedSeconds(game)
+        gameUpdates.timerLastStarted = null
+      }
+      if (data.type === 'HALFTIME_END') {
+        gameUpdates.status = 'IN_PROGRESS'
+        gameUpdates.timerRunning = false
+        gameUpdates.timerSeconds = 0
+        gameUpdates.timerLastStarted = null
+        gameUpdates.currentQuarter = 3
+      }
       if (data.type === 'GAME_END') {
         gameUpdates.status = 'FINISHED'
         gameUpdates.finishedAt = new Date()
