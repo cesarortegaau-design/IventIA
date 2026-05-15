@@ -97,7 +97,7 @@ const BTN_PRIMARY: React.CSSProperties = {
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
 
@@ -478,7 +478,14 @@ export default function EventDetailPage() {
   }
 
   const event = data?.data
-  useRecentScreen(event ? `Evento: ${event.name}` : '', 'eventos')
+  const TAB_LABEL: Record<string, string> = {
+    resumen: 'Resumen', espacios: 'Espacios', timeline: 'Timeline',
+    tareas: 'Tareas', presupuesto: 'Presupuesto', ordenes: 'Órdenes',
+    contratos: 'Contratos', documentos: 'Documentos', produccion: 'Producción',
+    mapa: 'Mapa del Venue', boletos: 'Boletos', portal: 'Portal',
+    deporte: 'Portal Deportivo', auditoria: 'Auditoría',
+  }
+  useRecentScreen(event ? `${event.name} › ${TAB_LABEL[activeTab] ?? activeTab}` : '', 'eventos')
 
   // ── Loading / error ───────────────────────────────────────────────────────
   if (isLoading) {
@@ -679,7 +686,7 @@ export default function EventDetailPage() {
           {TABS.map(tab => (
             <button
               key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
+              onClick={() => { setActiveTab(tab.key); setSearchParams({ tab: tab.key }, { replace: true }) }}
               style={{
                 padding: '10px 14px', background: 'none', border: 'none',
                 borderBottom: activeTab === tab.key ? `2px solid ${T.blue}` : '2px solid transparent',

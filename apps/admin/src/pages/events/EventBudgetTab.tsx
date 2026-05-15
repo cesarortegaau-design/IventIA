@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useRecentScreen } from '../../hooks/useRecentScreen'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Table, Button, Select, Modal, Form, Input, Space, Tag, Typography,
@@ -152,7 +153,8 @@ interface EventBudgetTabProps { eventId: string; event?: any }
 
 export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) {
   const qc = useQueryClient()
-  const [selectedBudgetId, setSelectedBudgetId] = useState<string | null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [selectedBudgetId, setSelectedBudgetId] = useState<string | null>(() => searchParams.get('budgetId'))
   const [createModalOpen, setCreateModalOpen]   = useState(false)
   const [directOrderModal, setDirectOrderModal] = useState<{ lineId: string } | null>(null)
   const [indirectOrderModal, setIndirectOrderModal] = useState<{ lineId: string } | null>(null)
@@ -180,6 +182,13 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
   })
   const budget = budgetDetail?.data ?? null
   const lines: any[] = budget?.lines ?? []
+
+  useRecentScreen(
+    event?.name && budget?.name
+      ? `${event.name} › Presupuesto › ${budget.name}`
+      : '',
+    'eventos'
+  )
 
   const { data: conceptListsData } = useQuery({
     queryKey: ['price-lists-concept'],
@@ -565,7 +574,12 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
           {budgets.length > 0 && (
             <Select
               placeholder="Seleccionar presupuesto"
-              value={selectedBudgetId} onChange={setSelectedBudgetId}
+              value={selectedBudgetId}
+              onChange={(v) => {
+                setSelectedBudgetId(v)
+                if (v) setSearchParams({ tab: 'presupuesto', budgetId: v }, { replace: true })
+                else setSearchParams({ tab: 'presupuesto' }, { replace: true })
+              }}
               style={{ width: 260 }}
               options={budgets.map((b: any) => ({ value: b.id, label: b.name }))}
               allowClear
