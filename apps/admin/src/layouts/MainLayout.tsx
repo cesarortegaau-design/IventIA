@@ -67,15 +67,8 @@ function getLabelForPath(pathname: string): { label: string; section: string } |
     '/crm':                                 { label: 'CRM',                    section: 'crm' },
     '/chat':                                { label: 'Colabora',               section: 'colabora' },
   }
-  if (staticMap[pathname]) return staticMap[pathname]
-  // Dynamic detail pages — placeholder labels, overridden by page-level useRecentScreen
-  if (/^\/eventos\/[^/]/.test(pathname))                return { label: 'Detalle de evento',   section: 'eventos' }
-  if (/^\/ordenes\/[^/]/.test(pathname))                return { label: 'Detalle de orden',    section: 'ordenes' }
-  if (/^\/crm\/[^/]/.test(pathname))                    return { label: 'Detalle de cliente',  section: 'crm' }
-  if (/^\/contratos\/[^/]/.test(pathname))              return { label: 'Detalle de contrato', section: 'eventos' }
-  if (/^\/catalogos\/recursos\/[^/]/.test(pathname))    return { label: 'Detalle de recurso',  section: 'catalogos' }
-  if (/^\/catalogos\/clientes\/[^/]/.test(pathname))    return { label: 'Detalle de cliente',  section: 'catalogos' }
-  return null
+  // Dynamic detail pages register themselves via useRecentScreen with rich labels
+  return staticMap[pathname] ?? null
 }
 
 // Top-level area definitions

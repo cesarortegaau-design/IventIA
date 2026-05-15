@@ -120,13 +120,17 @@ export default function RecentScreensPanel() {
             <div style={{ maxHeight: 'min(380px, 55dvh)', overflowY: 'auto' }}>
               {items.map((screen, i) => {
                 const dot = SECTION_COLORS[screen.section] ?? '#94a3b8'
+                // Split breadcrumb: last segment = primary (distinctive), rest = parent context
+                const parts = screen.label.split(' › ')
+                const primary = parts[parts.length - 1]
+                const parent  = parts.length > 1 ? parts.slice(0, -1).join(' › ') : null
                 return (
                   <button
                     key={screen.path + i}
                     onClick={() => { navigate(screen.path); setOpen(false) }}
                     style={{
                       width: '100%', background: 'none', border: 'none', cursor: 'pointer',
-                      padding: '11px 14px', textAlign: 'left',
+                      padding: '10px 14px', textAlign: 'left',
                       borderBottom: i < items.length - 1 ? '1px solid #f5f5f5' : 'none',
                       display: 'flex', alignItems: 'center', gap: 10,
                     }}
@@ -136,19 +140,23 @@ export default function RecentScreensPanel() {
                     {/* Section dot */}
                     <span style={{
                       width: 8, height: 8, borderRadius: '50%',
-                      background: dot, flexShrink: 0,
+                      background: dot, flexShrink: 0, marginTop: parent ? 2 : 0,
                     }} />
-                    {/* Label + section */}
+                    {/* Primary + parent breadcrumb */}
                     <span style={{ flex: 1, overflow: 'hidden' }}>
                       <span style={{
-                        display: 'block', fontSize: 13, fontWeight: 500, color: '#1f2937',
+                        display: 'block', fontSize: 13, fontWeight: 600, color: '#1f2937',
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       }}>
-                        {screen.label}
+                        {primary}
                       </span>
-                      {SECTION_LABELS[screen.section] && (
-                        <span style={{ fontSize: 10, color: dot, fontWeight: 600 }}>
-                          {SECTION_LABELS[screen.section]}
+                      {parent && (
+                        <span style={{
+                          display: 'block', fontSize: 10, color: '#94a3b8', fontWeight: 400,
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          marginTop: 1,
+                        }}>
+                          {parent}
                         </span>
                       )}
                     </span>
