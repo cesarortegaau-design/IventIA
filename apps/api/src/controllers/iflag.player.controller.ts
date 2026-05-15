@@ -8,6 +8,7 @@ import { AppError } from '../middleware/errorHandler'
 import { PortalTokenPayload } from '../middleware/portalAuth.middleware'
 import { stripe } from '../lib/stripe'
 import { uploadToStorage } from '../lib/storage'
+import { buildTeamStats } from './iflag.controller'
 
 function signPlayerTokens(portalUserId: string, tenantId: string, email: string) {
   const payload: PortalTokenPayload = { portalUserId, tenantId, email, type: 'portal' }
@@ -721,6 +722,48 @@ export async function playerVerifyPayment(req: Request, res: Response, next: Nex
     }
 
     res.json({ success: true, data: { paymentStatus: pue.paymentStatus } })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function publicGetTeamStats(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { eventId } = req.params
+
+    const config = await prisma.tournamentConfig.findUnique({ where: { eventId } })
+    if (!config) throw new AppError(404, 'NOT_FOUND', 'Torneo no encontrado')
+    const settings = (config.settings ?? {}) as any
+    if (!settings?.portalEnabled) throw new AppError(404, 'NOT_FOUND', 'Torneo no encontrado')
+
+    const [games, registrations] = await Promise.all([
+      prisma.footballGame.findMany({
+        where: { eventId },
+        select: { id: true, localTeamId: true, visitingTeamId: true },
+      }),
+      prisma.teamEventRegistration.findMany({
+        where: { eventId },
+        include: { teamClient: { select: { id: true, companyName: true } } },
+      }),
+    ])
+
+    const gameIds = games.map(g => g.id)
+    if (gameIds.length === 0) {
+      return res.json({ success: true, data: { teams: [] } })
+    }
+
+    const [attendance, gameEvents] = await Promise.all([
+      prisma.playerAttendance.findMany({
+        where: { gameId: { in: gameIds } },
+        include: { player: { select: { id: true, firstName: true, lastName: true, companyName: true, playerNumber: true } } },
+      }),
+      prisma.gameEvent.findMany({
+        where: { gameId: { in: gameIds }, playerId: { not: null } },
+        select: { type: true, gameId: true, playerId: true, teamId: true },
+      }),
+    ])
+
+    res.json({ success: true, data: { teams: buildTeamStats(registrations, games, attendance, gameEvents) } })
   } catch (err) {
     next(err)
   }

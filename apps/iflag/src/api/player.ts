@@ -40,6 +40,8 @@ export const playerApi = {
   },
   getStats: (eventId?: string) =>
     playerClient.get('/iflag/player/stats', { params: eventId ? { eventId } : undefined }).then((r) => r.data),
+  getTeamStats: (eventId: string) =>
+    publicClient.get(`/iflag/public/tournaments/${eventId}/team-stats`).then((r) => r.data),
   payTournament: (eventId: string) =>
     playerClient.post(`/iflag/player/tournaments/${eventId}/pay`).then((r) => r.data),
   verifyPayment: (eventId: string, sessionId: string) =>

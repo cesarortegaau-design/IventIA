@@ -43,8 +43,15 @@ export default function PlayerProfilePage() {
     enabled: activeTab === 'stats',
   })
 
+  const { data: teamStatsData } = useQuery({
+    queryKey: ['team-stats', statsEventId],
+    queryFn: () => playerApi.getTeamStats(statsEventId),
+    enabled: activeTab === 'stats' && !!statsEventId,
+  })
+
   const me = meData?.data
   const stats = statsData?.data
+  const teamStats: any[] = teamStatsData?.data?.teams ?? []
 
   function startEdit() {
     if (!me) return
@@ -337,6 +344,15 @@ export default function PlayerProfilePage() {
                     )}
                   </>
                 )}
+
+                {/* Team roster stats (only when a tournament is selected) */}
+                {statsEventId && teamStats.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {teamStats.map((team: any) => (
+                      <TeamRosterCard key={team.teamId} team={team} />
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -415,6 +431,76 @@ function GameCard({ game }: { game: any }) {
     </div>
   )
 }
+
+const PLAYER_STAT_KEYS = [
+  { key: 'TOUCHDOWN',    label: 'TD',  icon: '🏈', color: 'var(--green)' },
+  { key: 'EXTRA_POINT',  label: 'XP',  icon: '✔',  color: '#1a9c50' },
+  { key: 'SAFETY',       label: 'SAF', icon: '🛡',  color: 'var(--blue)' },
+  { key: 'INTERCEPTION', label: 'INT', icon: '🙌',  color: '#e91e63' },
+  { key: 'FLAG_PENALTY', label: 'PEN', icon: '🚩',  color: 'var(--orange)' },
+]
+
+function TeamRosterCard({ team }: { team: any }) {
+  const [expanded, setExpanded] = useState(false)
+  const catColors: Record<string, string> = { FEMENIL: '#e91e63', VARONIL: '#2196f3', MIXTO: '#7b1fa2' }
+  const catLabels: Record<string, string> = { FEMENIL: 'Femenil', VARONIL: 'Varonil', MIXTO: 'Mixto' }
+  const catColor = catColors[team.category] ?? 'var(--text-muted)'
+
+  return (
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+      <div
+        onClick={() => setExpanded(v => !v)}
+        style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', background: 'var(--surface2)' }}
+      >
+        <div>
+          <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>{team.teamName}</span>
+          {team.category && (
+            <span style={{ marginLeft: 8, fontSize: 10, color: catColor, background: `${catColor}22`, padding: '2px 8px', borderRadius: 12, fontWeight: 600 }}>
+              {catLabels[team.category] ?? team.category}
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{team.players?.length ?? 0} jugadores</span>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{expanded ? '▲' : '▼'}</span>
+        </div>
+      </div>
+      {expanded && (team.players ?? []).length > 0 && (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr style={{ background: 'var(--surface2)', borderBottom: '1px solid var(--border)' }}>
+                <th style={thStyle}>#</th>
+                <th style={{ ...thStyle, textAlign: 'left' }}>Jugador</th>
+                <th style={thStyle}>Pres.</th>
+                {PLAYER_STAT_KEYS.map(s => <th key={s.key} style={thStyle}>{s.label}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {(team.players as any[]).map((p, i) => (
+                <tr key={p.playerId} style={{ borderBottom: i < team.players.length - 1 ? '1px solid var(--border)' : 'none', background: i % 2 === 0 ? 'transparent' : 'var(--surface2)' }}>
+                  <td style={tdCenter}>{p.playerNumber ? `#${p.playerNumber}` : '—'}</td>
+                  <td style={{ padding: '8px 12px', color: 'var(--text)', fontWeight: 600, whiteSpace: 'nowrap' }}>{p.playerName}</td>
+                  <td style={tdCenter}>{p.gamesAttended > 0 ? <span style={{ color: 'var(--green)', fontWeight: 700 }}>{p.gamesAttended}</span> : '—'}</td>
+                  {PLAYER_STAT_KEYS.map(s => {
+                    const v = p.stats?.[s.key] ?? 0
+                    return <td key={s.key} style={tdCenter}>{v > 0 ? <span style={{ color: s.color, fontWeight: 700 }}>{v}</span> : <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {expanded && (team.players ?? []).length === 0 && (
+        <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>Sin jugadores registrados</div>
+      )}
+    </div>
+  )
+}
+
+const thStyle: React.CSSProperties = { padding: '6px 10px', fontWeight: 600, color: 'var(--text-muted)', fontSize: 11, textAlign: 'center', whiteSpace: 'nowrap' }
+const tdCenter: React.CSSProperties = { padding: '8px 10px', textAlign: 'center', color: 'var(--text)' }
 
 function InfoRow({ label, value }: { label: string; value?: string }) {
   return (

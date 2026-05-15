@@ -15,7 +15,7 @@ import {
   publicListTournaments, publicGetTournament, publicGetCalendar,
   playerVerifyCode, playerSignup, playerLogin, playerRefresh,
   playerMe, playerUpdateMe, playerUploadPhoto, playerStats,
-  playerPayTournament, playerVerifyPayment,
+  playerPayTournament, playerVerifyPayment, publicGetTeamStats,
 } from '../controllers/iflag.player.controller'
 
 const router = Router()
@@ -35,6 +35,7 @@ router.get('/public/games/:gameId', publicGetGame)
 router.get('/public/tournaments', publicListTournaments)
 router.get('/public/tournaments/:eventId', publicGetTournament)
 router.get('/public/tournaments/:eventId/calendar', publicGetCalendar)
+router.get('/public/tournaments/:eventId/team-stats', publicGetTeamStats)
 
 // ── Player auth (no auth required) ───────────────────────────────────────────
 router.post('/player/verify-code', playerVerifyCode)

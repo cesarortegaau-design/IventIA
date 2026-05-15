@@ -17,6 +17,7 @@ import {
   generatePlayerCodes,
   listPlayerCodes,
 } from '../controllers/tournament.controller'
+import { getEventTeamStats } from '../controllers/iflag.controller'
 
 const router = Router({ mergeParams: true })
 
@@ -46,5 +47,8 @@ router.post('/generate-schedule', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED)
 // Player Portal Codes
 router.get('/player-codes', requirePrivilege(PRIVILEGES.EVENT_VIEW), listPlayerCodes)
 router.post('/player-codes', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), generatePlayerCodes)
+
+// Team+player stats aggregated from I-Flag games
+router.get('/team-player-stats', requirePrivilege(PRIVILEGES.EVENT_VIEW), getEventTeamStats)
 
 export default router

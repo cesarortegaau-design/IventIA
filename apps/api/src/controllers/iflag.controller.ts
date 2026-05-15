@@ -651,6 +651,99 @@ export async function listGameEvents(req: Request, res: Response, next: NextFunc
   }
 }
 
+// ── Event team+player stats (aggregate GameEvent + PlayerAttendance) ─────────
+
+export function buildTeamStats(
+  registrations: any[],
+  games: any[],
+  attendance: any[],
+  gameEvents: any[],
+) {
+  const teamRegistry: Record<string, { teamId: string; teamName: string; category: string }> = {}
+  for (const reg of registrations) {
+    teamRegistry[reg.teamClientId] = {
+      teamId: reg.teamClientId,
+      teamName: reg.teamClient.companyName,
+      category: reg.category,
+    }
+  }
+  if (Object.keys(teamRegistry).length === 0) {
+    for (const g of games) {
+      if (!teamRegistry[g.localTeamId]) teamRegistry[g.localTeamId] = { teamId: g.localTeamId, teamName: g.localTeamId.slice(0, 8), category: 'SIN_CAT' }
+      if (!teamRegistry[g.visitingTeamId]) teamRegistry[g.visitingTeamId] = { teamId: g.visitingTeamId, teamName: g.visitingTeamId.slice(0, 8), category: 'SIN_CAT' }
+    }
+  }
+
+  const teamPlayerMap: Record<string, Record<string, {
+    playerId: string; playerName: string; playerNumber: string | null
+    gamesAttended: number; stats: Record<string, number>
+  }>> = {}
+
+  for (const att of attendance) {
+    const { teamId, playerId, present, player } = att
+    if (!teamId || !playerId) continue
+    if (!teamPlayerMap[teamId]) teamPlayerMap[teamId] = {}
+    if (!teamPlayerMap[teamId][playerId]) {
+      const name = player.companyName || `${player.firstName ?? ''} ${player.lastName ?? ''}`.trim() || '—'
+      teamPlayerMap[teamId][playerId] = { playerId, playerName: name, playerNumber: player.playerNumber ?? null, gamesAttended: 0, stats: {} }
+    }
+    if (present) teamPlayerMap[teamId][playerId].gamesAttended += 1
+  }
+
+  for (const ev of gameEvents) {
+    if (!ev.teamId || !ev.playerId) continue
+    if (!teamPlayerMap[ev.teamId]) teamPlayerMap[ev.teamId] = {}
+    if (!teamPlayerMap[ev.teamId][ev.playerId]) {
+      teamPlayerMap[ev.teamId][ev.playerId] = { playerId: ev.playerId, playerName: '—', playerNumber: null, gamesAttended: 0, stats: {} }
+    }
+    teamPlayerMap[ev.teamId][ev.playerId].stats[ev.type] = (teamPlayerMap[ev.teamId][ev.playerId].stats[ev.type] ?? 0) + 1
+  }
+
+  return Object.values(teamRegistry).map(team => ({
+    ...team,
+    players: Object.values(teamPlayerMap[team.teamId] ?? {})
+      .sort((a, b) => a.playerName.localeCompare(b.playerName)),
+  }))
+}
+
+export async function getEventTeamStats(req: Request, res: Response, next: NextFunction) {
+  try {
+    const tenantId = req.user!.tenantId
+    const { eventId } = req.params
+
+    const [games, registrations] = await Promise.all([
+      prisma.footballGame.findMany({
+        where: { eventId, tenantId },
+        select: { id: true, localTeamId: true, visitingTeamId: true },
+      }),
+      prisma.teamEventRegistration.findMany({
+        where: { eventId },
+        include: { teamClient: { select: { id: true, companyName: true } } },
+      }),
+    ])
+
+    const gameIds = games.map(g => g.id)
+    if (gameIds.length === 0) {
+      return res.json({ success: true, data: { teams: [] } })
+    }
+
+    const [attendance, gameEvents] = await Promise.all([
+      prisma.playerAttendance.findMany({
+        where: { gameId: { in: gameIds } },
+        include: { player: { select: { id: true, firstName: true, lastName: true, companyName: true, playerNumber: true } } },
+      }),
+      prisma.gameEvent.findMany({
+        where: { gameId: { in: gameIds }, playerId: { not: null } },
+        select: { type: true, gameId: true, playerId: true, teamId: true },
+      }),
+    ])
+
+    res.json({ success: true, data: { teams: buildTeamStats(registrations, games, attendance, gameEvents) } })
+  } catch (err) {
+    next(err)
+  }
+}
+
 // ── Players for a team (from JUGADOR relations) ────────────────────────────────
 
 export async function getTeamPlayers(req: Request, res: Response, next: NextFunction) {

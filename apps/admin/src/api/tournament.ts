@@ -124,4 +124,8 @@ export const tournamentApi = {
     apiClient.post(`/events/${eventId}/tournament/player-codes`, data ?? {}).then((r) => r.data),
   listPlayerCodes: (eventId: string) =>
     apiClient.get(`/events/${eventId}/tournament/player-codes`).then((r) => r.data),
+
+  // Team+player stats (aggregated from I-Flag games)
+  getTeamPlayerStats: (eventId: string) =>
+    apiClient.get(`/events/${eventId}/tournament/team-player-stats`).then((r) => r.data),
 }

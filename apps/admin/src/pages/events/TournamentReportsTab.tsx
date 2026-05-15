@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import {
-  App, Button, Table, Card, Tag, Tabs, Empty, Typography, Badge,
+  App, Button, Table, Card, Tag, Tabs, Empty, Typography, Badge, Tooltip,
 } from 'antd'
 import {
-  FileExcelOutlined, CalendarOutlined, TrophyOutlined,
+  FileExcelOutlined, CalendarOutlined, TrophyOutlined, UserOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import * as XLSX from 'xlsx'
@@ -60,6 +60,17 @@ export default function TournamentReportsTab({ eventId }: Props) {
     enabled: !!eventId,
   })
   const teams: any[] = teamsData?.data ?? []
+
+  // Per-player stats per team
+  const { data: teamStatsData } = useQuery({
+    queryKey: ['tournament-team-player-stats', eventId],
+    queryFn: () => tournamentApi.getTeamPlayerStats(eventId),
+    enabled: !!eventId,
+  })
+  const teamPlayerStats: any[] = teamStatsData?.data?.teams ?? []
+  const teamPlayerStatsMap: Record<string, any[]> = Object.fromEntries(
+    teamPlayerStats.map((t: any) => [t.teamId, t.players ?? []])
+  )
 
   const isLoading = activitiesLoading || footballLoading
 
@@ -309,7 +320,22 @@ export default function TournamentReportsTab({ eventId }: Props) {
 
   const standingsColumns = [
     { title: '#', key: 'pos', width: 40, render: (_: any, __: any, i: number) => i + 1 },
-    { title: 'Equipo', dataIndex: 'teamName', key: 'teamName' },
+    {
+      title: 'Equipo', dataIndex: 'teamName', key: 'teamName',
+      render: (name: string, row: any) => {
+        const playerCount = (teamPlayerStatsMap[row.teamId] ?? []).length
+        return (
+          <span>
+            {name}
+            {playerCount > 0 && (
+              <Tooltip title={`${playerCount} jugadores`}>
+                <Tag icon={<UserOutlined />} color="blue" style={{ marginLeft: 6, fontSize: 11 }}>{playerCount}</Tag>
+              </Tooltip>
+            )}
+          </span>
+        )
+      },
+    },
     { title: 'PJ', dataIndex: 'played', key: 'played', width: 45 },
     { title: 'G',  dataIndex: 'wins',   key: 'wins',   width: 45, render: (v: number) => <Text style={{ color: '#52c41a' }}>{v}</Text> },
     { title: 'E',  dataIndex: 'draws',  key: 'draws',  width: 45 },
@@ -318,6 +344,27 @@ export default function TournamentReportsTab({ eventId }: Props) {
     { title: 'GC', dataIndex: 'ga',     key: 'ga',     width: 45 },
     { title: 'DG', dataIndex: 'gd',     key: 'gd',     width: 45, render: (v: number) => <span style={{ color: v >= 0 ? '#52c41a' : '#ff4d4f' }}>{v > 0 ? '+' : ''}{v}</span> },
     { title: 'Pts', dataIndex: 'points', key: 'points', width: 50, render: (v: number) => <strong style={{ color: T.navy }}>{v}</strong> },
+  ]
+
+  const STAT_LABELS: Record<string, string> = {
+    TOUCHDOWN: 'TD', EXTRA_POINT: 'XP', SAFETY: 'SAF',
+    INTERCEPTION: 'INT', FLAG_PENALTY: 'PEN', SCORE_ADJUST: 'ADJ',
+  }
+  const STAT_KEYS = ['TOUCHDOWN', 'EXTRA_POINT', 'SAFETY', 'INTERCEPTION', 'FLAG_PENALTY']
+
+  const playerColumns = [
+    { title: '#', key: 'num', width: 40, render: (_: any, r: any) => r.playerNumber ? `#${r.playerNumber}` : '—' },
+    { title: 'Jugador', dataIndex: 'playerName', key: 'playerName' },
+    { title: 'Pres.', key: 'att', width: 55, render: (_: any, r: any) => r.gamesAttended },
+    ...STAT_KEYS.map(k => ({
+      title: STAT_LABELS[k] ?? k,
+      key: k,
+      width: 50,
+      render: (_: any, r: any) => {
+        const v = r.stats?.[k] ?? 0
+        return v > 0 ? <strong style={{ color: k === 'TOUCHDOWN' ? '#52c41a' : k === 'INTERCEPTION' ? '#e91e63' : k === 'FLAG_PENALTY' ? '#faad14' : undefined }}>{v}</strong> : <Text type="secondary">—</Text>
+      },
+    })),
   ]
 
   const finishedCount = allGames.filter((g) => g.homeScore !== null).length
@@ -384,6 +431,27 @@ export default function TournamentReportsTab({ eventId }: Props) {
                           pagination={false}
                           size="small"
                           scroll={{ x: 'max-content' }}
+                          expandable={{
+                            rowExpandable: (r: any) => (teamPlayerStatsMap[r.teamId]?.length ?? 0) > 0,
+                            expandedRowRender: (r: any) => {
+                              const players = teamPlayerStatsMap[r.teamId] ?? []
+                              return (
+                                <div style={{ padding: '8px 0 8px 32px' }}>
+                                  <Text type="secondary" style={{ fontSize: 12, marginBottom: 8, display: 'block' }}>
+                                    Estadísticas por jugador — {r.teamName}
+                                  </Text>
+                                  <Table
+                                    columns={playerColumns}
+                                    dataSource={players}
+                                    rowKey="playerId"
+                                    pagination={false}
+                                    size="small"
+                                    scroll={{ x: 'max-content' }}
+                                  />
+                                </div>
+                              )
+                            },
+                          }}
                         />
                       </div>
                     ))}
