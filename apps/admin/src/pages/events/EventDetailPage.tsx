@@ -102,6 +102,7 @@ export default function EventDetailPage() {
   const { message } = App.useApp()
 
   const activeTab = searchParams.get('tab') ?? 'resumen'
+  const switchTab = (tab: string) => setSearchParams({ tab }, { replace: true })
 
   // ── Modal / UI state ──────────────────────────────────────────────────────
   const [genModalOpen, setGenModalOpen] = useState(false)
@@ -712,7 +713,7 @@ export default function EventDetailPage() {
           <EventSummaryTab
             event={event}
             auditData={auditData?.data ?? []}
-            onSwitchTab={setActiveTab}
+            onSwitchTab={switchTab}
           />
         )}
 
