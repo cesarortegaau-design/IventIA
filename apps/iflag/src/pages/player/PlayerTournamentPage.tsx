@@ -69,6 +69,16 @@ export default function PlayerTournamentPage() {
   })
   const myStats = myStatsData?.data
 
+  const { data: teamStatsData } = useQuery({
+    queryKey: ['tournament-team-stats-public', eventId],
+    queryFn: () => playerApi.getTeamStats(eventId!),
+    enabled: !!eventId,
+  })
+  const teamPlayerStats: any[] = teamStatsData?.data?.teams ?? []
+  const teamPlayerStatsMap: Record<string, any[]> = Object.fromEntries(
+    teamPlayerStats.map((t: any) => [t.teamId, t.players ?? []])
+  )
+
   const payMutation = useMutation({
     mutationFn: () => playerApi.payTournament(eventId!),
     onSuccess: (res) => {
@@ -243,7 +253,7 @@ export default function PlayerTournamentPage() {
       {/* Content */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {activeView === 'standings' && activeCategory && standings[activeCategory] ? (
-          <StandingsTable rows={standings[activeCategory].standings} />
+          <StandingsTable rows={standings[activeCategory].standings} teamPlayerStatsMap={teamPlayerStatsMap} />
         ) : activeView === 'calendar' ? (
           <CalendarList games={filteredCalendar} eventId={eventId} />
         ) : activeView === 'stats' ? (
@@ -258,49 +268,147 @@ export default function PlayerTournamentPage() {
   )
 }
 
-function StandingsTable({ rows }: { rows: any[] }) {
+const PLAYER_STAT_KEYS_TT = [
+  { key: 'TOUCHDOWN',    label: 'TD',  color: 'var(--green)' },
+  { key: 'EXTRA_POINT',  label: 'XP',  color: '#1a9c50' },
+  { key: 'SAFETY',       label: 'SAF', color: 'var(--blue)' },
+  { key: 'INTERCEPTION', label: 'INT', color: '#e91e63' },
+  { key: 'FLAG_PENALTY', label: 'PEN', color: 'var(--orange)' },
+]
+
+function StandingsTable({ rows, teamPlayerStatsMap }: { rows: any[]; teamPlayerStatsMap: Record<string, any[]> }) {
+  const [expandedTeam, setExpandedTeam] = useState<string | null>(null)
+
   if (!rows?.length) {
     return <div style={{ padding: 24, color: 'var(--text-muted)', textAlign: 'center', fontSize: 13 }}>Sin partidos jugados aún</div>
   }
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-        <thead>
-          <tr style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
-            {['#', 'Equipo', 'PJ', 'G', 'E', 'P', 'GF', 'GC', 'DG', 'Pts'].map((h) => (
-              <th
-                key={h}
-                style={{ padding: '8px 10px', textAlign: h === 'Equipo' ? 'left' : 'center', color: 'var(--text-muted)', fontWeight: 600, whiteSpace: 'nowrap' }}
-              >
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => (
-            <tr key={row.teamId} style={{ borderBottom: '1px solid var(--border)' }}>
-              <td style={{ padding: '10px 10px', color: 'var(--text-muted)', textAlign: 'center' }}>{i + 1}</td>
-              <td style={{ padding: '10px 10px', fontWeight: 600, color: 'var(--text)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {row.teamName}
-              </td>
-              <td style={numCell}>{row.played}</td>
-              <td style={{ ...numCell, color: 'var(--green)' }}>{row.won}</td>
-              <td style={numCell}>{row.drawn}</td>
-              <td style={{ ...numCell, color: 'var(--red)' }}>{row.lost}</td>
-              <td style={numCell}>{row.gf}</td>
-              <td style={numCell}>{row.ga}</td>
-              <td style={{ ...numCell, color: row.gd >= 0 ? 'var(--green)' : 'var(--red)' }}>
-                {row.gd > 0 ? '+' : ''}{row.gd}
-              </td>
-              <td style={{ ...numCell, fontWeight: 700, color: 'var(--text)', fontSize: 14 }}>{row.points}</td>
+    <div style={{ padding: '0 0 16px' }}>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
+              {['#', 'Equipo', 'PJ', 'G', 'E', 'P', 'GF', 'GC', 'DG', 'Pts'].map((h) => (
+                <th key={h} style={{ padding: '8px 10px', textAlign: h === 'Equipo' ? 'left' : 'center', color: 'var(--text-muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                  {h}
+                </th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => {
+              const players = teamPlayerStatsMap[row.teamId] ?? []
+              const isExpanded = expandedTeam === row.teamId
+              const hasPlayers = players.length > 0
+              return (
+                <>
+                  <tr
+                    key={row.teamId}
+                    onClick={() => hasPlayers && setExpandedTeam(isExpanded ? null : row.teamId)}
+                    style={{ borderBottom: isExpanded ? 'none' : '1px solid var(--border)', cursor: hasPlayers ? 'pointer' : 'default', background: isExpanded ? 'var(--surface2)' : 'transparent' }}
+                  >
+                    <td style={{ padding: '10px 10px', color: 'var(--text-muted)', textAlign: 'center' }}>{i + 1}</td>
+                    <td style={{ padding: '10px 10px', fontWeight: 600, color: 'var(--text)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {row.teamName}
+                      {hasPlayers && <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--blue)' }}>{isExpanded ? '▲' : '▼'}</span>}
+                    </td>
+                    <td style={numCell}>{row.played}</td>
+                    <td style={{ ...numCell, color: 'var(--green)' }}>{row.won}</td>
+                    <td style={numCell}>{row.drawn}</td>
+                    <td style={{ ...numCell, color: 'var(--red)' }}>{row.lost}</td>
+                    <td style={numCell}>{row.gf}</td>
+                    <td style={numCell}>{row.ga}</td>
+                    <td style={{ ...numCell, color: row.gd >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                      {row.gd > 0 ? '+' : ''}{row.gd}
+                    </td>
+                    <td style={{ ...numCell, fontWeight: 700, color: 'var(--text)', fontSize: 14 }}>{row.points}</td>
+                  </tr>
+                  {isExpanded && (
+                    <tr key={`${row.teamId}-expand`} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td colSpan={10} style={{ padding: '0 0 8px 16px', background: 'var(--surface2)' }}>
+                        <div style={{ overflowX: 'auto', paddingTop: 4 }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                            <thead>
+                              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                                <th style={pthStyle}>#</th>
+                                <th style={{ ...pthStyle, textAlign: 'left' }}>Jugador</th>
+                                <th style={pthStyle}>Pres.</th>
+                                {PLAYER_STAT_KEYS_TT.map(s => <th key={s.key} style={pthStyle}>{s.label}</th>)}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {players.map((p: any, pi: number) => (
+                                <tr key={p.playerId} style={{ borderBottom: pi < players.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                                  <td style={ptdStyle}>{p.playerNumber ? `#${p.playerNumber}` : '—'}</td>
+                                  <td style={{ ...ptdStyle, textAlign: 'left', fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap' }}>{p.playerName}</td>
+                                  <td style={ptdStyle}>{p.gamesAttended > 0 ? <span style={{ color: 'var(--green)', fontWeight: 700 }}>{p.gamesAttended}</span> : <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
+                                  {PLAYER_STAT_KEYS_TT.map(s => {
+                                    const v = p.stats?.[s.key] ?? 0
+                                    return <td key={s.key} style={ptdStyle}>{v > 0 ? <span style={{ color: s.color, fontWeight: 700 }}>{v}</span> : <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
+                                  })}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      <StandingsLegendIflag />
     </div>
   )
 }
+
+function StandingsLegendIflag() {
+  const [open, setOpen] = useState(false)
+  const teamCols = [
+    ['PJ', 'Partidos Jugados'], ['G', 'Ganados'], ['E', 'Empates'], ['P', 'Perdidos'],
+    ['GF', 'Goles a Favor'], ['GC', 'Goles en Contra'], ['DG', 'Diferencia de Goles'], ['Pts', 'Puntos'],
+  ]
+  const playerCols = [
+    ['Pres.', 'Presencias en partidos'], ['TD', 'Touchdown'], ['XP', 'Punto Extra'],
+    ['SAF', 'Safety'], ['INT', 'Intercepción'], ['PEN', 'Castigo / Flag Penalty'],
+  ]
+  return (
+    <div style={{ margin: '12px 16px 0' }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)', padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}
+      >
+        ℹ️ Leyenda de acrónimos {open ? '▲' : '▼'}
+      </button>
+      {open && (
+        <div style={{ marginTop: 8, padding: '12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Equipo</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px 14px', marginBottom: 10 }}>
+            {teamCols.map(([abbr, full]) => (
+              <span key={abbr} style={{ fontSize: 11, color: 'var(--text)', whiteSpace: 'nowrap' }}>
+                <strong style={{ color: 'var(--blue)' }}>{abbr}</strong> = {full}
+              </span>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Jugador (toca el equipo para ver)</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px 14px' }}>
+            {playerCols.map(([abbr, full]) => (
+              <span key={abbr} style={{ fontSize: 11, color: 'var(--text)', whiteSpace: 'nowrap' }}>
+                <strong style={{ color: 'var(--green)' }}>{abbr}</strong> = {full}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+const pthStyle: React.CSSProperties = { padding: '5px 8px', fontWeight: 600, color: 'var(--text-muted)', fontSize: 11, textAlign: 'center', whiteSpace: 'nowrap' }
+const ptdStyle: React.CSSProperties = { padding: '7px 8px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }
 
 function CalendarList({ games, eventId }: { games: any[]; eventId?: string }) {
   const navigate = useNavigate()
