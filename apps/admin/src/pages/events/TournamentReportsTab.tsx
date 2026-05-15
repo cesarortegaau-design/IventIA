@@ -1,3 +1,4 @@
+import React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   App, Button, Table, Card, Tag, Tabs, Empty, Typography, Badge, Tooltip,
@@ -33,49 +34,49 @@ interface GameRow {
 }
 
 function StandingsLegend() {
+  const [open, setOpen] = React.useState(false)
   const teamCols = [
-    { abbr: 'PJ', full: 'Partidos Jugados' },
-    { abbr: 'G',  full: 'Ganados' },
-    { abbr: 'E',  full: 'Empates' },
-    { abbr: 'P',  full: 'Perdidos' },
-    { abbr: 'GF', full: 'Goles a Favor' },
-    { abbr: 'GC', full: 'Goles en Contra' },
-    { abbr: 'DG', full: 'Diferencia de Goles' },
-    { abbr: 'Pts',full: 'Puntos' },
+    ['PJ', 'Partidos Jugados'], ['G', 'Ganados'], ['E', 'Empates'], ['P', 'Perdidos'],
+    ['GF', 'Goles a Favor'], ['GC', 'Goles en Contra'], ['DG', 'Diferencia de Goles'], ['Pts', 'Puntos'],
   ]
   const playerCols = [
-    { abbr: 'Pres.', full: 'Presencias en partidos' },
-    { abbr: 'TD',   full: 'Touchdown' },
-    { abbr: 'XP',   full: 'Punto Extra (Extra Point)' },
-    { abbr: 'SAF',  full: 'Safety' },
-    { abbr: 'INT',  full: 'Intercepción' },
-    { abbr: 'PEN',  full: 'Castigo / Flag Penalty' },
+    ['Pres.', 'Presencias en partidos'], ['TD', 'Touchdown'], ['XP', 'Punto Extra (Extra Point)'],
+    ['SAF', 'Safety'], ['INT', 'Intercepción'], ['PEN', 'Castigo / Flag Penalty'],
   ]
   return (
-    <div style={{ marginTop: 16, padding: '12px 14px', background: '#fafafa', border: '1px solid #f0f0f0', borderRadius: 8 }}>
-      <Text type="secondary" style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 8 }}>Leyenda</Text>
-      <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-        <div>
-          <Text type="secondary" style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Equipo</Text>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 16px' }}>
-            {teamCols.map(c => (
-              <span key={c.abbr} style={{ fontSize: 11, color: '#555', whiteSpace: 'nowrap' }}>
-                <strong>{c.abbr}</strong> = {c.full}
-              </span>
-            ))}
+    <div style={{ marginTop: 12 }}>
+      <Button
+        type="link"
+        size="small"
+        onClick={() => setOpen(v => !v)}
+        style={{ padding: 0, fontSize: 12, color: '#8c8c8c' }}
+      >
+        ℹ️ Leyenda de acrónimos {open ? '▲' : '▼'}
+      </Button>
+      {open && (
+        <div style={{ marginTop: 8, padding: '12px 14px', background: '#fafafa', border: '1px solid #f0f0f0', borderRadius: 8, display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+          <div>
+            <Text type="secondary" style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Equipo</Text>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 16px' }}>
+              {teamCols.map(([abbr, full]) => (
+                <span key={abbr} style={{ fontSize: 11, color: '#555', whiteSpace: 'nowrap' }}>
+                  <strong>{abbr}</strong> = {full}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div>
+            <Text type="secondary" style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Jugador (expandir fila de equipo)</Text>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 16px' }}>
+              {playerCols.map(([abbr, full]) => (
+                <span key={abbr} style={{ fontSize: 11, color: '#555', whiteSpace: 'nowrap' }}>
+                  <strong>{abbr}</strong> = {full}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
-        <div>
-          <Text type="secondary" style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Jugador (al expandir equipo)</Text>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 16px' }}>
-            {playerCols.map(c => (
-              <span key={c.abbr} style={{ fontSize: 11, color: '#555', whiteSpace: 'nowrap' }}>
-                <strong>{c.abbr}</strong> = {c.full}
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   )
 }
