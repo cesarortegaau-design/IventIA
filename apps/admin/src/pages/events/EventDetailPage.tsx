@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { useRecentScreen } from '../../hooks/useRecentScreen'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Tag, Button, Table, Space, Tabs, App, Select, Typography, Form, DatePicker,
@@ -489,6 +490,7 @@ export default function EventDetailPage() {
   }
 
   const event = data?.data
+  useRecentScreen(event ? `Evento: ${event.name}` : '', 'eventos')
 
   if (!event) {
     return (

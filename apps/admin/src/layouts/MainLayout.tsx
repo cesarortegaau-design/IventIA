@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react' // v2
+import { useState, useMemo, useEffect } from 'react' // v2
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { Avatar, Dropdown, Typography, Space, Badge, Drawer, Button, Grid, Input, Modal } from 'antd'
 import {
@@ -28,6 +28,8 @@ import {
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '../stores/authStore'
+import { useRecentScreensStore } from '../stores/recentScreensStore'
+import RecentScreensPanel from '../components/RecentScreensPanel'
 import { chatApi } from '../api/chat'
 import { collabTasksApi } from '../api/collabTasks'
 import { PRIVILEGES } from '@iventia/shared'
@@ -35,6 +37,46 @@ import { T } from '../styles/tokens'
 
 const { Text } = Typography
 const { useBreakpoint } = Grid
+
+// Maps a pathname to a { label, section } for the recent screens store.
+// Static pages are registered directly; dynamic detail pages use placeholder labels
+// that get overridden by page-level useRecentScreen() once data loads.
+function getLabelForPath(pathname: string): { label: string; section: string } | null {
+  const staticMap: Record<string, { label: string; section: string }> = {
+    '/':                                    { label: 'Inicio',                 section: 'inicio' },
+    '/dashboard/contabilidad':              { label: 'Contabilidad',           section: 'inicio' },
+    '/dashboard/operaciones':              { label: 'Operaciones',             section: 'inicio' },
+    '/eventos':                             { label: 'Todos los eventos',      section: 'eventos' },
+    '/booking-calendar':                    { label: 'Calendario',             section: 'eventos' },
+    '/contratos':                           { label: 'Contratos',              section: 'eventos' },
+    '/plantillas':                          { label: 'Plantillas',             section: 'eventos' },
+    '/reportes/ordenes':                    { label: 'Órdenes de Servicio',    section: 'operaciones' },
+    '/catalogos/ordenes-compra':            { label: 'Órdenes de Compra',      section: 'operaciones' },
+    '/almacen/almacenes':                   { label: 'Almacenes',              section: 'almacen' },
+    '/almacen/inventario':                  { label: 'Inventario',             section: 'almacen' },
+    '/almacen/recepcion':                   { label: 'Recepción OC',           section: 'almacen' },
+    '/catalogos/recursos':                  { label: 'Recursos',               section: 'catalogos' },
+    '/catalogos/listas-precio':             { label: 'Listas de Precio',       section: 'catalogos' },
+    '/catalogos/listas-precios-proveedores':{ label: 'Listas Proveedores',     section: 'catalogos' },
+    '/catalogos/clientes':                  { label: 'Clientes',               section: 'catalogos' },
+    '/catalogos/proveedores':               { label: 'Proveedores',            section: 'catalogos' },
+    '/catalogos/organizaciones':            { label: 'Organizaciones',         section: 'catalogos' },
+    '/catalogos/usuarios-perfiles':         { label: 'Usuarios y Perfiles',    section: 'catalogos' },
+    '/analisis':                            { label: 'Análisis IA',            section: 'analitica' },
+    '/produccion':                          { label: 'Producción y Costos',    section: 'analitica' },
+    '/crm':                                 { label: 'CRM',                    section: 'crm' },
+    '/chat':                                { label: 'Colabora',               section: 'colabora' },
+  }
+  if (staticMap[pathname]) return staticMap[pathname]
+  // Dynamic detail pages — placeholder labels, overridden by page-level useRecentScreen
+  if (/^\/eventos\/[^/]/.test(pathname))                return { label: 'Detalle de evento',   section: 'eventos' }
+  if (/^\/ordenes\/[^/]/.test(pathname))                return { label: 'Detalle de orden',    section: 'ordenes' }
+  if (/^\/crm\/[^/]/.test(pathname))                    return { label: 'Detalle de cliente',  section: 'crm' }
+  if (/^\/contratos\/[^/]/.test(pathname))              return { label: 'Detalle de contrato', section: 'eventos' }
+  if (/^\/catalogos\/recursos\/[^/]/.test(pathname))    return { label: 'Detalle de recurso',  section: 'catalogos' }
+  if (/^\/catalogos\/clientes\/[^/]/.test(pathname))    return { label: 'Detalle de cliente',  section: 'catalogos' }
+  return null
+}
 
 // Top-level area definitions
 const TOP_AREAS = [
@@ -200,6 +242,13 @@ export default function MainLayout() {
   ]
 
   const initials = `${user?.firstName?.[0] || ''}${user?.lastName?.[0] || ''}`
+
+  // Track visited routes in the recent screens store
+  const pushRecent = useRecentScreensStore((s) => s.push)
+  useEffect(() => {
+    const entry = getLabelForPath(location.pathname)
+    if (entry) pushRecent({ path: location.pathname, ...entry })
+  }, [location.pathname]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Sidebar renderer (shared between desktop and mobile drawer) ──
   const renderSidebar = () => (
@@ -446,6 +495,9 @@ export default function MainLayout() {
           <Outlet />
         </main>
       </div>
+
+      {/* Recent screens floating panel */}
+      <RecentScreensPanel />
 
       {/* Search modal (⌘K) */}
       <Modal

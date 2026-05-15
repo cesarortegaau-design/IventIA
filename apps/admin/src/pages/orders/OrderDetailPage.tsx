@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useRecentScreen } from '../../hooks/useRecentScreen'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Descriptions, Table, Tag, Button, Space, Timeline, Form, Tabs,
@@ -304,6 +305,8 @@ export default function OrderDetailPage() {
     queryFn: organizationsApi.list,
     enabled: editModalOpen,
   })
+
+  useRecentScreen(order ? `Orden: ${order.orderNumber}` : '', 'ordenes')
 
   if (isLoading) return <Card loading />
   if (!order) return null

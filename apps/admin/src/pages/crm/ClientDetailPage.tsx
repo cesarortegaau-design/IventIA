@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useRecentScreen } from '../../hooks/useRecentScreen'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Row, Col, Typography, Tag, Button, Tabs, Timeline, List, Avatar,
@@ -224,6 +225,11 @@ export default function ClientDetailPage() {
     mutationFn: (relationId: string) => clientsApi.deleteRelation(clientId!, relationId),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['client-summary', clientId] }); message.success('Relación eliminada') },
   })
+
+  useRecentScreen(
+    summaryData?.data?.client ? clientDisplayName(summaryData.data.client) : '',
+    'crm'
+  )
 
   if (isLoading) return <div style={{ padding: 40, textAlign: 'center' }}><Spin size="large" /></div>
 
