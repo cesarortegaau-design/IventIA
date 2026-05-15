@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Table, Button, Tag, Space, Input, Select, Drawer, Spin, Empty,
-  Progress, Avatar, App, Popconfirm, Row, Col, Statistic,
+  Progress, Avatar, App, Popconfirm, Row, Col, Statistic, Grid,
 } from 'antd'
 import {
   PlusOutlined, SearchOutlined, UserOutlined, ClockCircleOutlined,
@@ -51,6 +51,7 @@ interface EventTasksTabProps {
 export default function EventTasksTab({ eventId, event }: EventTasksTabProps) {
   const qc = useQueryClient()
   const { message } = App.useApp()
+  const { lg } = Grid.useBreakpoint()
 
   const [search, setSearch]             = useState('')
   const [filterStatus, setFilterStatus] = useState<string | undefined>()
@@ -343,13 +344,14 @@ export default function EventTasksTab({ eventId, event }: EventTasksTabProps) {
       </div>
 
       {/* Table */}
-      <div style={{ background: 'white', borderRadius: 10, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
+      <div style={{ background: 'white', borderRadius: 10, border: `1px solid ${T.border}`, overflowX: 'auto' }}>
         <Table
           dataSource={filtered}
           columns={columns}
           rowKey="id"
           loading={isLoading}
           size="small"
+          scroll={lg ? undefined : { x: 'max-content' }}
           pagination={{ pageSize: 20, showSizeChanger: false, hideOnSinglePage: true }}
           locale={{ emptyText: <Empty description={hasFilters ? 'Sin resultados para los filtros aplicados' : 'Sin tareas para este evento'} /> }}
           onRow={r => ({

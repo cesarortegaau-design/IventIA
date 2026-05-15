@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   App, Button, Table, Tag, Space, Popconfirm, Select, Upload, Modal,
-  DatePicker, Drawer, Tooltip,
+  DatePicker, Drawer, Tooltip, Grid,
 } from 'antd'
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, DownloadOutlined,
@@ -259,6 +259,7 @@ interface Props {
 export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
   const queryClient = useQueryClient()
   const { message } = App.useApp()
+  const { lg } = Grid.useBreakpoint()
 
   // ── View state ──────────────────────────────────────────────────────────────
   const [view, setView]                       = useState<'list' | 'gantt'>('list')
@@ -527,7 +528,7 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
       dataIndex: 'position',
       key: 'position',
       width: 48,
-      fixed: 'left' as const,
+      fixed: lg ? 'left' as const : undefined,
       render: (v: number) => <span style={{ color: T.textMuted, fontSize: 12 }}>{v ?? '—'}</span>,
     },
     {
@@ -535,7 +536,7 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
       dataIndex: 'title',
       key: 'title',
       width: 220,
-      fixed: 'left' as const,
+      fixed: lg ? 'left' as const : undefined,
       render: (v: string, r: any) => (
         <span style={{ paddingLeft: r._isChild || r.parentId ? 16 : 0, fontWeight: r._isChild ? 400 : 500 }}>
           {v}
@@ -810,7 +811,7 @@ export default function EventTimelineTab({ eventId, event, activeTab }: Props) {
               pageSizeOptions: [10, 25, 50, 100],
               onShowSizeChange: (_: number, size: number) => setPageSize(size),
             }}
-            scroll={{ x: 1800, y: 'calc(100vh - 420px)' }}
+            scroll={lg ? { x: 1800, y: 'calc(100vh - 420px)' } : { x: 1800 }}
             expandable={{
               expandedRowKeys,
               onExpand: (expanded, record) => {

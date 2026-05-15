@@ -374,7 +374,7 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
   // ── Shared Concepto column ──────────────────────────────────────────────────
   const conceptoCol = {
     title: 'Concepto',
-    key: 'desc', width: 220, fixed: 'left' as const,
+    key: 'desc', width: 220, fixed: lg ? 'left' as const : undefined,
     onHeaderCell: () => hFixed,
     render: (_: any, r: any) => (
       <div style={{ padding: '2px 0' }}>
@@ -389,7 +389,7 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
 
   const tasksCol = {
     title: 'Tareas',
-    key: 'tasks', width: 75, fixed: 'right' as const,
+    key: 'tasks', width: 75, fixed: lg ? 'right' as const : undefined,
     onHeaderCell: () => hFixed,
     render: (_: any, r: any) => (
       <div style={{ textAlign: 'center' }}>
