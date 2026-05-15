@@ -3,7 +3,11 @@ import {
   Spin, Alert, Checkbox, Space, Typography, Tag, Drawer, Form, Input,
   Select, InputNumber, Button, Popconfirm, App, Modal, Tooltip, Table, Badge,
 } from 'antd'
-import { EditOutlined, StopOutlined, PlusOutlined, LinkOutlined, ZoomInOutlined, ZoomOutOutlined, FullscreenExitOutlined } from '@ant-design/icons'
+import {
+  EditOutlined, StopOutlined, PlusOutlined, LinkOutlined,
+  ZoomInOutlined, ZoomOutOutlined, FullscreenExitOutlined,
+  BorderOutlined, AimOutlined, CaretUpOutlined,
+} from '@ant-design/icons'
 import Konva from 'konva'
 import { Stage, Layer, Line, Circle, Text, Group, Image as KonvaImage } from 'react-konva'
 // @ts-ignore — no official types for dxf-parser
@@ -196,10 +200,15 @@ export default function DxfViewer({
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  // Draw mode
+  // Draw mode (free polygon)
   const [drawMode, setDrawMode] = useState(false)
   const [drawPoints, setDrawPoints] = useState<[number, number][]>([])
   const [cursorDxf, setCursorDxf] = useState<[number, number] | null>(null)
+
+  // Shape mode (preset figures)
+  const [shapeMode, setShapeMode] = useState<'rect' | 'circle' | 'triangle' | null>(null)
+  const [shapeSize, setShapeSize] = useState<number>(10)
+  const [shapePreviewPos, setShapePreviewPos] = useState<[number, number] | null>(null)
 
   // Portal modal
   const [portalStand, setPortalStand] = useState<StandGeo | null>(null)
@@ -233,6 +242,9 @@ export default function DxfViewer({
         const ty = PADDING + bbox.maxY * fitScale + ((height - PADDING * 2) - dxfH * fitScale) / 2
         baseTransform.current = { scale: fitScale, x: tx, y: ty }
         setScale(fitScale); setPos({ x: tx, y: ty })
+        // Default shape size = ~5% of the shorter bbox dimension
+        const shortSide = Math.min(dxfW, dxfH)
+        setShapeSize(Math.max(1, parseFloat((shortSide * 0.05).toFixed(2))))
       })
       .catch((e) => {
         const serverMsg = e?.response?.data?.error?.message
@@ -314,27 +326,63 @@ export default function DxfViewer({
     setDrawerOpen(true)
   }
   function cancelDraw() { setDrawMode(false); setDrawPoints([]); setCursorDxf(null) }
+  function cancelShape() { setShapeMode(null); setShapePreviewPos(null) }
+
+  // ── Shape helpers ─────────────────────────────────────────────────────────
+  function rectPolygon(cx: number, cy: number, size: number): [number, number][] {
+    const h = size / 2
+    return [[cx - h, cy - h], [cx + h, cy - h], [cx + h, cy + h], [cx - h, cy + h]]
+  }
+  function circlePolygon(cx: number, cy: number, size: number, sides = 20): [number, number][] {
+    const r = size / 2
+    return Array.from({ length: sides }, (_, i) => {
+      const a = (i / sides) * Math.PI * 2
+      return [cx + Math.cos(a) * r, cy + Math.sin(a) * r] as [number, number]
+    })
+  }
+  function trianglePolygon(cx: number, cy: number, size: number): [number, number][] {
+    const r = size / Math.sqrt(3)
+    return [[cx, cy + r * 1.0], [cx - size / 2, cy - r * 0.5], [cx + size / 2, cy - r * 0.5]]
+  }
+  function shapeToPolygon(type: typeof shapeMode, cx: number, cy: number): [number, number][] {
+    if (type === 'rect') return rectPolygon(cx, cy, shapeSize)
+    if (type === 'circle') return circlePolygon(cx, cy, shapeSize)
+    if (type === 'triangle') return trianglePolygon(cx, cy, shapeSize)
+    return []
+  }
+  function placeShape(cx: number, cy: number) {
+    if (!shapeMode) return
+    const polygon = shapeToPolygon(shapeMode, cx, cy)
+    cancelShape()
+    const draft: Partial<StandSaveData> = { code: '', status: 'AVAILABLE', polygon, dxfEntityIdx: null, floorPlanId: floorPlan.id }
+    setEditingStand(draft); setEditingStandFull(null)
+    form.setFieldsValue({ code: '', status: 'AVAILABLE', widthM: null, depthM: null, heightM: null, locationNotes: null, clientId: null })
+    setDrawerOpen(true)
+  }
 
   function handleStageClick(e: Konva.KonvaEventObject<MouseEvent>) {
-    if (!drawMode) return
+    if (!drawMode && !shapeMode) return
     const stage = stageRef.current; if (!stage) return
     const ptr = stage.getPointerPosition()!
     const [dx, dy] = screenToDxf(ptr.x, ptr.y)
+    if (shapeMode) { placeShape(dx, dy); return }
     if (isNearFirstPoint(dx, dy)) { finishPolygon(drawPoints); return }
     setDrawPoints((prev) => [...prev, [dx, dy]])
   }
   function handleStageDblClick() { if (drawMode && drawPoints.length >= 3) finishPolygon(drawPoints) }
   function handleStageMouseMove(e: Konva.KonvaEventObject<MouseEvent>) {
-    if (!drawMode) return
+    if (!drawMode && !shapeMode) return
     const stage = stageRef.current; if (!stage) return
-    setCursorDxf(screenToDxf(stage.getPointerPosition()!.x, stage.getPointerPosition()!.y))
+    const dxfPos = screenToDxf(stage.getPointerPosition()!.x, stage.getPointerPosition()!.y)
+    if (drawMode) setCursorDxf(dxfPos)
+    if (shapeMode) setShapePreviewPos(dxfPos)
   }
   useEffect(() => {
-    if (!drawMode) return
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') cancelDraw() }
+    if (!drawMode && !shapeMode) return
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') { cancelDraw(); cancelShape() } }
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
-  }, [drawMode]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [drawMode, shapeMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Entity click ─────────────────────────────────────────────────────────
   function openDrawerForEntity(entityIdx: number, entity: DxfEntity) {
@@ -521,9 +569,22 @@ export default function DxfViewer({
 
   // ── Draw preview ──────────────────────────────────────────────────────────
   function renderDrawPreview() {
+    const sw = 2 / scale
+    // Shape mode preview
+    if (shapeMode && shapePreviewPos) {
+      const [cx, cy] = shapePreviewPos
+      const poly = shapeToPolygon(shapeMode, cx, cy)
+      const pts = poly.flatMap(([x, y]) => [x, -y])
+      return (
+        <>
+          <Line points={pts} closed stroke="#f59e0b" strokeWidth={sw} fill="#f59e0b33" dash={[6 / scale, 3 / scale]} listening={false} />
+          <Circle x={cx} y={-cy} radius={4 / scale} fill="#f59e0b" listening={false} />
+        </>
+      )
+    }
+    // Free polygon preview
     if (!drawMode || drawPoints.length === 0) return null
     const nearFirst = cursorDxf ? isNearFirstPoint(cursorDxf[0], cursorDxf[1]) : false
-    const sw = 2 / scale
     return (
       <>
         {drawPoints.length > 1 && <Line points={drawPoints.flatMap(([x, y]) => [x, -y])} stroke="#f59e0b" strokeWidth={sw} listening={false} />}
@@ -560,29 +621,106 @@ export default function DxfViewer({
 
       {/* Admin toolbar */}
       {!readonly && (
-        <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <Tooltip title="Dibuja un polígono personalizado. Clic = vértice · Clic en primer punto o doble-clic = cerrar · Escape = cancelar">
-            <Button icon={drawMode ? <StopOutlined /> : <EditOutlined />} type={drawMode ? 'primary' : 'default'} danger={drawMode}
-              onClick={() => drawMode ? cancelDraw() : setDrawMode(true)}>
-              {drawMode ? `Cancelar (${drawPoints.length} pts)` : 'Dibujar stand'}
-            </Button>
-          </Tooltip>
-          {!drawMode && <span style={{ fontSize: 12, color: '#94a3b8' }}>O haz clic en un <strong style={{ color: '#f59e0b' }}>polígono cerrado</strong> del DXF para identificarlo</span>}
-          {drawMode && (
-            <span style={{ fontSize: 12, color: '#f59e0b' }}>
-              {drawPoints.length === 0 ? 'Haz clic para agregar el primer vértice'
-                : drawPoints.length < 3 ? `${drawPoints.length} vértice(s) — agrega al menos 3`
-                : 'Cierra el polígono haciendo clic en el primer punto (verde) o doble-clic'}
+        <div style={{ marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {/* Row 1: drawing tools */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            {/* Free polygon */}
+            <Tooltip title="Polígono libre: Clic = vértice · Clic en primer punto o doble-clic = cerrar · Escape = cancelar">
+              <Button
+                size="small"
+                icon={drawMode ? <StopOutlined /> : <EditOutlined />}
+                type={drawMode ? 'primary' : 'default'} danger={drawMode}
+                onClick={() => { if (drawMode) cancelDraw(); else { cancelShape(); setDrawMode(true) } }}
+              >
+                {drawMode ? `Cancelar (${drawPoints.length} pts)` : 'Polígono'}
+              </Button>
+            </Tooltip>
+
+            <span style={{ color: '#334155', fontSize: 12, fontWeight: 600 }}>Figuras:</span>
+
+            {/* Rectangle */}
+            <Tooltip title="Rectángulo — haz clic en el plano para colocarlo">
+              <Button
+                size="small"
+                icon={<BorderOutlined />}
+                type={shapeMode === 'rect' ? 'primary' : 'default'}
+                onClick={() => { cancelDraw(); setShapeMode(shapeMode === 'rect' ? null : 'rect'); setShapePreviewPos(null) }}
+              >
+                Rectángulo
+              </Button>
+            </Tooltip>
+
+            {/* Circle */}
+            <Tooltip title="Círculo (aproximación poligonal) — haz clic en el plano para colocarlo">
+              <Button
+                size="small"
+                icon={<AimOutlined />}
+                type={shapeMode === 'circle' ? 'primary' : 'default'}
+                onClick={() => { cancelDraw(); setShapeMode(shapeMode === 'circle' ? null : 'circle'); setShapePreviewPos(null) }}
+              >
+                Círculo
+              </Button>
+            </Tooltip>
+
+            {/* Triangle */}
+            <Tooltip title="Triángulo equilátero — haz clic en el plano para colocarlo">
+              <Button
+                size="small"
+                icon={<CaretUpOutlined />}
+                type={shapeMode === 'triangle' ? 'primary' : 'default'}
+                onClick={() => { cancelDraw(); setShapeMode(shapeMode === 'triangle' ? null : 'triangle'); setShapePreviewPos(null) }}
+              >
+                Triángulo
+              </Button>
+            </Tooltip>
+
+            {/* Size control — visible when any shape mode is active */}
+            {shapeMode && (
+              <>
+                <span style={{ fontSize: 12, color: '#64748b', marginLeft: 4 }}>Tamaño:</span>
+                <InputNumber
+                  size="small"
+                  value={shapeSize}
+                  onChange={(v) => setShapeSize(v ?? 1)}
+                  min={0.01}
+                  step={parseFloat((shapeSize * 0.1).toFixed(2)) || 0.1}
+                  style={{ width: 100 }}
+                  addonAfter="u"
+                />
+                <Button size="small" danger icon={<StopOutlined />} onClick={cancelShape}>Cancelar</Button>
+              </>
+            )}
+
+            {/* Status legend */}
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 10 }}>
+              {Object.entries(STATUS_COLORS).map(([k, c]) => (
+                <span key={k} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#94a3b8' }}>
+                  <span style={{ width: 10, height: 10, background: c, borderRadius: 2, display: 'inline-block' }} />
+                  {STATUS_LABELS[k]}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Row 2: contextual hints */}
+          {!drawMode && !shapeMode && (
+            <span style={{ fontSize: 12, color: '#94a3b8' }}>
+              Haz clic en un <strong style={{ color: '#f59e0b' }}>polígono cerrado</strong> del DXF para identificarlo como stand, o usa los botones de dibujo.
             </span>
           )}
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 10 }}>
-            {Object.entries(STATUS_COLORS).map(([k, c]) => (
-              <span key={k} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#94a3b8' }}>
-                <span style={{ width: 10, height: 10, background: c, borderRadius: 2, display: 'inline-block' }} />
-                {STATUS_LABELS[k]}
-              </span>
-            ))}
-          </div>
+          {drawMode && (
+            <span style={{ fontSize: 12, color: '#f59e0b' }}>
+              {drawPoints.length === 0 ? 'Polígono libre: haz clic para agregar el primer vértice'
+                : drawPoints.length < 3 ? `${drawPoints.length} vértice(s) — agrega al menos 3`
+                : 'Cierra haciendo clic en el primer punto (verde) o doble-clic · Escape = cancelar'}
+            </span>
+          )}
+          {shapeMode && (
+            <span style={{ fontSize: 12, color: '#f59e0b' }}>
+              {shapeMode === 'rect' ? '▣ Rectángulo' : shapeMode === 'circle' ? '◯ Círculo' : '△ Triángulo'}
+              {' '}— Haz clic en el plano para colocar la figura · ajusta el tamaño antes de colocar · Escape = cancelar
+            </span>
+          )}
         </div>
       )}
 
@@ -621,15 +759,15 @@ export default function DxfViewer({
         {!loading && !error && dxf && (
           <Stage ref={stageRef} width={stageWidth} height={height}
             scaleX={scale} scaleY={scale} x={pos.x} y={pos.y}
-            draggable={!drawMode && !isPinching} style={{ cursor: drawMode ? 'crosshair' : undefined }}
+            draggable={!drawMode && !shapeMode && !isPinching} style={{ cursor: (drawMode || shapeMode) ? 'crosshair' : undefined }}
             onWheel={handleWheel}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
             onDragEnd={(e) => setPos({ x: e.target.x(), y: e.target.y() })}
-            onClick={drawMode ? handleStageClick : undefined}
+            onClick={(drawMode || shapeMode) ? handleStageClick : undefined}
             onDblClick={drawMode ? handleStageDblClick : undefined}
-            onMouseMove={drawMode ? handleStageMouseMove : undefined}
+            onMouseMove={(drawMode || shapeMode) ? handleStageMouseMove : undefined}
           >
             <Layer><Group>{renderEntities()}</Group></Layer>
             <Layer>{renderStandOverlays()}</Layer>
