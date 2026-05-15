@@ -5,7 +5,6 @@ import {
 } from 'antd'
 import {
   EditOutlined, StopOutlined, PlusOutlined, LinkOutlined,
-  ZoomInOutlined, ZoomOutOutlined, FullscreenExitOutlined,
   BorderOutlined, AimOutlined, CaretUpOutlined,
 } from '@ant-design/icons'
 import Konva from 'konva'
@@ -735,25 +734,84 @@ export default function DxfViewer({
           </div>
         )}
         {error && <div style={{ padding: 24 }}><Alert type="error" message={error} /></div>}
-        {/* Zoom controls — always visible, essential on mobile */}
+        {/* Zoom controls — touch-friendly panel */}
         {!loading && !error && dxf && (
-          <div style={{ position: 'absolute', bottom: 12, right: 12, zIndex: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <Button
-              icon={<ZoomInOutlined />} size="middle"
-              style={{ width: 36, height: 36, padding: 0, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', borderRadius: 6 }}
-              onClick={() => applyZoom(1.3)}
-            />
-            <Button
-              icon={<ZoomOutOutlined />} size="middle"
-              style={{ width: 36, height: 36, padding: 0, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', borderRadius: 6 }}
-              onClick={() => applyZoom(1 / 1.3)}
-            />
-            <Button
-              icon={<FullscreenExitOutlined />} size="middle"
+          <div style={{
+            position: 'absolute', bottom: 14, right: 14, zIndex: 10,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0,
+            background: 'rgba(15,23,42,0.88)', borderRadius: 16,
+            border: '1px solid rgba(255,255,255,0.18)',
+            backdropFilter: 'blur(6px)',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+            overflow: 'hidden',
+            userSelect: 'none',
+          }}>
+            {/* Zoom In */}
+            <button
+              aria-label="Acercar"
+              onPointerDown={(e) => { e.preventDefault(); applyZoom(1.4) }}
+              style={{
+                width: 52, height: 52, border: 'none', background: 'transparent',
+                color: '#fff', fontSize: 26, fontWeight: 300, lineHeight: 1,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'background 0.12s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.12)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            >
+              +
+            </button>
+
+            {/* Zoom level */}
+            <div style={{
+              width: 52, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.55)',
+              letterSpacing: '0.03em', lineHeight: 1,
+              borderTop: '1px solid rgba(255,255,255,0.1)',
+              borderBottom: '1px solid rgba(255,255,255,0.1)',
+            }}>
+              {Math.round((scale / baseTransform.current.scale) * 100)}%
+            </div>
+
+            {/* Zoom Out */}
+            <button
+              aria-label="Alejar"
+              onPointerDown={(e) => { e.preventDefault(); applyZoom(1 / 1.4) }}
+              style={{
+                width: 52, height: 52, border: 'none', background: 'transparent',
+                color: '#fff', fontSize: 26, fontWeight: 300, lineHeight: 1,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'background 0.12s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.12)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            >
+              −
+            </button>
+
+            {/* Separator */}
+            <div style={{ width: 32, height: 1, background: 'rgba(255,255,255,0.15)', margin: '0 10px' }} />
+
+            {/* Reset */}
+            <button
+              aria-label="Restablecer vista"
               title="Restablecer vista"
-              style={{ width: 36, height: 36, padding: 0, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', borderRadius: 6 }}
-              onClick={() => { setScale(baseTransform.current.scale); setPos({ x: baseTransform.current.x, y: baseTransform.current.y }) }}
-            />
+              onPointerDown={(e) => {
+                e.preventDefault()
+                setScale(baseTransform.current.scale)
+                setPos({ x: baseTransform.current.x, y: baseTransform.current.y })
+              }}
+              style={{
+                width: 52, height: 44, border: 'none', background: 'transparent',
+                color: 'rgba(255,255,255,0.6)', fontSize: 17, lineHeight: 1,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'background 0.12s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.12)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            >
+              ⊡
+            </button>
           </div>
         )}
         {!loading && !error && dxf && (
