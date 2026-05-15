@@ -24,6 +24,7 @@ interface Shape {
   capacity?: number
   sold?: number
   price?: number
+  paused?: boolean
 }
 
 interface Access {
@@ -380,6 +381,13 @@ export default function VenueMapV2({ eventId }: VenueMapV2Props) {
   const [seatPreviewRows, setSeatPreviewRows] = useState(10)
   const [seatPreviewSeats, setSeatPreviewSeats] = useState(20)
 
+  // Layer visibility
+  const [layerVis, setLayerVis] = useState({ zones: true, accesses: true, pois: true })
+
+  // Canvas cursor + save indicator
+  const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 })
+  const [hasUnsaved, setHasUnsaved] = useState(false)
+
   // Drawing state
   const [isDrawing, setIsDrawing] = useState(false)
   const [startPos, setStartPos] = useState({ x: 0, y: 0 })
@@ -453,6 +461,7 @@ export default function VenueMapV2({ eventId }: VenueMapV2Props) {
       // Allow the next mapDataRes update (from invalidation) to reload sections
       initialLoadDone.current = false
       queryClient.invalidateQueries({ queryKey: ['venue-map', eventId] })
+      setHasUnsaved(false)
       message.success('Mapa guardado')
     },
     onError: (err: any) => {
@@ -486,6 +495,7 @@ export default function VenueMapV2({ eventId }: VenueMapV2Props) {
         tier: s.tier || null,
         colorHex: s.colorHex,
         name: s.name,
+        paused: s.paused ?? false,
       })),
     })
   }
@@ -496,6 +506,7 @@ export default function VenueMapV2({ eventId }: VenueMapV2Props) {
     setHistory(newHistory)
     setHistoryIndex(newHistory.length - 1)
     setSections(newSections)
+    setHasUnsaved(true)
   }
 
   const handleUndo = () => {
@@ -586,6 +597,7 @@ export default function VenueMapV2({ eventId }: VenueMapV2Props) {
 
   const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
     const coords = getSVGCoords(e)
+    setCursorPos({ x: Math.round(coords.x), y: Math.round(coords.y) })
 
     if (resizingId && resizeHandle) {
       const updated = sections.map(s => {
@@ -671,6 +683,38 @@ export default function VenueMapV2({ eventId }: VenueMapV2Props) {
         setSelectedId(null)
       },
     })
+  }
+
+  const handleDuplicate = () => {
+    if (!selectedId) return
+    const src = sections.find(s => s.id === selectedId)
+    if (!src || !src.shapeData) return
+    // Find first unpositioned section to receive the duplicated shape
+    const target = sections.find(s => s.id !== selectedId && !s.shapeData)
+    if (!target) { message.info('No hay zonas sin posición para duplicar la forma'); return }
+    const offset = 20
+    let newShapeData: any
+    if (src.shapeType === 'rect') {
+      newShapeData = { ...src.shapeData, x: src.shapeData.x + offset, y: src.shapeData.y + offset }
+    } else {
+      newShapeData = { ...src.shapeData, cx: src.shapeData.cx + offset, cy: src.shapeData.cy + offset }
+    }
+    const updated = sections.map(s =>
+      s.id === target.id
+        ? { ...s, shapeType: src.shapeType, shapeData: newShapeData, labelX: (src.labelX ?? 0) + offset, labelY: (src.labelY ?? 0) + offset, colorHex: src.colorHex, tier: src.tier }
+        : s
+    )
+    updateHistory(updated)
+    setSelectedId(target.id)
+    message.success(`Forma duplicada a "${target.name}"`)
+  }
+
+  const handleTogglePause = () => {
+    if (!selectedId) return
+    const updated = sections.map(s =>
+      s.id === selectedId ? { ...s, paused: !s.paused } : s
+    )
+    updateHistory(updated)
   }
 
   const handleClear = () => {
@@ -786,7 +830,7 @@ export default function VenueMapV2({ eventId }: VenueMapV2Props) {
     <div style={{ display: 'flex', gap: 16, height: 650 }}>
       {/* Canvas */}
       <div style={{ flex: 1, overflow: 'hidden' }}>
-        <div style={{ marginBottom: 12 }}>
+        <div style={{ marginBottom: 8 }}>
           <Space wrap>
             <Space>
               <Button size="small" onClick={() => setDrawMode('select')} type={drawMode === 'select' ? 'primary' : 'default'}>Seleccionar</Button>
@@ -808,16 +852,40 @@ export default function VenueMapV2({ eventId }: VenueMapV2Props) {
             <Button size="small" danger icon={<ClearOutlined />} onClick={handleClear}>Limpiar</Button>
           </Space>
         </div>
-        <div style={{ overflow: 'auto', maxHeight: 600 }}>
+        {/* Layer visibility strip */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, color: '#94a3b8', alignSelf: 'center', marginRight: 2 }}>Capas:</span>
+          {([
+            { key: 'zones', label: 'Zonas', count: sections.filter(s => s.shapeData).length },
+            { key: 'accesses', label: 'Accesos', count: accesses.length },
+            { key: 'pois', label: 'POIs', count: pois.length },
+          ] as const).map(({ key, label, count }) => (
+            <button
+              key={key}
+              onClick={() => setLayerVis(v => ({ ...v, [key]: !v[key] }))}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 4,
+                padding: '2px 8px', borderRadius: 4, fontSize: 11, cursor: 'pointer',
+                border: `1px solid ${layerVis[key] ? '#1677ff' : '#d9d9d9'}`,
+                background: layerVis[key] ? '#e6f4ff' : '#f5f5f5',
+                color: layerVis[key] ? '#1677ff' : '#999',
+              }}
+            >
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: layerVis[key] ? '#1677ff' : '#d9d9d9', display: 'inline-block' }} />
+              {label} ({count})
+            </button>
+          ))}
+        </div>
+        <div style={{ overflow: 'auto', maxHeight: 580 }}>
           <svg
             ref={svgRef}
             width={svgWidth * zoom}
             height={svgHeight * zoom}
             viewBox={`0 0 ${svgWidth} ${svgHeight}`}
             style={{
-              border: '1px solid #d9d9d9', borderRadius: 4,
+              border: '1px solid #d9d9d9', borderRadius: '4px 4px 0 0',
               cursor: drawMode === 'select' ? 'pointer' : 'crosshair',
-              backgroundColor: '#fafafa', userSelect: 'none',
+              backgroundColor: '#fafafa', userSelect: 'none', display: 'block',
             }}
             onMouseDown={handleMouseDown}
             onMouseUp={handleMouseUp}
@@ -838,7 +906,7 @@ export default function VenueMapV2({ eventId }: VenueMapV2Props) {
             )}
 
             {/* Sections */}
-            {sections.map(sec => {
+            {layerVis.zones && sections.map(sec => {
               const isSelected = sec.id === selectedId
               return (
                 <g key={sec.id} onMouseDown={(e) => handleShapeMouseDown(sec.id, e)}>
@@ -866,7 +934,7 @@ export default function VenueMapV2({ eventId }: VenueMapV2Props) {
                     fill={isSelected ? '#000' : '#555'}
                     pointerEvents="none" textAnchor="middle" dominantBaseline="middle"
                   >
-                    {sec.name}
+                    {sec.paused ? '⏸ ' : ''}{sec.name}
                   </text>
                   {isSelected && sec.shapeType === 'rect' && sec.shapeData && (
                     <>
@@ -891,7 +959,7 @@ export default function VenueMapV2({ eventId }: VenueMapV2Props) {
             })}
 
             {/* Accesses */}
-            {accesses.map(acc => (
+            {layerVis.accesses && accesses.map(acc => (
               <g
                 key={acc.id}
                 style={{ cursor: 'move' }}
@@ -913,7 +981,7 @@ export default function VenueMapV2({ eventId }: VenueMapV2Props) {
             ))}
 
             {/* POIs */}
-            {pois.map(poi => {
+            {layerVis.pois && pois.map(poi => {
               const color = POI_COLORS[poi.type] ?? '#64748b'
               const isStage = poi.type === 'stage'
               const width = isStage ? 60 : 36
@@ -947,6 +1015,21 @@ export default function VenueMapV2({ eventId }: VenueMapV2Props) {
               )
             })}
           </svg>
+          {/* Status bar */}
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: '3px 10px', background: '#1e293b', borderRadius: '0 0 4px 4px',
+            fontSize: 11, color: '#64748b', userSelect: 'none', flexWrap: 'wrap', gap: 8,
+          }}>
+            <span>x: {cursorPos.x} · y: {cursorPos.y}</span>
+            <span>{svgWidth} × {svgHeight} px · {Math.round(zoom * 100)}%</span>
+            <span style={{
+              color: saveMutation.isPending ? '#f59e0b' : hasUnsaved ? '#ef4444' : '#22c55e',
+              fontWeight: 500,
+            }}>
+              {saveMutation.isPending ? '⏳ Guardando...' : hasUnsaved ? '● Sin guardar' : '✓ Guardado'}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -954,6 +1037,62 @@ export default function VenueMapV2({ eventId }: VenueMapV2Props) {
       <div style={{ width: 300, borderLeft: '1px solid #d9d9d9', paddingLeft: 16, overflowY: 'auto', maxHeight: '100%', display: 'flex', flexDirection: 'column' }}>
         {selected ? (
           <>
+            {/* ── Live stats ── */}
+            {(selected.capacity != null || selected.sold != null || selected.price != null) && (() => {
+              const sold = selected.sold ?? 0
+              const cap = selected.capacity ?? 0
+              const avail = cap - sold
+              const pct = cap > 0 ? Math.round((sold / cap) * 100) : 0
+              const revenue = sold * (selected.price ?? 0)
+              return (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{
+                    display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8,
+                  }}>
+                    {[
+                      { label: 'Vendidos', value: sold, color: '#6366f1' },
+                      { label: 'Disponibles', value: avail, color: '#22c55e' },
+                      { label: 'Ingresos', value: `$${revenue.toLocaleString('es-MX', { minimumFractionDigits: 0 })}`, color: '#eab308' },
+                      { label: 'Ocupación', value: `${pct}%`, color: pct > 80 ? '#ef4444' : '#94a3b8' },
+                    ].map(stat => (
+                      <div key={stat.label} style={{
+                        background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6,
+                        padding: '6px 8px', textAlign: 'center',
+                      }}>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: stat.color }}>{stat.value}</div>
+                        <div style={{ fontSize: 10, color: '#94a3b8' }}>{stat.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {cap > 0 && (
+                    <div style={{ height: 4, background: '#e2e8f0', borderRadius: 2, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${pct}%`, background: pct > 80 ? '#ef4444' : '#22c55e', transition: 'width 0.3s' }} />
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
+            {/* ── Quick actions ── */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+              <Button
+                size="small" style={{ flex: 1, fontSize: 11 }}
+                type={selected.paused ? 'primary' : 'default'}
+                danger={!selected.paused}
+                onClick={handleTogglePause}
+              >
+                {selected.paused ? '▶ Reanudar' : '⏸ Pausar venta'}
+              </Button>
+              <Button size="small" style={{ flex: 1, fontSize: 11 }} onClick={handleDuplicate}>
+                ⎘ Duplicar
+              </Button>
+            </div>
+            {selected.paused && (
+              <div style={{ fontSize: 11, color: '#ef4444', marginBottom: 8, padding: '4px 8px', background: '#fef2f2', borderRadius: 4, border: '1px solid #fecaca' }}>
+                ⏸ Venta pausada — no visible en portal
+              </div>
+            )}
+
             <Form layout="vertical" size="small">
               <Form.Item label="Nombre de la zona">
                 <Input
@@ -1065,6 +1204,9 @@ export default function VenueMapV2({ eventId }: VenueMapV2Props) {
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', width: '100%' }}>
                     <div style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: zone.colorHex, border: '1px solid #d9d9d9', flexShrink: 0 }} />
                     <div style={{ flex: 1, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{zone.name}</div>
+                    {zone.paused && (
+                      <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 8, background: '#fef2f2', color: '#ef4444' }}>⏸</span>
+                    )}
                     {zone.tier && (
                       <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 8, background: TIER_COLORS[zone.tier] + '22', color: TIER_COLORS[zone.tier] }}>
                         {TIER_OPTIONS.find(t => t.value === zone.tier)?.label}

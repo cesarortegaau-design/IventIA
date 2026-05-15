@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { ticketsPublicApi } from '../../api/tickets'
@@ -85,6 +85,17 @@ interface MapData {
   pois?: Array<{ id: string; type: string; x: number; y: number; label: string }>
 }
 
+// ── useIsMobile ────────────────────────────────────────────────────────────────
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768)
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [])
+  return isMobile
+}
+
 function VenueMapSVG({
   sections,
   mapData,
@@ -154,7 +165,7 @@ function VenueMapSVG({
   return (
     <div
       ref={containerRef}
-      style={{ flex: 1, position: 'relative', overflow: 'hidden', background: '#0d1b2e', borderRadius: 8 }}
+      style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: '#0d1b2e', borderRadius: 12 }}
     >
       <svg
         width="100%"
@@ -364,176 +375,181 @@ function VenueMapSVG({
   )
 }
 
-// ── Side Panel ─────────────────────────────────────────────────────────────────
-function SidePanel({
+// ── Event Banner ───────────────────────────────────────────────────────────────
+function EventBanner({ eventData, formatDate }: { eventData: any; formatDate: (s: string) => string }) {
+  return (
+    <div style={{
+      background: 'linear-gradient(180deg, #0f1e35 0%, #0a1220 100%)',
+      borderBottom: `1px solid ${C.line}`,
+      padding: '32px 24px 28px',
+    }}>
+      <div style={{ maxWidth: 1280, margin: '0 auto' }}>
+        <h1 style={{
+          fontSize: 'clamp(22px, 4vw, 36px)', fontWeight: 800, color: C.text,
+          margin: '0 0 10px', lineHeight: 1.2,
+        }}>
+          {eventData.event?.name}
+        </h1>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, marginBottom: eventData.description ? 12 : 0 }}>
+          {eventData.event?.eventStart && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, color: C.textMute }}>
+              <span style={{ fontSize: 16 }}>📅</span>
+              {formatDate(eventData.event.eventStart)}
+            </span>
+          )}
+          {eventData.event?.venueLocation && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, color: C.textMute }}>
+              <span style={{ fontSize: 16 }}>📍</span>
+              {eventData.event.venueLocation}
+            </span>
+          )}
+        </div>
+        {eventData.description && (
+          <p style={{ fontSize: 14, color: C.textMute, margin: '8px 0 0', maxWidth: 640, lineHeight: 1.6 }}>
+            {eventData.description}
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Smart Suggestion Banner ────────────────────────────────────────────────────
+function SuggestionBanner({ zone, onClick }: { zone: Section; onClick: () => void }) {
+  const avail = (zone.capacity ?? 0) - (zone.sold ?? 0)
+  return (
+    <div style={{
+      background: 'rgba(52,211,153,0.06)',
+      borderBottom: `1px solid rgba(52,211,153,0.15)`,
+      padding: '10px 24px',
+    }}>
+      <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 14, color: C.accent }}>★</span>
+        <span style={{ fontSize: 13, color: C.textMute }}>Mejor relación calidad/precio:</span>
+        <button
+          onClick={onClick}
+          style={{
+            background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+            fontSize: 13, fontWeight: 700, color: C.accent, textDecoration: 'underline',
+          }}
+        >
+          {zone.name}
+        </button>
+        <span style={{ fontSize: 12, color: C.textMute }}>
+          — {avail} disponibles
+          {zone.price != null && ` · $${Number(zone.price).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// ── Section List ───────────────────────────────────────────────────────────────
+function SectionList({
   sections,
-  selectedSection,
   filterTier,
   setFilterTier,
-  sectionCart,
-  seatCart,
-  setSectionCart,
-  setSeatCart,
-  mode,
-  onCheckout,
+  selectedId,
+  onSelect,
 }: {
   sections: Section[]
-  selectedSection: Section | null
   filterTier: string | null
   setFilterTier: (t: string | null) => void
-  sectionCart: SectionCart
-  seatCart: SeatCart
-  setSectionCart: React.Dispatch<React.SetStateAction<SectionCart>>
-  setSeatCart: React.Dispatch<React.SetStateAction<SeatCart>>
-  mode: 'SECTION' | 'SEAT' | 'REGISTRO'
-  onCheckout: () => void
+  selectedId: string | null
+  onSelect: (id: string) => void
 }) {
-  const [activeTab, setActiveTab] = useState<'leyenda' | 'detalle' | 'carrito'>('leyenda')
-  const isRegistro = mode === 'REGISTRO'
-
-  useEffect(() => {
-    if (selectedSection) setActiveTab('detalle')
-  }, [selectedSection?.id])
-
-  const cartItemCount = mode === 'SECTION' || isRegistro
-    ? Object.keys(sectionCart).length
-    : Object.keys(seatCart).length
-
-  const subtotal = mode === 'SECTION' || isRegistro
-    ? Object.values(sectionCart).reduce((s, i) => s + i.qty * i.price, 0)
-    : Object.values(seatCart).reduce((s, i) => s + i.price, 0)
-
   const tierSet = Array.from(new Set(sections.map(s => s.tier).filter(Boolean))) as string[]
+  const visible = filterTier ? sections.filter(s => s.tier === filterTier) : sections
 
-  const tabStyle = (key: string): React.CSSProperties => ({
-    flex: 1, padding: '10px 4px', background: 'none', border: 'none',
-    borderBottom: activeTab === key ? `2px solid ${C.accent}` : `2px solid transparent`,
-    color: activeTab === key ? C.accent : C.textMute,
-    fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500,
-    transition: 'color 0.15s',
+  const chipStyle = (active: boolean, color?: string): React.CSSProperties => ({
+    padding: '5px 14px', borderRadius: 20, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap',
+    border: `1px solid ${active ? (color ?? C.accent) : C.line}`,
+    background: active ? (color ?? C.accent) + '22' : 'transparent',
+    color: active ? (color ?? C.accent) : C.textMute,
+    fontFamily: 'inherit',
+    transition: 'all 0.15s',
   })
 
   return (
-    <div style={{
-      width: 320, background: C.bg1, borderLeft: `1px solid ${C.line}`,
-      display: 'flex', flexDirection: 'column', height: '100%',
-    }}>
-      {/* Tabs */}
-      <div style={{ display: 'flex', borderBottom: `1px solid ${C.line}` }}>
-        <button style={tabStyle('leyenda')} onClick={() => setActiveTab('leyenda')}>Leyenda</button>
-        <button style={tabStyle('detalle')} onClick={() => setActiveTab('detalle')}>Detalle</button>
-        <button style={tabStyle('carrito')} onClick={() => setActiveTab('carrito')}>
-          Carrito{cartItemCount > 0 ? ` (${cartItemCount})` : ''}
-        </button>
+    <div>
+      {/* Tier filter chips */}
+      <div style={{
+        display: 'flex', gap: 8, overflowX: 'auto', padding: '4px 0 12px',
+        scrollbarWidth: 'none',
+      }}>
+        <button style={chipStyle(filterTier === null)} onClick={() => setFilterTier(null)}>Todas</button>
+        {tierSet.map(tier => (
+          <button
+            key={tier}
+            style={chipStyle(filterTier === tier, TIER_COLORS[tier])}
+            onClick={() => setFilterTier(filterTier === tier ? null : tier)}
+          >
+            {TIER_LABELS[tier] ?? tier}
+          </button>
+        ))}
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+      {/* Section cards */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {visible.map(sec => {
+          const avail = (sec.capacity ?? 0) - (sec.sold ?? 0)
+          const pct = sec.capacity ? Math.round(((sec.sold ?? 0) / sec.capacity) * 100) : 0
+          const isSoldOut = avail === 0 && (sec.capacity ?? 0) > 0
+          const isSelected = sec.id === selectedId
 
-        {/* ── Leyenda ── */}
-        {activeTab === 'leyenda' && (
-          <div>
-            <div style={{ fontSize: 12, color: C.textMute, marginBottom: 12 }}>Filtrar por tier:</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
-              <button
-                onClick={() => setFilterTier(null)}
-                style={{
-                  padding: '4px 12px', borderRadius: 20, fontSize: 12, cursor: 'pointer',
-                  border: `1px solid ${filterTier === null ? C.accent : C.line}`,
-                  background: filterTier === null ? C.accent + '22' : 'transparent',
-                  color: filterTier === null ? C.accent : C.textMute,
-                }}
-              >
-                Todos
-              </button>
-              {tierSet.map(tier => (
-                <button
-                  key={tier}
-                  onClick={() => setFilterTier(filterTier === tier ? null : tier)}
-                  style={{
-                    padding: '4px 12px', borderRadius: 20, fontSize: 12, cursor: 'pointer',
-                    border: `1px solid ${filterTier === tier ? TIER_COLORS[tier] : C.line}`,
-                    background: filterTier === tier ? TIER_COLORS[tier] + '22' : 'transparent',
-                    color: filterTier === tier ? TIER_COLORS[tier] : C.textMute,
-                  }}
-                >
-                  {TIER_LABELS[tier] ?? tier}
-                </button>
-              ))}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {sections
-                .filter(s => filterTier === null || s.tier === filterTier)
-                .map(sec => {
-                  const avail = (sec.capacity ?? 0) - (sec.sold ?? 0)
-                  return (
-                    <div key={sec.id} style={{
-                      padding: '10px 12px', borderRadius: 8,
-                      background: C.bg2, border: `1px solid ${C.line}`,
+          return (
+            <button
+              key={sec.id}
+              onClick={() => !isSoldOut && onSelect(sec.id)}
+              style={{
+                width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: 0,
+                cursor: isSoldOut ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              <div style={{
+                padding: '12px 14px', borderRadius: 10,
+                background: isSelected ? 'rgba(52,211,153,0.08)' : C.bg2,
+                border: `1px solid ${isSelected ? C.accent : C.line}`,
+                transition: 'all 0.15s',
+                opacity: isSoldOut ? 0.5 : 1,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: 2, background: sec.colorHex, flexShrink: 0 }} />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: C.text, flex: 1 }}>{sec.name}</span>
+                  {sec.tier && (
+                    <span style={{
+                      fontSize: 10, padding: '2px 8px', borderRadius: 10,
+                      background: TIER_COLORS[sec.tier] + '22',
+                      color: TIER_COLORS[sec.tier],
                     }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                        <div style={{ width: 12, height: 12, borderRadius: 3, background: sec.colorHex, flexShrink: 0 }} />
-                        <span style={{ color: C.text, fontSize: 13, fontWeight: 600, flex: 1 }}>{sec.name}</span>
-                        {sec.tier && (
-                          <span style={{
-                            fontSize: 10, padding: '2px 8px', borderRadius: 10,
-                            background: TIER_COLORS[sec.tier] + '22',
-                            color: TIER_COLORS[sec.tier],
-                          }}>
-                            {TIER_LABELS[sec.tier]}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: C.textMute }}>
-                        <span>{avail > 0 ? `${avail} disponibles` : 'Agotado'}</span>
-                        {sec.price != null && (
-                          <span style={{ color: C.accent, fontWeight: 600 }}>
-                            ${Number(sec.price).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                          </span>
-                        )}
-                      </div>
+                      {TIER_LABELS[sec.tier] ?? sec.tier}
+                    </span>
+                  )}
+                  {sec.price != null && (
+                    <span style={{ fontSize: 13, fontWeight: 700, color: isSoldOut ? C.textMute : C.accent }}>
+                      ${Number(sec.price).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                    </span>
+                  )}
+                </div>
+
+                {sec.capacity != null && (
+                  <>
+                    <div style={{ height: 4, background: C.bg3, borderRadius: 2, overflow: 'hidden', marginBottom: 4 }}>
+                      <div style={{
+                        height: '100%', width: `${pct}%`,
+                        background: pct > 80 ? '#ef4444' : C.accent,
+                        borderRadius: 2, transition: 'width 0.3s',
+                      }} />
                     </div>
-                  )
-                })}
-            </div>
-          </div>
-        )}
-
-        {/* ── Detalle ── */}
-        {activeTab === 'detalle' && (
-          <div>
-            {!selectedSection ? (
-              <div style={{ color: C.textMute, fontSize: 13, textAlign: 'center', paddingTop: 40 }}>
-                Selecciona una zona en el mapa
+                    <div style={{ fontSize: 11, color: isSoldOut ? '#ef4444' : C.textMute }}>
+                      {isSoldOut ? 'Agotado' : `${avail} disponibles`}
+                    </div>
+                  </>
+                )}
               </div>
-            ) : mode === 'SECTION' || isRegistro ? (
-              <SectionDetail
-                section={selectedSection}
-                sectionCart={sectionCart}
-                setSectionCart={setSectionCart}
-                isRegistro={isRegistro}
-              />
-            ) : (
-              <SeatDetail
-                section={selectedSection}
-                seatCart={seatCart}
-                setSeatCart={setSeatCart}
-              />
-            )}
-          </div>
-        )}
-
-        {/* ── Carrito ── */}
-        {activeTab === 'carrito' && (
-          <CartPanel
-            mode={mode}
-            sectionCart={sectionCart}
-            seatCart={seatCart}
-            subtotal={subtotal}
-            setSectionCart={setSectionCart}
-            setSeatCart={setSeatCart}
-            onCheckout={onCheckout}
-          />
-        )}
+            </button>
+          )
+        })}
       </div>
     </div>
   )
@@ -554,7 +570,6 @@ function SectionDetail({
   const avail = (section.capacity ?? 0) - (section.sold ?? 0)
   const isSoldOut = avail === 0 && (section.capacity ?? 0) > 0
 
-  // In REGISTRO mode, count all items with matching sectionId; otherwise use single cart entry
   const qty = isRegistro
     ? Object.values(sectionCart).filter(item => item.sectionId === section.id).length
     : sectionCart[section.id]?.qty ?? 0
@@ -562,8 +577,6 @@ function SectionDetail({
   const addToCart = () => {
     setSectionCart(prev => {
       if (isRegistro) {
-        // In REGISTRO mode, create a unique cart entry for each ticket (like individual cart items)
-        // Use timestamp + random to create unique key for each "slot"
         const uniqueKey = `${section.id}-${Date.now()}-${Math.random()}`
         return {
           ...prev,
@@ -817,82 +830,163 @@ function CartPanel({
     padding: '6px 0', borderBottom: `1px solid ${C.line}`,
   }
 
+  if (isEmpty) return null
+
   return (
-    <div>
-      {isEmpty ? (
-        <div style={{ color: C.textMute, fontSize: 13, textAlign: 'center', paddingTop: 40 }}>
-          Tu carrito está vacío
+    <div style={{
+      marginTop: 16, padding: 16, borderRadius: 10,
+      background: C.bg2, border: `1px solid ${C.line}`,
+    }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 12 }}>Tu selección</div>
+
+      <div style={{ marginBottom: 12 }}>
+        {mode === 'SECTION' || isRegistro
+          ? Object.entries(sectionCart).map(([cartKey, item]) => (
+            <div key={cartKey} style={rowStyle}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 10, height: 10, borderRadius: 2, background: item.colorHex }} />
+                <span style={{ color: C.text }}>{item.name}</span>
+                {item.qty > 1 && <span style={{ color: C.textMute }}>×{item.qty}</span>}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ color: C.accent }}>
+                  ${(item.qty * item.price).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                </span>
+                <button
+                  onClick={() => setSectionCart(prev => { const n = { ...prev }; delete n[cartKey]; return n })}
+                  style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 16, padding: 0 }}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          ))
+          : Object.entries(seatCart).map(([cartKey, item]) => (
+            <div key={cartKey} style={rowStyle}>
+              <span style={{ color: C.text }}>{item.sectionName} – {item.row}{item.number}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ color: C.accent }}>
+                  ${item.price.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                </span>
+                <button
+                  onClick={() => setSeatCart(prev => { const n = { ...prev }; delete n[cartKey]; return n })}
+                  style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 16, padding: 0 }}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          ))
+        }
+      </div>
+
+      <div style={{ fontSize: 13, marginBottom: 14 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', color: C.textMute, marginBottom: 4 }}>
+          <span>Subtotal</span>
+          <span>${subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
         </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', color: C.textMute, marginBottom: 8 }}>
+          <span>Cargo por servicio (10%)</span>
+          <span>${serviceFee.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 16, color: C.text }}>
+          <span>Total</span>
+          <span style={{ color: C.accent }}>${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+        </div>
+      </div>
+
+      <button
+        onClick={onCheckout}
+        style={{
+          width: '100%', padding: '13px', borderRadius: 8, border: 'none',
+          background: C.accent, color: '#0a1220', fontSize: 15, fontWeight: 700,
+          cursor: 'pointer',
+        }}
+      >
+        Continuar al pago →
+      </button>
+    </div>
+  )
+}
+
+// ── Right Panel ────────────────────────────────────────────────────────────────
+function RightPanel({
+  selectedSection, mode, sectionCart, seatCart, subtotal,
+  setSectionCart, setSeatCart, onCheckout,
+}: {
+  selectedSection: Section | null
+  mode: 'SECTION' | 'SEAT' | 'REGISTRO'
+  sectionCart: SectionCart
+  seatCart: SeatCart
+  subtotal: number
+  setSectionCart: React.Dispatch<React.SetStateAction<SectionCart>>
+  setSeatCart: React.Dispatch<React.SetStateAction<SeatCart>>
+  onCheckout: () => void
+}) {
+  const isRegistro = mode === 'REGISTRO'
+  return (
+    <div style={{ padding: 20, background: C.bg1, borderRadius: 12, border: `1px solid ${C.line}` }}>
+      {!selectedSection ? (
+        <div style={{ textAlign: 'center', padding: '32px 0', color: C.textMute, fontSize: 14 }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>🗺️</div>
+          Selecciona una zona en el mapa
+        </div>
+      ) : mode === 'SECTION' || isRegistro ? (
+        <SectionDetail
+          section={selectedSection}
+          sectionCart={sectionCart}
+          setSectionCart={setSectionCart}
+          isRegistro={isRegistro}
+        />
       ) : (
-        <>
-          <div style={{ marginBottom: 16 }}>
-            {mode === 'SECTION' || isRegistro
-              ? Object.entries(sectionCart).map(([cartKey, item]) => (
-                <div key={cartKey} style={rowStyle}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ width: 10, height: 10, borderRadius: 2, background: item.colorHex }} />
-                    <span style={{ color: C.text }}>{item.name}</span>
-                    {item.qty > 1 && <span style={{ color: C.textMute }}>×{item.qty}</span>}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ color: C.accent }}>
-                      ${(item.qty * item.price).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                    </span>
-                    <button
-                      onClick={() => setSectionCart(prev => { const n = { ...prev }; delete n[cartKey]; return n })}
-                      style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 16, padding: 0 }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                </div>
-              ))
-              : Object.entries(seatCart).map(([cartKey, item]) => (
-                <div key={cartKey} style={rowStyle}>
-                  <span style={{ color: C.text }}>{item.sectionName} – {item.row}{item.number}</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ color: C.accent }}>
-                      ${item.price.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                    </span>
-                    <button
-                      onClick={() => setSeatCart(prev => { const n = { ...prev }; delete n[cartKey]; return n })}
-                      style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 16, padding: 0 }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                </div>
-              ))
-            }
-          </div>
-
-          <div style={{ fontSize: 13, marginBottom: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', color: C.textMute, marginBottom: 4 }}>
-              <span>Subtotal</span>
-              <span>${subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', color: C.textMute, marginBottom: 8 }}>
-              <span>Cargo por servicio (10%)</span>
-              <span>${serviceFee.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 16, color: C.text }}>
-              <span>Total</span>
-              <span style={{ color: C.accent }}>${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
-            </div>
-          </div>
-
-          <button
-            onClick={onCheckout}
-            style={{
-              width: '100%', padding: '14px', borderRadius: 8, border: 'none',
-              background: C.accent, color: '#0a1220', fontSize: 15, fontWeight: 700,
-              cursor: 'pointer',
-            }}
-          >
-            Continuar al pago
-          </button>
-        </>
+        <SeatDetail
+          section={selectedSection}
+          seatCart={seatCart}
+          setSeatCart={setSeatCart}
+        />
       )}
+      <CartPanel
+        mode={mode}
+        sectionCart={sectionCart}
+        seatCart={seatCart}
+        subtotal={subtotal}
+        setSectionCart={setSectionCart}
+        setSeatCart={setSeatCart}
+        onCheckout={onCheckout}
+      />
+    </div>
+  )
+}
+
+// ── Mobile Sticky Footer ───────────────────────────────────────────────────────
+function MobileStickyFooter({
+  total, cartItemCount, onCheckout,
+}: {
+  total: number; cartItemCount: number; onCheckout: () => void
+}) {
+  return (
+    <div style={{
+      position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50,
+      background: C.bg1, borderTop: `1px solid ${C.line}`,
+      padding: '12px 20px',
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
+    }}>
+      <div>
+        <div style={{ fontSize: 12, color: C.textMute }}>{cartItemCount} {cartItemCount === 1 ? 'boleto' : 'boletos'}</div>
+        <div style={{ fontSize: 18, fontWeight: 800, color: C.accent }}>
+          ${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+        </div>
+      </div>
+      <button
+        onClick={onCheckout}
+        style={{
+          padding: '12px 28px', borderRadius: 8, border: 'none',
+          background: C.accent, color: '#0a1220', fontSize: 15, fontWeight: 700,
+          cursor: 'pointer', flexShrink: 0,
+        }}
+      >
+        Continuar →
+      </button>
     </div>
   )
 }
@@ -907,7 +1001,6 @@ function CheckoutModal({
   onClose: () => void; onSuccess: (url: string) => void
 }) {
   const { user: buyerUser } = useTicketBuyerAuthStore()
-  // 2 steps: 'datos' (buyer + attendees) → 'pago'
   const [step, setStep] = useState<'datos' | 'pago'>('datos')
   const [buyerForm, setBuyerForm] = useState({ name: '', email: '', phone: '' })
   const [attendees, setAttendees] = useState<Record<string, any>>({})
@@ -918,7 +1011,6 @@ function CheckoutModal({
   const isRegistro = mode === 'REGISTRO'
   const cartEntries = Object.entries(sectionCart)
 
-  // Reset on every open
   useEffect(() => {
     if (open) {
       setStep('datos')
@@ -951,7 +1043,6 @@ function CheckoutModal({
     },
   })
 
-  // Validate step 1 (buyer + attendees)
   const validateDatos = () => {
     const e: Record<string, string> = {}
     if (!buyerForm.name.trim()) e.name = 'Requerido'
@@ -1012,7 +1103,7 @@ function CheckoutModal({
     }}>
       <div style={{
         background: C.bg1, borderRadius: 12, padding: 28,
-        width: 500, maxHeight: '92vh', overflowY: 'auto',
+        width: 500, maxWidth: 'calc(100vw - 32px)', maxHeight: '92vh', overflowY: 'auto',
         border: `1px solid ${C.line}`, boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
       }}>
 
@@ -1037,7 +1128,6 @@ function CheckoutModal({
         {/* ── STEP 1: Datos ────────────────────────────────────── */}
         {step === 'datos' && (
           <>
-            {/* Buyer info */}
             <h3 style={{ color: C.text, margin: '0 0 14px', fontSize: 16 }}>Datos del comprador</h3>
             {!buyerUser && (
               <div style={{
@@ -1078,7 +1168,6 @@ function CheckoutModal({
               {err('email')}
             </div>
 
-            {/* Attendees (REGISTRO only) */}
             {isRegistro && cartEntries.length > 0 && (
               <>
                 <div style={{ borderTop: `1px solid ${C.line}`, marginBottom: 16 }} />
@@ -1237,6 +1326,7 @@ function CheckoutModal({
 // ── Main Page ──────────────────────────────────────────────────────────────────
 export default function TicketPurchasePage() {
   const { slug } = useParams<{ slug: string }>()
+  const isMobile = useIsMobile()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [filterTier, setFilterTier] = useState<string | null>(null)
   const [sectionCart, setSectionCart] = useState<SectionCart>({})
@@ -1255,6 +1345,31 @@ export default function TicketPurchasePage() {
   const mapData: MapData = eventData?.mapData ?? {}
   const mode: 'SECTION' | 'SEAT' | 'REGISTRO' = eventData?.mode ?? 'SECTION'
   const selectedSection = sections.find(s => s.id === selectedId) ?? null
+
+  const subtotal = mode === 'SECTION' || mode === 'REGISTRO'
+    ? Object.values(sectionCart).reduce((s, i) => s + i.qty * i.price, 0)
+    : Object.values(seatCart).reduce((s, i) => s + i.price, 0)
+
+  const cartItemCount = mode === 'SECTION' || mode === 'REGISTRO'
+    ? Object.keys(sectionCart).length
+    : Object.keys(seatCart).length
+
+  const total = subtotal * 1.1
+
+  const suggestedZone = useMemo(() => {
+    const available = sections.filter(s => {
+      const avail = (s.capacity ?? 0) - (s.sold ?? 0)
+      return avail > 5 && s.price != null && s.price > 0
+    })
+    if (available.length === 0) return null
+    return available.reduce((best, sec) => {
+      const secAvail = (sec.capacity ?? 0) - (sec.sold ?? 0)
+      const bestAvail = (best.capacity ?? 0) - (best.sold ?? 0)
+      const secScore = secAvail / (sec.price! + 1)
+      const bestScore = bestAvail / (best.price! + 1)
+      return secScore > bestScore ? sec : best
+    })
+  }, [sections])
 
   const formatDate = (iso: string) => {
     try {
@@ -1290,66 +1405,104 @@ export default function TicketPurchasePage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', flexDirection: 'column', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+    <div style={{ minHeight: '100vh', background: C.bg, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
 
-      {/* Topbar */}
+      {/* Topbar — sticky */}
       <div style={{
+        position: 'sticky', top: 0, zIndex: 50,
         background: C.bg1, borderBottom: `1px solid ${C.line}`,
-        padding: '14px 24px', display: 'flex', alignItems: 'center', gap: 16,
-        flexWrap: 'wrap',
+        padding: '12px 24px', display: 'flex', alignItems: 'center', gap: 12,
       }}>
         <div style={{
-          width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+          width: 30, height: 30, borderRadius: 8, flexShrink: 0,
           background: 'linear-gradient(135deg, #34d399, #059669)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontWeight: 800, fontSize: 14, color: '#0a1220',
+          fontWeight: 800, fontSize: 13, color: '#0a1220',
         }}>
           iA
         </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {eventData.event?.name}
-          </div>
-          <div style={{ display: 'flex', gap: 16, fontSize: 12, color: C.textMute, flexWrap: 'wrap', marginTop: 2 }}>
-            {eventData.event?.eventStart && <span>📅 {formatDate(eventData.event.eventStart)}</span>}
-            {eventData.event?.venueLocation && <span>📍 {eventData.event.venueLocation}</span>}
-          </div>
-        </div>
-        {eventData.description && (
-          <div style={{ fontSize: 12, color: C.textMute, maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {eventData.description}
+        <span style={{ fontSize: 14, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+          {eventData.event?.name}
+        </span>
+        {cartItemCount > 0 && (
+          <div style={{
+            fontSize: 12, color: C.accent, fontWeight: 700,
+            background: 'rgba(52,211,153,0.12)', padding: '4px 10px', borderRadius: 20,
+            flexShrink: 0,
+          }}>
+            🛒 {cartItemCount}
           </div>
         )}
       </div>
 
-      {/* Stage */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', height: 'calc(100vh - 65px)' }}>
-        {/* Map canvas */}
-        <VenueMapSVG
-          sections={sections}
-          mapData={mapData}
-          selectedId={selectedId}
-          filterTier={filterTier}
-          sectionCart={sectionCart}
-          seatCart={seatCart}
-          mode={mode}
-          onSelectSection={setSelectedId}
-        />
+      {/* Event Banner */}
+      <EventBanner eventData={eventData} formatDate={formatDate} />
 
-        {/* Side panel */}
-        <SidePanel
-          sections={sections}
-          selectedSection={selectedSection}
-          filterTier={filterTier}
-          setFilterTier={setFilterTier}
-          sectionCart={sectionCart}
-          seatCart={seatCart}
-          setSectionCart={setSectionCart}
-          setSeatCart={setSeatCart}
-          mode={mode}
+      {/* Smart Suggestion */}
+      {suggestedZone && suggestedZone.id !== selectedId && (
+        <SuggestionBanner zone={suggestedZone} onClick={() => setSelectedId(suggestedZone.id)} />
+      )}
+
+      {/* Main content grid */}
+      <div style={{
+        maxWidth: 1280,
+        margin: '0 auto',
+        padding: isMobile ? '16px 16px 96px' : '24px 24px',
+        display: 'grid',
+        gridTemplateColumns: isMobile ? '1fr' : '1fr 380px',
+        gap: isMobile ? 20 : 24,
+        alignItems: 'start',
+      }}>
+
+        {/* Left column: map + section list */}
+        <div>
+          {/* Map */}
+          <div style={{ height: isMobile ? 280 : 500, marginBottom: 20 }}>
+            <VenueMapSVG
+              sections={sections}
+              mapData={mapData}
+              selectedId={selectedId}
+              filterTier={filterTier}
+              sectionCart={sectionCart}
+              seatCart={seatCart}
+              mode={mode}
+              onSelectSection={setSelectedId}
+            />
+          </div>
+
+          {/* Section list */}
+          <SectionList
+            sections={sections}
+            filterTier={filterTier}
+            setFilterTier={setFilterTier}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+          />
+        </div>
+
+        {/* Right column: zone detail + cart (sticky on desktop) */}
+        <div style={isMobile ? {} : { position: 'sticky', top: 70 }}>
+          <RightPanel
+            selectedSection={selectedSection}
+            mode={mode}
+            sectionCart={sectionCart}
+            seatCart={seatCart}
+            subtotal={subtotal}
+            setSectionCart={setSectionCart}
+            setSeatCart={setSeatCart}
+            onCheckout={() => setCheckoutOpen(true)}
+          />
+        </div>
+      </div>
+
+      {/* Mobile sticky footer */}
+      {isMobile && cartItemCount > 0 && (
+        <MobileStickyFooter
+          total={total}
+          cartItemCount={cartItemCount}
           onCheckout={() => setCheckoutOpen(true)}
         />
-      </div>
+      )}
 
       {/* Checkout modal */}
       <CheckoutModal
@@ -1359,13 +1512,7 @@ export default function TicketPurchasePage() {
         sectionCart={sectionCart}
         seatCart={seatCart}
         onClose={() => setCheckoutOpen(false)}
-        onSuccess={(url) => {
-          if (url.startsWith('/')) {
-            window.location.href = url
-          } else {
-            window.location.href = url
-          }
-        }}
+        onSuccess={(url) => { window.location.href = url }}
       />
     </div>
   )
