@@ -4,7 +4,7 @@ import { useRecentScreen } from '../../hooks/useRecentScreen'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Table, Button, Select, Modal, Form, Input, Space, Tag, Typography,
-  Spin, Empty, Popconfirm, InputNumber, Divider, message as antMessage, Tabs,
+  Spin, Empty, Popconfirm, InputNumber, Divider, message as antMessage, Tabs, Grid,
 } from 'antd'
 import { PlusOutlined, DeleteOutlined, FileExcelOutlined, EditOutlined, OrderedListOutlined, CheckSquareOutlined, FilePdfOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
 import { budgetsApi } from '../../api/budgets'
@@ -153,6 +153,10 @@ interface EventBudgetTabProps { eventId: string; event?: any }
 
 export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) {
   const qc = useQueryClient()
+  const { lg } = Grid.useBreakpoint()
+  const tableScroll = lg
+    ? { x: 1100, y: 'calc(100vh - 380px)' }
+    : { x: 1100 }
   const [searchParams, setSearchParams] = useSearchParams()
   const selectedBudgetId = searchParams.get('budgetId')
   const [createModalOpen, setCreateModalOpen]   = useState(false)
@@ -619,7 +623,7 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
               children: (
                 <Table
                   dataSource={lines} columns={columnsPres} rowKey="id" size="small"
-                  pagination={false} scroll={{ x: 1100, y: 'calc(100vh - 380px)' }}
+                  pagination={false} scroll={tableScroll}
                   rowClassName={() => 'budget-row'}
                   expandable={{
                     expandedRowKeys: expandedKeys,
@@ -656,7 +660,7 @@ export default function EventBudgetTab({ eventId, event }: EventBudgetTabProps) 
               children: (
                 <Table
                   dataSource={lines} columns={columnsReal} rowKey="id" size="small"
-                  pagination={false} scroll={{ x: 1100, y: 'calc(100vh - 380px)' }}
+                  pagination={false} scroll={tableScroll}
                   rowClassName={() => 'budget-row'}
                   expandable={{
                     expandedRowKeys: expandedKeys,
