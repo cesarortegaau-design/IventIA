@@ -477,6 +477,9 @@ export default function EventDetailPage() {
     setSpaceModalOpen(true)
   }
 
+  const event = data?.data
+  useRecentScreen(event ? `Evento: ${event.name}` : '', 'eventos')
+
   // ── Loading / error ───────────────────────────────────────────────────────
   if (isLoading) {
     return (
@@ -488,9 +491,6 @@ export default function EventDetailPage() {
       </div>
     )
   }
-
-  const event = data?.data
-  useRecentScreen(event ? `Evento: ${event.name}` : '', 'eventos')
 
   if (!event) {
     return (
