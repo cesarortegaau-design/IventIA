@@ -46,8 +46,8 @@ export async function upsertTicketEvent(req: Request, res: Response, next: NextF
     if (slug !== undefined) updateData.slug = slug
     if (active !== undefined) updateData.active = active
     if (description !== undefined) updateData.description = description
-    if (imageUrl !== undefined) updateData.imageUrl = imageUrl
-    if (mapImageUrl !== undefined) updateData.mapImageUrl = mapImageUrl
+    if (imageUrl !== undefined && imageUrl !== '') updateData.imageUrl = imageUrl
+    if (mapImageUrl !== undefined && mapImageUrl !== '') updateData.mapImageUrl = mapImageUrl
 
     const existing = await prisma.ticketEvent.findUnique({ where: { eventId } })
 

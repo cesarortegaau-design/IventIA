@@ -377,13 +377,40 @@ function VenueMapSVG({
 
 // ── Event Banner ───────────────────────────────────────────────────────────────
 function EventBanner({ eventData, formatDate }: { eventData: any; formatDate: (s: string) => string }) {
+  const hasImage = !!eventData.imageUrl
   return (
     <div style={{
-      background: 'linear-gradient(180deg, #0f1e35 0%, #0a1220 100%)',
+      position: 'relative',
       borderBottom: `1px solid ${C.line}`,
-      padding: '32px 24px 28px',
+      overflow: 'hidden',
+      minHeight: hasImage ? 220 : undefined,
     }}>
-      <div style={{ maxWidth: 1280, margin: '0 auto' }}>
+      {/* Background image */}
+      {hasImage && (
+        <>
+          <img
+            src={eventData.imageUrl}
+            alt=""
+            style={{
+              position: 'absolute', inset: 0, width: '100%', height: '100%',
+              objectFit: 'cover', objectPosition: 'center top',
+            }}
+          />
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(180deg, rgba(10,18,32,0.55) 0%, rgba(10,18,32,0.88) 60%, rgba(10,18,32,0.98) 100%)',
+          }} />
+        </>
+      )}
+      {/* Fallback background when no image */}
+      {!hasImage && (
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'linear-gradient(180deg, #0f1e35 0%, #0a1220 100%)',
+        }} />
+      )}
+      {/* Content */}
+      <div style={{ position: 'relative', maxWidth: 1280, margin: '0 auto', padding: '32px 24px 28px' }}>
         <h1 style={{
           fontSize: 'clamp(22px, 4vw, 36px)', fontWeight: 800, color: C.text,
           margin: '0 0 10px', lineHeight: 1.2,
