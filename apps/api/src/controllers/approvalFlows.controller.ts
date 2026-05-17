@@ -214,8 +214,20 @@ export async function updateFlow(req: Request, res: Response, next: NextFunction
       })
 
       if (steps !== undefined) {
-        // Replace strategy: delete all and recreate
-        await tx.approvalFlowStep.deleteMany({ where: { flowId: req.params.id } })
+        // Only delete steps that are NOT referenced by any request step (FK constraint guard)
+        const referenced = await tx.approvalRequestStep.findMany({
+          where: { step: { flowId: req.params.id } },
+          select: { stepId: true },
+        })
+        const referencedIds = new Set(referenced.map(r => r.stepId))
+
+        await tx.approvalFlowStep.deleteMany({
+          where: {
+            flowId: req.params.id,
+            ...(referencedIds.size > 0 && { id: { notIn: [...referencedIds] } }),
+          },
+        })
+
         if (steps.length > 0) {
           await tx.approvalFlowStep.createMany({
             data: steps.map((s: any, idx: number) => ({
