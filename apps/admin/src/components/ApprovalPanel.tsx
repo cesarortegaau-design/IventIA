@@ -149,7 +149,89 @@ export default function ApprovalPanel({ objectType, objectId, onStatusChange }: 
           0%, 100% { box-shadow: 0 0 0 3px rgba(24,144,255,0.25); }
           50% { box-shadow: 0 0 0 6px rgba(24,144,255,0.08); }
         }
+        @keyframes approval-badge-pulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(250,173,20,0.5); }
+          50% { box-shadow: 0 0 0 6px rgba(250,173,20,0); }
+        }
       `}</style>
+
+      {/* Floating window — fixed top-right, shows active approval state */}
+      {(() => {
+        const currentStep = steps.find((s: any) => s.order === currentStepOrder && s.status === 'PENDING')
+        const totalSteps = steps.length
+        return (
+          <div style={{
+            position: 'fixed',
+            top: 70,
+            right: 24,
+            zIndex: 1100,
+            background: '#fff',
+            border: '2px solid #faad14',
+            borderRadius: 10,
+            boxShadow: '0 6px 20px rgba(0,0,0,0.15)',
+            minWidth: 240,
+            maxWidth: 320,
+            overflow: 'hidden',
+            animation: 'approval-badge-pulse 2s infinite',
+          }}>
+            {/* Header strip */}
+            <div style={{
+              background: '#faad14',
+              padding: '7px 14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 7,
+            }}>
+              <ThunderboltOutlined style={{ color: '#fff', fontSize: 14 }} />
+              <span style={{ color: '#fff', fontWeight: 700, fontSize: 13 }}>
+                Aprobación en curso
+              </span>
+            </div>
+            {/* Body */}
+            <div style={{ padding: '10px 14px' }}>
+              {request.flow?.name && (
+                <div style={{ fontSize: 12, color: '#595959', marginBottom: 6, fontWeight: 600 }}>
+                  {request.flow.name}
+                </div>
+              )}
+              {currentStep ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <div style={{ fontSize: 12, color: '#1890ff', fontWeight: 600 }}>
+                    Paso {currentStep.order + 1} de {totalSteps}: {currentStep.step?.name}
+                  </div>
+                  {currentStep.step?.assigneeType && (
+                    <div style={{ fontSize: 11, color: '#8c8c8c' }}>
+                      Esperando revisión del responsable asignado
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: '#8c8c8c' }}>Procesando…</div>
+              )}
+              {/* Mini step dots */}
+              {totalSteps > 1 && (
+                <div style={{ display: 'flex', gap: 5, marginTop: 8, alignItems: 'center' }}>
+                  {steps.map((s: any) => {
+                    const done = s.status === 'APPROVED'
+                    const active = s.order === currentStepOrder && s.status === 'PENDING'
+                    const rejected = s.status === 'REJECTED'
+                    return (
+                      <div key={s.id} title={`Paso ${s.order + 1}: ${s.step?.name}`} style={{
+                        width: active ? 12 : 8,
+                        height: active ? 12 : 8,
+                        borderRadius: '50%',
+                        background: done ? '#52c41a' : rejected ? '#ff4d4f' : active ? '#faad14' : '#d9d9d9',
+                        transition: 'all 0.2s',
+                        flexShrink: 0,
+                      }} />
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      })()}
 
       <Card
         style={{
@@ -200,6 +282,11 @@ export default function ApprovalPanel({ objectType, objectId, onStatusChange }: 
                     <Text strong style={{ fontSize: 13 }}>
                       Paso {s.order + 1}: {s.step?.name}
                     </Text>
+                    {s.step?.stepType === 'NOTIFICATION' ? (
+                      <Tag color="blue" style={{ fontSize: 11 }}>🔔 Notificación</Tag>
+                    ) : (
+                      <Tag color="purple" style={{ fontSize: 11 }}>✅ Autorización</Tag>
+                    )}
                     <Tag
                       color={
                         s.status === 'APPROVED' ? 'success' :
@@ -208,7 +295,7 @@ export default function ApprovalPanel({ objectType, objectId, onStatusChange }: 
                       }
                       style={{ fontSize: 11 }}
                     >
-                      {s.status === 'APPROVED' ? 'Aprobado' :
+                      {s.status === 'APPROVED' ? (s.step?.stepType === 'NOTIFICATION' ? 'Notificado' : 'Aprobado') :
                        s.status === 'REJECTED' ? 'Rechazado' :
                        isCurrent ? 'En revisión' : 'Pendiente'}
                     </Tag>

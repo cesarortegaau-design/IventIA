@@ -2560,6 +2560,7 @@ model ApprovalFlowStep {
   order             Int
   name              String               @db.VarChar(200)
   description       String?
+  stepType          String               @default("APPROVAL") @map("step_type") @db.VarChar(20)
   assigneeType      ApprovalAssigneeType @map("assignee_type")
   assigneeUserId    String?              @map("assignee_user_id")
   assigneeProfileId String?              @map("assignee_profile_id")

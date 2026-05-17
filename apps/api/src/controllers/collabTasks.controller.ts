@@ -68,15 +68,72 @@ const COLLAB_TASK_INCLUDE = {
   },
   approvalRequestStep: {
     include: {
-      step: { select: { id: true, name: true, order: true } },
+      step: { select: { id: true, name: true, order: true, assigneeType: true, assigneeUserId: true, assigneeProfileId: true } },
       request: {
-        include: {
+        select: {
+          id: true,
+          objectType: true,
+          objectId: true,
           flow: { select: { id: true, name: true } },
+          triggeredBy: { select: { id: true, firstName: true, lastName: true } },
         },
       },
       reviewedBy: { select: { id: true, firstName: true, lastName: true } },
     },
   },
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Object label fetcher — enriches approval task with human-readable object info
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function fetchObjectLabel(objectType: string, objectId: string): Promise<string> {
+  try {
+    if (objectType === 'ORDER' || objectType === 'BUDGET_ORDER') {
+      const order = await prisma.order.findUnique({
+        where: { id: objectId },
+        select: {
+          orderNumber: true,
+          isBudgetOrder: true,
+          event: { select: { name: true } },
+          client: { select: { companyName: true, firstName: true, lastName: true } },
+        },
+      })
+      if (!order) return objectId
+      const tipo = order.isBudgetOrder ? 'Presupuesto' : 'Orden de Servicio'
+      const clientName = order.client?.companyName ?? `${order.client?.firstName ?? ''} ${order.client?.lastName ?? ''}`.trim()
+      const parts = [`${tipo} #${order.orderNumber}`]
+      if (order.event?.name) parts.push(`Evento: ${order.event.name}`)
+      else if (clientName) parts.push(`Cliente: ${clientName}`)
+      return parts.join(' — ')
+    }
+    if (objectType === 'EVENT') {
+      const event = await prisma.event.findUnique({
+        where: { id: objectId },
+        select: { name: true, code: true },
+      })
+      if (!event) return objectId
+      return `Evento: ${event.name}${event.code ? ` (${event.code})` : ''}`
+    }
+    if (objectType === 'SUPPLIER') {
+      const supplier = await prisma.supplier.findUnique({
+        where: { id: objectId },
+        select: { name: true },
+      })
+      return supplier ? `Proveedor: ${supplier.name}` : objectId
+    }
+    if (objectType === 'PURCHASE_ORDER') {
+      const po = await prisma.purchaseOrder.findUnique({
+        where: { id: objectId },
+        select: { poNumber: true, supplier: { select: { name: true } } },
+      })
+      if (!po) return objectId
+      return `OC #${po.poNumber}${po.supplier?.name ? ` — ${po.supplier.name}` : ''}`
+    }
+  } catch {
+    // Swallow — don't break task fetch
+  }
+  return objectId
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -314,7 +371,18 @@ export async function getCollabTask(req: Request, res: Response, next: NextFunct
     })
 
     if (!task) throw new AppError(404, 'TASK_NOT_FOUND', 'Task not found')
-    res.json({ success: true, data: task })
+
+    // Enrich approval step with human-readable object label
+    let data: any = task
+    if (task.approvalRequestStep?.request?.objectType && task.approvalRequestStep?.request?.objectId) {
+      const objectLabel = await fetchObjectLabel(
+        task.approvalRequestStep.request.objectType,
+        task.approvalRequestStep.request.objectId,
+      )
+      data = { ...task, approvalRequestStep: { ...task.approvalRequestStep, objectLabel } }
+    }
+
+    res.json({ success: true, data })
   } catch (err) {
     next(err)
   }

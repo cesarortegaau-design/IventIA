@@ -1,24 +1,41 @@
 import { useState } from 'react'
-import { Tabs, Descriptions, Progress, Button, Space, Spin, Popconfirm, Tag, Avatar, Typography, Divider, Empty, Modal, Select, App, Alert } from 'antd'
-import { DeleteOutlined, EditOutlined, DownloadOutlined, CalendarOutlined, ThunderboltOutlined, CheckCircleFilled, CloseCircleFilled, ClockCircleOutlined } from '@ant-design/icons'
+import { useNavigate } from 'react-router-dom'
+import { Tabs, Descriptions, Progress, Button, Space, Spin, Popconfirm, Tag, Avatar, Typography, Divider, Empty, Modal, Select, App, Alert, Input } from 'antd'
+import { DeleteOutlined, EditOutlined, ThunderboltOutlined, CheckCircleFilled, CloseCircleFilled, ClockCircleOutlined, LinkOutlined, UserOutlined } from '@ant-design/icons'
 import { TaskDocumentsPanel } from './TaskDocumentsPanel'
 import { TaskCommentThread } from './TaskCommentThread'
-import ApprovalPanel from '../../../components/ApprovalPanel'
 import { approvalFlowsApi } from '../../../api/approvalFlows'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 const { Text } = Typography
+const { TextArea } = Input
 
 function formatDateTime(date: string | null | undefined) {
   if (!date) return '-'
   return new Date(date).toLocaleDateString('es-MX', { month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
+// Map objectType → admin route (labels come from backend objectLabel)
+const OBJECT_ROUTE: Record<string, (id: string) => string> = {
+  ORDER:          id => `/ordenes/${id}`,
+  BUDGET_ORDER:   id => `/ordenes/${id}`,
+  EVENT:          id => `/eventos/${id}`,
+  SUPPLIER:       _id => `/catalogos/proveedores`,
+  PURCHASE_ORDER: id => `/catalogos/ordenes-compra/${id}`,
+  COLLAB_TASK:    id => `/chat`,
+}
+
 export function TaskDetailDrawer({ task, isLoading, statusConfig, priorityConfig, isEventActivity, onEdit, onDelete, isDeletingis, onEditEventActivity, onStatusChange }: any) {
   const { message } = App.useApp()
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+
   const [triggerModalOpen, setTriggerModalOpen] = useState(false)
   const [availableFlows, setAvailableFlows] = useState<any[]>([])
   const [selectedFlowId, setSelectedFlowId] = useState<string | undefined>()
   const [triggering, setTriggering] = useState(false)
+  const [rejectModalOpen, setRejectModalOpen] = useState(false)
+  const [rejectReason, setRejectReason] = useState('')
 
   async function openTriggerModal() {
     const flows = await approvalFlowsApi.list({ objectType: 'COLLAB_TASK' })
@@ -41,6 +58,19 @@ export function TaskDetailDrawer({ task, isLoading, statusConfig, priorityConfig
     }
   }
 
+  // Approval step review mutation (for approval tasks)
+  const reviewMutation = useMutation({
+    mutationFn: ({ stepId, requestId, action, reason }: { stepId: string; requestId: string; action: 'APPROVE' | 'REJECT'; reason?: string }) =>
+      approvalFlowsApi.reviewStep(requestId, stepId, action, reason),
+    onSuccess: () => {
+      message.success('Revisión registrada')
+      queryClient.invalidateQueries({ queryKey: ['collab-tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['collab-task', task?.id] })
+      onStatusChange?.()
+    },
+    onError: (e: any) => message.error(e.response?.data?.message ?? 'Error al procesar la revisión'),
+  })
+
   if (isLoading) {
     return <div style={{ padding: 32, textAlign: 'center' }}><Spin /></div>
   }
@@ -51,6 +81,26 @@ export function TaskDetailDrawer({ task, isLoading, statusConfig, priorityConfig
 
   const status = statusConfig[task.status as keyof typeof statusConfig]
   const priority = priorityConfig[task.priority as keyof typeof priorityConfig]
+
+  // Approval step data
+  const approvalStep = task.approvalRequestStep
+  const isApprovalTask = !!approvalStep
+  const stepStatus: string = approvalStep?.status ?? ''
+  const isApproved = stepStatus === 'APPROVED'
+  const isRejected = stepStatus === 'REJECTED'
+  const isPending  = stepStatus === 'PENDING'
+  const flowName    = approvalStep?.request?.flow?.name ?? 'Flujo de aprobación'
+  const stepName    = approvalStep?.step?.name ?? ''
+  const stepType    = (approvalStep?.step?.stepType ?? 'APPROVAL') as 'APPROVAL' | 'NOTIFICATION'
+  const isNotification = stepType === 'NOTIFICATION'
+  const reviewedBy  = approvalStep?.reviewedBy
+  const triggeredBy = approvalStep?.request?.triggeredBy
+  const objectType   = approvalStep?.request?.objectType as string | undefined
+  const objectId     = approvalStep?.request?.objectId as string | undefined
+  const objectLabel  = approvalStep?.objectLabel as string | undefined
+  const objectRoute  = objectType && objectId ? OBJECT_ROUTE[objectType]?.(objectId) : undefined
+  const requestId    = approvalStep?.request?.id
+  const stepId       = approvalStep?.stepId
 
   return (
     <div style={{ padding: '24px' }}>
@@ -70,9 +120,11 @@ export function TaskDetailDrawer({ task, isLoading, statusConfig, priorityConfig
             </Space>
           </div>
           <Space>
-            <Button icon={<ThunderboltOutlined />} size="small" onClick={openTriggerModal}>
-              ⚡ Flujo de aprobación
-            </Button>
+            {!isApprovalTask && (
+              <Button icon={<ThunderboltOutlined />} size="small" onClick={openTriggerModal}>
+                ⚡ Flujo de aprobación
+              </Button>
+            )}
             {isEventActivity ? (
               <Button icon={<EditOutlined />} type="primary" onClick={() => onEditEventActivity?.(task)}>
                 Editar
@@ -99,60 +151,100 @@ export function TaskDetailDrawer({ task, isLoading, statusConfig, priorityConfig
 
       <Divider />
 
-      {/* Approval task banner — shown when this task was created from a flow step */}
-      {task.approvalRequestStep && (() => {
-        const step = task.approvalRequestStep
-        const stepStatus: string = step.status
-        const flowName: string = step.request?.flow?.name ?? 'Flujo de aprobación'
-        const stepName: string = step.step?.name ?? ''
-        const reviewedBy = step.reviewedBy
-        const reviewedAt = step.reviewedAt ? new Date(step.reviewedAt).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : null
-
-        const isApproved = stepStatus === 'APPROVED'
-        const isRejected = stepStatus === 'REJECTED'
-        const isPending  = stepStatus === 'PENDING'
-
-        return (
-          <div style={{ marginBottom: 16 }}>
-            <div style={{
-              borderRadius: 8,
-              border: `1.5px solid ${isApproved ? '#b7eb8f' : isRejected ? '#ffccc7' : '#ffe58f'}`,
-              background: isApproved ? '#f6ffed' : isRejected ? '#fff2f0' : '#fffbe6',
-              padding: '12px 16px',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                {isApproved && <CheckCircleFilled style={{ color: '#52c41a', fontSize: 16 }} />}
-                {isRejected && <CloseCircleFilled style={{ color: '#ff4d4f', fontSize: 16 }} />}
-                {isPending  && <ClockCircleOutlined style={{ color: '#faad14', fontSize: 16 }} />}
-                <Typography.Text strong style={{ fontSize: 13, color: isApproved ? '#389e0d' : isRejected ? '#cf1322' : '#d48806' }}>
-                  Tarea de aprobación —{' '}
-                  {isApproved ? 'Aprobado' : isRejected ? 'Rechazado' : 'Pendiente de revisión'}
-                </Typography.Text>
-              </div>
-              <Typography.Text style={{ fontSize: 12, color: '#595959', display: 'block' }}>
-                Flujo: <strong>{flowName}</strong>
-                {stepName && <> · Paso: <strong>{stepName}</strong></>}
-              </Typography.Text>
-              {(isApproved || isRejected) && reviewedBy && (
-                <Typography.Text style={{ fontSize: 12, color: '#8c8c8c', display: 'block', marginTop: 2 }}>
-                  {isApproved ? 'Aprobado' : 'Rechazado'} por {reviewedBy.firstName} {reviewedBy.lastName}
-                  {reviewedAt && ` — ${reviewedAt}`}
-                  {step.reason && ` · "${step.reason}"`}
-                </Typography.Text>
-              )}
+      {/* ── Approval task card ────────────────────────────────────────────── */}
+      {isApprovalTask && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{
+            borderRadius: 10,
+            border: `2px solid ${isApproved ? '#b7eb8f' : isRejected ? '#ffccc7' : '#faad14'}`,
+            background: isApproved ? '#f6ffed' : isRejected ? '#fff2f0' : '#fffbe6',
+            padding: '16px 18px',
+          }}>
+            {/* Status header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              {isApproved && <CheckCircleFilled style={{ color: '#52c41a', fontSize: 18 }} />}
+              {isRejected && <CloseCircleFilled style={{ color: '#ff4d4f', fontSize: 18 }} />}
+              {isPending  && <ClockCircleOutlined style={{ color: '#faad14', fontSize: 18 }} />}
+              <Text strong style={{ fontSize: 14, color: isApproved ? '#389e0d' : isRejected ? '#cf1322' : '#d48806' }}>
+                {isNotification ? '🔔 Notificación' : '✅ Autorización'} —{' '}
+                {isApproved ? (isNotification ? 'Notificado' : 'Aprobado') : isRejected ? 'Rechazado' : 'Pendiente de revisión'}
+              </Text>
             </div>
-          </div>
-        )
-      })()}
 
-      {/* Approval panel */}
-      <div style={{ marginBottom: 16 }}>
-        <ApprovalPanel
-          objectType="COLLAB_TASK"
-          objectId={task.id}
-          onStatusChange={onStatusChange}
-        />
-      </div>
+            {/* Flow + step */}
+            <Text style={{ fontSize: 12, color: '#595959', display: 'block', marginBottom: 6 }}>
+              Flujo: <strong>{flowName}</strong>
+              {stepName && <> · Paso: <strong>{stepName}</strong></>}
+            </Text>
+
+            {/* Triggered by */}
+            {triggeredBy && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <UserOutlined style={{ color: '#8c8c8c', fontSize: 12 }} />
+                <Text style={{ fontSize: 12, color: '#595959' }}>
+                  Solicitado por <strong>{triggeredBy.firstName} {triggeredBy.lastName}</strong>
+                </Text>
+              </div>
+            )}
+
+            {/* Object link */}
+            {objectRoute && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: isPending ? 14 : 0 }}>
+                <LinkOutlined style={{ color: '#1890ff', fontSize: 12 }} />
+                <Button
+                  type="link"
+                  size="small"
+                  style={{ padding: 0, height: 'auto', fontSize: 12, textAlign: 'left', whiteSpace: 'normal' }}
+                  onClick={() => navigate(objectRoute)}
+                >
+                  {objectLabel ?? objectType} →
+                </Button>
+              </div>
+            )}
+
+            {/* Review result */}
+            {(isApproved || isRejected) && reviewedBy && (
+              <Text style={{ fontSize: 12, color: '#8c8c8c', display: 'block', marginTop: 4 }}>
+                {isApproved ? 'Aprobado' : 'Rechazado'} por <strong>{reviewedBy.firstName} {reviewedBy.lastName}</strong>
+                {approvalStep.reviewedAt && ` — ${new Date(approvalStep.reviewedAt).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
+                {approvalStep.reason && ` · "${approvalStep.reason}"`}
+              </Text>
+            )}
+
+            {/* Action buttons — only when pending */}
+            {isPending && requestId && stepId && (
+              isNotification ? (
+                <div style={{ marginTop: 4 }}>
+                  <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 6 }}>
+                    Este es un paso de notificación. El flujo avanza automáticamente.
+                  </Text>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                  <Button
+                    type="primary"
+                    icon={<CheckCircleFilled />}
+                    style={{ background: '#52c41a', borderColor: '#52c41a', fontWeight: 600 }}
+                    loading={reviewMutation.isPending}
+                    onClick={() => reviewMutation.mutate({ requestId, stepId, action: 'APPROVE' })}
+                  >
+                    Aprobar
+                  </Button>
+                  <Button
+                    danger
+                    icon={<CloseCircleFilled />}
+                    style={{ fontWeight: 600 }}
+                    loading={reviewMutation.isPending}
+                    onClick={() => { setRejectReason(''); setRejectModalOpen(true) }}
+                  >
+                    Rechazar
+                  </Button>
+                </div>
+              )
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Progress */}
       {task.progress !== undefined && (
@@ -164,6 +256,31 @@ export function TaskDetailDrawer({ task, isLoading, statusConfig, priorityConfig
           <Divider />
         </>
       )}
+
+      {/* Reject reason modal */}
+      <Modal
+        title="Rechazar paso de aprobación"
+        open={rejectModalOpen}
+        onOk={() => {
+          if (!requestId || !stepId) return
+          reviewMutation.mutate({ requestId, stepId, action: 'REJECT', reason: rejectReason || undefined })
+          setRejectModalOpen(false)
+        }}
+        onCancel={() => setRejectModalOpen(false)}
+        okText="Confirmar rechazo"
+        okButtonProps={{ danger: true }}
+        cancelText="Cancelar"
+      >
+        <Text type="secondary" style={{ fontSize: 13, display: 'block', marginBottom: 12 }}>
+          Puedes agregar un motivo de rechazo (opcional). El flujo regresará al paso anterior.
+        </Text>
+        <TextArea
+          rows={3}
+          placeholder="Motivo del rechazo..."
+          value={rejectReason}
+          onChange={e => setRejectReason(e.target.value)}
+        />
+      </Modal>
 
       {/* Trigger approval flow modal */}
       <Modal

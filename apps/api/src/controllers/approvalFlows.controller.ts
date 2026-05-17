@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { Request, Response, NextFunction } from 'express'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
+import { auditService } from '../services/audit.service'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Object data schemas — tell Claude which fields are available per type
@@ -71,10 +72,99 @@ const REQUEST_INCLUDE = {
   steps: {
     orderBy: { order: 'asc' as const },
     include: {
-      step: { select: { name: true } },
+      step: { select: { name: true, stepType: true } },
       reviewedBy: { select: { id: true, firstName: true, lastName: true } },
     },
   },
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Auto-advance helper — skips NOTIFICATION steps automatically
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function autoAdvanceNotifications(
+  tenantId: string,
+  triggeredById: string,
+  requestId: string,
+): Promise<void> {
+  // Re-load fresh request state
+  const request = await prisma.approvalRequest.findUnique({
+    where: { id: requestId },
+    include: {
+      flow: { include: { steps: { orderBy: { order: 'asc' } } } },
+      steps: { orderBy: { order: 'asc' } },
+    },
+  })
+  if (!request || request.status !== 'IN_PROGRESS') return
+
+  const currentOrder = request.currentStep ?? 0
+  const currentReqStep = request.steps.find(s => s.order === currentOrder && s.status === 'PENDING')
+  if (!currentReqStep) return
+
+  const currentFlowStep = request.flow.steps.find(s => s.id === currentReqStep.stepId)
+  if (!currentFlowStep || currentFlowStep.stepType !== 'NOTIFICATION') return
+
+  // Auto-approve this notification step
+  const now = new Date()
+  await prisma.approvalRequestStep.update({
+    where: { id: currentReqStep.id },
+    data: {
+      status: 'APPROVED',
+      reviewedAt: now,
+      reason: 'Auto-avanzado (paso de notificación)',
+    },
+  })
+
+  // Auto-complete the linked task if it exists
+  if (currentReqStep.taskId) {
+    await prisma.collabTask.update({
+      where: { id: currentReqStep.taskId },
+      data: { status: 'DONE', completedAt: now },
+    }).catch(() => {})
+  }
+
+  const nextReqStep = request.steps.find(s => s.order === currentOrder + 1)
+  if (!nextReqStep) {
+    // Last step was a notification — complete the request
+    await prisma.approvalRequest.update({
+      where: { id: requestId },
+      data: { status: 'APPROVED', completedAt: now },
+    })
+    return
+  }
+
+  // Advance to next step
+  await prisma.approvalRequest.update({
+    where: { id: requestId },
+    data: { currentStep: nextReqStep.order },
+  })
+
+  // Create task for next step
+  const nextFlowStep = request.flow.steps.find(s => s.id === nextReqStep.stepId)
+  if (nextFlowStep) {
+    const taskId = await createTaskForStep(
+      tenantId,
+      triggeredById,
+      request.flow.name,
+      nextFlowStep.order,
+      nextFlowStep.name,
+      nextFlowStep.description,
+      request.objectType,
+      request.objectId,
+      nextFlowStep.assigneeType,
+      nextFlowStep.assigneeUserId,
+      nextFlowStep.assigneeProfileId,
+    )
+    if (taskId) {
+      await prisma.approvalRequestStep.update({
+        where: { id: nextReqStep.id },
+        data: { taskId },
+      })
+    }
+  }
+
+  // Recurse in case the next step is also a notification
+  await autoAdvanceNotifications(tenantId, triggeredById, requestId)
 }
 
 /**
@@ -254,6 +344,7 @@ export async function createFlow(req: Request, res: Response, next: NextFunction
             order: s.order ?? idx,
             name: s.name,
             description: s.description ?? null,
+            stepType: s.stepType ?? 'APPROVAL',
             assigneeType: s.assigneeType,
             assigneeUserId: s.assigneeUserId ?? null,
             assigneeProfileId: s.assigneeProfileId ?? null,
@@ -346,6 +437,7 @@ export async function updateFlow(req: Request, res: Response, next: NextFunction
               order: s.order ?? idx,
               name: s.name,
               description: s.description ?? null,
+              stepType: s.stepType ?? 'APPROVAL',
               assigneeType: s.assigneeType,
               assigneeUserId: s.assigneeUserId ?? null,
               assigneeProfileId: s.assigneeProfileId ?? null,
@@ -378,14 +470,27 @@ export async function deleteFlow(req: Request, res: Response, next: NextFunction
     })
     if (!existing) throw new AppError(404, 'NOT_FOUND', 'Flujo de aprobación no encontrado')
 
-    const inProgress = await prisma.approvalRequest.count({
-      where: { flowId: req.params.id, status: 'IN_PROGRESS' },
-    })
-    if (inProgress > 0) {
-      throw new AppError(400, 'CONFLICT', 'No se puede eliminar un flujo con solicitudes en progreso')
-    }
+    // Cascade delete manually: request steps → requests → flow steps → flow
+    await prisma.$transaction(async (tx) => {
+      // Get all requests for this flow
+      const requests = await tx.approvalRequest.findMany({
+        where: { flowId: req.params.id },
+        select: { id: true },
+      })
+      const requestIds = requests.map(r => r.id)
 
-    await prisma.approvalFlow.delete({ where: { id: req.params.id } })
+      // Delete request steps
+      if (requestIds.length > 0) {
+        await tx.approvalRequestStep.deleteMany({ where: { requestId: { in: requestIds } } })
+        await tx.approvalRequest.deleteMany({ where: { id: { in: requestIds } } })
+      }
+
+      // Delete flow steps
+      await tx.approvalFlowStep.deleteMany({ where: { flowId: req.params.id } })
+
+      // Delete the flow itself
+      await tx.approvalFlow.delete({ where: { id: req.params.id } })
+    })
 
     res.json({ success: true, data: null })
   } catch (err) {
@@ -445,7 +550,7 @@ export async function getActiveRequest(req: Request, res: Response, next: NextFu
         steps: {
           orderBy: { order: 'asc' },
           include: {
-            step: { select: { name: true, assigneeType: true, assigneeUserId: true, assigneeProfileId: true } },
+            step: { select: { name: true, stepType: true, assigneeType: true, assigneeUserId: true, assigneeProfileId: true } },
             reviewedBy: { select: { id: true, firstName: true, lastName: true } },
           },
         },
@@ -540,6 +645,9 @@ export async function triggerRequest(req: Request, res: Response, next: NextFunc
         data: { taskId },
       })
     }
+
+    // Auto-advance if first step is NOTIFICATION
+    await autoAdvanceNotifications(req.user!.tenantId, req.user!.userId, approvalRequest.request.id)
 
     const result = await prisma.approvalRequest.findUnique({
       where: { id: approvalRequest.request.id },
@@ -646,6 +754,9 @@ export async function reviewStep(req: Request, res: Response, next: NextFunction
           data: { status: 'DONE', completedAt: now },
         })
       }
+
+      // Auto-advance if next step is NOTIFICATION
+      await autoAdvanceNotifications(req.user!.tenantId, req.user!.userId, requestId)
     } else {
       // REJECT: go back to previous step (or reject entirely if step 0)
       const prevStep = request.steps.find(s => s.order === requestStep.order - 1)
@@ -721,6 +832,29 @@ export async function reviewStep(req: Request, res: Response, next: NextFunction
       where: { id: requestId },
       include: REQUEST_INCLUDE,
     })
+
+    // Audit log on the target object
+    const reviewer = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      select: { firstName: true, lastName: true },
+    })
+    await auditService.log(
+      req.user!.tenantId,
+      req.user!.userId,
+      request.objectType,
+      request.objectId,
+      'UPDATE',
+      null,
+      {
+        approvalAction: action,
+        flowName: request.flow.name,
+        stepName: requestStep.step?.name,
+        stepOrder: requestStep.order + 1,
+        reason: reason ?? null,
+        reviewedBy: reviewer ? `${reviewer.firstName} ${reviewer.lastName}` : req.user!.email,
+      },
+      req.ip,
+    )
 
     res.json({ success: true, data: result })
   } catch (err) {

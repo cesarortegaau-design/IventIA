@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient, } from '@tanstack/react-query'
 import {
   Table, Button, Card, Space, Tag, Modal, Form, Input, Select,
   Switch, Typography, Row, Col, App, Divider, Drawer, Popconfirm,
-  Tooltip, Empty, Alert, Spin,
+  Tooltip, Empty, Alert, Spin, Radio,
 } from 'antd'
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, ThunderboltOutlined,
@@ -161,6 +161,7 @@ interface StepFormValue {
   key: string
   name: string
   description?: string
+  stepType: 'APPROVAL' | 'NOTIFICATION'
   assigneeType: 'USER' | 'PROFILE'
   assigneeUserId?: string
   assigneeProfileId?: string
@@ -180,7 +181,7 @@ function StepBuilder({
   const addStep = () => {
     onChange([
       ...steps,
-      { key: Date.now().toString(), name: '', assigneeType: 'USER' },
+      { key: Date.now().toString(), name: '', stepType: 'APPROVAL', assigneeType: 'USER' },
     ])
   }
 
@@ -230,6 +231,25 @@ function StepBuilder({
           }
         >
           <Row gutter={[8, 8]}>
+            <Col span={24}>
+              <Radio.Group
+                value={step.stepType ?? 'APPROVAL'}
+                onChange={e => updateStep(step.key, 'stepType', e.target.value)}
+                size="small"
+              >
+                <Radio.Button value="APPROVAL">
+                  ✅ Autorización
+                </Radio.Button>
+                <Radio.Button value="NOTIFICATION">
+                  🔔 Notificación
+                </Radio.Button>
+              </Radio.Group>
+              {step.stepType === 'NOTIFICATION' && (
+                <Text type="secondary" style={{ fontSize: 11, marginLeft: 8 }}>
+                  El flujo avanza automáticamente; solo notifica al asignado.
+                </Text>
+              )}
+            </Col>
             <Col span={24}>
               <Input
                 placeholder="Nombre del paso *"
@@ -413,6 +433,7 @@ export default function ApprovalFlowsPage() {
         key: s.id,
         name: s.name,
         description: s.description ?? '',
+        stepType: s.stepType ?? 'APPROVAL',
         assigneeType: s.assigneeType,
         assigneeUserId: s.assigneeUserId ?? undefined,
         assigneeProfileId: s.assigneeProfileId ?? undefined,
@@ -442,6 +463,7 @@ export default function ApprovalFlowsPage() {
           order: idx,
           name: s.name,
           description: s.description || null,
+          stepType: s.stepType ?? 'APPROVAL',
           assigneeType: s.assigneeType,
           assigneeUserId: s.assigneeType === 'USER' ? (s.assigneeUserId ?? null) : null,
           assigneeProfileId: s.assigneeType === 'PROFILE' ? (s.assigneeProfileId ?? null) : null,
