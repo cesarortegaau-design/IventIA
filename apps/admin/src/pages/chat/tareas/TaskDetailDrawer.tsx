@@ -68,7 +68,11 @@ export function TaskDetailDrawer({ task, isLoading, statusConfig, priorityConfig
       queryClient.invalidateQueries({ queryKey: ['collab-task', task?.id] })
       onStatusChange?.()
     },
-    onError: (e: any) => message.error(e.response?.data?.message ?? 'Error al procesar la revisión'),
+    onError: (e: any) => {
+      message.error(e.response?.data?.error?.message ?? 'Error al procesar la revisión')
+      queryClient.invalidateQueries({ queryKey: ['collab-tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['collab-task', task?.id] })
+    },
   })
 
   if (isLoading) {

@@ -83,6 +83,10 @@ export default function ApprovalPanel({ objectType, objectId, onStatusChange }: 
       queryClient.invalidateQueries({ queryKey })
       onStatusChange?.()
     },
+    onError: () => {
+      // Refresh so stale UI state is corrected
+      queryClient.invalidateQueries({ queryKey })
+    },
   })
 
   if (isLoading) {
@@ -348,7 +352,7 @@ export default function ApprovalPanel({ objectType, objectId, onStatusChange }: 
         {reviewMutation.isError && (
           <Alert
             type="error"
-            message={(reviewMutation.error as any)?.response?.data?.message ?? 'Error al procesar la revisión'}
+            message={(reviewMutation.error as any)?.response?.data?.error?.message ?? 'Error al procesar la revisión'}
             style={{ marginTop: 10 }}
             showIcon
           />
