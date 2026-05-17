@@ -116,7 +116,7 @@ export async function listFlows(req: Request, res: Response, next: NextFunction)
 
 export async function createFlow(req: Request, res: Response, next: NextFunction) {
   try {
-    const { name, description, objectType, targetStatus, activationConditionsText, finalEffectsText, autoTrigger, blocksTransition, steps = [] } = req.body
+    const { name, description, objectType, targetStatus, activationConditionsText, finalEffectsText, autoTrigger, blocksTransition, minAmount, steps = [] } = req.body
 
     if (!name) throw new AppError(400, 'VALIDATION_ERROR', 'El nombre es requerido')
     if (!objectType) throw new AppError(400, 'VALIDATION_ERROR', 'El tipo de objeto es requerido')
@@ -134,6 +134,7 @@ export async function createFlow(req: Request, res: Response, next: NextFunction
           finalEffectsText: finalEffectsText ?? null,
           autoTrigger: autoTrigger ?? false,
           blocksTransition: blocksTransition !== undefined ? blocksTransition : true,
+          minAmount: minAmount != null ? minAmount : null,
           createdById: req.user!.userId,
         },
       })
@@ -197,7 +198,7 @@ export async function updateFlow(req: Request, res: Response, next: NextFunction
     })
     if (!existing) throw new AppError(404, 'NOT_FOUND', 'Flujo de aprobación no encontrado')
 
-    const { name, description, activationConditionsText, finalEffectsText, isActive, autoTrigger, blocksTransition, steps } = req.body
+    const { name, description, activationConditionsText, finalEffectsText, isActive, autoTrigger, blocksTransition, minAmount, steps } = req.body
 
     const flow = await prisma.$transaction(async (tx) => {
       await tx.approvalFlow.update({
@@ -210,6 +211,7 @@ export async function updateFlow(req: Request, res: Response, next: NextFunction
           ...(isActive !== undefined && { isActive }),
           ...(autoTrigger !== undefined && { autoTrigger }),
           ...(blocksTransition !== undefined && { blocksTransition }),
+          ...(minAmount !== undefined && { minAmount: minAmount != null ? minAmount : null }),
         },
       })
 

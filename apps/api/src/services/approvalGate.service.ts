@@ -35,6 +35,15 @@ export async function checkApprovalGate(
 
   if (!flow || !flow.blocksTransition) return { blocked: false, message: '' }
 
+  // Check minAmount condition for orders
+  if (flow.minAmount !== null && (objectType === 'ORDER' || objectType === 'BUDGET_ORDER')) {
+    const order = await prisma.order.findUnique({
+      where: { id: objectId },
+      select: { total: true },
+    })
+    if (!order || order.total < flow.minAmount) return { blocked: false, message: '' }
+  }
+
   // Already approved for this object+flow → let it through
   const approved = await prisma.approvalRequest.findFirst({
     where: { tenantId, flowId: flow.id, objectType: objectType as any, objectId, status: 'APPROVED' },

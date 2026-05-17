@@ -321,6 +321,7 @@ export default function ApprovalFlowsPage() {
   const [selectedObjectType, setSelectedObjectType] = useState<string | undefined>()
   const [selectedTargetStatus, setSelectedTargetStatus] = useState<string | undefined>()
   const statusOptions = STATUS_OPTIONS_BY_TYPE[selectedObjectType ?? ''] ?? []
+  const showMinAmount = autoTriggerOn && (selectedObjectType === 'ORDER' || selectedObjectType === 'BUDGET_ORDER')
 
   // ── Queries ──
   const { data: flows = [], isLoading } = useQuery<any[]>({
@@ -401,6 +402,7 @@ export default function ApprovalFlowsPage() {
       finalEffectsText: flow.finalEffectsText,
       autoTrigger: !!flow.autoTrigger,
       blocksTransition: flow.blocksTransition !== false,
+      minAmount: flow.minAmount ? Number(flow.minAmount) : undefined,
     })
     setSteps(
       (flow.steps ?? []).map((s: any) => ({
@@ -489,6 +491,14 @@ export default function ApprovalFlowsPage() {
       render: (_: any, record: any) => record.autoTrigger
         ? <Tag color="purple" icon={<RobotOutlined />}>Auto</Tag>
         : <Tag color="default">Manual</Tag>,
+    },
+    {
+      title: 'Monto mín.',
+      key: 'minAmount',
+      width: 110,
+      render: (_: any, record: any) => record.minAmount
+        ? <Text style={{ fontSize: 12 }}>${Number(record.minAmount).toLocaleString('es-MX')}</Text>
+        : <Text type="secondary" style={{ fontSize: 12 }}>—</Text>,
     },
     {
       title: 'Pasos',
@@ -730,6 +740,21 @@ export default function ApprovalFlowsPage() {
               >
                 <Switch defaultChecked />
               </Form.Item>
+              {showMinAmount && (
+                <Form.Item
+                  name="minAmount"
+                  label="Monto mínimo para activar (MXN)"
+                  tooltip="El flujo solo se disparará si el total de la orden supera este monto. Deja vacío para activar sin importar el monto."
+                >
+                  <Input
+                    type="number"
+                    min={0}
+                    placeholder="Ej: 50000"
+                    prefix="$"
+                    suffix="MXN"
+                  />
+                </Form.Item>
+              )}
               <Alert
                 type="info"
                 showIcon

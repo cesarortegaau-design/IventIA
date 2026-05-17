@@ -2538,6 +2538,7 @@ model ApprovalFlow {
   isActive                 Boolean            @default(true) @map("is_active")
   autoTrigger              Boolean            @default(false) @map("auto_trigger")
   blocksTransition         Boolean            @default(true) @map("blocks_transition")
+  minAmount                Decimal?           @map("min_amount") @db.Decimal(12, 2)
   createdById              String             @map("created_by_id")
   createdAt                DateTime           @default(now()) @map("created_at")
   updatedAt                DateTime           @updatedAt @map("updated_at")
