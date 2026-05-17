@@ -2,7 +2,10 @@ import { apiClient } from './client'
 
 export const resourcesApi = {
   list: (params?: Record<string, any>) =>
-    apiClient.get('/resources', { params }).then(r => r.data),
+    apiClient.get('/resources', { params }).then(r => ({
+      data: Array.isArray(r.data?.data) ? r.data.data : Array.isArray(r.data) ? r.data : [],
+      meta: r.data?.meta,
+    })),
   get: (id: string) =>
     apiClient.get(`/resources/${id}`).then(r => r.data),
   create: (data: any) =>

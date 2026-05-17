@@ -294,7 +294,7 @@ export function PackageComponentsManager({
                 showSearch
                 placeholder="Busca un recurso..."
                 optionFilterProp="label"
-                options={allResources
+                options={(Array.isArray(allResources) ? allResources : [])
                   .filter(r => r.id !== packageResourceId)
                   .map(r => ({
                     value: r.id,

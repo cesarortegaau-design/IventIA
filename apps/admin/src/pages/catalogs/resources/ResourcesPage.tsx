@@ -207,7 +207,8 @@ export default function ResourcesPage() {
   })
 
   // Derive counts per type for sidebar
-  const allResources: any[] = data?.data ?? []
+  const allResources: any[] = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : []
+  const deptList: any[] = Array.isArray(departments) ? departments : []
   const typeCounts = useMemo(() => {
     const counts: Record<string, number> = {}
     allResources.forEach((r: any) => {
@@ -420,7 +421,7 @@ export default function ResourcesPage() {
           <Col span={12}>
             <Form.Item name="departmentId" label="Departamento">
               <Select allowClear placeholder="Seleccionar departamento" showSearch optionFilterProp="label"
-                options={(departments || []).filter((d: any) => d.isActive).map((d: any) => ({ value: d.id, label: d.name }))} />
+                options={deptList.filter((d: any) => d.isActive).map((d: any) => ({ value: d.id, label: d.name }))} />
             </Form.Item>
           </Col>
           <Col span={8}>
