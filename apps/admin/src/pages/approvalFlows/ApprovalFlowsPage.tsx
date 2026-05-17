@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, } from '@tanstack/react-query'
 import {
   Table, Button, Card, Space, Tag, Modal, Form, Input, Select,
   Switch, Typography, Row, Col, App, Divider, Drawer, Popconfirm,
@@ -45,6 +45,48 @@ const OBJECT_TYPE_COLORS: Record<string, string> = {
 }
 
 const OBJECT_TYPE_OPTIONS = Object.entries(OBJECT_TYPE_LABELS).map(([value, label]) => ({ value, label }))
+
+// Real enum values per object type — must match the DB/API exactly
+const STATUS_OPTIONS_BY_TYPE: Record<string, { value: string; label: string }[]> = {
+  ORDER: [
+    { value: 'CONFIRMED',   label: 'CONFIRMED — Confirmada' },
+    { value: 'EXECUTED',    label: 'EXECUTED — Ejecutada' },
+    { value: 'INVOICED',    label: 'INVOICED — Facturada' },
+    { value: 'CANCELLED',   label: 'CANCELLED — Cancelada' },
+  ],
+  BUDGET_ORDER: [
+    { value: 'CONFIRMED',   label: 'CONFIRMED — Confirmada' },
+    { value: 'EXECUTED',    label: 'EXECUTED — Ejecutada' },
+    { value: 'INVOICED',    label: 'INVOICED — Facturada' },
+    { value: 'CANCELLED',   label: 'CANCELLED — Cancelada' },
+  ],
+  EVENT: [
+    { value: 'CONFIRMED',    label: 'CONFIRMED — Confirmado' },
+    { value: 'IN_EXECUTION', label: 'IN_EXECUTION — En Ejecución' },
+    { value: 'CLOSED',       label: 'CLOSED — Cerrado' },
+    { value: 'CANCELLED',    label: 'CANCELLED — Cancelado' },
+  ],
+  SUPPLIER: [
+    { value: 'ACTIVE',   label: 'ACTIVE — Activo' },
+    { value: 'INACTIVE', label: 'INACTIVE — Inactivo' },
+    { value: 'BLOCKED',  label: 'BLOCKED — Bloqueado' },
+  ],
+  PURCHASE_ORDER: [
+    { value: 'CONFIRMED',          label: 'CONFIRMED — Confirmada' },
+    { value: 'PARTIALLY_RECEIVED', label: 'PARTIALLY_RECEIVED — Recibida parcialmente' },
+    { value: 'RECEIVED',           label: 'RECEIVED — Recibida' },
+    { value: 'INVOICED',           label: 'INVOICED — Facturada' },
+    { value: 'CANCELLED',          label: 'CANCELLED — Cancelada' },
+  ],
+  COLLAB_TASK: [
+    { value: 'IN_PROGRESS', label: 'IN_PROGRESS — En Progreso' },
+    { value: 'DONE',        label: 'DONE — Completada' },
+    { value: 'CANCELLED',   label: 'CANCELLED — Cancelada' },
+  ],
+  CLIENT:              [],
+  PRICE_LIST:          [],
+  SUPPLIER_PRICE_LIST: [],
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Flow Diagram Component
@@ -276,6 +318,9 @@ export default function ApprovalFlowsPage() {
   const [form] = Form.useForm()
   const [steps, setSteps] = useState<StepFormValue[]>([])
   const [autoTriggerOn, setAutoTriggerOn] = useState(false)
+  const watchedObjectType: string | undefined = Form.useWatch('objectType', form)
+  const watchedTargetStatus: string | undefined = Form.useWatch('targetStatus', form)
+  const statusOptions = STATUS_OPTIONS_BY_TYPE[watchedObjectType ?? ''] ?? []
 
   // ── Queries ──
   const { data: flows = [], isLoading } = useQuery<any[]>({
@@ -620,6 +665,7 @@ export default function ApprovalFlowsPage() {
                 <Select
                   placeholder="Seleccionar objeto"
                   options={OBJECT_TYPE_OPTIONS}
+                  onChange={() => form.setFieldValue('targetStatus', undefined)}
                 />
               </Form.Item>
             </Col>
@@ -628,9 +674,17 @@ export default function ApprovalFlowsPage() {
                 name="targetStatus"
                 label="Estado destino"
                 rules={[{ required: true, message: 'El estado destino es requerido' }]}
-                tooltip="Estado al que el objeto intentará transicionar. Ej: CONFIRMED"
+                tooltip="Estado al que el objeto debe transicionar para disparar este flujo"
               >
-                <Input placeholder="Ej: CONFIRMED" />
+                {statusOptions.length > 0 ? (
+                  <Select
+                    placeholder="Seleccionar estado"
+                    options={statusOptions}
+                    disabled={!watchedObjectType}
+                  />
+                ) : (
+                  <Input placeholder="Ej: CONFIRMED" />
+                )}
               </Form.Item>
             </Col>
           </Row>
@@ -668,7 +722,7 @@ export default function ApprovalFlowsPage() {
                 showIcon
                 icon={<RobotOutlined />}
                 style={{ marginBottom: 16, fontSize: 12 }}
-                message={`Cuando el objeto intente cambiar a "${form.getFieldValue('targetStatus') || '(estado destino)'}", el sistema creará este flujo automáticamente y bloqueará la transición hasta recibir aprobación.`}
+                message={`Cuando el objeto intente cambiar a "${watchedTargetStatus || '(estado destino)'}", el sistema creará este flujo automáticamente y bloqueará la transición hasta recibir aprobación.`}
               />
             </>
           )}
