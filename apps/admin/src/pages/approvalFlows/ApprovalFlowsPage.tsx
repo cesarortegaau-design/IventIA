@@ -460,6 +460,7 @@ export default function ApprovalFlowsPage() {
         ...values,
         ruleCode: ruleCode ?? null,
         steps: steps.map((s, idx) => ({
+          id: s.key,
           order: idx,
           name: s.name,
           description: s.description || null,

@@ -416,33 +416,49 @@ export async function updateFlow(req: Request, res: Response, next: NextFunction
       })
 
       if (steps !== undefined) {
-        // Only delete steps that are NOT referenced by any request step (FK constraint guard)
+        // Get existing step IDs for this flow
+        const existingSteps = await tx.approvalFlowStep.findMany({
+          where: { flowId: req.params.id },
+          select: { id: true },
+        })
+        const existingIds = new Set(existingSteps.map(s => s.id))
+
+        // Payload step IDs that already exist in the DB (to be updated, not recreated)
+        const payloadIds = new Set(
+          steps.filter((s: any) => s.id && existingIds.has(s.id)).map((s: any) => s.id as string)
+        )
+
+        // Delete steps that are no longer in the payload and are not referenced by active requests
         const referenced = await tx.approvalRequestStep.findMany({
           where: { step: { flowId: req.params.id } },
           select: { stepId: true },
         })
         const referencedIds = new Set(referenced.map(r => r.stepId))
 
+        const idsToKeep = new Set([...payloadIds, ...referencedIds])
         await tx.approvalFlowStep.deleteMany({
           where: {
             flowId: req.params.id,
-            ...(referencedIds.size > 0 && { id: { notIn: [...referencedIds] } }),
+            ...(idsToKeep.size > 0 && { id: { notIn: [...idsToKeep] } }),
           },
         })
 
-        if (steps.length > 0) {
-          await tx.approvalFlowStep.createMany({
-            data: steps.map((s: any, idx: number) => ({
-              flowId: req.params.id,
-              order: s.order ?? idx,
-              name: s.name,
-              description: s.description ?? null,
-              stepType: s.stepType ?? 'APPROVAL',
-              assigneeType: s.assigneeType,
-              assigneeUserId: s.assigneeUserId ?? null,
-              assigneeProfileId: s.assigneeProfileId ?? null,
-            })),
-          })
+        // Update existing steps in-place; create new ones
+        for (const [idx, s] of (steps as any[]).entries()) {
+          const stepData = {
+            order: s.order ?? idx,
+            name: s.name,
+            description: s.description ?? null,
+            stepType: s.stepType ?? 'APPROVAL',
+            assigneeType: s.assigneeType,
+            assigneeUserId: s.assigneeUserId ?? null,
+            assigneeProfileId: s.assigneeProfileId ?? null,
+          }
+          if (s.id && existingIds.has(s.id)) {
+            await tx.approvalFlowStep.update({ where: { id: s.id }, data: stepData })
+          } else {
+            await tx.approvalFlowStep.create({ data: { flowId: req.params.id, ...stepData } })
+          }
         }
       }
 
