@@ -318,9 +318,9 @@ export default function ApprovalFlowsPage() {
   const [form] = Form.useForm()
   const [steps, setSteps] = useState<StepFormValue[]>([])
   const [autoTriggerOn, setAutoTriggerOn] = useState(false)
-  const watchedObjectType: string | undefined = Form.useWatch('objectType', form)
-  const watchedTargetStatus: string | undefined = Form.useWatch('targetStatus', form)
-  const statusOptions = STATUS_OPTIONS_BY_TYPE[watchedObjectType ?? ''] ?? []
+  const [selectedObjectType, setSelectedObjectType] = useState<string | undefined>()
+  const [selectedTargetStatus, setSelectedTargetStatus] = useState<string | undefined>()
+  const statusOptions = STATUS_OPTIONS_BY_TYPE[selectedObjectType ?? ''] ?? []
 
   // ── Queries ──
   const { data: flows = [], isLoading } = useQuery<any[]>({
@@ -381,6 +381,8 @@ export default function ApprovalFlowsPage() {
     setEditingId(null)
     setSteps([])
     setAutoTriggerOn(false)
+    setSelectedObjectType(undefined)
+    setSelectedTargetStatus(undefined)
     form.resetFields()
     setDrawerOpen(true)
   }
@@ -388,6 +390,8 @@ export default function ApprovalFlowsPage() {
   const openEdit = (flow: any) => {
     setEditingId(flow.id)
     setAutoTriggerOn(!!flow.autoTrigger)
+    setSelectedObjectType(flow.objectType)
+    setSelectedTargetStatus(flow.targetStatus)
     form.setFieldsValue({
       name: flow.name,
       description: flow.description,
@@ -416,6 +420,8 @@ export default function ApprovalFlowsPage() {
     setEditingId(null)
     setSteps([])
     setAutoTriggerOn(false)
+    setSelectedObjectType(undefined)
+    setSelectedTargetStatus(undefined)
     form.resetFields()
   }
 
@@ -665,7 +671,11 @@ export default function ApprovalFlowsPage() {
                 <Select
                   placeholder="Seleccionar objeto"
                   options={OBJECT_TYPE_OPTIONS}
-                  onChange={() => form.setFieldValue('targetStatus', undefined)}
+                  onChange={(v) => {
+                    setSelectedObjectType(v)
+                    setSelectedTargetStatus(undefined)
+                    form.setFieldValue('targetStatus', undefined)
+                  }}
                 />
               </Form.Item>
             </Col>
@@ -680,10 +690,13 @@ export default function ApprovalFlowsPage() {
                   <Select
                     placeholder="Seleccionar estado"
                     options={statusOptions}
-                    disabled={!watchedObjectType}
+                    onChange={(v) => setSelectedTargetStatus(v)}
                   />
                 ) : (
-                  <Input placeholder="Ej: CONFIRMED" />
+                  <Input
+                    placeholder={selectedObjectType ? 'Ingresa el estado exacto' : 'Primero selecciona el objeto'}
+                    disabled={!selectedObjectType}
+                  />
                 )}
               </Form.Item>
             </Col>
@@ -722,7 +735,7 @@ export default function ApprovalFlowsPage() {
                 showIcon
                 icon={<RobotOutlined />}
                 style={{ marginBottom: 16, fontSize: 12 }}
-                message={`Cuando el objeto intente cambiar a "${watchedTargetStatus || '(estado destino)'}", el sistema creará este flujo automáticamente y bloqueará la transición hasta recibir aprobación.`}
+                message={`Cuando el objeto intente cambiar a "${selectedTargetStatus || '(estado destino)'}", el sistema creará este flujo automáticamente y bloqueará la transición hasta recibir aprobación.`}
               />
             </>
           )}
