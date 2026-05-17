@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Table, Button, Card, Space, Tag, Modal, Form, Input, Select, Row, Col, App, Typography, Switch, Tooltip } from 'antd'
-import { PlusOutlined, EditOutlined, DownloadOutlined, MailOutlined, WhatsAppOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, DownloadOutlined, MailOutlined, MobileOutlined } from '@ant-design/icons'
 import { apiClient } from '../../../api/client'
 import { exportToCsv } from '../../../utils/exportCsv'
 
@@ -78,7 +78,7 @@ export default function UsersPage() {
             <MailOutlined style={{ color: r.notifyTaskEmail ? '#52c41a' : '#d9d9d9', fontSize: 15 }} />
           </Tooltip>
           <Tooltip title="WhatsApp">
-            <WhatsAppOutlined style={{ color: r.notifyTaskWhatsapp ? '#25D366' : '#d9d9d9', fontSize: 15 }} />
+            <MobileOutlined style={{ color: r.notifyTaskWhatsapp ? '#25D366' : '#d9d9d9', fontSize: 15 }} />
           </Tooltip>
         </Space>
       ),
@@ -167,7 +167,7 @@ export default function UsersPage() {
                   </Col>
                   <Col>
                     <Form.Item name="notifyTaskWhatsapp" valuePropName="checked" initialValue={false} style={{ marginBottom: 0 }}>
-                      <Switch checkedChildren={<WhatsAppOutlined />} unCheckedChildren={<WhatsAppOutlined />} style={{ background: '#25D366' }} />
+                      <Switch checkedChildren={<MobileOutlined />} unCheckedChildren={<MobileOutlined />} style={{ background: '#25D366' }} />
                     </Form.Item>
                     <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>WhatsApp</div>
                   </Col>
