@@ -120,6 +120,8 @@ model User {
   phone               String?                      @db.VarChar(30)
   role                UserRole                     @default(NORMAL)
   isActive            Boolean                      @default(true) @map("is_active")
+  notifyTaskEmail     Boolean                      @default(true) @map("notify_task_email")
+  notifyTaskWhatsapp  Boolean                      @default(false) @map("notify_task_whatsapp")
   azureAdId           String?                      @map("azure_ad_id") @db.VarChar(200)
   createdAt           DateTime                     @default(now()) @map("created_at")
   updatedAt           DateTime                     @updatedAt @map("updated_at")

@@ -261,6 +261,10 @@ export const emailService = {
     to: string
     recipientName: string
     taskTitle: string
+    taskDescription?: string
+    dueDate?: string
+    objectLabel?: string
+    objectUrl?: string
     taskUrl: string
     action: 'created' | 'assigned'
   }) {
@@ -289,14 +293,33 @@ export const emailService = {
           </p>
 
           <!-- Task info -->
-          <div style="background: #f0f5ff; border-left: 4px solid #4A90E2; border-radius: 8px; padding: 16px 20px; margin-bottom: 24px;">
-            <div style="font-size: 18px; font-weight: 700; color: #1a1a2e; margin-bottom: 8px;">${params.taskTitle}</div>
+          <div style="background: #f0f5ff; border-left: 4px solid #4A90E2; border-radius: 8px; padding: 16px 20px; margin-bottom: 16px;">
+            <div style="font-size: 18px; font-weight: 700; color: #1a1a2e; margin-bottom: ${params.taskDescription ? '10px' : '0'};">
+              ${params.taskTitle}
+            </div>
+            ${params.taskDescription ? `<div style="font-size: 14px; color: #555; line-height: 1.6;">${params.taskDescription}</div>` : ''}
           </div>
+
+          <!-- Metadata row -->
+          ${params.dueDate || params.objectLabel ? `
+          <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px;">
+            ${params.dueDate ? `
+            <div style="background: #fff7e6; border: 1px solid #ffd591; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #874d00;">
+              📅 <strong>Vence:</strong> ${params.dueDate}
+            </div>` : ''}
+            ${params.objectLabel && params.objectUrl ? `
+            <div style="background: #f6ffed; border: 1px solid #b7eb8f; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #135200;">
+              🔗 <a href="${params.objectUrl}" style="color: #237804; font-weight: 600; text-decoration: none;">${params.objectLabel}</a>
+            </div>` : params.objectLabel ? `
+            <div style="background: #f6ffed; border: 1px solid #b7eb8f; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #135200;">
+              🔗 ${params.objectLabel}
+            </div>` : ''}
+          </div>` : ''}
 
           <!-- CTA Button -->
           <div style="text-align: center; margin: 28px 0;">
             <a href="${params.taskUrl}" style="background: linear-gradient(135deg, #4A90E2 0%, #357abd 100%); color: #fff; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-block;">
-              Ver tarea
+              Ver tarea en IventIA
             </a>
           </div>
 

@@ -20,6 +20,8 @@ const userSchema = z.object({
   profileId: z.string().uuid().nullish(),
   departmentIds: z.array(z.string()).default([]),
   isActive: z.boolean().optional(),
+  notifyTaskEmail: z.boolean().optional(),
+  notifyTaskWhatsapp: z.boolean().optional(),
 })
 
 // Lightweight list of active users for assignment dropdowns — any authenticated user

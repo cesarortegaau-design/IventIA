@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Table, Button, Card, Space, Tag, Modal, Form, Input, Select, Row, Col, App, Typography } from 'antd'
-import { PlusOutlined, EditOutlined, DownloadOutlined } from '@ant-design/icons'
+import { Table, Button, Card, Space, Tag, Modal, Form, Input, Select, Row, Col, App, Typography, Switch, Tooltip } from 'antd'
+import { PlusOutlined, EditOutlined, DownloadOutlined, MailOutlined, WhatsAppOutlined } from '@ant-design/icons'
 import { apiClient } from '../../../api/client'
 import { exportToCsv } from '../../../utils/exportCsv'
 
@@ -55,6 +55,8 @@ export default function UsersPage() {
       departmentIds: record.userDepartments?.map((ud: any) => ud.department.id),
       profileId: record.profile?.id ?? null,
       password: undefined,
+      notifyTaskEmail: record.notifyTaskEmail ?? true,
+      notifyTaskWhatsapp: record.notifyTaskWhatsapp ?? false,
     })
     setModalOpen(true)
   }
@@ -66,6 +68,21 @@ export default function UsersPage() {
     { title: 'Perfil', render: (_: any, r: any) => r.profile?.name ?? <Tag>Sin perfil</Tag> },
     { title: 'Departamentos', render: (_: any, r: any) => r.userDepartments?.map((ud: any) => ud.department.name).join(', ') },
     { title: 'Activo', dataIndex: 'isActive', render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? 'Activo' : 'Inactivo'}</Tag> },
+    {
+      title: 'Notif. tareas',
+      key: 'notif',
+      width: 110,
+      render: (_: any, r: any) => (
+        <Space size={4}>
+          <Tooltip title="Email">
+            <MailOutlined style={{ color: r.notifyTaskEmail ? '#52c41a' : '#d9d9d9', fontSize: 15 }} />
+          </Tooltip>
+          <Tooltip title="WhatsApp">
+            <WhatsAppOutlined style={{ color: r.notifyTaskWhatsapp ? '#25D366' : '#d9d9d9', fontSize: 15 }} />
+          </Tooltip>
+        </Space>
+      ),
+    },
     { title: '', key: 'actions', render: (_: any, r: any) => <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)} /> },
   ]
 
@@ -134,6 +151,27 @@ export default function UsersPage() {
               <Form.Item name="departmentIds" label="Departamentos">
                 <Select mode="multiple" options={deptOptions} />
               </Form.Item>
+            </Col>
+            <Col span={24}>
+              <div style={{ background: '#fafafa', border: '1px solid #f0f0f0', borderRadius: 8, padding: '12px 16px' }}>
+                <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10, color: '#595959' }}>
+                  Notificaciones de nueva tarea asignada
+                </div>
+                <Row gutter={24}>
+                  <Col>
+                    <Form.Item name="notifyTaskEmail" valuePropName="checked" initialValue={true} style={{ marginBottom: 0 }}>
+                      <Switch checkedChildren={<MailOutlined />} unCheckedChildren={<MailOutlined />} />
+                    </Form.Item>
+                    <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>Correo electrónico</div>
+                  </Col>
+                  <Col>
+                    <Form.Item name="notifyTaskWhatsapp" valuePropName="checked" initialValue={false} style={{ marginBottom: 0 }}>
+                      <Switch checkedChildren={<WhatsAppOutlined />} unCheckedChildren={<WhatsAppOutlined />} style={{ background: '#25D366' }} />
+                    </Form.Item>
+                    <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>WhatsApp</div>
+                  </Col>
+                </Row>
+              </div>
             </Col>
           </Row>
         </Form>

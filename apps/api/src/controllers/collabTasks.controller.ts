@@ -161,70 +161,112 @@ async function notifyCollabTask(
     (async () => {
       const tenantId = req.user!.tenantId
 
-      // Collect recipients
-      const recipients = new Map<string, { email?: string; phone?: string; firstName: string; lastName: string }>()
+      // ── Resolve object label + URL for linked object ──────────────────────
+      let objectLabel: string | undefined
+      let objectUrl: string | undefined
+      const adminBase = process.env.ADMIN_URL || 'https://ivent-ia-admin.vercel.app'
+      const reqStep = task.approvalRequestStep
+      if (reqStep?.request?.objectType && reqStep?.request?.objectId) {
+        objectLabel = await fetchObjectLabel(reqStep.request.objectType, reqStep.request.objectId)
+        const objectRoutes: Record<string, string> = {
+          ORDER: '/ordenes',
+          BUDGET_ORDER: '/ordenes',
+          EVENT: '/eventos',
+          SUPPLIER: '/proveedores',
+          PURCHASE_ORDER: '/catalogos/ordenes-compra',
+        }
+        const base = objectRoutes[reqStep.request.objectType]
+        if (base) objectUrl = `${adminBase}${base}/${reqStep.request.objectId}`
+      } else if (task.event) {
+        objectLabel = `Evento: ${task.event.name}`
+        objectUrl = `${adminBase}/eventos/${task.event.id}`
+      } else if (task.orders?.[0]?.order) {
+        objectLabel = `Orden #${task.orders[0].order.orderNumber}`
+        objectUrl = `${adminBase}/ordenes/${task.orders[0].order.id}`
+      }
 
-      // Add all assigned users (multi-assignee)
+      // ── Due date ─────────────────────────────────────────────────────────
+      const dueDateFormatted = task.endDate
+        ? new Date(task.endDate).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
+        : undefined
+
+      // ── Collect recipients with notification preferences ──────────────────
+      const recipients = new Map<string, {
+        id: string; email?: string; phone?: string
+        firstName: string; lastName: string
+        notifyTaskEmail: boolean; notifyTaskWhatsapp: boolean
+      }>()
+
       const assigneeUserIds: string[] = task.assignees?.map((a: any) => a.userId) ?? (task.assignedToId ? [task.assignedToId] : [])
       if (assigneeUserIds.length > 0) {
         const users = await prisma.user.findMany({
           where: { id: { in: assigneeUserIds } },
-          select: { id: true, firstName: true, lastName: true, email: true, phone: true },
+          select: { id: true, firstName: true, lastName: true, email: true, phone: true, notifyTaskEmail: true, notifyTaskWhatsapp: true },
         })
         users.forEach(u => recipients.set(u.id, u))
       }
 
-      // Add all users in assigned departments
       const deptIds = task.departments.map((d: any) => d.departmentId)
       if (deptIds.length > 0) {
         const deptUsers = await prisma.userDepartment.findMany({
           where: { departmentId: { in: deptIds } },
-          include: { user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } } },
+          include: { user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true, notifyTaskEmail: true, notifyTaskWhatsapp: true } } },
         })
-        deptUsers.forEach(du => {
-          recipients.set(du.user.id, du.user)
-        })
+        deptUsers.forEach(du => recipients.set(du.user.id, du.user))
       }
 
-      // Send notifications to each recipient
-      const taskUrl = `${process.env.ADMIN_URL || 'http://localhost:5173'}/chat?tab=tareas&taskId=${task.id}`
-      const subjectLine = action === 'created' ? `Nueva tarea asignada: ${task.title}` : `Tarea asignada: ${task.title}`
-      const actionText = action === 'created' ? 'ha sido creada' : 'te ha sido asignada'
+      // ── Send to each recipient according to their preferences ─────────────
+      const taskUrl = `${adminBase}/chat?tab=tareas&taskId=${task.id}`
 
       for (const [, user] of recipients) {
         // Email
-        if (user.email) {
+        if (user.notifyTaskEmail && user.email) {
           emailService.sendCollabTaskNotification({
             to: user.email,
             recipientName: `${user.firstName} ${user.lastName}`,
             taskTitle: task.title,
+            taskDescription: task.description ?? undefined,
+            dueDate: dueDateFormatted,
+            objectLabel,
+            objectUrl,
             taskUrl,
             action,
           }).catch(err => console.error('Email notification error:', err))
         }
 
         // WhatsApp
-        if (user.phone && isWhatsAppConfigured()) {
-          const message = `${action === 'created' ? '📋' : '👤'} Tarea: ${task.title} ${actionText}`
+        if (user.notifyTaskWhatsapp && user.phone && isWhatsAppConfigured()) {
+          const lines = [
+            `${action === 'created' ? '📋 Nueva tarea asignada' : '👤 Tarea asignada'}: *${task.title}*`,
+            task.description ? task.description : null,
+            dueDateFormatted ? `📅 Vence: ${dueDateFormatted}` : null,
+            objectLabel ? `🔗 ${objectLabel}: ${objectUrl ?? ''}` : null,
+            `Ver tarea: ${taskUrl}`,
+          ].filter(Boolean)
           sendWhatsAppMessage({
             to: user.phone,
-            message,
+            message: lines.join('\n'),
           }).catch(err => console.error('WhatsApp notification error:', err))
         }
 
         // Log notification
-        await prisma.notification.create({
-          data: {
-            tenantId,
-            recipientType: 'USER',
-            recipientId: user.id,
-            channel: user.email ? 'email' : 'whatsapp',
-            templateKey: `collab_task_${action}`,
-            payload: { taskId: task.id, taskTitle: task.title },
-            status: 'sent',
-            sentAt: new Date(),
-          },
-        }).catch(err => console.error('Notification log error:', err))
+        const channels: string[] = []
+        if (user.notifyTaskEmail && user.email) channels.push('email')
+        if (user.notifyTaskWhatsapp && user.phone) channels.push('whatsapp')
+        if (channels.length > 0) {
+          await prisma.notification.create({
+            data: {
+              tenantId,
+              recipientType: 'USER',
+              recipientId: user.id,
+              channel: channels.join(','),
+              templateKey: `collab_task_${action}`,
+              payload: { taskId: task.id, taskTitle: task.title },
+              status: 'sent',
+              sentAt: new Date(),
+            },
+          }).catch(err => console.error('Notification log error:', err))
+        }
       }
     })(),
   ]).catch(err => console.error('Notification error:', err))
