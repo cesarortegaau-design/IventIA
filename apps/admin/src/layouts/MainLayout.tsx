@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react' // v2
-import { Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { Outlet, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { Avatar, Dropdown, Typography, Space, Badge, Drawer, Button, Grid, Input, Modal } from 'antd'
 import {
   CalendarOutlined,
@@ -30,6 +30,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '../stores/authStore'
 import { useRecentScreensStore } from '../stores/recentScreensStore'
 import RecentScreensPanel from '../components/RecentScreensPanel'
+import SplitViewOverlay from '../components/SplitViewOverlay'
 import { chatApi } from '../api/chat'
 import { collabTasksApi } from '../api/collabTasks'
 import { PRIVILEGES } from '@iventia/shared'
@@ -97,6 +98,8 @@ interface SidebarItem {
 export default function MainLayout() {
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams] = useSearchParams()
+  const isEmbed = searchParams.get('embed') === '1'
   const { user, clearAuth, hasPrivilege } = useAuthStore()
   const screens = useBreakpoint()
   const isMobile = !screens.lg
@@ -427,7 +430,24 @@ export default function MainLayout() {
     </header>
   )
 
+  // ── Embed mode: render content only (no chrome) for split-view iframes ──
+  if (isEmbed) {
+    return (
+      <main style={{
+        minHeight: '100vh',
+        background: '#f4f6fb',
+        padding: 16,
+        fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
+        overflowY: 'auto',
+      }}>
+        <Outlet />
+      </main>
+    )
+  }
+
   return (
+    <>
+    <SplitViewOverlay />
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }}>
       {/* Top navigation */}
       {renderTopNav()}
@@ -544,5 +564,6 @@ export default function MainLayout() {
         </div>
       </Modal>
     </div>
+    </>
   )
 }

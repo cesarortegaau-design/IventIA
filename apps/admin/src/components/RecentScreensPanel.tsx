@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { useRecentScreensStore } from '../stores/recentScreensStore'
+import { Tooltip } from 'antd'
 import { HistoryOutlined, CloseOutlined } from '@ant-design/icons'
+import { useRecentScreensStore } from '../stores/recentScreensStore'
+import { useSplitViewStore } from '../stores/splitViewStore'
 
 const SECTION_COLORS: Record<string, string> = {
   inicio:      '#10b981',
@@ -17,13 +19,6 @@ const SECTION_COLORS: Record<string, string> = {
   general:     '#94a3b8',
 }
 
-const SECTION_LABELS: Record<string, string> = {
-  inicio: 'Inicio', eventos: 'Eventos', ordenes: 'Órdenes',
-  catalogos: 'Catálogos', crm: 'CRM', analitica: 'Analítica',
-  colabora: 'Colabora', operaciones: 'Operaciones', almacen: 'Almacén',
-  produccion: 'Producción', general: '',
-}
-
 function relTime(ts: number): string {
   const s = Math.floor((Date.now() - ts) / 1000)
   if (s < 60) return 'Ahora'
@@ -34,9 +29,21 @@ function relTime(ts: number): string {
   return `${Math.floor(h / 24)}d`
 }
 
+// Split icon — two columns
+function SplitIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ display: 'block' }}>
+      <rect x="1" y="1" width="5" height="12" rx="1.5" fill="currentColor" opacity="0.9" />
+      <rect x="8" y="1" width="5" height="12" rx="1.5" fill="currentColor" opacity="0.5" />
+    </svg>
+  )
+}
+
 export default function RecentScreensPanel() {
   const [open, setOpen] = useState(false)
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
   const { screens, clear } = useRecentScreensStore()
+  const splitView = useSplitViewStore()
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const panelRef = useRef<HTMLDivElement>(null)
@@ -59,6 +66,16 @@ export default function RecentScreensPanel() {
   // Filter out current page
   const items = screens.filter((s) => s.path !== pathname)
 
+  const handleSplit = (screen: typeof screens[0]) => {
+    // Current page as pane A, selected as pane B
+    const currentLabel = screens.find(s => s.path === pathname)?.label ?? pathname
+    splitView.open(
+      { path: pathname, label: currentLabel },
+      { path: screen.path, label: screen.label },
+    )
+    setOpen(false)
+  }
+
   return (
     <div
       ref={panelRef}
@@ -71,7 +88,7 @@ export default function RecentScreensPanel() {
             position: 'absolute',
             bottom: 58,
             left: 0,
-            width: 'min(320px, calc(100vw - 32px))',
+            width: 'min(340px, calc(100vw - 32px))',
             background: '#fff',
             borderRadius: 14,
             boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
@@ -111,6 +128,14 @@ export default function RecentScreensPanel() {
             </div>
           </div>
 
+          {/* Split hint */}
+          {items.length >= 1 && (
+            <div style={{ padding: '6px 14px', background: '#f0f6ff', borderBottom: '1px solid #e0ecff', fontSize: 11, color: '#3b82f6', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <SplitIcon />
+              Pasa el cursor sobre una pantalla para verla junto a la actual
+            </div>
+          )}
+
           {/* List */}
           {items.length === 0 ? (
             <div style={{ padding: '28px 16px', textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>
@@ -120,51 +145,80 @@ export default function RecentScreensPanel() {
             <div style={{ maxHeight: 'min(380px, 55dvh)', overflowY: 'auto' }}>
               {items.map((screen, i) => {
                 const dot = SECTION_COLORS[screen.section] ?? '#94a3b8'
-                // Split breadcrumb: last segment = primary (distinctive), rest = parent context
                 const parts = screen.label.split(' › ')
                 const primary = parts[parts.length - 1]
                 const parent  = parts.length > 1 ? parts.slice(0, -1).join(' › ') : null
+                const isHovered = hoveredIdx === i
+
                 return (
-                  <button
+                  <div
                     key={screen.path + i}
-                    onClick={() => { navigate(screen.path); setOpen(false) }}
                     style={{
-                      width: '100%', background: 'none', border: 'none', cursor: 'pointer',
-                      padding: '10px 14px', textAlign: 'left',
                       borderBottom: i < items.length - 1 ? '1px solid #f5f5f5' : 'none',
-                      display: 'flex', alignItems: 'center', gap: 10,
+                      background: isHovered ? '#f8faff' : 'transparent',
+                      display: 'flex',
+                      alignItems: 'center',
+                      transition: 'background 0.1s',
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = '#f8faff')}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                    onMouseEnter={() => setHoveredIdx(i)}
+                    onMouseLeave={() => setHoveredIdx(null)}
                   >
-                    {/* Section dot */}
-                    <span style={{
-                      width: 8, height: 8, borderRadius: '50%',
-                      background: dot, flexShrink: 0, marginTop: parent ? 2 : 0,
-                    }} />
-                    {/* Primary + parent breadcrumb */}
-                    <span style={{ flex: 1, overflow: 'hidden' }}>
+                    {/* Nav button */}
+                    <button
+                      onClick={() => { navigate(screen.path); setOpen(false) }}
+                      style={{
+                        flex: 1, background: 'none', border: 'none', cursor: 'pointer',
+                        padding: '10px 14px', textAlign: 'left',
+                        display: 'flex', alignItems: 'center', gap: 10,
+                      }}
+                    >
                       <span style={{
-                        display: 'block', fontSize: 13, fontWeight: 600, color: '#1f2937',
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      }}>
-                        {primary}
-                      </span>
-                      {parent && (
+                        width: 8, height: 8, borderRadius: '50%',
+                        background: dot, flexShrink: 0, marginTop: parent ? 2 : 0,
+                      }} />
+                      <span style={{ flex: 1, overflow: 'hidden' }}>
                         <span style={{
-                          display: 'block', fontSize: 10, color: '#94a3b8', fontWeight: 400,
+                          display: 'block', fontSize: 13, fontWeight: 600, color: '#1f2937',
                           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                          marginTop: 1,
                         }}>
-                          {parent}
+                          {primary}
                         </span>
-                      )}
-                    </span>
-                    {/* Relative time */}
-                    <span style={{ fontSize: 10, color: '#b0bac5', flexShrink: 0, minWidth: 28, textAlign: 'right' }}>
-                      {relTime(screen.visitedAt)}
-                    </span>
-                  </button>
+                        {parent && (
+                          <span style={{
+                            display: 'block', fontSize: 10, color: '#94a3b8', fontWeight: 400,
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                            marginTop: 1,
+                          }}>
+                            {parent}
+                          </span>
+                        )}
+                      </span>
+                      <span style={{ fontSize: 10, color: '#b0bac5', flexShrink: 0, minWidth: 28, textAlign: 'right' }}>
+                        {relTime(screen.visitedAt)}
+                      </span>
+                    </button>
+
+                    {/* Split button */}
+                    <Tooltip title={`Ver junto a la pantalla actual`} placement="left">
+                      <button
+                        onClick={() => handleSplit(screen)}
+                        style={{
+                          width: 32, height: '100%', minHeight: 40, border: 'none',
+                          background: isHovered ? '#2e7fc1' : 'transparent',
+                          color: isHovered ? 'white' : '#cbd5e1',
+                          cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          flexShrink: 0, borderLeft: '1px solid #f0f0f0',
+                          transition: 'background 0.15s, color 0.15s',
+                          borderRadius: '0 0 0 0',
+                          padding: '0 9px',
+                        }}
+                        title="Vista dividida"
+                      >
+                        <SplitIcon />
+                      </button>
+                    </Tooltip>
+                  </div>
                 )
               })}
             </div>
@@ -187,12 +241,12 @@ export default function RecentScreensPanel() {
           fontSize: 18,
           transition: 'background 0.18s, color 0.18s, border-color 0.18s',
           outline: 'none',
+          position: 'relative',
         }}
         onMouseEnter={(e) => { if (!open) e.currentTarget.style.background = '#f0f6ff' }}
         onMouseLeave={(e) => { if (!open) e.currentTarget.style.background = '#fff' }}
       >
         <HistoryOutlined />
-        {/* Badge with count */}
         {items.length > 0 && !open && (
           <span style={{
             position: 'absolute', top: -2, right: -2,
