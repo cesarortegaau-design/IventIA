@@ -1,4 +1,3 @@
-import Anthropic from '@anthropic-ai/sdk'
 import { prisma } from '../config/database'
 
 interface GateResult {
@@ -8,46 +7,17 @@ interface GateResult {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AI condition evaluator
+// Rule executor — runs pre-compiled JS code stored in the flow
+// No AI tokens consumed here. Tokens were spent once at rule compilation time.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Asks Claude (Haiku) whether the given object satisfies the natural-language rule.
- * Returns true  → condition met  → gate should fire.
- * Returns false → condition not met → gate skips this object.
- * Defaults to true on any error so we never block on API failures.
- */
-async function evaluateAICondition(
-  ruleText: string,
-  objectType: string,
-  objectData: Record<string, any>,
-): Promise<boolean> {
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) return true // no key configured → treat as "always apply"
-
+function executeRuleCode(ruleCode: string, objectData: Record<string, any>): boolean {
   try {
-    const client = new Anthropic({ apiKey })
-
-    const prompt = `Eres un evaluador de reglas de negocio para un sistema de aprobaciones.
-
-REGLA: "${ruleText}"
-
-OBJETO A EVALUAR:
-Tipo: ${objectType}
-Datos: ${JSON.stringify(objectData, null, 2)}
-
-¿El objeto cumple con la regla? Responde ÚNICAMENTE con la palabra SÍ o NO.`
-
-    const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 5,
-      messages: [{ role: 'user', content: prompt }],
-    })
-
-    const text = response.content[0]?.type === 'text' ? response.content[0].text.trim().toUpperCase() : ''
-    return text.startsWith('SÍ') || text.startsWith('SI') || text.startsWith('YES')
+    // eslint-disable-next-line no-new-func
+    const fn = new Function('objectData', ruleCode)
+    return Boolean(fn(objectData))
   } catch {
-    // On API error, default to triggering the gate (conservative / safe)
+    // On execution error, default to triggering the gate (conservative)
     return true
   }
 }
@@ -184,9 +154,9 @@ export async function checkApprovalGate(
     if (total < Number(flow.minAmount)) return { blocked: false, message: '' }
   }
 
-  // 2. AI natural-language condition check
-  if (flow.activationConditionsText?.trim()) {
-    const conditionMet = await evaluateAICondition(flow.activationConditionsText, objectType, objectData)
+  // 2. Execute pre-compiled rule code (zero AI cost — compiled once at save time)
+  if (flow.ruleCode?.trim()) {
+    const conditionMet = executeRuleCode(flow.ruleCode, objectData)
     if (!conditionMet) return { blocked: false, message: '' }
   }
 

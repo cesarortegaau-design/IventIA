@@ -13,6 +13,7 @@ import {
   triggerRequest,
   reviewStep,
   cancelRequest,
+  compileRule,
 } from '../controllers/approvalFlows.controller'
 
 const router = Router()
@@ -20,6 +21,7 @@ router.use(authenticate)
 
 router.get('/', requirePrivilege(PRIVILEGES.APPROVAL_FLOW_VIEW), listFlows)
 router.post('/', requirePrivilege(PRIVILEGES.APPROVAL_FLOW_CREATE), createFlow)
+router.post('/compile-rule', requirePrivilege(PRIVILEGES.APPROVAL_FLOW_CREATE), compileRule)
 router.get('/requests', requirePrivilege(PRIVILEGES.APPROVAL_REQUEST_VIEW), listRequests)
 router.get('/requests/active', requirePrivilege(PRIVILEGES.APPROVAL_REQUEST_VIEW), getActiveRequest)
 router.post('/requests', requirePrivilege(PRIVILEGES.APPROVAL_REQUEST_TRIGGER), triggerRequest)

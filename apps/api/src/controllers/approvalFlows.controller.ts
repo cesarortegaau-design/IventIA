@@ -1,6 +1,60 @@
+import Anthropic from '@anthropic-ai/sdk'
 import { Request, Response, NextFunction } from 'express'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Object data schemas — tell Claude which fields are available per type
+// ─────────────────────────────────────────────────────────────────────────────
+
+const OBJECT_DATA_SCHEMAS: Record<string, object> = {
+  ORDER: {
+    numeroOrden: 'string',
+    estado: 'string (QUOTED|CONFIRMED|EXECUTED|INVOICED|CANCELLED)',
+    esBudget: 'boolean',
+    subtotal: 'number (MXN)',
+    total: 'number (MXN, incluye IVA)',
+    cliente: 'string (nombre del cliente)',
+    listaPrecios: 'string',
+    cantidadItems: 'number',
+    fechaCreacion: 'string (YYYY-MM-DD)',
+  },
+  BUDGET_ORDER: {
+    numeroOrden: 'string',
+    estado: 'string (QUOTED|CONFIRMED|EXECUTED|INVOICED|CANCELLED)',
+    esBudget: 'boolean (siempre true)',
+    subtotal: 'number (MXN)',
+    total: 'number (MXN, incluye IVA)',
+    cliente: 'string',
+    cantidadItems: 'number',
+    fechaCreacion: 'string (YYYY-MM-DD)',
+  },
+  EVENT: {
+    nombre: 'string',
+    estado: 'string (QUOTED|CONFIRMED|IN_EXECUTION|CLOSED|CANCELLED)',
+    inicio: 'string (YYYY-MM-DD)',
+    fin: 'string (YYYY-MM-DD)',
+    lugar: 'string',
+  },
+  SUPPLIER: {
+    nombre: 'string',
+    tipo: 'string (DISTRIBUTOR|MANUFACTURER|WHOLESALER|SERVICES)',
+    estado: 'string (ACTIVE|INACTIVE|BLOCKED)',
+  },
+  PURCHASE_ORDER: {
+    numero: 'string',
+    estado: 'string (DRAFT|CONFIRMED|PARTIALLY_RECEIVED|RECEIVED|INVOICED|CANCELLED)',
+    subtotal: 'number (MXN)',
+    total: 'number (MXN)',
+    proveedor: 'string',
+  },
+  COLLAB_TASK: {
+    titulo: 'string',
+    estado: 'string (PENDING|IN_PROGRESS|ON_HOLD|DONE|CANCELLED)',
+    prioridad: 'string (LOW|MEDIUM|HIGH|CRITICAL)',
+    progreso: 'number (0-100)',
+  },
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -87,6 +141,59 @@ async function createTaskForStep(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Rule compiler — natural language → JavaScript code (runs ONCE at save time)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function compileRule(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { ruleText, objectType } = req.body
+    if (!ruleText) throw new AppError(400, 'VALIDATION_ERROR', 'ruleText es requerido')
+    if (!objectType) throw new AppError(400, 'VALIDATION_ERROR', 'objectType es requerido')
+
+    const apiKey = process.env.ANTHROPIC_API_KEY
+    if (!apiKey) throw new AppError(503, 'AI_UNAVAILABLE', 'ANTHROPIC_API_KEY no configurado')
+
+    const schema = OBJECT_DATA_SCHEMAS[objectType] ?? {}
+
+    const client = new Anthropic({ apiKey })
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 300,
+      messages: [{
+        role: 'user',
+        content: `Convierte la siguiente regla de negocio a código JavaScript puro.
+
+REGLA: "${ruleText}"
+
+El código es el CUERPO de una función que recibe el parámetro "objectData".
+Estructura disponible de objectData para el tipo "${objectType}":
+${JSON.stringify(schema, null, 2)}
+
+INSTRUCCIONES:
+- Responde ÚNICAMENTE con el código JavaScript, sin markdown, sin comentarios, sin función wrapper
+- El código debe terminar con "return true;" o "return false;"
+- Usa solo operadores básicos: >, <, >=, <=, ===, !==, &&, ||, !
+- No uses fetch, require, import, eval ni acceso a variables globales
+
+EJEMPLOS:
+Regla "monto total mayor a 50000" → return objectData.total > 50000;
+Regla "cliente con nombre que contiene AFMF" → return objectData.cliente.includes('AFMF');
+Regla "proveedor activo" → return objectData.estado === 'ACTIVE';
+Regla "más de 5 items" → return objectData.cantidadItems > 5;`,
+      }],
+    })
+
+    const raw = response.content[0]?.type === 'text' ? response.content[0].text.trim() : ''
+    // Strip any accidental markdown fences
+    const ruleCode = raw.replace(/^```[\w]*\n?/, '').replace(/\n?```$/, '').trim() || 'return true;'
+
+    res.json({ success: true, data: { ruleCode } })
+  } catch (err) {
+    next(err)
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Flow CRUD
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -116,7 +223,7 @@ export async function listFlows(req: Request, res: Response, next: NextFunction)
 
 export async function createFlow(req: Request, res: Response, next: NextFunction) {
   try {
-    const { name, description, objectType, targetStatus, activationConditionsText, finalEffectsText, autoTrigger, blocksTransition, minAmount, steps = [] } = req.body
+    const { name, description, objectType, targetStatus, activationConditionsText, finalEffectsText, autoTrigger, blocksTransition, minAmount, ruleCode, steps = [] } = req.body
 
     if (!name) throw new AppError(400, 'VALIDATION_ERROR', 'El nombre es requerido')
     if (!objectType) throw new AppError(400, 'VALIDATION_ERROR', 'El tipo de objeto es requerido')
@@ -135,6 +242,7 @@ export async function createFlow(req: Request, res: Response, next: NextFunction
           autoTrigger: autoTrigger ?? false,
           blocksTransition: blocksTransition !== undefined ? blocksTransition : true,
           minAmount: minAmount != null ? minAmount : null,
+          ruleCode: ruleCode ?? null,
           createdById: req.user!.userId,
         },
       })
@@ -198,7 +306,7 @@ export async function updateFlow(req: Request, res: Response, next: NextFunction
     })
     if (!existing) throw new AppError(404, 'NOT_FOUND', 'Flujo de aprobación no encontrado')
 
-    const { name, description, activationConditionsText, finalEffectsText, isActive, autoTrigger, blocksTransition, minAmount, steps } = req.body
+    const { name, description, activationConditionsText, finalEffectsText, isActive, autoTrigger, blocksTransition, minAmount, ruleCode, steps } = req.body
 
     const flow = await prisma.$transaction(async (tx) => {
       await tx.approvalFlow.update({
@@ -212,6 +320,7 @@ export async function updateFlow(req: Request, res: Response, next: NextFunction
           ...(autoTrigger !== undefined && { autoTrigger }),
           ...(blocksTransition !== undefined && { blocksTransition }),
           ...(minAmount !== undefined && { minAmount: minAmount != null ? minAmount : null }),
+          ...(ruleCode !== undefined && { ruleCode: ruleCode ?? null }),
         },
       })
 

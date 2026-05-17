@@ -22,4 +22,7 @@ export const approvalFlowsApi = {
     apiClient.post(`/approval-flows/requests/${requestId}/steps/${stepId}/review`, { action, reason }).then(r => r.data.data),
   cancelRequest: (requestId: string) =>
     apiClient.post(`/approval-flows/requests/${requestId}/cancel`).then(r => r.data.data),
+
+  compileRule: (ruleText: string, objectType: string) =>
+    apiClient.post('/approval-flows/compile-rule', { ruleText, objectType }).then(r => r.data.data),
 }

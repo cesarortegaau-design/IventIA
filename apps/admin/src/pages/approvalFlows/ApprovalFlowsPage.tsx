@@ -3,11 +3,11 @@ import { useQuery, useMutation, useQueryClient, } from '@tanstack/react-query'
 import {
   Table, Button, Card, Space, Tag, Modal, Form, Input, Select,
   Switch, Typography, Row, Col, App, Divider, Drawer, Popconfirm,
-  Tooltip, Empty, Alert,
+  Tooltip, Empty, Alert, Spin,
 } from 'antd'
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, ThunderboltOutlined,
-  ArrowUpOutlined, ArrowDownOutlined, RobotOutlined,
+  ArrowUpOutlined, ArrowDownOutlined, RobotOutlined, CodeOutlined, CheckCircleOutlined,
 } from '@ant-design/icons'
 import { approvalFlowsApi } from '../../api/approvalFlows'
 import { usersApi } from '../../api/users'
@@ -320,6 +320,8 @@ export default function ApprovalFlowsPage() {
   const [autoTriggerOn, setAutoTriggerOn] = useState(false)
   const [selectedObjectType, setSelectedObjectType] = useState<string | undefined>()
   const [selectedTargetStatus, setSelectedTargetStatus] = useState<string | undefined>()
+  const [ruleCode, setRuleCode] = useState<string | undefined>()
+  const [compiling, setCompiling] = useState(false)
   const statusOptions = STATUS_OPTIONS_BY_TYPE[selectedObjectType ?? ''] ?? []
   const showMinAmount = autoTriggerOn && (selectedObjectType === 'ORDER' || selectedObjectType === 'BUDGET_ORDER')
 
@@ -384,6 +386,7 @@ export default function ApprovalFlowsPage() {
     setAutoTriggerOn(false)
     setSelectedObjectType(undefined)
     setSelectedTargetStatus(undefined)
+    setRuleCode(undefined)
     form.resetFields()
     setDrawerOpen(true)
   }
@@ -393,6 +396,7 @@ export default function ApprovalFlowsPage() {
     setAutoTriggerOn(!!flow.autoTrigger)
     setSelectedObjectType(flow.objectType)
     setSelectedTargetStatus(flow.targetStatus)
+    setRuleCode(flow.ruleCode ?? undefined)
     form.setFieldsValue({
       name: flow.name,
       description: flow.description,
@@ -424,6 +428,7 @@ export default function ApprovalFlowsPage() {
     setAutoTriggerOn(false)
     setSelectedObjectType(undefined)
     setSelectedTargetStatus(undefined)
+    setRuleCode(undefined)
     form.resetFields()
   }
 
@@ -432,6 +437,7 @@ export default function ApprovalFlowsPage() {
       const values = await form.validateFields()
       const payload = {
         ...values,
+        ruleCode: ruleCode ?? null,
         steps: steps.map((s, idx) => ({
           order: idx,
           name: s.name,
@@ -775,15 +781,72 @@ export default function ApprovalFlowsPage() {
                 </Tag>
               </span>
             }
-            tooltip="Describe en lenguaje natural cuándo debe activarse este flujo. El agente de IA leerá esta regla y evaluará si el objeto la cumple en tiempo real antes de disparar el flujo."
+            tooltip="Describe en lenguaje natural cuándo debe activarse este flujo. Luego usa el botón 'Compilar' para que la IA genere el código de evaluación (tokens solo se consumen al compilar, no en cada evaluación)."
           >
             <TextArea
               rows={3}
-              placeholder={
-                'Ejemplos:\n• Cuando el monto total de la orden supere $50,000 MXN\n• Cuando sea un proveedor nuevo sin historial de compras\n• Cuando el evento tenga más de 500 asistentes'
-              }
+              placeholder={'Ejemplos:\n• Cuando el monto total de la orden supere $50,000 MXN\n• Cuando el proveedor esté bloqueado\n• Cuando la orden tenga más de 5 items'}
             />
           </Form.Item>
+
+          {/* Compile rule button + code viewer */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <Button
+                icon={compiling ? <Spin size="small" /> : <RobotOutlined />}
+                disabled={compiling || !selectedObjectType}
+                onClick={async () => {
+                  const ruleText = form.getFieldValue('activationConditionsText')
+                  if (!ruleText?.trim()) { message.warning('Escribe una regla primero'); return }
+                  if (!selectedObjectType) { message.warning('Selecciona el tipo de objeto primero'); return }
+                  setCompiling(true)
+                  try {
+                    const result = await approvalFlowsApi.compileRule(ruleText, selectedObjectType)
+                    setRuleCode(result.ruleCode)
+                    message.success('Regla compilada correctamente')
+                  } catch {
+                    message.error('Error al compilar la regla')
+                  } finally {
+                    setCompiling(false)
+                  }
+                }}
+              >
+                {compiling ? 'Compilando…' : 'Compilar regla con IA'}
+              </Button>
+              {ruleCode && (
+                <Tag color="success" icon={<CheckCircleOutlined />}>
+                  Regla compilada
+                </Tag>
+              )}
+            </div>
+
+            {ruleCode && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <CodeOutlined style={{ color: '#722ed1', fontSize: 12 }} />
+                  <Text style={{ fontSize: 11, color: '#722ed1', fontWeight: 600 }}>
+                    Código generado (editable)
+                  </Text>
+                </div>
+                <Input.TextArea
+                  value={ruleCode}
+                  onChange={e => setRuleCode(e.target.value)}
+                  rows={3}
+                  style={{
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                    background: '#1e1e1e',
+                    color: '#d4d4d4',
+                    border: '1px solid #722ed1',
+                    borderRadius: 6,
+                  }}
+                />
+                <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
+                  Puedes editar este código directamente. Se ejecuta en cada cambio de estado — sin llamadas a IA.
+                </Text>
+              </div>
+            )}
+          </div>
 
           <Form.Item
             name="finalEffectsText"
