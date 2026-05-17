@@ -1,3 +1,4 @@
+import Anthropic from '@anthropic-ai/sdk'
 import { prisma } from '../config/database'
 
 interface GateResult {
@@ -6,14 +7,153 @@ interface GateResult {
   message: string
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// AI condition evaluator
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Asks Claude (Haiku) whether the given object satisfies the natural-language rule.
+ * Returns true  → condition met  → gate should fire.
+ * Returns false → condition not met → gate skips this object.
+ * Defaults to true on any error so we never block on API failures.
+ */
+async function evaluateAICondition(
+  ruleText: string,
+  objectType: string,
+  objectData: Record<string, any>,
+): Promise<boolean> {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) return true // no key configured → treat as "always apply"
+
+  try {
+    const client = new Anthropic({ apiKey })
+
+    const prompt = `Eres un evaluador de reglas de negocio para un sistema de aprobaciones.
+
+REGLA: "${ruleText}"
+
+OBJETO A EVALUAR:
+Tipo: ${objectType}
+Datos: ${JSON.stringify(objectData, null, 2)}
+
+¿El objeto cumple con la regla? Responde ÚNICAMENTE con la palabra SÍ o NO.`
+
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 5,
+      messages: [{ role: 'user', content: prompt }],
+    })
+
+    const text = response.content[0]?.type === 'text' ? response.content[0].text.trim().toUpperCase() : ''
+    return text.startsWith('SÍ') || text.startsWith('SI') || text.startsWith('YES')
+  } catch {
+    // On API error, default to triggering the gate (conservative / safe)
+    return true
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Object data fetchers — provide rich context to the AI evaluator
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function fetchObjectData(objectType: string, objectId: string): Promise<Record<string, any>> {
+  if (objectType === 'ORDER' || objectType === 'BUDGET_ORDER') {
+    const order = await prisma.order.findUnique({
+      where: { id: objectId },
+      select: {
+        orderNumber: true,
+        status: true,
+        isBudgetOrder: true,
+        subtotal: true,
+        total: true,
+        createdAt: true,
+        client: { select: { companyName: true, firstName: true, lastName: true } },
+        priceList: { select: { name: true } },
+        _count: { select: { lineItems: true } },
+      },
+    })
+    if (!order) return {}
+    return {
+      numeroOrden: order.orderNumber,
+      estado: order.status,
+      esBudget: order.isBudgetOrder,
+      subtotal: Number(order.subtotal),
+      total: Number(order.total),
+      cliente: order.client?.companyName ?? `${order.client?.firstName ?? ''} ${order.client?.lastName ?? ''}`.trim(),
+      listaPrecios: order.priceList?.name,
+      cantidadItems: order._count.lineItems,
+      fechaCreacion: order.createdAt?.toISOString().slice(0, 10),
+    }
+  }
+
+  if (objectType === 'EVENT') {
+    const event = await prisma.event.findUnique({
+      where: { id: objectId },
+      select: {
+        name: true,
+        status: true,
+        eventStart: true,
+        eventEnd: true,
+        venueLocation: true,
+      },
+    })
+    if (!event) return {}
+    return {
+      nombre: event.name,
+      estado: event.status,
+      inicio: event.eventStart?.toISOString().slice(0, 10),
+      fin: event.eventEnd?.toISOString().slice(0, 10),
+      lugar: event.venueLocation,
+    }
+  }
+
+  if (objectType === 'SUPPLIER') {
+    const supplier = await prisma.supplier.findUnique({
+      where: { id: objectId },
+      select: { name: true, type: true, status: true },
+    })
+    if (!supplier) return {}
+    return { nombre: supplier.name, tipo: supplier.type, estado: supplier.status }
+  }
+
+  if (objectType === 'PURCHASE_ORDER') {
+    const po = await prisma.purchaseOrder.findUnique({
+      where: { id: objectId },
+      select: {
+        poNumber: true,
+        status: true,
+        subtotal: true,
+        total: true,
+        supplier: { select: { name: true } },
+      },
+    })
+    if (!po) return {}
+    return {
+      numero: po.poNumber,
+      estado: po.status,
+      subtotal: Number(po.subtotal),
+      total: Number(po.total),
+      proveedor: po.supplier?.name,
+    }
+  }
+
+  return {}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main gate check
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
  * Check if a status transition is gated by an approval flow.
  *
- * If an active autoTrigger flow exists for this objectType+targetStatus and
- * blocksTransition is true:
- *   - Already APPROVED for this object → allow (blocked: false)
- *   - IN_PROGRESS already → block with existing requestId
- *   - Otherwise → auto-create ApprovalRequest + CollabTask, then block
+ * Evaluation order:
+ *  1. Find active autoTrigger flow for objectType+targetStatus
+ *  2. Check minAmount condition (structured, fast)
+ *  3. Check activationConditionsText via Claude AI (natural language rule)
+ *  4. If already APPROVED → allow
+ *  5. If IN_PROGRESS → block (return existing requestId)
+ *  6. Otherwise → auto-create ApprovalRequest + CollabTask, then block
  */
 export async function checkApprovalGate(
   tenantId: string,
@@ -35,13 +175,19 @@ export async function checkApprovalGate(
 
   if (!flow || !flow.blocksTransition) return { blocked: false, message: '' }
 
-  // Check minAmount condition for orders
+  // Fetch object data once — used for both minAmount and AI evaluation
+  const objectData = await fetchObjectData(objectType, objectId)
+
+  // 1. Structured minAmount check (no AI needed)
   if (flow.minAmount !== null && (objectType === 'ORDER' || objectType === 'BUDGET_ORDER')) {
-    const order = await prisma.order.findUnique({
-      where: { id: objectId },
-      select: { total: true },
-    })
-    if (!order || order.total < flow.minAmount) return { blocked: false, message: '' }
+    const total = (objectData.total as number) ?? 0
+    if (total < Number(flow.minAmount)) return { blocked: false, message: '' }
+  }
+
+  // 2. AI natural-language condition check
+  if (flow.activationConditionsText?.trim()) {
+    const conditionMet = await evaluateAICondition(flow.activationConditionsText, objectType, objectData)
+    if (!conditionMet) return { blocked: false, message: '' }
   }
 
   // Already approved for this object+flow → let it through
@@ -107,6 +253,10 @@ export async function checkApprovalGate(
     message: `Transición a "${targetStatus}" bloqueada — se inició automáticamente el flujo "${flow.name}". Debe ser aprobado antes de continuar.`,
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CollabTask creator for approval steps
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function createTaskForStep(
   tenantId: string,

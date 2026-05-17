@@ -620,8 +620,8 @@ export default function ApprovalFlowsPage() {
                   <FlowDiagram steps={record.steps ?? []} />
                   {record.activationConditionsText && (
                     <div style={{ marginTop: 8 }}>
-                      <Text type="secondary" style={{ fontSize: 12 }}>Condiciones de activación: </Text>
-                      <Text style={{ fontSize: 12 }}>{record.activationConditionsText}</Text>
+                      <Tag color="purple" style={{ fontSize: 10 }}><RobotOutlined /> Regla IA</Tag>
+                      <Text style={{ fontSize: 12, marginLeft: 4 }}>{record.activationConditionsText}</Text>
                     </div>
                   )}
                   {record.finalEffectsText && (
@@ -767,10 +767,22 @@ export default function ApprovalFlowsPage() {
 
           <Form.Item
             name="activationConditionsText"
-            label="Notas de activación"
-            tooltip="Notas adicionales sobre cuándo o por qué aplica este flujo"
+            label={
+              <span>
+                Reglas de identificación{' '}
+                <Tag color="purple" style={{ fontSize: 10, marginLeft: 4 }}>
+                  <RobotOutlined /> IA
+                </Tag>
+              </span>
+            }
+            tooltip="Describe en lenguaje natural cuándo debe activarse este flujo. El agente de IA leerá esta regla y evaluará si el objeto la cumple en tiempo real antes de disparar el flujo."
           >
-            <TextArea rows={2} placeholder="Ej: Aplica cuando el monto supere $50,000 MXN" />
+            <TextArea
+              rows={3}
+              placeholder={
+                'Ejemplos:\n• Cuando el monto total de la orden supere $50,000 MXN\n• Cuando sea un proveedor nuevo sin historial de compras\n• Cuando el evento tenga más de 500 asistentes'
+              }
+            />
           </Form.Item>
 
           <Form.Item
