@@ -6,14 +6,16 @@ import {
 } from 'antd'
 import {
   PlusOutlined, EditOutlined, DownloadOutlined, UploadOutlined,
-  OrderedListOutlined, MoreOutlined, TagsOutlined,
+  OrderedListOutlined, MoreOutlined, TagsOutlined, ThunderboltOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { priceListsApi } from '../../../api/priceLists'
 import { resourcesApi } from '../../../api/resources'
+import { approvalFlowsApi } from '../../../api/approvalFlows'
 import { exportToCsv } from '../../../utils/exportCsv'
 import { PageHeader } from '../../../components/ui'
 import { formatMoney, getInitials, getAvatarColors } from '../../../utils/format'
+import ApprovalPanel from '../../../components/ApprovalPanel'
 
 const { Text } = Typography
 
@@ -80,6 +82,10 @@ export default function PriceListsPage() {
   const [importPreview, setImportPreview] = useState<any[] | null>(null)
   const [importModalOpen, setImportModalOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [triggerModalOpen, setTriggerModalOpen] = useState(false)
+  const [availableFlows, setAvailableFlows] = useState<any[]>([])
+  const [selectedFlowId, setSelectedFlowId] = useState<string | undefined>()
+  const [triggering, setTriggering] = useState(false)
 
   const { data, isLoading } = useQuery({
     queryKey: ['price-lists'],
@@ -212,6 +218,28 @@ export default function PriceListsPage() {
       { header: 'P. Tardío', key: 'latePrice' },
       { header: 'Costo', key: 'cost' },
     ])
+  }
+
+  async function openTriggerModal() {
+    const flows = await approvalFlowsApi.list({ objectType: 'PRICE_LIST' })
+    setAvailableFlows(flows ?? [])
+    setSelectedFlowId(undefined)
+    setTriggerModalOpen(true)
+  }
+
+  async function handleTriggerFlow() {
+    if (!selectedFlowId || !selectedId) return
+    setTriggering(true)
+    try {
+      await approvalFlowsApi.triggerRequest({ flowId: selectedFlowId, objectType: 'PRICE_LIST', objectId: selectedId })
+      message.success('Flujo de aprobación iniciado')
+      setTriggerModalOpen(false)
+      queryClient.invalidateQueries({ queryKey: ['approval-active', 'PRICE_LIST', selectedId] })
+    } catch {
+      message.error('Error al iniciar el flujo')
+    } finally {
+      setTriggering(false)
+    }
   }
 
   const allLists: any[] = data?.data ?? []
@@ -441,6 +469,24 @@ export default function PriceListsPage() {
                 >
                   Plantilla
                 </Button>
+                <Button
+                  size="small"
+                  icon={<ThunderboltOutlined />}
+                  onClick={openTriggerModal}
+                >
+                  ⚡ Flujo de aprobación
+                </Button>
+              </div>
+
+              <Divider style={{ margin: 0 }} />
+
+              {/* Approval panel */}
+              <div style={{ padding: '12px 20px' }}>
+                <ApprovalPanel
+                  objectType="PRICE_LIST"
+                  objectId={selectedList.id}
+                  onStatusChange={() => queryClient.invalidateQueries({ queryKey: ['price-lists'] })}
+                />
               </div>
 
               {/* Price rules summary */}
@@ -591,6 +637,28 @@ export default function PriceListsPage() {
             <InputNumber min={0} max={100} style={{ width: '100%' }} />
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* Trigger approval flow modal */}
+      <Modal
+        title="⚡ Iniciar Flujo de Aprobación"
+        open={triggerModalOpen}
+        onCancel={() => setTriggerModalOpen(false)}
+        onOk={handleTriggerFlow}
+        okText="Iniciar flujo"
+        confirmLoading={triggering}
+        okButtonProps={{ disabled: !selectedFlowId }}
+      >
+        <p style={{ marginBottom: 12, color: 'rgba(0,0,0,0.65)' }}>
+          Selecciona el flujo de aprobación a iniciar para esta lista de precios:
+        </p>
+        <Select
+          style={{ width: '100%' }}
+          placeholder="Seleccionar flujo…"
+          value={selectedFlowId}
+          onChange={setSelectedFlowId}
+          options={availableFlows.map((f: any) => ({ value: f.id, label: f.name }))}
+        />
       </Modal>
 
       {/* Add item modal */}

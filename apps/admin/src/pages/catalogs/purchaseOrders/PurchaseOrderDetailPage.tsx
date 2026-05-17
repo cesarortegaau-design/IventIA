@@ -8,7 +8,9 @@ import {
 import { ArrowLeftOutlined, EditOutlined, CheckOutlined, StopOutlined, FilePdfOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { purchaseOrdersApi } from '../../../api/purchaseOrders'
+import { approvalFlowsApi } from '../../../api/approvalFlows'
 import { PageHeader } from '../../../components/ui'
+import ApprovalPanel from '../../../components/ApprovalPanel'
 import { formatMoney } from '../../../utils/format'
 
 const { Text } = Typography
@@ -33,6 +35,10 @@ export default function PurchaseOrderDetailPage() {
   const [confirmModalOpen, setConfirmModalOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [pdfLoading, setPdfLoading] = useState(false)
+  const [triggerModalOpen, setTriggerModalOpen] = useState(false)
+  const [availableFlows, setAvailableFlows] = useState<any[]>([])
+  const [selectedFlowId, setSelectedFlowId] = useState<string | undefined>(undefined)
+  const [triggering, setTriggering] = useState(false)
 
   async function downloadPdf() {
     if (!po) return
@@ -128,6 +134,26 @@ export default function PurchaseOrderDetailPage() {
   const subtotal = parseFloat(po.subtotal || 0)
   const taxAmt = parseFloat(po.taxAmount || 0)
   const totalAmt = parseFloat(po.total || 0)
+
+  async function openTriggerModal() {
+    const flows = await approvalFlowsApi.list({ objectType: 'PURCHASE_ORDER' })
+    setAvailableFlows(flows ?? [])
+    setSelectedFlowId(undefined)
+    setTriggerModalOpen(true)
+  }
+
+  async function handleTriggerFlow() {
+    if (!selectedFlowId || !id) return
+    setTriggering(true)
+    try {
+      await approvalFlowsApi.triggerRequest({ flowId: selectedFlowId, objectType: 'PURCHASE_ORDER', objectId: id })
+      setTriggerModalOpen(false)
+      queryClient.invalidateQueries({ queryKey: ['purchaseOrder', id] })
+      queryClient.invalidateQueries({ queryKey: ['purchaseOrders'] })
+    } finally {
+      setTriggering(false)
+    }
+  }
 
   function openEditModal() {
     editForm.setFieldsValue({
@@ -257,6 +283,11 @@ export default function PurchaseOrderDetailPage() {
                 </Button>
               </Popconfirm>
             )}
+            {po.status !== 'CANCELLED' && (
+              <Button icon={<span>⚡</span>} onClick={openTriggerModal}>
+                Flujo de aprobación
+              </Button>
+            )}
           </>
         }
         tabs={
@@ -271,6 +302,15 @@ export default function PurchaseOrderDetailPage() {
           />
         }
       />
+
+      {/* Approval Panel */}
+      <div style={{ padding: '0 24px' }}>
+        <ApprovalPanel
+          objectType="PURCHASE_ORDER"
+          objectId={id!}
+          onStatusChange={() => queryClient.invalidateQueries({ queryKey: ['purchaseOrder', id] })}
+        />
+      </div>
 
       {/* Content */}
       <div style={{ padding: 24 }}>
@@ -443,6 +483,25 @@ export default function PurchaseOrderDetailPage() {
             <Input.TextArea rows={3} />
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* Trigger approval flow modal */}
+      <Modal
+        title="Iniciar flujo de aprobación"
+        open={triggerModalOpen}
+        onCancel={() => setTriggerModalOpen(false)}
+        onOk={handleTriggerFlow}
+        confirmLoading={triggering}
+        okText="Iniciar flujo"
+        okButtonProps={{ disabled: !selectedFlowId }}
+      >
+        <Select
+          style={{ width: '100%' }}
+          placeholder="Selecciona un flujo..."
+          value={selectedFlowId}
+          onChange={setSelectedFlowId}
+          options={availableFlows.map((f: any) => ({ value: f.id, label: f.name }))}
+        />
       </Modal>
     </div>
   )

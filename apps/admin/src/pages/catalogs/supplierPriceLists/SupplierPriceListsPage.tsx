@@ -11,6 +11,8 @@ import { suppliersApi } from '../../../api/suppliers'
 import { resourcesApi } from '../../../api/resources'
 import { PageHeader, FilterBar } from '../../../components/ui'
 import { getInitials, getAvatarColors } from '../../../utils/format'
+import ApprovalPanel from '../../../components/ApprovalPanel'
+import { approvalFlowsApi } from '../../../api/approvalFlows'
 
 const { Text } = Typography
 
@@ -70,6 +72,10 @@ export default function SupplierPriceListsPage() {
   const [selectedPriceListId, setSelectedPriceListId] = useState<string | null>(null)
   const [itemModalOpen, setItemModalOpen] = useState(false)
   const [editingItemId, setEditingItemId] = useState<string | null>(null)
+  const [triggerModalOpen, setTriggerModalOpen] = useState(false)
+  const [availableFlows, setAvailableFlows] = useState<any[]>([])
+  const [selectedFlowId, setSelectedFlowId] = useState('')
+  const [triggering, setTriggering] = useState(false)
 
   const { data: priceListsData, isLoading } = useQuery({
     queryKey: ['supplierPriceLists', page, pageSize, supplierId],
@@ -196,6 +202,28 @@ export default function SupplierPriceListsPage() {
     setItemModalOpen(true)
   }
 
+  async function openTriggerModal() {
+    const res = await approvalFlowsApi.list({ objectType: 'SUPPLIER_PRICE_LIST' })
+    setAvailableFlows(res.data?.data ?? res.data ?? [])
+    setSelectedFlowId('')
+    setTriggerModalOpen(true)
+  }
+
+  async function handleTriggerFlow() {
+    if (!selectedFlowId || !selectedPriceListId) return
+    setTriggering(true)
+    try {
+      await approvalFlowsApi.triggerRequest({ flowId: selectedFlowId, objectType: 'SUPPLIER_PRICE_LIST', objectId: selectedPriceListId })
+      setTriggerModalOpen(false)
+      queryClient.invalidateQueries({ queryKey: ['supplierPriceList', selectedPriceListId] })
+      message.success('Flujo de aprobación iniciado')
+    } catch (e: any) {
+      message.error(e?.response?.data?.message || 'Error al iniciar flujo')
+    } finally {
+      setTriggering(false)
+    }
+  }
+
   const existingResourceIds = new Set((detail?.items ?? []).map((item: any) => item.resourceId))
   const resourceOptions = (resourcesData?.data ?? [])
     .filter((r: any) => r.isActive)
@@ -253,6 +281,7 @@ export default function SupplierPriceListsPage() {
               <Button icon={<ArrowLeftOutlined />} onClick={() => setSelectedPriceListId(null)}>
                 Volver
               </Button>
+              <Button onClick={openTriggerModal}>⚡ Flujo de aprobación</Button>
               <Button type="primary" icon={<PlusOutlined />} onClick={openAddItem}>
                 Agregar recurso
               </Button>
@@ -375,6 +404,32 @@ export default function SupplierPriceListsPage() {
               </Form.Item>
             </div>
           </Form>
+        </Modal>
+
+        <ApprovalPanel
+          objectType="SUPPLIER_PRICE_LIST"
+          objectId={selectedPriceListId}
+          onStatusChange={() => queryClient.invalidateQueries({ queryKey: ['supplierPriceList', selectedPriceListId] })}
+        />
+
+        <Modal
+          title="Iniciar flujo de aprobación"
+          open={triggerModalOpen}
+          onCancel={() => setTriggerModalOpen(false)}
+          onOk={handleTriggerFlow}
+          confirmLoading={triggering}
+          okText="Iniciar"
+          okButtonProps={{ disabled: !selectedFlowId }}
+          destroyOnClose
+        >
+          <div style={{ marginBottom: 8 }}>Selecciona el flujo a ejecutar para esta lista de precios:</div>
+          <Select
+            style={{ width: '100%' }}
+            placeholder="Seleccionar flujo..."
+            value={selectedFlowId || undefined}
+            onChange={setSelectedFlowId}
+            options={availableFlows.map((f: any) => ({ value: f.id, label: f.name }))}
+          />
         </Modal>
       </div>
     )

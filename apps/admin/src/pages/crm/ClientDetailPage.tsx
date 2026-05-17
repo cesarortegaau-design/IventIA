@@ -18,6 +18,8 @@ import dayjs from 'dayjs'
 import { crmApi } from '../../api/crm'
 import { clientsApi } from '../../api/clients'
 import { auditApi } from '../../api/audit'
+import { approvalFlowsApi } from '../../api/approvalFlows'
+import ApprovalPanel from '../../components/ApprovalPanel'
 import { exportToCsv } from '../../utils/exportCsv'
 import AuditDrawer from '../../components/AuditDrawer'
 
@@ -60,6 +62,10 @@ export default function ClientDetailPage() {
   const [editClientForm] = Form.useForm()
   const [relationModalOpen, setRelationModalOpen] = useState(false)
   const [relationForm] = Form.useForm()
+  const [triggerModalOpen, setTriggerModalOpen] = useState(false)
+  const [availableFlows, setAvailableFlows] = useState<any[]>([])
+  const [selectedFlowId, setSelectedFlowId] = useState<string | undefined>(undefined)
+  const [triggering, setTriggering] = useState(false)
 
   const [interactionModalOpen, setInteractionModalOpen] = useState(false)
   const [editingInteraction, setEditingInteraction] = useState<any>(null)
@@ -241,6 +247,25 @@ export default function ClientDetailPage() {
   const allTasks = tasksData?.data ?? pendingTasks
   const users = usersData?.data ?? []
 
+  async function openTriggerModal() {
+    const flows = await approvalFlowsApi.list({ objectType: 'CLIENT' })
+    setAvailableFlows(flows ?? [])
+    setSelectedFlowId(undefined)
+    setTriggerModalOpen(true)
+  }
+
+  async function handleTriggerFlow() {
+    if (!selectedFlowId || !clientId) return
+    setTriggering(true)
+    try {
+      await approvalFlowsApi.triggerRequest({ flowId: selectedFlowId, objectType: 'CLIENT', objectId: clientId })
+      setTriggerModalOpen(false)
+      qc.invalidateQueries({ queryKey: ['client-summary', clientId] })
+    } finally {
+      setTriggering(false)
+    }
+  }
+
   function openEditInteraction(item: any) {
     setEditingInteraction(item)
     intForm.setFieldsValue({
@@ -325,10 +350,20 @@ export default function ClientDetailPage() {
                 data={auditData?.data ?? []}
                 loading={auditLoading}
               />
+              <Button icon={<span>⚡</span>} onClick={openTriggerModal}>
+                Flujo de aprobación
+              </Button>
             </Space>
           </Col>
         </Row>
       </div>
+
+      {/* Approval Panel */}
+      <ApprovalPanel
+        objectType="CLIENT"
+        objectId={clientId!}
+        onStatusChange={() => qc.invalidateQueries({ queryKey: ['client-summary', clientId] })}
+      />
 
       {/* KPI row */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
@@ -1033,6 +1068,25 @@ export default function ClientDetailPage() {
             />
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* Trigger approval flow modal */}
+      <Modal
+        title="Iniciar flujo de aprobación"
+        open={triggerModalOpen}
+        onCancel={() => setTriggerModalOpen(false)}
+        onOk={handleTriggerFlow}
+        confirmLoading={triggering}
+        okText="Iniciar flujo"
+        okButtonProps={{ disabled: !selectedFlowId }}
+      >
+        <Select
+          style={{ width: '100%' }}
+          placeholder="Selecciona un flujo..."
+          value={selectedFlowId}
+          onChange={setSelectedFlowId}
+          options={availableFlows.map((f: any) => ({ value: f.id, label: f.name }))}
+        />
       </Modal>
     </div>
   )

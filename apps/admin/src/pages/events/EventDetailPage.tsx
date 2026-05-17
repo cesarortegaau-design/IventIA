@@ -38,6 +38,8 @@ import EventBudgetTab from './EventBudgetTab'
 import EventTasksTab from './EventTasksTab'
 import TournamentTab from './TournamentTab'
 import { T } from '../../styles/tokens'
+import ApprovalPanel from '../../components/ApprovalPanel'
+import { approvalFlowsApi } from '../../api/approvalFlows'
 
 const { Text } = Typography
 
@@ -120,6 +122,10 @@ export default function EventDetailPage() {
   const [fpProgress, setFpProgress] = useState(0)
   const [selectedFpId, setSelectedFpId] = useState<string | null>(null)
   const [orderTypeFilter, setOrderTypeFilter] = useState<'all' | 'service' | 'budget'>('all')
+  const [triggerModalOpen, setTriggerModalOpen] = useState(false)
+  const [availableFlows, setAvailableFlows] = useState<any[]>([])
+  const [selectedFlowId, setSelectedFlowId] = useState<string>('')
+  const [triggering, setTriggering] = useState(false)
 
   // ── Mutations ─────────────────────────────────────────────────────────────
   const deleteDocMutation = useMutation({
@@ -478,6 +484,25 @@ export default function EventDetailPage() {
     setSpaceModalOpen(true)
   }
 
+  async function openTriggerModal() {
+    const flows = await approvalFlowsApi.list({ objectType: 'EVENT' })
+    setAvailableFlows(Array.isArray(flows) ? flows : [])
+    setSelectedFlowId('')
+    setTriggerModalOpen(true)
+  }
+
+  async function handleTriggerFlow() {
+    if (!selectedFlowId) return
+    setTriggering(true)
+    try {
+      await approvalFlowsApi.triggerRequest({ flowId: selectedFlowId, objectType: 'EVENT', objectId: id! })
+      setTriggerModalOpen(false)
+      queryClient.invalidateQueries({ queryKey: ['event', id] })
+    } finally {
+      setTriggering(false)
+    }
+  }
+
   const event = data?.data
   const TAB_LABEL: Record<string, string> = {
     resumen: 'Resumen', espacios: 'Espacios', timeline: 'Timeline',
@@ -673,6 +698,11 @@ export default function EventDetailPage() {
             <button style={BTN_PRIMARY} onClick={() => navigate(`/eventos/${id}/editar`)}>
               Editar
             </button>
+            {event.status !== 'CANCELLED' && (
+              <button style={BTN_SECONDARY} onClick={openTriggerModal}>
+                ⚡ Flujo de aprobación
+              </button>
+            )}
             <button
               style={{ ...BTN_PRIMARY, background: T.blue, display: 'flex', alignItems: 'center', gap: 6 }}
               onClick={() => navigate(`/eventos/${id}/ordenes/nueva`)}
@@ -707,6 +737,13 @@ export default function EventDetailPage() {
 
       {/* ═══════════════════════════════════════════════════════════ BODY */}
       <div style={{ padding: 24, background: T.bg }}>
+
+        {/* Approval panel */}
+        <ApprovalPanel
+          objectType="EVENT"
+          objectId={id!}
+          onStatusChange={() => queryClient.invalidateQueries({ queryKey: ['event', id] })}
+        />
 
         {/* ── Tab: Resumen ── */}
         {activeTab === 'resumen' && (
@@ -1208,6 +1245,25 @@ export default function EventDetailPage() {
       </div>
 
       {/* ═══════════════════════════════════════════════════════════ MODALS */}
+
+      {/* Trigger approval flow modal */}
+      <Modal
+        title="Iniciar flujo de aprobación"
+        open={triggerModalOpen}
+        onCancel={() => setTriggerModalOpen(false)}
+        onOk={handleTriggerFlow}
+        confirmLoading={triggering}
+        okText="Iniciar"
+        okButtonProps={{ disabled: !selectedFlowId }}
+      >
+        <Select
+          style={{ width: '100%' }}
+          placeholder="Seleccionar flujo..."
+          value={selectedFlowId || undefined}
+          onChange={v => setSelectedFlowId(v)}
+          options={availableFlows.map((f: any) => ({ value: f.id, label: f.name }))}
+        />
+      </Modal>
 
       {/* Space audit modal */}
       <Modal

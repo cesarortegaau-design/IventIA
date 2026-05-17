@@ -28,6 +28,8 @@ import GenerateDocumentModal from '../../components/GenerateDocumentModal'
 import { templatesApi } from '../../api/templates'
 import { PageHeader, StatusTag } from '../../components/ui'
 import { formatMoney } from '../../utils/format'
+import ApprovalPanel from '../../components/ApprovalPanel'
+import { approvalFlowsApi } from '../../api/approvalFlows'
 
 const { Title, Text } = Typography
 
@@ -99,6 +101,10 @@ export default function OrderDetailPage() {
   const [creditNoteModalOpen, setCreditNoteModalOpen] = useState(false)
   const [creditNoteItems, setCreditNoteItems] = useState<any[]>([])
   const [creditNoteNotes, setCreditNoteNotes] = useState('')
+  const [triggerModalOpen, setTriggerModalOpen] = useState(false)
+  const [availableFlows, setAvailableFlows] = useState<any[]>([])
+  const [selectedFlowId, setSelectedFlowId] = useState<string>('')
+  const [triggering, setTriggering] = useState(false)
 
   const deleteDocMutation = useMutation({
     mutationFn: (docId: string) => ordersApi.deleteDocument(id!, docId),
@@ -284,6 +290,25 @@ export default function OrderDetailPage() {
 
   function updateCreditNoteItem(index: number, field: string, value: any) {
     setCreditNoteItems(prev => prev.map((li, i) => i === index ? { ...li, [field]: value } : li))
+  }
+
+  async function openTriggerModal() {
+    const flows = await approvalFlowsApi.list({ objectType: 'ORDER' })
+    setAvailableFlows(Array.isArray(flows) ? flows : [])
+    setSelectedFlowId('')
+    setTriggerModalOpen(true)
+  }
+
+  async function handleTriggerFlow() {
+    if (!selectedFlowId) return
+    setTriggering(true)
+    try {
+      await approvalFlowsApi.triggerRequest({ flowId: selectedFlowId, objectType: 'ORDER', objectId: id! })
+      setTriggerModalOpen(false)
+      queryClient.invalidateQueries({ queryKey: ['order', id] })
+    } finally {
+      setTriggering(false)
+    }
   }
 
   const order = data?.data
@@ -618,6 +643,11 @@ export default function OrderDetailPage() {
                 Crear Nota de Crédito
               </Button>
             )}
+            {order.status !== 'CANCELLED' && (
+              <Button onClick={openTriggerModal}>
+                ⚡ Flujo de aprobación
+              </Button>
+            )}
           </>
         }
         tabs={
@@ -636,6 +666,15 @@ export default function OrderDetailPage() {
           />
         }
       />
+
+      {/* Approval panel */}
+      <div style={{ padding: '16px 24px 0' }}>
+        <ApprovalPanel
+          objectType="ORDER"
+          objectId={id!}
+          onStatusChange={() => queryClient.invalidateQueries({ queryKey: ['order', id] })}
+        />
+      </div>
 
       {/* Content */}
       <div style={{ padding: 24 }}>
@@ -1366,6 +1405,24 @@ export default function OrderDetailPage() {
         context="ORDER"
         entityId={id!}
       />
+
+      <Modal
+        title="Iniciar flujo de aprobación"
+        open={triggerModalOpen}
+        onCancel={() => setTriggerModalOpen(false)}
+        onOk={handleTriggerFlow}
+        confirmLoading={triggering}
+        okText="Iniciar"
+        okButtonProps={{ disabled: !selectedFlowId }}
+      >
+        <Select
+          style={{ width: '100%' }}
+          placeholder="Seleccionar flujo..."
+          value={selectedFlowId || undefined}
+          onChange={v => setSelectedFlowId(v)}
+          options={availableFlows.map((f: any) => ({ value: f.id, label: f.name }))}
+        />
+      </Modal>
 
       <Modal
         title={`Crear Nota de Crédito — ${order?.orderNumber}`}

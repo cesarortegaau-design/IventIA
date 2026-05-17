@@ -7,12 +7,14 @@ import {
 } from 'antd'
 import {
   PlusOutlined, EditOutlined, KeyOutlined, StopOutlined, MoreOutlined,
-  StarFilled,
+  StarFilled, ThunderboltOutlined,
 } from '@ant-design/icons'
 import { suppliersApi } from '../../../api/suppliers'
+import { approvalFlowsApi } from '../../../api/approvalFlows'
 import dayjs from 'dayjs'
 import { PageHeader, FilterBar, StatCard } from '../../../components/ui'
 import { getInitials, getAvatarColors } from '../../../utils/format'
+import ApprovalPanel from '../../../components/ApprovalPanel'
 
 const { Text } = Typography
 
@@ -46,6 +48,10 @@ export default function SuppliersPage() {
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<string | undefined>()
   const [statusFilter, setStatusFilter] = useState<string | undefined>()
+  const [triggerModalOpen, setTriggerModalOpen] = useState(false)
+  const [availableFlows, setAvailableFlows] = useState<any[]>([])
+  const [selectedFlowId, setSelectedFlowId] = useState<string | undefined>()
+  const [triggering, setTriggering] = useState(false)
 
   const { data: suppliersData, isLoading } = useQuery({
     queryKey: ['suppliers', page, pageSize],
@@ -95,6 +101,28 @@ export default function SuppliersPage() {
       message.error(error?.response?.data?.message || 'Error')
     },
   })
+
+  async function openTriggerModal() {
+    const flows = await approvalFlowsApi.list({ objectType: 'SUPPLIER' })
+    setAvailableFlows(flows ?? [])
+    setSelectedFlowId(undefined)
+    setTriggerModalOpen(true)
+  }
+
+  async function handleTriggerFlow() {
+    if (!selectedFlowId || !editingId) return
+    setTriggering(true)
+    try {
+      await approvalFlowsApi.triggerRequest({ flowId: selectedFlowId, objectType: 'SUPPLIER', objectId: editingId })
+      message.success('Flujo de aprobación iniciado')
+      setTriggerModalOpen(false)
+      queryClient.invalidateQueries({ queryKey: ['approval-active', 'SUPPLIER', editingId] })
+    } catch {
+      message.error('Error al iniciar el flujo')
+    } finally {
+      setTriggering(false)
+    }
+  }
 
   function openEdit(record: any) {
     setEditingId(record.id)
@@ -333,11 +361,33 @@ export default function SuppliersPage() {
         open={modalOpen}
         onCancel={() => { setModalOpen(false); setActiveModalTab('info') }}
         onOk={activeModalTab === 'info' ? () => form.submit() : undefined}
-        footer={activeModalTab === 'portal' ? null : undefined}
+        footer={activeModalTab === 'portal' ? null : (activeModalTab === 'info' ? undefined : undefined)}
         width={820}
         confirmLoading={saveMutation.isPending}
         forceRender
+        extra={editingId ? (
+          <Button icon={<ThunderboltOutlined />} onClick={openTriggerModal} style={{ marginRight: 8 }}>
+            ⚡ Flujo de aprobación
+          </Button>
+        ) : undefined}
       >
+        {editingId && (
+          <div style={{ marginBottom: 16 }}>
+            <Button
+              icon={<ThunderboltOutlined />}
+              size="small"
+              onClick={openTriggerModal}
+              style={{ marginBottom: 12 }}
+            >
+              ⚡ Flujo de aprobación
+            </Button>
+            <ApprovalPanel
+              objectType="SUPPLIER"
+              objectId={editingId}
+              onStatusChange={() => queryClient.invalidateQueries({ queryKey: ['suppliers'] })}
+            />
+          </div>
+        )}
         <Tabs
           activeKey={activeModalTab}
           onChange={setActiveModalTab}
@@ -517,6 +567,28 @@ export default function SuppliersPage() {
               ),
             }] : []),
           ]}
+        />
+      </Modal>
+
+      {/* Trigger approval flow modal */}
+      <Modal
+        title="⚡ Iniciar Flujo de Aprobación"
+        open={triggerModalOpen}
+        onCancel={() => setTriggerModalOpen(false)}
+        onOk={handleTriggerFlow}
+        okText="Iniciar flujo"
+        confirmLoading={triggering}
+        okButtonProps={{ disabled: !selectedFlowId }}
+      >
+        <p style={{ marginBottom: 12, color: 'rgba(0,0,0,0.65)' }}>
+          Selecciona el flujo de aprobación a iniciar para este proveedor:
+        </p>
+        <Select
+          style={{ width: '100%' }}
+          placeholder="Seleccionar flujo…"
+          value={selectedFlowId}
+          onChange={setSelectedFlowId}
+          options={availableFlows.map((f: any) => ({ value: f.id, label: f.name }))}
         />
       </Modal>
     </div>

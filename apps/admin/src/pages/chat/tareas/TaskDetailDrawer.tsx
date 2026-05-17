@@ -1,7 +1,10 @@
-import { Tabs, Descriptions, Progress, Button, Space, Spin, Popconfirm, Tag, Avatar, Typography, Divider, Empty } from 'antd'
-import { DeleteOutlined, EditOutlined, DownloadOutlined, CalendarOutlined } from '@ant-design/icons'
+import { useState } from 'react'
+import { Tabs, Descriptions, Progress, Button, Space, Spin, Popconfirm, Tag, Avatar, Typography, Divider, Empty, Modal, Select, App } from 'antd'
+import { DeleteOutlined, EditOutlined, DownloadOutlined, CalendarOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { TaskDocumentsPanel } from './TaskDocumentsPanel'
 import { TaskCommentThread } from './TaskCommentThread'
+import ApprovalPanel from '../../../components/ApprovalPanel'
+import { approvalFlowsApi } from '../../../api/approvalFlows'
 
 const { Text } = Typography
 
@@ -10,7 +13,34 @@ function formatDateTime(date: string | null | undefined) {
   return new Date(date).toLocaleDateString('es-MX', { month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-export function TaskDetailDrawer({ task, isLoading, statusConfig, priorityConfig, isEventActivity, onEdit, onDelete, isDeletingis, onEditEventActivity }: any) {
+export function TaskDetailDrawer({ task, isLoading, statusConfig, priorityConfig, isEventActivity, onEdit, onDelete, isDeletingis, onEditEventActivity, onStatusChange }: any) {
+  const { message } = App.useApp()
+  const [triggerModalOpen, setTriggerModalOpen] = useState(false)
+  const [availableFlows, setAvailableFlows] = useState<any[]>([])
+  const [selectedFlowId, setSelectedFlowId] = useState<string | undefined>()
+  const [triggering, setTriggering] = useState(false)
+
+  async function openTriggerModal() {
+    const flows = await approvalFlowsApi.list({ objectType: 'COLLAB_TASK' })
+    setAvailableFlows(flows ?? [])
+    setSelectedFlowId(undefined)
+    setTriggerModalOpen(true)
+  }
+
+  async function handleTriggerFlow() {
+    if (!selectedFlowId || !task?.id) return
+    setTriggering(true)
+    try {
+      await approvalFlowsApi.triggerRequest({ flowId: selectedFlowId, objectType: 'COLLAB_TASK', objectId: task.id })
+      message.success('Flujo de aprobación iniciado')
+      setTriggerModalOpen(false)
+    } catch {
+      message.error('Error al iniciar el flujo')
+    } finally {
+      setTriggering(false)
+    }
+  }
+
   if (isLoading) {
     return <div style={{ padding: 32, textAlign: 'center' }}><Spin /></div>
   }
@@ -40,6 +70,9 @@ export function TaskDetailDrawer({ task, isLoading, statusConfig, priorityConfig
             </Space>
           </div>
           <Space>
+            <Button icon={<ThunderboltOutlined />} size="small" onClick={openTriggerModal}>
+              ⚡ Flujo de aprobación
+            </Button>
             {isEventActivity ? (
               <Button icon={<EditOutlined />} type="primary" onClick={() => onEditEventActivity?.(task)}>
                 Editar
@@ -66,6 +99,15 @@ export function TaskDetailDrawer({ task, isLoading, statusConfig, priorityConfig
 
       <Divider />
 
+      {/* Approval panel */}
+      <div style={{ marginBottom: 16 }}>
+        <ApprovalPanel
+          objectType="COLLAB_TASK"
+          objectId={task.id}
+          onStatusChange={onStatusChange}
+        />
+      </div>
+
       {/* Progress */}
       {task.progress !== undefined && (
         <>
@@ -76,6 +118,28 @@ export function TaskDetailDrawer({ task, isLoading, statusConfig, priorityConfig
           <Divider />
         </>
       )}
+
+      {/* Trigger approval flow modal */}
+      <Modal
+        title="⚡ Iniciar Flujo de Aprobación"
+        open={triggerModalOpen}
+        onCancel={() => setTriggerModalOpen(false)}
+        onOk={handleTriggerFlow}
+        okText="Iniciar flujo"
+        confirmLoading={triggering}
+        okButtonProps={{ disabled: !selectedFlowId }}
+      >
+        <p style={{ marginBottom: 12, color: 'rgba(0,0,0,0.65)' }}>
+          Selecciona el flujo de aprobación a iniciar para esta tarea:
+        </p>
+        <Select
+          style={{ width: '100%' }}
+          placeholder="Seleccionar flujo…"
+          value={selectedFlowId}
+          onChange={setSelectedFlowId}
+          options={availableFlows.map((f: any) => ({ value: f.id, label: f.name }))}
+        />
+      </Modal>
 
       {/* Tabs */}
       <Tabs
