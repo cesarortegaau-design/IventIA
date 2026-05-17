@@ -66,6 +66,17 @@ const COLLAB_TASK_INCLUDE = {
     include: { author: { select: { id: true, firstName: true, lastName: true } } },
     orderBy: { createdAt: 'asc' as const },
   },
+  approvalRequestStep: {
+    include: {
+      step: { select: { id: true, name: true, order: true } },
+      request: {
+        include: {
+          flow: { select: { id: true, name: true } },
+        },
+      },
+      reviewedBy: { select: { id: true, firstName: true, lastName: true } },
+    },
+  },
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

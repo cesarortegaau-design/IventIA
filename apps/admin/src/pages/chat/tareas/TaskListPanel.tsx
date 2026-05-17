@@ -1,6 +1,18 @@
 import { Avatar, Tag } from 'antd'
-import { CalendarOutlined } from '@ant-design/icons'
+import { CalendarOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { T } from '../../../styles/tokens'
+
+const APPROVAL_STEP_STATUS_COLOR: Record<string, string> = {
+  PENDING:  '#faad14',
+  APPROVED: '#52c41a',
+  REJECTED: '#ff4d4f',
+}
+
+const APPROVAL_STEP_STATUS_LABEL: Record<string, string> = {
+  PENDING:  'Pendiente',
+  APPROVED: 'Aprobado',
+  REJECTED: 'Rechazado',
+}
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -177,8 +189,25 @@ function TaskCard({
       </div>
 
       {/* ── Row 3: context tags ── */}
-      {(eventName || depts.length > 0) && (
+      {(eventName || depts.length > 0 || task.approvalRequestStep) && (
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6 }}>
+          {task.approvalRequestStep && (() => {
+            const stepStatus = task.approvalRequestStep.status as string
+            const color = APPROVAL_STEP_STATUS_COLOR[stepStatus] ?? '#faad14'
+            const label = APPROVAL_STEP_STATUS_LABEL[stepStatus] ?? stepStatus
+            return (
+              <Tag
+                icon={<ThunderboltOutlined />}
+                style={{
+                  fontSize: 10, padding: '0 5px', lineHeight: '16px', margin: 0,
+                  color, borderColor: color, background: `${color}18`,
+                  fontWeight: 600,
+                }}
+              >
+                Aprobación — {label}
+              </Tag>
+            )
+          })()}
           {eventName && (
             <Tag
               icon={<CalendarOutlined />}

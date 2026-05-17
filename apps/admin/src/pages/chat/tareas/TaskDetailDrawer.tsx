@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Tabs, Descriptions, Progress, Button, Space, Spin, Popconfirm, Tag, Avatar, Typography, Divider, Empty, Modal, Select, App } from 'antd'
-import { DeleteOutlined, EditOutlined, DownloadOutlined, CalendarOutlined, ThunderboltOutlined } from '@ant-design/icons'
+import { Tabs, Descriptions, Progress, Button, Space, Spin, Popconfirm, Tag, Avatar, Typography, Divider, Empty, Modal, Select, App, Alert } from 'antd'
+import { DeleteOutlined, EditOutlined, DownloadOutlined, CalendarOutlined, ThunderboltOutlined, CheckCircleFilled, CloseCircleFilled, ClockCircleOutlined } from '@ant-design/icons'
 import { TaskDocumentsPanel } from './TaskDocumentsPanel'
 import { TaskCommentThread } from './TaskCommentThread'
 import ApprovalPanel from '../../../components/ApprovalPanel'
@@ -98,6 +98,52 @@ export function TaskDetailDrawer({ task, isLoading, statusConfig, priorityConfig
       </div>
 
       <Divider />
+
+      {/* Approval task banner — shown when this task was created from a flow step */}
+      {task.approvalRequestStep && (() => {
+        const step = task.approvalRequestStep
+        const stepStatus: string = step.status
+        const flowName: string = step.request?.flow?.name ?? 'Flujo de aprobación'
+        const stepName: string = step.step?.name ?? ''
+        const reviewedBy = step.reviewedBy
+        const reviewedAt = step.reviewedAt ? new Date(step.reviewedAt).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : null
+
+        const isApproved = stepStatus === 'APPROVED'
+        const isRejected = stepStatus === 'REJECTED'
+        const isPending  = stepStatus === 'PENDING'
+
+        return (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{
+              borderRadius: 8,
+              border: `1.5px solid ${isApproved ? '#b7eb8f' : isRejected ? '#ffccc7' : '#ffe58f'}`,
+              background: isApproved ? '#f6ffed' : isRejected ? '#fff2f0' : '#fffbe6',
+              padding: '12px 16px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                {isApproved && <CheckCircleFilled style={{ color: '#52c41a', fontSize: 16 }} />}
+                {isRejected && <CloseCircleFilled style={{ color: '#ff4d4f', fontSize: 16 }} />}
+                {isPending  && <ClockCircleOutlined style={{ color: '#faad14', fontSize: 16 }} />}
+                <Typography.Text strong style={{ fontSize: 13, color: isApproved ? '#389e0d' : isRejected ? '#cf1322' : '#d48806' }}>
+                  Tarea de aprobación —{' '}
+                  {isApproved ? 'Aprobado' : isRejected ? 'Rechazado' : 'Pendiente de revisión'}
+                </Typography.Text>
+              </div>
+              <Typography.Text style={{ fontSize: 12, color: '#595959', display: 'block' }}>
+                Flujo: <strong>{flowName}</strong>
+                {stepName && <> · Paso: <strong>{stepName}</strong></>}
+              </Typography.Text>
+              {(isApproved || isRejected) && reviewedBy && (
+                <Typography.Text style={{ fontSize: 12, color: '#8c8c8c', display: 'block', marginTop: 2 }}>
+                  {isApproved ? 'Aprobado' : 'Rechazado'} por {reviewedBy.firstName} {reviewedBy.lastName}
+                  {reviewedAt && ` — ${reviewedAt}`}
+                  {step.reason && ` · "${step.reason}"`}
+                </Typography.Text>
+              )}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Approval panel */}
       <div style={{ marginBottom: 16 }}>

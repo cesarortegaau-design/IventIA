@@ -515,6 +515,14 @@ export async function reviewStep(req: Request, res: Response, next: NextFunction
           })
         }
       })
+
+      // Auto-complete the linked CollabTask (DONE = approved)
+      if (requestStep.taskId) {
+        await prisma.collabTask.update({
+          where: { id: requestStep.taskId },
+          data: { status: 'DONE', completedAt: now },
+        })
+      }
     } else {
       // REJECT: go back to previous step (or reject entirely if step 0)
       const prevStep = request.steps.find(s => s.order === requestStep.order - 1)
@@ -576,6 +584,14 @@ export async function reviewStep(req: Request, res: Response, next: NextFunction
           })
         }
       })
+
+      // Auto-cancel the linked CollabTask (CANCELLED = rejected)
+      if (requestStep.taskId) {
+        await prisma.collabTask.update({
+          where: { id: requestStep.taskId },
+          data: { status: 'CANCELLED', completedAt: now },
+        })
+      }
     }
 
     const result = await prisma.approvalRequest.findUnique({
