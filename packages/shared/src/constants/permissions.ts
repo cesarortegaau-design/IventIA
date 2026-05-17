@@ -160,6 +160,15 @@ export const PRIVILEGES = {
 
   // ── Production ──────────────────────────────────────────────────────────────
   PRODUCTION_VIEW: 'production.view',
+
+  // ── Approval Flows ───────────────────────────────────────────────────────────
+  APPROVAL_FLOW_VIEW: 'approval_flow.view',
+  APPROVAL_FLOW_CREATE: 'approval_flow.create',
+  APPROVAL_FLOW_EDIT: 'approval_flow.edit',
+  APPROVAL_FLOW_DELETE: 'approval_flow.delete',
+  APPROVAL_REQUEST_VIEW: 'approval_request.view',
+  APPROVAL_REQUEST_TRIGGER: 'approval_request.trigger',
+  APPROVAL_REQUEST_REVIEW: 'approval_request.review',
 } as const
 
 export type PrivilegeKey = typeof PRIVILEGES[keyof typeof PRIVILEGES]
@@ -381,6 +390,18 @@ export const PRIVILEGE_GROUPS: { label: string; privileges: { key: PrivilegeKey;
       { key: PRIVILEGES.CRM_VIEW, label: 'CRM' },
       { key: PRIVILEGES.CHAT_VIEW, label: 'Chat / Colabora' },
       { key: PRIVILEGES.PRODUCTION_VIEW, label: 'Producción y costos' },
+    ],
+  },
+  {
+    label: 'Flujos de Aprobación',
+    privileges: [
+      { key: PRIVILEGES.APPROVAL_FLOW_VIEW, label: 'Consultar flujos de aprobación' },
+      { key: PRIVILEGES.APPROVAL_FLOW_CREATE, label: 'Crear flujos de aprobación' },
+      { key: PRIVILEGES.APPROVAL_FLOW_EDIT, label: 'Modificar flujos de aprobación' },
+      { key: PRIVILEGES.APPROVAL_FLOW_DELETE, label: 'Eliminar flujos de aprobación' },
+      { key: PRIVILEGES.APPROVAL_REQUEST_VIEW, label: 'Ver solicitudes de aprobación' },
+      { key: PRIVILEGES.APPROVAL_REQUEST_TRIGGER, label: 'Iniciar procesos de aprobación' },
+      { key: PRIVILEGES.APPROVAL_REQUEST_REVIEW, label: 'Aprobar / Rechazar pasos' },
     ],
   },
 ]

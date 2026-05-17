@@ -39,6 +39,7 @@ import OrganizationsPage from '../pages/catalogs/organizations/OrganizationsPage
 import UsersAndProfilesPage from '../pages/catalogs/users/UsersAndProfilesPage'
 import AnalysisDashboard from '../pages/analysis/AnalysisDashboard'
 import EventResumenReport from '../pages/events/EventResumenReport'
+import ApprovalFlowsPage from '../pages/approvalFlows/ApprovalFlowsPage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.accessToken)
@@ -96,6 +97,7 @@ export function AppRouter() {
         <Route path="catalogos/usuarios-perfiles" element={<UsersAndProfilesPage />} />
         <Route path="catalogos/organizaciones" element={<OrganizationsPage />} />
         <Route path="analisis" element={<AnalysisDashboard />} />
+        <Route path="catalogos/flujos-aprobacion" element={<ApprovalFlowsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

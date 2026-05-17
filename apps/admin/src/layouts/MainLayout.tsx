@@ -62,6 +62,7 @@ function getLabelForPath(pathname: string): { label: string; section: string } |
     '/catalogos/proveedores':               { label: 'Proveedores',            section: 'catalogos' },
     '/catalogos/organizaciones':            { label: 'Organizaciones',         section: 'catalogos' },
     '/catalogos/usuarios-perfiles':         { label: 'Usuarios y Perfiles',    section: 'catalogos' },
+    '/catalogos/flujos-aprobacion':         { label: 'Flujos de Aprobación',   section: 'catalogos' },
     '/analisis':                            { label: 'Análisis IA',            section: 'analitica' },
     '/produccion':                          { label: 'Producción y Costos',    section: 'analitica' },
     '/crm':                                 { label: 'CRM',                    section: 'crm' },
@@ -171,6 +172,8 @@ export default function MainLayout() {
       { key: '/catalogos/organizaciones', label: 'Organizaciones y Depts.', icon: <ApartmentOutlined />, route: '/catalogos/organizaciones', privilege: PRIVILEGES.ORGANIZATION_VIEW },
       { type: 'section', label: 'Accesos' },
       { key: '/catalogos/usuarios-perfiles', label: 'Usuarios y Perfiles', icon: <UserOutlined />, route: '/catalogos/usuarios-perfiles', privilege: PRIVILEGES.USER_VIEW },
+      { type: 'section', label: 'Automatización' },
+      { key: '/catalogos/flujos-aprobacion', label: 'Flujos de Aprobación', icon: <SafetyCertificateOutlined />, route: '/catalogos/flujos-aprobacion', privilege: PRIVILEGES.APPROVAL_FLOW_VIEW },
     ],
     analitica: [
       { type: 'section', label: 'Inteligencia' },

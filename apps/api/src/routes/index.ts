@@ -34,6 +34,7 @@ import ticketsPublicRoutes from './tickets.public.routes'
 import ticketBuyerRoutes from './ticket-buyer.routes'
 import collabTasksRoutes from './collabTasks.routes'
 import budgetsRoutes from './budgets.routes'
+import approvalFlowsRouter from './approvalFlows.routes'
 
 const router = Router()
 
@@ -60,6 +61,7 @@ router.use('/portal', portalRoutes)
 router.use('/events/:id/portal-codes', portalCodesRoutes)
 router.use('/chat', chatRoutes)
 router.use('/collab-tasks', collabTasksRoutes)
+router.use('/approval-flows', approvalFlowsRouter)
 router.use('/', budgetsRoutes)
 router.use('/bookings', bookingsRoutes)
 router.use('/audit', auditRoutes)

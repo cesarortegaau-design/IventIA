@@ -77,6 +77,8 @@ model Tenant {
   collabTaskDocuments       CollabTaskDocument[]
   collabTaskComments        CollabTaskComment[]
   budgets                   Budget[]
+  approvalFlows             ApprovalFlow[]
+  approvalRequests          ApprovalRequest[]
 
   @@map("tenants")
 }
@@ -92,6 +94,7 @@ model Profile {
   privileges  ProfilePrivilege[]
   tenant      Tenant             @relation(fields: [tenantId], references: [id])
   users       User[]
+  approvalSteps ApprovalFlowStep[] @relation("ApprovalStepProfile")
 
   @@unique([tenantId, name])
   @@map("profiles")
@@ -160,6 +163,10 @@ model User {
   collabTaskDocUploads CollabTaskDocument[]        @relation("CollabTaskDocUploader")
   collabTaskComments  CollabTaskComment[]          @relation("CollabTaskCommentAuthor")
   budgets             Budget[]                     @relation("BudgetCreatedBy")
+  approvalFlowsCreated     ApprovalFlow[]          @relation("ApprovalFlowCreator")
+  approvalStepsAsUser      ApprovalFlowStep[]      @relation("ApprovalStepUser")
+  approvalRequestsTriggered ApprovalRequest[]      @relation("ApprovalRequestTrigger")
+  approvalStepsReviewed    ApprovalRequestStep[]   @relation("ApprovalStepReviewer")
 
   @@index([tenantId, isActive])
   @@map("users")
@@ -2362,6 +2369,7 @@ model CollabTask {
   documents    CollabTaskDocument[]
   comments     CollabTaskComment[]
   budgetLines  CollabTaskBudgetLine[]
+  approvalRequestStep ApprovalRequestStep?
 
   @@index([tenantId, status])
   @@index([tenantId, assignedToId, status])
@@ -2516,6 +2524,123 @@ model CollabTaskBudgetLine {
 
   @@unique([collabTaskId, budgetLineId])
   @@map("collab_task_budget_lines")
+}
+
+model ApprovalFlow {
+  id                       String             @id @default(uuid())
+  tenantId                 String             @map("tenant_id")
+  name                     String             @db.VarChar(300)
+  description              String?
+  objectType               ApprovalObjectType @map("object_type")
+  targetStatus             String             @map("target_status") @db.VarChar(100)
+  activationConditionsText String?            @map("activation_conditions_text")
+  finalEffectsText         String?            @map("final_effects_text")
+  isActive                 Boolean            @default(true) @map("is_active")
+  createdById              String             @map("created_by_id")
+  createdAt                DateTime           @default(now()) @map("created_at")
+  updatedAt                DateTime           @updatedAt @map("updated_at")
+
+  tenant    Tenant             @relation(fields: [tenantId], references: [id])
+  createdBy User               @relation("ApprovalFlowCreator", fields: [createdById], references: [id])
+  steps     ApprovalFlowStep[]
+  requests  ApprovalRequest[]
+
+  @@index([tenantId, objectType])
+  @@index([tenantId, isActive])
+  @@map("approval_flows")
+}
+
+model ApprovalFlowStep {
+  id                String               @id @default(uuid())
+  flowId            String               @map("flow_id")
+  order             Int
+  name              String               @db.VarChar(200)
+  description       String?
+  assigneeType      ApprovalAssigneeType @map("assignee_type")
+  assigneeUserId    String?              @map("assignee_user_id")
+  assigneeProfileId String?              @map("assignee_profile_id")
+  createdAt         DateTime             @default(now()) @map("created_at")
+
+  flow            ApprovalFlow          @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  assigneeUser    User?                 @relation("ApprovalStepUser", fields: [assigneeUserId], references: [id])
+  assigneeProfile Profile?              @relation("ApprovalStepProfile", fields: [assigneeProfileId], references: [id])
+  requestSteps    ApprovalRequestStep[]
+
+  @@index([flowId, order])
+  @@map("approval_flow_steps")
+}
+
+model ApprovalRequest {
+  id            String                @id @default(uuid())
+  tenantId      String                @map("tenant_id")
+  flowId        String                @map("flow_id")
+  objectType    ApprovalObjectType    @map("object_type")
+  objectId      String                @map("object_id")
+  currentStep   Int?                  @map("current_step")
+  status        ApprovalRequestStatus @default(IN_PROGRESS) @map("status")
+  triggeredById String                @map("triggered_by_id")
+  completedAt   DateTime?             @map("completed_at")
+  createdAt     DateTime              @default(now()) @map("created_at")
+  updatedAt     DateTime              @updatedAt @map("updated_at")
+
+  tenant      Tenant                @relation(fields: [tenantId], references: [id])
+  flow        ApprovalFlow          @relation(fields: [flowId], references: [id])
+  triggeredBy User                  @relation("ApprovalRequestTrigger", fields: [triggeredById], references: [id])
+  steps       ApprovalRequestStep[]
+
+  @@index([tenantId, objectType, objectId])
+  @@index([tenantId, status])
+  @@map("approval_requests")
+}
+
+model ApprovalRequestStep {
+  id           String             @id @default(uuid())
+  requestId    String             @map("request_id")
+  stepId       String             @map("step_id")
+  order        Int
+  status       ApprovalStepStatus @default(PENDING) @map("status")
+  reviewedById String?            @map("reviewed_by_id")
+  reason       String?
+  reviewedAt   DateTime?          @map("reviewed_at")
+  taskId       String?            @unique @map("task_id")
+  createdAt    DateTime           @default(now()) @map("created_at")
+
+  request    ApprovalRequest  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  step       ApprovalFlowStep @relation(fields: [stepId], references: [id])
+  reviewedBy User?            @relation("ApprovalStepReviewer", fields: [reviewedById], references: [id])
+  task       CollabTask?      @relation(fields: [taskId], references: [id])
+
+  @@index([requestId, order])
+  @@map("approval_request_steps")
+}
+
+enum ApprovalObjectType {
+  PRICE_LIST
+  CLIENT
+  SUPPLIER
+  SUPPLIER_PRICE_LIST
+  EVENT
+  ORDER
+  PURCHASE_ORDER
+  COLLAB_TASK
+}
+
+enum ApprovalRequestStatus {
+  IN_PROGRESS
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum ApprovalStepStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ApprovalAssigneeType {
+  USER
+  PROFILE
 }
 
 enum ResourceType {
