@@ -129,6 +129,7 @@ export default function UsersPage() {
         onOk={() => form.submit()}
         width={700}
         confirmLoading={saveMutation.isPending}
+        styles={{ body: { maxHeight: '75vh', overflowY: 'auto' } }}
       >
         <Form form={form} layout="vertical" onFinish={saveMutation.mutate}>
           <Row gutter={16}>
