@@ -151,15 +151,14 @@ async function buildVisibilityFilter(req: Request) {
 // Notification (fire-and-forget)
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function notifyCollabTask(
+export async function notifyCollabTask(
   action: 'created' | 'assigned',
   task: any,
-  req: Request
+  tenantId: string,
 ) {
   // Fire and forget: don't await, don't block response
   Promise.allSettled([
     (async () => {
-      const tenantId = req.user!.tenantId
 
       // ── Resolve object label + URL for linked object ──────────────────────
       let objectLabel: string | undefined
@@ -270,6 +269,22 @@ async function notifyCollabTask(
       }
     })(),
   ]).catch(err => console.error('Notification error:', err))
+}
+
+/**
+ * Fetch a task by ID and send its creation notification.
+ * Used externally (e.g. from approvalFlows controller) after task creation.
+ */
+export async function notifyTaskById(taskId: string, tenantId: string, action: 'created' | 'assigned' = 'created') {
+  try {
+    const task = await prisma.collabTask.findUnique({
+      where: { id: taskId },
+      include: COLLAB_TASK_INCLUDE,
+    })
+    if (task) await notifyCollabTask(action, task, tenantId)
+  } catch (err) {
+    console.error('notifyTaskById error:', err)
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -390,7 +405,7 @@ export async function createCollabTask(req: Request, res: Response, next: NextFu
     }, req?.ip)
 
     // Notify
-    await notifyCollabTask('created', fullTask, req)
+    await notifyCollabTask('created', fullTask, tenantId)
 
     res.status(201).json({ success: true, data: fullTask })
   } catch (err) {
@@ -519,7 +534,7 @@ export async function updateCollabTask(req: Request, res: Response, next: NextFu
 
     // Notify if assignees changed
     if (assigneeIds !== undefined && assigneeIds.length > 0) {
-      await notifyCollabTask('assigned', fullTask, req)
+      await notifyCollabTask('assigned', fullTask, tenantId)
     }
 
     res.json({ success: true, data: fullTask })

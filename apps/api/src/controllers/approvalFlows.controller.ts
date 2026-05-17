@@ -3,6 +3,7 @@ import { Request, Response, NextFunction } from 'express'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { auditService } from '../services/audit.service'
+import { notifyTaskById } from './collabTasks.controller'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Object data schemas — tell Claude which fields are available per type
@@ -660,6 +661,7 @@ export async function triggerRequest(req: Request, res: Response, next: NextFunc
         where: { id: approvalRequest.firstRequestStep.id },
         data: { taskId },
       })
+      notifyTaskById(taskId, req.user!.tenantId, 'created')
     }
 
     // Auto-advance if first step is NOTIFICATION
@@ -711,6 +713,9 @@ export async function reviewStep(req: Request, res: Response, next: NextFunction
       // Find the next step (by order)
       const nextStep = request.steps.find(s => s.order === requestStep.order + 1)
 
+      // Capture info needed AFTER transaction to create task + notify
+      let nextStepTaskInfo: { flowStep: any; reqStepId: string } | null = null
+
       await prisma.$transaction(async (tx) => {
         // Update current request step
         await tx.approvalRequestStep.update({
@@ -729,31 +734,9 @@ export async function reviewStep(req: Request, res: Response, next: NextFunction
             where: { id: requestId },
             data: { currentStep: nextStep.order },
           })
-
-          // Find the flow step for the next request step
-          const nextFlowStep = request.flow.steps.find(s => s.id === nextStep.stepId)!
-
-          // Create task for next step
-          const taskId = await createTaskForStep(
-            req.user!.tenantId,
-            req.user!.userId,
-            request.flow.name,
-            nextFlowStep.order,
-            nextFlowStep.name,
-            nextFlowStep.description,
-            request.objectType,
-            request.objectId,
-            nextFlowStep.assigneeType,
-            nextFlowStep.assigneeUserId,
-            nextFlowStep.assigneeProfileId,
-          )
-
-          if (taskId) {
-            await tx.approvalRequestStep.update({
-              where: { id: nextStep.id },
-              data: { taskId },
-            })
-          }
+          // Capture flow step info for post-transaction task creation
+          const nextFlowStep = request.flow.steps.find(s => s.id === nextStep.stepId)
+          if (nextFlowStep) nextStepTaskInfo = { flowStep: nextFlowStep, reqStepId: nextStep.id }
         } else {
           // No next step — request is fully approved
           await tx.approvalRequest.update({
@@ -762,6 +745,28 @@ export async function reviewStep(req: Request, res: Response, next: NextFunction
           })
         }
       })
+
+      // Create task OUTSIDE transaction to avoid connection/timeout issues
+      if (nextStepTaskInfo) {
+        const { flowStep, reqStepId } = nextStepTaskInfo as { flowStep: any; reqStepId: string }
+        const taskId = await createTaskForStep(
+          req.user!.tenantId,
+          req.user!.userId,
+          request.flow.name,
+          flowStep.order,
+          flowStep.name,
+          flowStep.description,
+          request.objectType,
+          request.objectId,
+          flowStep.assigneeType,
+          flowStep.assigneeUserId,
+          flowStep.assigneeProfileId,
+        )
+        if (taskId) {
+          await prisma.approvalRequestStep.update({ where: { id: reqStepId }, data: { taskId } })
+          notifyTaskById(taskId, req.user!.tenantId, 'created')
+        }
+      }
 
       // Auto-complete the linked CollabTask (DONE = approved)
       if (requestStep.taskId) {
@@ -776,6 +781,9 @@ export async function reviewStep(req: Request, res: Response, next: NextFunction
     } else {
       // REJECT: go back to previous step (or reject entirely if step 0)
       const prevStep = request.steps.find(s => s.order === requestStep.order - 1)
+
+      // Capture info needed AFTER transaction to create task + notify
+      let prevStepTaskInfo: { flowStep: any; reqStepId: string } | null = null
 
       await prisma.$transaction(async (tx) => {
         // Update current step to rejected
@@ -802,30 +810,9 @@ export async function reviewStep(req: Request, res: Response, next: NextFunction
             data: { status: 'PENDING', reviewedById: null, reviewedAt: null, reason: null },
           })
 
-          // Find the flow step for the previous request step
-          const prevFlowStep = request.flow.steps.find(s => s.id === prevStep.stepId)!
-
-          // Create new task for prev step assignee
-          const taskId = await createTaskForStep(
-            req.user!.tenantId,
-            req.user!.userId,
-            request.flow.name,
-            prevFlowStep.order,
-            prevFlowStep.name,
-            prevFlowStep.description,
-            request.objectType,
-            request.objectId,
-            prevFlowStep.assigneeType,
-            prevFlowStep.assigneeUserId,
-            prevFlowStep.assigneeProfileId,
-          )
-
-          if (taskId) {
-            await tx.approvalRequestStep.update({
-              where: { id: prevStep.id },
-              data: { taskId },
-            })
-          }
+          // Capture flow step info for post-transaction task creation
+          const prevFlowStep = request.flow.steps.find(s => s.id === prevStep.stepId)
+          if (prevFlowStep) prevStepTaskInfo = { flowStep: prevFlowStep, reqStepId: prevStep.id }
         } else {
           // No previous step — fully rejected
           await tx.approvalRequest.update({
@@ -834,6 +821,28 @@ export async function reviewStep(req: Request, res: Response, next: NextFunction
           })
         }
       })
+
+      // Create task OUTSIDE transaction to avoid connection/timeout issues
+      if (prevStepTaskInfo) {
+        const { flowStep, reqStepId } = prevStepTaskInfo as { flowStep: any; reqStepId: string }
+        const taskId = await createTaskForStep(
+          req.user!.tenantId,
+          req.user!.userId,
+          request.flow.name,
+          flowStep.order,
+          flowStep.name,
+          flowStep.description,
+          request.objectType,
+          request.objectId,
+          flowStep.assigneeType,
+          flowStep.assigneeUserId,
+          flowStep.assigneeProfileId,
+        )
+        if (taskId) {
+          await prisma.approvalRequestStep.update({ where: { id: reqStepId }, data: { taskId } })
+          notifyTaskById(taskId, req.user!.tenantId, 'created')
+        }
+      }
 
       // Auto-cancel the linked CollabTask (CANCELLED = rejected)
       if (requestStep.taskId) {

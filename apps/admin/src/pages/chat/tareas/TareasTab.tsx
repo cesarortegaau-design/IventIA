@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Layout, Select, Input, Button, Empty, Spin, Space, Tag, message as antMessage } from 'antd'
 import { PlusOutlined, UserOutlined, FireOutlined, TeamOutlined, ClockCircleOutlined, ExclamationCircleOutlined, CheckCircleOutlined } from '@ant-design/icons'
@@ -188,6 +188,7 @@ export function TareasTab() {
   const [editingTask, setEditingTask] = useState<any | null>(null)
   const [showActivityModal, setShowActivityModal] = useState(false)
   const [editingActivity, setEditingActivity] = useState<any | null>(null)
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768)
   const [viewFilter, setViewFilter] = useState<'all' | 'mine' | 'urgent'>('mine')
   const [filters, setFilters] = useState({
     status: undefined as string | undefined,
@@ -247,6 +248,12 @@ export function TareasTab() {
   })
 
   const isLoading = tasksLoading || activitiesLoading
+
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [])
 
   const isAssignedToMe = (item: any) => {
     if (item.assignedTo?.id === currentUserId) return true
@@ -403,11 +410,25 @@ export function TareasTab() {
     [allTasks, currentUserId]
   )
 
+  // On mobile: show detail panel when task selected, list otherwise
+  const showList = !isMobile || !selectedTaskId
+  const showDetail = !isMobile || !!selectedTaskId
+
   return (
     <>
       <Layout style={{ height: '100%', borderRadius: 0, overflow: 'hidden' }}>
         {/* ── Task list sidebar ───────────────────────────────────────────────── */}
-        <Sider width={420} style={{ background: '#f8fafc', borderRight: '1px solid #e8f0fe', overflowY: 'auto' }}>
+        <Sider
+          width={isMobile ? '100%' : 420}
+          style={{
+            background: '#f8fafc',
+            borderRight: isMobile ? 'none' : '1px solid #e8f0fe',
+            overflowY: 'auto',
+            display: showList ? 'block' : 'none',
+            maxWidth: isMobile ? '100%' : 420,
+            minWidth: isMobile ? '100%' : 320,
+          }}
+        >
           <div style={{ borderBottom: `1px solid ${T.border}`, position: 'sticky', top: 0, background: '#fff', zIndex: 10 }}>
 
             {/* ── View filter tabs ── */}
@@ -539,7 +560,12 @@ export function TareasTab() {
         </Sider>
 
         {/* ── Task detail / home overview ───────────────────────────────────── */}
-        <Content style={{ overflow: 'auto', background: '#f8fafc' }}>
+        <Content style={{ overflow: 'auto', background: '#f8fafc', display: showDetail ? 'block' : 'none' }}>
+          {isMobile && selectedTaskId && (
+            <div style={{ padding: '10px 16px', borderBottom: '1px solid #e8f0fe', background: '#fff' }}>
+              <Button size="small" onClick={() => setSelectedTaskId(null)}>← Volver a tareas</Button>
+            </div>
+          )}
           {!selectedTaskId ? (
             <MyTasksOverview
               myPendingTasks={myPendingTasks}
