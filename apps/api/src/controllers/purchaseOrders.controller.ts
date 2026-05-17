@@ -4,6 +4,7 @@ import { Decimal } from 'decimal.js'
 import * as poService from '../services/purchaseOrder.service'
 import { AppError } from '../middleware/errorHandler'
 import { getUserOrgIds } from '../middleware/departmentScope'
+import { checkApprovalGate } from '../services/approvalGate.service'
 
 const toDate = z.union([z.string().datetime(), z.string().min(10)]).transform((v) => new Date(v))
 const toDecimal = z.union([z.string(), z.number()]).transform((v) => new Decimal(String(v)))
@@ -118,6 +119,9 @@ export async function updatePurchaseOrder(req: Request, res: Response, next: Nex
 export async function confirmPurchaseOrder(req: Request, res: Response, next: NextFunction) {
   try {
     const { notes } = z.object({ notes: z.string().optional() }).parse(req.body)
+
+    const gate = await checkApprovalGate(req.user!.tenantId, req.user!.userId, 'PURCHASE_ORDER', req.params.id, 'CONFIRMED')
+    if (gate.blocked) throw new AppError(422, 'APPROVAL_REQUIRED', gate.message)
 
     const po = await poService.confirmPurchaseOrder(req.params.id, req.user!.tenantId, req.user!.userId, notes)
 

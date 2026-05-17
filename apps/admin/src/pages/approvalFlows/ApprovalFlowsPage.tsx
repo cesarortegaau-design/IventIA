@@ -3,11 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Table, Button, Card, Space, Tag, Modal, Form, Input, Select,
   Switch, Typography, Row, Col, App, Divider, Drawer, Popconfirm,
-  Tooltip, Empty,
+  Tooltip, Empty, Alert,
 } from 'antd'
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, ThunderboltOutlined,
-  ArrowUpOutlined, ArrowDownOutlined,
+  ArrowUpOutlined, ArrowDownOutlined, RobotOutlined,
 } from '@ant-design/icons'
 import { approvalFlowsApi } from '../../api/approvalFlows'
 import { usersApi } from '../../api/users'
@@ -27,6 +27,7 @@ const OBJECT_TYPE_LABELS: Record<string, string> = {
   SUPPLIER_PRICE_LIST: 'Lista de Precio de Proveedor',
   EVENT: 'Evento',
   ORDER: 'Orden de Servicio',
+  BUDGET_ORDER: 'Orden de Presupuesto',
   PURCHASE_ORDER: 'Orden de Compra',
   COLLAB_TASK: 'Tarea',
 }
@@ -38,6 +39,7 @@ const OBJECT_TYPE_COLORS: Record<string, string> = {
   SUPPLIER_PRICE_LIST: 'geekblue',
   EVENT: 'green',
   ORDER: 'volcano',
+  BUDGET_ORDER: 'magenta',
   PURCHASE_ORDER: 'orange',
   COLLAB_TASK: 'cyan',
 }
@@ -273,6 +275,7 @@ export default function ApprovalFlowsPage() {
   const [filterObjectType, setFilterObjectType] = useState<string | undefined>()
   const [form] = Form.useForm()
   const [steps, setSteps] = useState<StepFormValue[]>([])
+  const [autoTriggerOn, setAutoTriggerOn] = useState(false)
 
   // ── Queries ──
   const { data: flows = [], isLoading } = useQuery<any[]>({
@@ -332,12 +335,14 @@ export default function ApprovalFlowsPage() {
   const openCreate = () => {
     setEditingId(null)
     setSteps([])
+    setAutoTriggerOn(false)
     form.resetFields()
     setDrawerOpen(true)
   }
 
   const openEdit = (flow: any) => {
     setEditingId(flow.id)
+    setAutoTriggerOn(!!flow.autoTrigger)
     form.setFieldsValue({
       name: flow.name,
       description: flow.description,
@@ -345,6 +350,8 @@ export default function ApprovalFlowsPage() {
       targetStatus: flow.targetStatus,
       activationConditionsText: flow.activationConditionsText,
       finalEffectsText: flow.finalEffectsText,
+      autoTrigger: !!flow.autoTrigger,
+      blocksTransition: flow.blocksTransition !== false,
     })
     setSteps(
       (flow.steps ?? []).map((s: any) => ({
@@ -363,6 +370,7 @@ export default function ApprovalFlowsPage() {
     setDrawerOpen(false)
     setEditingId(null)
     setSteps([])
+    setAutoTriggerOn(false)
     form.resetFields()
   }
 
@@ -422,6 +430,14 @@ export default function ApprovalFlowsPage() {
       key: 'targetStatus',
       width: 130,
       render: (t: string) => <Tag>{t}</Tag>,
+    },
+    {
+      title: 'Disparo',
+      key: 'autoTrigger',
+      width: 90,
+      render: (_: any, record: any) => record.autoTrigger
+        ? <Tag color="purple" icon={<RobotOutlined />}>Auto</Tag>
+        : <Tag color="default">Manual</Tag>,
     },
     {
       title: 'Pasos',
@@ -619,17 +635,55 @@ export default function ApprovalFlowsPage() {
             </Col>
           </Row>
 
+          <Divider orientation="left" style={{ fontSize: 13, fontWeight: 600 }}>
+            Activación automática
+          </Divider>
+
+          <Form.Item
+            name="autoTrigger"
+            label="Activar automáticamente"
+            valuePropName="checked"
+            tooltip="Si está activo, el flujo se dispara automáticamente cuando el objeto intente cambiar al estado destino configurado arriba"
+          >
+            <Switch
+              onChange={(checked) => {
+                setAutoTriggerOn(checked)
+                if (!checked) form.setFieldValue('blocksTransition', true)
+              }}
+            />
+          </Form.Item>
+
+          {autoTriggerOn && (
+            <>
+              <Form.Item
+                name="blocksTransition"
+                label="Bloquear transición hasta aprobar"
+                valuePropName="checked"
+                tooltip="El cambio de estado queda bloqueado hasta que el flujo sea aprobado"
+              >
+                <Switch defaultChecked />
+              </Form.Item>
+              <Alert
+                type="info"
+                showIcon
+                icon={<RobotOutlined />}
+                style={{ marginBottom: 16, fontSize: 12 }}
+                message={`Cuando el objeto intente cambiar a "${form.getFieldValue('targetStatus') || '(estado destino)'}", el sistema creará este flujo automáticamente y bloqueará la transición hasta recibir aprobación.`}
+              />
+            </>
+          )}
+
           <Form.Item
             name="activationConditionsText"
-            label="Condiciones de activación"
-            tooltip="Describe cuándo debe activarse este flujo"
+            label="Notas de activación"
+            tooltip="Notas adicionales sobre cuándo o por qué aplica este flujo"
           >
-            <TextArea rows={2} placeholder="Ej: Cuando el monto supere $50,000 MXN" />
+            <TextArea rows={2} placeholder="Ej: Aplica cuando el monto supere $50,000 MXN" />
           </Form.Item>
 
           <Form.Item
             name="finalEffectsText"
-            label="Efectos finales"
+            label="Efectos al aprobar"
             tooltip="Describe qué ocurre cuando el flujo es aprobado"
           >
             <TextArea rows={2} placeholder="Ej: El evento cambia a estado CONFIRMED automáticamente" />

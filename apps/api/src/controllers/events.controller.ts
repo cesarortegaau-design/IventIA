@@ -4,6 +4,7 @@ import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { auditService } from '../services/audit.service'
 import { getUserOrgIds } from '../middleware/departmentScope'
+import { checkApprovalGate } from '../services/approvalGate.service'
 
 const createEventSchema = z.object({
   name: z.string().min(1).max(300),
@@ -284,6 +285,9 @@ export async function updateEventStatus(req: Request, res: Response, next: NextF
       where: { id: req.params.id, tenantId: req.user!.tenantId },
     })
     if (!event) throw new AppError(404, 'EVENT_NOT_FOUND', 'Event not found')
+
+    const gate = await checkApprovalGate(req.user!.tenantId, req.user!.userId, 'EVENT', req.params.id, status)
+    if (gate.blocked) throw new AppError(422, 'APPROVAL_REQUIRED', gate.message)
 
     const updated = await prisma.event.update({
       where: { id: req.params.id },

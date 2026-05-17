@@ -4,6 +4,7 @@ import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import * as orderService from '../services/order.service'
 import { orgFilterForOrder } from '../middleware/departmentScope'
+import { checkApprovalGate } from '../services/approvalGate.service'
 
 const createOrderSchema = z.object({
   clientId: z.string().min(1),
@@ -447,6 +448,10 @@ export async function updateOrderStatus(req: Request, res: Response, next: NextF
       where: { id: req.params.id, tenantId: req.user!.tenantId },
     })
     if (!order) throw new AppError(404, 'ORDER_NOT_FOUND', 'Order not found')
+
+    const objectType = order.isBudgetOrder ? 'BUDGET_ORDER' : 'ORDER'
+    const gate = await checkApprovalGate(req.user!.tenantId, req.user!.userId, objectType, req.params.id, status)
+    if (gate.blocked) throw new AppError(422, 'APPROVAL_REQUIRED', gate.message)
 
     const updated = await orderService.transitionOrderStatus(
       req.params.id,

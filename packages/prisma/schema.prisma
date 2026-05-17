@@ -2536,6 +2536,8 @@ model ApprovalFlow {
   activationConditionsText String?            @map("activation_conditions_text")
   finalEffectsText         String?            @map("final_effects_text")
   isActive                 Boolean            @default(true) @map("is_active")
+  autoTrigger              Boolean            @default(false) @map("auto_trigger")
+  blocksTransition         Boolean            @default(true) @map("blocks_transition")
   createdById              String             @map("created_by_id")
   createdAt                DateTime           @default(now()) @map("created_at")
   updatedAt                DateTime           @updatedAt @map("updated_at")
@@ -2621,6 +2623,7 @@ enum ApprovalObjectType {
   SUPPLIER_PRICE_LIST
   EVENT
   ORDER
+  BUDGET_ORDER
   PURCHASE_ORDER
   COLLAB_TASK
 }

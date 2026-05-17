@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express'
 import { z } from 'zod'
 import * as supplierService from '../services/supplier.service'
 import { AppError } from '../middleware/errorHandler'
+import { checkApprovalGate } from '../services/approvalGate.service'
 
 const createSupplierSchema = z.object({
   name: z.string().min(1),
@@ -96,6 +97,9 @@ export async function updateSupplier(req: Request, res: Response, next: NextFunc
 export async function toggleSupplierStatus(req: Request, res: Response, next: NextFunction) {
   try {
     const { status } = z.object({ status: z.enum(['ACTIVE', 'INACTIVE', 'BLOCKED']) }).parse(req.body)
+
+    const gate = await checkApprovalGate(req.user!.tenantId, req.user!.userId, 'SUPPLIER', req.params.id, status)
+    if (gate.blocked) throw new AppError(422, 'APPROVAL_REQUIRED', gate.message)
 
     const supplier = await supplierService.toggleSupplierStatus(req.params.id, req.user!.tenantId, status, req.user!.userId)
 

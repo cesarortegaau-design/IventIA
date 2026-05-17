@@ -70,7 +70,9 @@ export default function ApprovalPanel({ objectType, objectId, onStatusChange }: 
   const { data: request, isLoading } = useQuery<any>({
     queryKey,
     queryFn: () => approvalFlowsApi.getActiveRequest(objectType, objectId),
-    refetchInterval: 30000,
+    // Poll every 5s when no active request (to pick up auto-triggered flows quickly),
+    // every 30s once a request is active.
+    refetchInterval: (query) => (query.state.data ? 30000 : 5000),
   })
 
   const reviewMutation = useMutation({

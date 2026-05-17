@@ -116,7 +116,7 @@ export async function listFlows(req: Request, res: Response, next: NextFunction)
 
 export async function createFlow(req: Request, res: Response, next: NextFunction) {
   try {
-    const { name, description, objectType, targetStatus, activationConditionsText, finalEffectsText, steps = [] } = req.body
+    const { name, description, objectType, targetStatus, activationConditionsText, finalEffectsText, autoTrigger, blocksTransition, steps = [] } = req.body
 
     if (!name) throw new AppError(400, 'VALIDATION_ERROR', 'El nombre es requerido')
     if (!objectType) throw new AppError(400, 'VALIDATION_ERROR', 'El tipo de objeto es requerido')
@@ -132,6 +132,8 @@ export async function createFlow(req: Request, res: Response, next: NextFunction
           targetStatus,
           activationConditionsText: activationConditionsText ?? null,
           finalEffectsText: finalEffectsText ?? null,
+          autoTrigger: autoTrigger ?? false,
+          blocksTransition: blocksTransition !== undefined ? blocksTransition : true,
           createdById: req.user!.userId,
         },
       })
@@ -195,7 +197,7 @@ export async function updateFlow(req: Request, res: Response, next: NextFunction
     })
     if (!existing) throw new AppError(404, 'NOT_FOUND', 'Flujo de aprobación no encontrado')
 
-    const { name, description, activationConditionsText, finalEffectsText, isActive, steps } = req.body
+    const { name, description, activationConditionsText, finalEffectsText, isActive, autoTrigger, blocksTransition, steps } = req.body
 
     const flow = await prisma.$transaction(async (tx) => {
       await tx.approvalFlow.update({
@@ -206,6 +208,8 @@ export async function updateFlow(req: Request, res: Response, next: NextFunction
           ...(activationConditionsText !== undefined && { activationConditionsText }),
           ...(finalEffectsText !== undefined && { finalEffectsText }),
           ...(isActive !== undefined && { isActive }),
+          ...(autoTrigger !== undefined && { autoTrigger }),
+          ...(blocksTransition !== undefined && { blocksTransition }),
         },
       })
 
