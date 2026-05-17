@@ -43,4 +43,7 @@ export const collabTasksApi = {
 
   deleteComment: (taskId: string, commentId: string) =>
     apiClient.delete(`/collab-tasks/${taskId}/comments/${commentId}`).then(r => r.data),
+
+  testNotification: (taskId: string) =>
+    apiClient.post(`/collab-tasks/${taskId}/test-notification`).then(r => r.data.data),
 }

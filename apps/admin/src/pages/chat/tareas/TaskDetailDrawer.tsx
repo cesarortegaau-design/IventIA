@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Tabs, Descriptions, Progress, Button, Space, Spin, Popconfirm, Tag, Avatar, Typography, Divider, Empty, Modal, Select, App, Alert, Input } from 'antd'
-import { DeleteOutlined, EditOutlined, ThunderboltOutlined, CheckCircleFilled, CloseCircleFilled, ClockCircleOutlined, LinkOutlined, UserOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EditOutlined, ThunderboltOutlined, CheckCircleFilled, CloseCircleFilled, ClockCircleOutlined, LinkOutlined, UserOutlined, BellOutlined } from '@ant-design/icons'
 import { TaskDocumentsPanel } from './TaskDocumentsPanel'
 import { TaskCommentThread } from './TaskCommentThread'
 import { approvalFlowsApi } from '../../../api/approvalFlows'
+import { collabTasksApi } from '../../../api/collabTasks'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 const { Text } = Typography
@@ -36,6 +37,21 @@ export function TaskDetailDrawer({ task, isLoading, statusConfig, priorityConfig
   const [triggering, setTriggering] = useState(false)
   const [rejectModalOpen, setRejectModalOpen] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
+  const [testNotifLoading, setTestNotifLoading] = useState(false)
+  const [testNotifResult, setTestNotifResult] = useState<any>(null)
+
+  async function handleTestNotification() {
+    if (!task?.id) return
+    setTestNotifLoading(true)
+    try {
+      const result = await collabTasksApi.testNotification(task.id)
+      setTestNotifResult(result)
+    } catch (e: any) {
+      message.error(e.response?.data?.error?.message ?? 'Error al probar notificación')
+    } finally {
+      setTestNotifLoading(false)
+    }
+  }
 
   async function openTriggerModal() {
     const flows = await approvalFlowsApi.list({ objectType: 'COLLAB_TASK' })
@@ -129,6 +145,15 @@ export function TaskDetailDrawer({ task, isLoading, statusConfig, priorityConfig
                 ⚡ Flujo de aprobación
               </Button>
             )}
+            <Button
+              icon={<BellOutlined />}
+              size="small"
+              loading={testNotifLoading}
+              onClick={handleTestNotification}
+              title="Probar envío de notificación para esta tarea"
+            >
+              Test notif.
+            </Button>
             {isEventActivity ? (
               <Button icon={<EditOutlined />} type="primary" onClick={() => onEditEventActivity?.(task)}>
                 Editar
@@ -284,6 +309,53 @@ export function TaskDetailDrawer({ task, isLoading, statusConfig, priorityConfig
           value={rejectReason}
           onChange={e => setRejectReason(e.target.value)}
         />
+      </Modal>
+
+      {/* Test notification result modal */}
+      <Modal
+        title="Diagnóstico de notificación"
+        open={!!testNotifResult}
+        onCancel={() => setTestNotifResult(null)}
+        footer={<Button onClick={() => setTestNotifResult(null)}>Cerrar</Button>}
+        width={560}
+      >
+        {testNotifResult && (
+          <div style={{ fontSize: 13 }}>
+            <div style={{ marginBottom: 8 }}>
+              <Tag color={testNotifResult.serviceStatus.emailConfigured ? 'success' : 'error'}>
+                Email (SendGrid): {testNotifResult.serviceStatus.emailConfigured ? '✓ configurado' : '✗ no configurado'}
+              </Tag>
+              <Tag color={testNotifResult.serviceStatus.whatsappConfigured ? 'success' : 'error'}>
+                WhatsApp (Twilio): {testNotifResult.serviceStatus.whatsappConfigured ? '✓ configurado' : '✗ no configurado'}
+              </Tag>
+            </div>
+            <div style={{ marginBottom: 8, color: '#595959' }}>
+              Assignee IDs encontrados: <strong>{testNotifResult.assigneeIds?.length ?? 0}</strong>
+              {testNotifResult.assigneeIds?.length === 0 && (
+                <Alert type="error" showIcon message="No se encontraron assignees — la tarea no tiene destinatarios" style={{ marginTop: 6 }} />
+              )}
+            </div>
+            {testNotifResult.recipients?.map((r: any) => (
+              <div key={r.id} style={{ border: '1px solid #f0f0f0', borderRadius: 6, padding: '8px 12px', marginBottom: 8 }}>
+                <div style={{ fontWeight: 600 }}>{r.name}</div>
+                <div style={{ color: '#888', marginBottom: 4 }}>
+                  {r.email || '(sin email)'} · {r.phone || '(sin teléfono)'}
+                </div>
+                <Space>
+                  <Tag color={r.emailResult === 'sent' ? 'success' : r.emailResult === 'error' ? 'error' : 'default'}>
+                    Email: {r.emailResult}{r.emailSkipReason ? ` — ${r.emailSkipReason}` : ''}
+                  </Tag>
+                  <Tag color={r.whatsappResult === 'sent' ? 'success' : r.whatsappResult === 'error' ? 'error' : 'default'}>
+                    WA: {r.whatsappResult}{r.whatsappSkipReason ? ` — ${r.whatsappSkipReason}` : ''}
+                  </Tag>
+                </Space>
+              </div>
+            ))}
+            {testNotifResult.recipients?.length === 0 && testNotifResult.assigneeIds?.length > 0 && (
+              <Alert type="warning" showIcon message="Los assignees existen pero no se encontraron en la tabla de usuarios" />
+            )}
+          </div>
+        )}
       </Modal>
 
       {/* Trigger approval flow modal */}

@@ -151,76 +151,130 @@ async function buildVisibilityFilter(req: Request) {
 // Notification (fire-and-forget)
 // ─────────────────────────────────────────────────────────────────────────────
 
+export interface NotifyCollabTaskResult {
+  taskId: string
+  action: string
+  serviceStatus: { emailConfigured: boolean; whatsappConfigured: boolean }
+  assigneeIds: string[]
+  recipientCount: number
+  recipients: Array<{
+    id: string; name: string; email?: string | null; phone?: string | null
+    notifyTaskEmail: boolean; notifyTaskWhatsapp: boolean
+    emailResult: 'sent' | 'skipped' | 'error'; emailSkipReason?: string
+    whatsappResult: 'sent' | 'skipped' | 'error'; whatsappSkipReason?: string
+  }>
+}
+
 export async function notifyCollabTask(
   action: 'created' | 'assigned',
   task: any,
   tenantId: string,
-) {
-  // Fire and forget: don't await, don't block response
-  Promise.allSettled([
-    (async () => {
+): Promise<NotifyCollabTaskResult> {
+  const tag = `[notifyCollabTask task=${task.id} action=${action}]`
+  const result: NotifyCollabTaskResult = {
+    taskId: task.id,
+    action,
+    serviceStatus: {
+      emailConfigured: !!(process.env.SENDGRID_API_KEY),
+      whatsappConfigured: isWhatsAppConfigured(),
+    },
+    assigneeIds: [],
+    recipientCount: 0,
+    recipients: [],
+  }
 
-      // ── Resolve object label + URL for linked object ──────────────────────
-      let objectLabel: string | undefined
-      let objectUrl: string | undefined
-      const adminBase = process.env.ADMIN_URL || 'https://ivent-ia-admin.vercel.app'
-      const reqStep = task.approvalRequestStep
-      if (reqStep?.request?.objectType && reqStep?.request?.objectId) {
-        objectLabel = await fetchObjectLabel(reqStep.request.objectType, reqStep.request.objectId)
-        const objectRoutes: Record<string, string> = {
-          ORDER: '/ordenes',
-          BUDGET_ORDER: '/ordenes',
-          EVENT: '/eventos',
-          SUPPLIER: '/proveedores',
-          PURCHASE_ORDER: '/catalogos/ordenes-compra',
-        }
-        const base = objectRoutes[reqStep.request.objectType]
-        if (base) objectUrl = `${adminBase}${base}/${reqStep.request.objectId}`
-      } else if (task.event) {
-        objectLabel = `Evento: ${task.event.name}`
-        objectUrl = `${adminBase}/eventos/${task.event.id}`
-      } else if (task.orders?.[0]?.order) {
-        objectLabel = `Orden #${task.orders[0].order.orderNumber}`
-        objectUrl = `${adminBase}/ordenes/${task.orders[0].order.id}`
+  try {
+    // ── Resolve object label + URL for linked object ──────────────────────
+    let objectLabel: string | undefined
+    let objectUrl: string | undefined
+    const adminBase = process.env.ADMIN_URL || 'https://ivent-ia-admin.vercel.app'
+    const reqStep = task.approvalRequestStep
+    if (reqStep?.request?.objectType && reqStep?.request?.objectId) {
+      objectLabel = await fetchObjectLabel(reqStep.request.objectType, reqStep.request.objectId)
+      const objectRoutes: Record<string, string> = {
+        ORDER: '/ordenes',
+        BUDGET_ORDER: '/ordenes',
+        EVENT: '/eventos',
+        SUPPLIER: '/proveedores',
+        PURCHASE_ORDER: '/catalogos/ordenes-compra',
+      }
+      const base = objectRoutes[reqStep.request.objectType]
+      if (base) objectUrl = `${adminBase}${base}/${reqStep.request.objectId}`
+    } else if (task.event) {
+      objectLabel = `Evento: ${task.event.name}`
+      objectUrl = `${adminBase}/eventos/${task.event.id}`
+    } else if (task.orders?.[0]?.order) {
+      objectLabel = `Orden #${task.orders[0].order.orderNumber}`
+      objectUrl = `${adminBase}/ordenes/${task.orders[0].order.id}`
+    }
+
+    // ── Due date ─────────────────────────────────────────────────────────
+    const dueDateFormatted = task.endDate
+      ? new Date(task.endDate).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
+      : undefined
+
+    // ── Collect recipients with notification preferences ──────────────────
+    const recipients = new Map<string, {
+      id: string; email?: string | null; phone?: string | null
+      firstName: string; lastName: string
+      notifyTaskEmail: boolean; notifyTaskWhatsapp: boolean
+    }>()
+
+    const assigneeUserIds: string[] = (task.assignees && task.assignees.length > 0)
+      ? task.assignees.map((a: any) => a.userId)
+      : (task.assignedToId ? [task.assignedToId] : [])
+
+    result.assigneeIds = assigneeUserIds
+    console.log(`${tag} assigneeIds=${JSON.stringify(assigneeUserIds)} assignees_length=${task.assignees?.length ?? 'null'} assignedToId=${task.assignedToId}`)
+
+    if (assigneeUserIds.length > 0) {
+      const users = await prisma.user.findMany({
+        where: { id: { in: assigneeUserIds } },
+        select: { id: true, firstName: true, lastName: true, email: true, phone: true, notifyTaskEmail: true, notifyTaskWhatsapp: true },
+      })
+      console.log(`${tag} users_found=${users.length} users=${JSON.stringify(users.map(u => ({ id: u.id, email: u.email, notifyTaskEmail: u.notifyTaskEmail, phone: u.phone, notifyTaskWhatsapp: u.notifyTaskWhatsapp })))}`)
+      users.forEach(u => recipients.set(u.id, u))
+    } else {
+      console.warn(`${tag} no assigneeIds found — no notifications will be sent`)
+    }
+
+    const deptIds = (task.departments ?? []).map((d: any) => d.departmentId)
+    if (deptIds.length > 0) {
+      const deptUsers = await prisma.userDepartment.findMany({
+        where: { departmentId: { in: deptIds } },
+        include: { user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true, notifyTaskEmail: true, notifyTaskWhatsapp: true } } },
+      })
+      deptUsers.forEach(du => recipients.set(du.user.id, du.user))
+    }
+
+    result.recipientCount = recipients.size
+    console.log(`${tag} total_recipients=${recipients.size} emailConfigured=${result.serviceStatus.emailConfigured} waConfigured=${result.serviceStatus.whatsappConfigured}`)
+
+    // ── Send to each recipient according to their preferences ─────────────
+    const taskUrl = `${adminBase}/chat?tab=tareas&taskId=${task.id}`
+
+    for (const [, user] of recipients) {
+      const recipientEntry: NotifyCollabTaskResult['recipients'][0] = {
+        id: user.id,
+        name: `${user.firstName} ${user.lastName}`,
+        email: user.email,
+        phone: user.phone,
+        notifyTaskEmail: user.notifyTaskEmail,
+        notifyTaskWhatsapp: user.notifyTaskWhatsapp,
+        emailResult: 'skipped',
+        whatsappResult: 'skipped',
       }
 
-      // ── Due date ─────────────────────────────────────────────────────────
-      const dueDateFormatted = task.endDate
-        ? new Date(task.endDate).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
-        : undefined
-
-      // ── Collect recipients with notification preferences ──────────────────
-      const recipients = new Map<string, {
-        id: string; email?: string; phone?: string
-        firstName: string; lastName: string
-        notifyTaskEmail: boolean; notifyTaskWhatsapp: boolean
-      }>()
-
-      const assigneeUserIds: string[] = task.assignees?.map((a: any) => a.userId) ?? (task.assignedToId ? [task.assignedToId] : [])
-      if (assigneeUserIds.length > 0) {
-        const users = await prisma.user.findMany({
-          where: { id: { in: assigneeUserIds } },
-          select: { id: true, firstName: true, lastName: true, email: true, phone: true, notifyTaskEmail: true, notifyTaskWhatsapp: true },
-        })
-        users.forEach(u => recipients.set(u.id, u))
-      }
-
-      const deptIds = task.departments.map((d: any) => d.departmentId)
-      if (deptIds.length > 0) {
-        const deptUsers = await prisma.userDepartment.findMany({
-          where: { departmentId: { in: deptIds } },
-          include: { user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true, notifyTaskEmail: true, notifyTaskWhatsapp: true } } },
-        })
-        deptUsers.forEach(du => recipients.set(du.user.id, du.user))
-      }
-
-      // ── Send to each recipient according to their preferences ─────────────
-      const taskUrl = `${adminBase}/chat?tab=tareas&taskId=${task.id}`
-
-      for (const [, user] of recipients) {
-        // Email
-        if (user.notifyTaskEmail && user.email) {
-          emailService.sendCollabTaskNotification({
+      // Email
+      if (!user.notifyTaskEmail) {
+        recipientEntry.emailSkipReason = 'notifyTaskEmail=false'
+      } else if (!user.email) {
+        recipientEntry.emailSkipReason = 'no email address'
+      } else if (!result.serviceStatus.emailConfigured) {
+        recipientEntry.emailSkipReason = 'SENDGRID_API_KEY not configured'
+      } else {
+        try {
+          await emailService.sendCollabTaskNotification({
             to: user.email,
             recipientName: `${user.firstName} ${user.lastName}`,
             taskTitle: task.title,
@@ -230,45 +284,91 @@ export async function notifyCollabTask(
             objectUrl,
             taskUrl,
             action,
-          }).catch(err => console.error('Email notification error:', err))
-        }
-
-        // WhatsApp
-        if (user.notifyTaskWhatsapp && user.phone && isWhatsAppConfigured()) {
-          const lines = [
-            `${action === 'created' ? '📋 Nueva tarea asignada' : '👤 Tarea asignada'}: *${task.title}*`,
-            task.description ? task.description : null,
-            dueDateFormatted ? `📅 Vence: ${dueDateFormatted}` : null,
-            objectLabel ? `🔗 ${objectLabel}: ${objectUrl ?? ''}` : null,
-            `Ver tarea: ${taskUrl}`,
-          ].filter(Boolean)
-          sendWhatsAppMessage({
-            to: user.phone,
-            message: lines.join('\n'),
-          }).catch(err => console.error('WhatsApp notification error:', err))
-        }
-
-        // Log notification
-        const channels: string[] = []
-        if (user.notifyTaskEmail && user.email) channels.push('email')
-        if (user.notifyTaskWhatsapp && user.phone) channels.push('whatsapp')
-        if (channels.length > 0) {
-          await prisma.notification.create({
-            data: {
-              tenantId,
-              recipientType: 'USER',
-              recipientId: user.id,
-              channel: channels.join(','),
-              templateKey: `collab_task_${action}`,
-              payload: { taskId: task.id, taskTitle: task.title },
-              status: 'sent',
-              sentAt: new Date(),
-            },
-          }).catch(err => console.error('Notification log error:', err))
+          })
+          recipientEntry.emailResult = 'sent'
+          console.log(`${tag} email sent to ${user.email}`)
+        } catch (err: any) {
+          recipientEntry.emailResult = 'error'
+          recipientEntry.emailSkipReason = err?.message ?? String(err)
+          console.error(`${tag} email error for ${user.email}:`, err)
         }
       }
-    })(),
-  ]).catch(err => console.error('Notification error:', err))
+
+      // WhatsApp
+      if (!user.notifyTaskWhatsapp) {
+        recipientEntry.whatsappSkipReason = 'notifyTaskWhatsapp=false'
+      } else if (!user.phone) {
+        recipientEntry.whatsappSkipReason = 'no phone number'
+      } else if (!result.serviceStatus.whatsappConfigured) {
+        recipientEntry.whatsappSkipReason = 'Twilio not configured'
+      } else {
+        const lines = [
+          `${action === 'created' ? '📋 Nueva tarea asignada' : '👤 Tarea asignada'}: *${task.title}*`,
+          task.description ? task.description : null,
+          dueDateFormatted ? `📅 Vence: ${dueDateFormatted}` : null,
+          objectLabel ? `🔗 ${objectLabel}: ${objectUrl ?? ''}` : null,
+          `Ver tarea: ${taskUrl}`,
+        ].filter(Boolean)
+        try {
+          await sendWhatsAppMessage({ to: user.phone, message: lines.join('\n') })
+          recipientEntry.whatsappResult = 'sent'
+          console.log(`${tag} WhatsApp sent to ${user.phone}`)
+        } catch (err: any) {
+          recipientEntry.whatsappResult = 'error'
+          recipientEntry.whatsappSkipReason = err?.message ?? String(err)
+          console.error(`${tag} WhatsApp error for ${user.phone}:`, err)
+        }
+      }
+
+      result.recipients.push(recipientEntry)
+
+      // Log notification record
+      const channels: string[] = []
+      if (recipientEntry.emailResult === 'sent') channels.push('email')
+      if (recipientEntry.whatsappResult === 'sent') channels.push('whatsapp')
+      if (channels.length > 0) {
+        await prisma.notification.create({
+          data: {
+            tenantId,
+            recipientType: 'USER',
+            recipientId: user.id,
+            channel: channels.join(','),
+            templateKey: `collab_task_${action}`,
+            payload: { taskId: task.id, taskTitle: task.title },
+            status: 'sent',
+            sentAt: new Date(),
+          },
+        }).catch(err => console.error(`${tag} notification log error:`, err))
+      }
+    }
+
+    console.log(`${tag} done — result=${JSON.stringify({ recipientCount: result.recipientCount, recipients: result.recipients.map(r => ({ name: r.name, emailResult: r.emailResult, emailSkipReason: r.emailSkipReason, whatsappResult: r.whatsappResult, whatsappSkipReason: r.whatsappSkipReason })) })}`)
+  } catch (err) {
+    console.error(`${tag} unhandled error:`, err)
+    throw err
+  }
+
+  return result
+}
+
+/**
+ * Admin endpoint: test the notification for a specific task synchronously.
+ * Returns the full diagnostic result without side-effects.
+ */
+export async function testTaskNotification(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { taskId } = req.params
+    const task = await prisma.collabTask.findFirst({
+      where: { id: taskId, tenantId: req.user!.tenantId },
+      include: COLLAB_TASK_INCLUDE,
+    })
+    if (!task) throw new AppError(404, 'NOT_FOUND', 'Tarea no encontrada')
+
+    const result = await notifyCollabTask('created', task, req.user!.tenantId)
+    res.json({ success: true, data: result })
+  } catch (err) {
+    next(err)
+  }
 }
 
 /**
@@ -404,8 +504,8 @@ export async function createCollabTask(req: Request, res: Response, next: NextFu
       departmentCount: validated.departmentIds.length,
     }, req?.ip)
 
-    // Notify
-    await notifyCollabTask('created', fullTask, tenantId)
+    // Notify (fire-and-forget — don't block the HTTP response)
+    notifyCollabTask('created', fullTask, tenantId).catch(err => console.error('[createCollabTask] notification error:', err))
 
     res.status(201).json({ success: true, data: fullTask })
   } catch (err) {
@@ -532,9 +632,9 @@ export async function updateCollabTask(req: Request, res: Response, next: NextFu
     // Audit
     await auditService.log(tenantId, userId, 'CollabTask', taskId, 'UPDATE', existingTask, updatedTask, req?.ip)
 
-    // Notify if assignees changed
+    // Notify if assignees changed (fire-and-forget — don't block the HTTP response)
     if (assigneeIds !== undefined && assigneeIds.length > 0) {
-      await notifyCollabTask('assigned', fullTask, tenantId)
+      notifyCollabTask('assigned', fullTask, tenantId).catch(err => console.error('[updateCollabTask] notification error:', err))
     }
 
     res.json({ success: true, data: fullTask })
