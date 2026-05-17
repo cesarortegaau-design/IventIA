@@ -150,6 +150,7 @@ export default function PurchaseOrderDetailPage() {
       setTriggerModalOpen(false)
       queryClient.invalidateQueries({ queryKey: ['purchaseOrder', id] })
       queryClient.invalidateQueries({ queryKey: ['purchaseOrders'] })
+      queryClient.invalidateQueries({ queryKey: ['approval-active', 'PURCHASE_ORDER', id] })
     } finally {
       setTriggering(false)
     }

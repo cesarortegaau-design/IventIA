@@ -498,6 +498,7 @@ export default function EventDetailPage() {
       await approvalFlowsApi.triggerRequest({ flowId: selectedFlowId, objectType: 'EVENT', objectId: id! })
       setTriggerModalOpen(false)
       queryClient.invalidateQueries({ queryKey: ['event', id] })
+      queryClient.invalidateQueries({ queryKey: ['approval-active', 'EVENT', id] })
     } finally {
       setTriggering(false)
     }

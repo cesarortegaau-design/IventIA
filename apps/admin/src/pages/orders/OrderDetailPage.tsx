@@ -293,7 +293,8 @@ export default function OrderDetailPage() {
   }
 
   async function openTriggerModal() {
-    const flows = await approvalFlowsApi.list({ objectType: 'ORDER' })
+    const ot = order?.isBudgetOrder ? 'BUDGET_ORDER' : 'ORDER'
+    const flows = await approvalFlowsApi.list({ objectType: ot })
     setAvailableFlows(Array.isArray(flows) ? flows : [])
     setSelectedFlowId('')
     setTriggerModalOpen(true)
@@ -302,10 +303,12 @@ export default function OrderDetailPage() {
   async function handleTriggerFlow() {
     if (!selectedFlowId) return
     setTriggering(true)
+    const ot = order?.isBudgetOrder ? 'BUDGET_ORDER' : 'ORDER'
     try {
-      await approvalFlowsApi.triggerRequest({ flowId: selectedFlowId, objectType: 'ORDER', objectId: id! })
+      await approvalFlowsApi.triggerRequest({ flowId: selectedFlowId, objectType: ot, objectId: id! })
       setTriggerModalOpen(false)
       queryClient.invalidateQueries({ queryKey: ['order', id] })
+      queryClient.invalidateQueries({ queryKey: ['approval-active', ot, id] })
     } finally {
       setTriggering(false)
     }
@@ -670,7 +673,7 @@ export default function OrderDetailPage() {
       {/* Approval panel */}
       <div style={{ padding: '16px 24px 0' }}>
         <ApprovalPanel
-          objectType="ORDER"
+          objectType={order?.isBudgetOrder ? 'BUDGET_ORDER' : 'ORDER'}
           objectId={id!}
           onStatusChange={() => queryClient.invalidateQueries({ queryKey: ['order', id] })}
         />

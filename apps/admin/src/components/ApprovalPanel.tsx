@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Typography, Button, Space, Spin, Alert, Tag, Tooltip,
@@ -155,83 +156,84 @@ export default function ApprovalPanel({ objectType, objectId, onStatusChange }: 
         }
       `}</style>
 
-      {/* Floating window — fixed top-right, shows active approval state */}
-      {(() => {
-        const currentStep = steps.find((s: any) => s.order === currentStepOrder && s.status === 'PENDING')
-        const totalSteps = steps.length
-        return (
-          <div style={{
-            position: 'fixed',
-            top: 70,
-            right: 24,
-            zIndex: 1100,
-            background: '#fff',
-            border: '2px solid #faad14',
-            borderRadius: 10,
-            boxShadow: '0 6px 20px rgba(0,0,0,0.15)',
-            minWidth: 240,
-            maxWidth: 320,
-            overflow: 'hidden',
-            animation: 'approval-badge-pulse 2s infinite',
-          }}>
-            {/* Header strip */}
+      {/* Floating window — rendered via Portal to escape overflow:hidden parents */}
+      {createPortal(
+        (() => {
+          const currentStep = steps.find((s: any) => s.order === currentStepOrder && s.status === 'PENDING')
+          const totalSteps = steps.length
+          return (
             <div style={{
-              background: '#faad14',
-              padding: '7px 14px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 7,
+              position: 'fixed',
+              top: 70,
+              right: 24,
+              zIndex: 9999,
+              background: '#fff',
+              border: '2px solid #faad14',
+              borderRadius: 10,
+              boxShadow: '0 6px 24px rgba(0,0,0,0.18)',
+              minWidth: 250,
+              maxWidth: 330,
+              overflow: 'hidden',
+              animation: 'approval-badge-pulse 2s infinite',
+              pointerEvents: 'none',
             }}>
-              <ThunderboltOutlined style={{ color: '#fff', fontSize: 14 }} />
-              <span style={{ color: '#fff', fontWeight: 700, fontSize: 13 }}>
-                Aprobación en curso
-              </span>
-            </div>
-            {/* Body */}
-            <div style={{ padding: '10px 14px' }}>
-              {request.flow?.name && (
-                <div style={{ fontSize: 12, color: '#595959', marginBottom: 6, fontWeight: 600 }}>
-                  {request.flow.name}
-                </div>
-              )}
-              {currentStep ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  <div style={{ fontSize: 12, color: '#1890ff', fontWeight: 600 }}>
-                    Paso {currentStep.order + 1} de {totalSteps}: {currentStep.step?.name}
+              {/* Header strip */}
+              <div style={{
+                background: '#faad14',
+                padding: '8px 14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 7,
+              }}>
+                <ThunderboltOutlined style={{ color: '#fff', fontSize: 15 }} />
+                <span style={{ color: '#fff', fontWeight: 700, fontSize: 13, letterSpacing: 0.2 }}>
+                  Aprobación en curso
+                </span>
+              </div>
+              {/* Body */}
+              <div style={{ padding: '10px 14px 12px' }}>
+                {request.flow?.name && (
+                  <div style={{ fontSize: 12, color: '#595959', marginBottom: 6, fontWeight: 600 }}>
+                    {request.flow.name}
                   </div>
-                  {currentStep.step?.assigneeType && (
+                )}
+                {currentStep ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    <div style={{ fontSize: 12, color: '#1890ff', fontWeight: 700 }}>
+                      Paso {currentStep.order + 1} de {totalSteps}: {currentStep.step?.name}
+                    </div>
                     <div style={{ fontSize: 11, color: '#8c8c8c' }}>
                       Esperando revisión del responsable asignado
                     </div>
-                  )}
-                </div>
-              ) : (
-                <div style={{ fontSize: 12, color: '#8c8c8c' }}>Procesando…</div>
-              )}
-              {/* Mini step dots */}
-              {totalSteps > 1 && (
-                <div style={{ display: 'flex', gap: 5, marginTop: 8, alignItems: 'center' }}>
-                  {steps.map((s: any) => {
-                    const done = s.status === 'APPROVED'
-                    const active = s.order === currentStepOrder && s.status === 'PENDING'
-                    const rejected = s.status === 'REJECTED'
-                    return (
-                      <div key={s.id} title={`Paso ${s.order + 1}: ${s.step?.name}`} style={{
-                        width: active ? 12 : 8,
-                        height: active ? 12 : 8,
-                        borderRadius: '50%',
-                        background: done ? '#52c41a' : rejected ? '#ff4d4f' : active ? '#faad14' : '#d9d9d9',
-                        transition: 'all 0.2s',
-                        flexShrink: 0,
-                      }} />
-                    )
-                  })}
-                </div>
-              )}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, color: '#8c8c8c' }}>Procesando…</div>
+                )}
+                {totalSteps > 1 && (
+                  <div style={{ display: 'flex', gap: 5, marginTop: 9, alignItems: 'center' }}>
+                    {steps.map((s: any) => {
+                      const done = s.status === 'APPROVED'
+                      const active = s.order === currentStepOrder && s.status === 'PENDING'
+                      const rejected = s.status === 'REJECTED'
+                      return (
+                        <div key={s.id} title={`Paso ${s.order + 1}: ${s.step?.name}`} style={{
+                          width: active ? 12 : 8,
+                          height: active ? 12 : 8,
+                          borderRadius: '50%',
+                          background: done ? '#52c41a' : rejected ? '#ff4d4f' : active ? '#faad14' : '#d9d9d9',
+                          transition: 'all 0.2s',
+                          flexShrink: 0,
+                        }} />
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        )
-      })()}
+          )
+        })(),
+        document.body,
+      )}
 
       <Card
         style={{
