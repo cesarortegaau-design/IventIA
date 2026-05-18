@@ -324,35 +324,18 @@ La descripción debe ser clara, profesional y orientada al cliente expositor. So
 export async function searchResourceImages(req: Request, res: Response, next: NextFunction) {
   try {
     const { q } = req.query as { q?: string }
-    const key = env.UNSPLASH_ACCESS_KEY
-    console.error('[searchResourceImages] key present:', !!key, '| key length:', key?.length ?? 0, '| q:', q)
-    if (!key) return res.json({
-      data: [],
-      configured: false,
-      debug: {
-        reason: 'UNSPLASH_ACCESS_KEY not set in env',
-        envKeys: Object.keys(process.env).filter(k => k.includes('UNSPLASH')),
-        nodeEnv: process.env.NODE_ENV,
-      },
-    })
+    // Read from both sources: Zod-parsed env and raw process.env (covers Docker cache scenarios)
+    const key = env.UNSPLASH_ACCESS_KEY ?? process.env['UNSPLASH_ACCESS_KEY']
+    if (!key) return res.json({ data: [], configured: false })
     if (!q?.trim()) return res.json({ data: [], configured: true })
 
     const json = await new Promise<any>((resolve, reject) => {
       const qs = new URLSearchParams({ query: q, per_page: '12', orientation: 'landscape' }).toString()
-      const url = `https://api.unsplash.com/search/photos?${qs}`
-      console.log('[searchResourceImages] calling:', url)
-      https.get(url, { headers: { Authorization: `Client-ID ${key}` } }, (r) => {
-        console.log('[searchResourceImages] Unsplash status:', r.statusCode)
+      https.get(`https://api.unsplash.com/search/photos?${qs}`, { headers: { Authorization: `Client-ID ${key}` } }, (r) => {
         let body = ''
         r.on('data', (chunk) => { body += chunk })
-        r.on('end', () => {
-          console.log('[searchResourceImages] body preview:', body.slice(0, 200))
-          try { resolve(JSON.parse(body)) } catch (e) { reject(e) }
-        })
-      }).on('error', (e) => {
-        console.error('[searchResourceImages] https error:', e.message)
-        reject(e)
-      })
+        r.on('end', () => { try { resolve(JSON.parse(body)) } catch (e) { reject(e) } })
+      }).on('error', reject)
     })
 
     const results = (json.results ?? []).map((p: any) => ({
