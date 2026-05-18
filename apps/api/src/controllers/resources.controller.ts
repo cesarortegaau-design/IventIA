@@ -319,12 +319,18 @@ La descripción debe ser clara, profesional y orientada al cliente expositor. So
   }
 }
 
-// ─── Image search via Unsplash ─────────────────────────────────────────────────
+// ─── Search config — exposes Unsplash key so frontend can call Unsplash directly ─
+
+export async function getSearchConfig(req: Request, res: Response) {
+  const key = env.UNSPLASH_ACCESS_KEY ?? process.env['UNSPLASH_ACCESS_KEY'] ?? null
+  res.json({ unsplashKey: key })
+}
+
+// ─── Image search via Unsplash (kept as backend proxy fallback) ────────────────
 
 export async function searchResourceImages(req: Request, res: Response, next: NextFunction) {
   try {
     const { q } = req.query as { q?: string }
-    // Read from both sources: Zod-parsed env and raw process.env (covers Docker cache scenarios)
     const key = env.UNSPLASH_ACCESS_KEY ?? process.env['UNSPLASH_ACCESS_KEY']
     if (!key) return res.json({ data: [], configured: false })
     if (!q?.trim()) return res.json({ data: [], configured: true })

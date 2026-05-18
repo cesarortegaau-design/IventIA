@@ -121,19 +121,28 @@ function ImageSearchModal({
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
-  const [configured, setConfigured] = useState<boolean | null>(null)
+  const [unsplashKey, setUnsplashKey] = useState<string | null | undefined>(undefined)
   const [selected, setSelected] = useState<string | null>(null)
   const [pastedUrl, setPastedUrl] = useState('')
   const { message } = App.useApp()
 
+  // Fetch the Unsplash key from Render backend each time modal opens
+  if (open && unsplashKey === undefined) {
+    resourcesApi.getSearchConfig()
+      .then(cfg => setUnsplashKey(cfg.unsplashKey))
+      .catch(() => setUnsplashKey(null))
+  }
+
   async function handleSearch() {
-    if (!query.trim()) return
+    if (!query.trim() || !unsplashKey) return
     setLoading(true)
     try {
-      const res = await resourcesApi.searchImages(query)
-      setConfigured(res.configured)
-      if (!res.configured) { setResults([]); return }
-      setResults(res.data)
+      const qs = new URLSearchParams({ query: query.trim(), per_page: '12', orientation: 'landscape' }).toString()
+      const resp = await fetch(`https://api.unsplash.com/search/photos?${qs}`, {
+        headers: { Authorization: `Client-ID ${unsplashKey}` },
+      })
+      const json = await resp.json()
+      setResults(json.results ?? [])
     } catch {
       message.error('Error al buscar imágenes')
     } finally {
@@ -142,7 +151,7 @@ function ImageSearchModal({
   }
 
   function handleClose() {
-    setSelected(null); setPastedUrl(''); setResults([]); setQuery(''); setConfigured(null)
+    setSelected(null); setPastedUrl(''); setResults([]); setQuery(''); setUnsplashKey(undefined)
     onClose()
   }
 
@@ -186,17 +195,15 @@ function ImageSearchModal({
               onChange={e => setQuery(e.target.value)}
               onPressEnter={handleSearch}
             />
-            <Button type="primary" icon={<SearchOutlined />} onClick={handleSearch} loading={loading}>
+            <Button type="primary" icon={<SearchOutlined />} onClick={handleSearch}
+              loading={loading} disabled={!unsplashKey}>
               Buscar
             </Button>
           </Space.Compact>
 
-          {configured === false && (
-            <Alert
-              type="warning"
-              message="Agrega UNSPLASH_ACCESS_KEY en las variables de Render y redeploy. Por ahora usa la pestaña 'Pegar URL'."
-              showIcon style={{ marginBottom: 12 }}
-            />
+          {unsplashKey === null && (
+            <Alert type="warning" showIcon style={{ marginBottom: 12 }}
+              message="UNSPLASH_ACCESS_KEY no configurada en Render. Usa la pestaña 'Pegar URL'." />
           )}
 
           {loading && <div style={{ textAlign: 'center', padding: 32 }}><Spin /></div>}
@@ -207,21 +214,21 @@ function ImageSearchModal({
                 {results.map((img: any) => (
                   <div
                     key={img.id}
-                    onClick={() => setSelected(img.small)}
+                    onClick={() => setSelected(img.urls.small)}
                     style={{
                       borderRadius: 8, overflow: 'hidden', cursor: 'pointer',
-                      border: selected === img.small ? '2px solid #6B46C1' : '2px solid transparent',
+                      border: selected === img.urls.small ? '2px solid #6B46C1' : '2px solid transparent',
                       position: 'relative',
                     }}
                   >
-                    <img src={img.thumb} style={{ width: '100%', height: 80, objectFit: 'cover', display: 'block' }} />
-                    {selected === img.small && (
+                    <img src={img.urls.thumb} style={{ width: '100%', height: 80, objectFit: 'cover', display: 'block' }} />
+                    {selected === img.urls.small && (
                       <div style={{ position: 'absolute', top: 4, right: 4, background: '#6B46C1', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <CheckOutlined style={{ color: '#fff', fontSize: 11 }} />
                       </div>
                     )}
                     <div style={{ fontSize: 10, color: 'rgba(0,0,0,0.45)', padding: '2px 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {img.author}
+                      {img.user?.name}
                     </div>
                   </div>
                 ))}

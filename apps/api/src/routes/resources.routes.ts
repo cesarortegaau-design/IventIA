@@ -12,6 +12,7 @@ import {
   uploadResourceImage,
   deleteResourceImage,
   generateResourceDescription,
+  getSearchConfig,
   searchResourceImages,
   importResourceImageFromUrl,
   getPackageComponents,
@@ -41,6 +42,7 @@ router.get('/', requirePrivilege(PRIVILEGES.RESOURCE_VIEW), listResources)
 router.post('/', requirePrivilege(PRIVILEGES.RESOURCE_CREATE), createResource)
 router.get('/export-csv', requirePrivilege(PRIVILEGES.RESOURCE_VIEW), exportResourcesCsv)
 router.post('/import-csv', requirePrivilege(PRIVILEGES.RESOURCE_CREATE), importResourcesCsv)
+router.get('/search-config', requirePrivilege(PRIVILEGES.RESOURCE_VIEW), getSearchConfig)
 router.get('/search-images', requirePrivilege(PRIVILEGES.RESOURCE_VIEW), searchResourceImages)
 router.get('/:id', requirePrivilege(PRIVILEGES.RESOURCE_VIEW), getResource)
 router.put('/:id', requirePrivilege(PRIVILEGES.RESOURCE_EDIT), updateResource)

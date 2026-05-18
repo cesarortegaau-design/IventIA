@@ -39,11 +39,8 @@ export const resourcesApi = {
 
   generateDescription: (id: string) =>
     apiClient.post(`/resources/${id}/generate-description`).then(r => r.data.data as { description: string }),
-  searchImages: (q: string) =>
-    apiClient.get('/resources/search-images', { params: { q } }).then(r => r.data as {
-      data: Array<{ id: string; thumb: string; small: string; regular: string; author: string }>
-      configured: boolean
-    }),
+  getSearchConfig: () =>
+    apiClient.get('/resources/search-config').then(r => r.data as { unsplashKey: string | null }),
   importImageFromUrl: (id: string, slot: 'main' | 'desc' | 'extra', url: string) =>
     apiClient.post(`/resources/${id}/images/${slot}/import-url`, { url }).then(r => r.data),
 
