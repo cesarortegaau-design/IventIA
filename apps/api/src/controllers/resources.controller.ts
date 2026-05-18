@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express'
 import { z, ZodError } from 'zod'
 import { Decimal } from '@prisma/client/runtime/library'
 import { prisma } from '../config/database'
+import { env } from '../config/env'
 import { AppError } from '../middleware/errorHandler'
 import { uploadToCloudinary, deleteFromCloudinary } from '../lib/storage'
 import { auditService } from '../services/audit.service'
@@ -322,7 +323,7 @@ La descripción debe ser clara, profesional y orientada al cliente expositor. So
 export async function searchResourceImages(req: Request, res: Response, next: NextFunction) {
   try {
     const { q } = req.query as { q?: string }
-    const key = process.env.UNSPLASH_ACCESS_KEY
+    const key = env.UNSPLASH_ACCESS_KEY
     if (!key) return res.json({ data: [], configured: false })
     if (!q?.trim()) return res.json({ data: [], configured: true })
 
