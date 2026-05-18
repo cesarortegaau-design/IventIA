@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express'
 import { z, ZodError } from 'zod'
 import { Decimal } from '@prisma/client/runtime/library'
-import axios from 'axios'
+import https from 'https'
 import { prisma } from '../config/database'
 import { env } from '../config/env'
 import { AppError } from '../middleware/errorHandler'
@@ -328,9 +328,13 @@ export async function searchResourceImages(req: Request, res: Response, next: Ne
     if (!key) return res.json({ data: [], configured: false })
     if (!q?.trim()) return res.json({ data: [], configured: true })
 
-    const { data: json } = await axios.get('https://api.unsplash.com/search/photos', {
-      params: { query: q, per_page: 12, orientation: 'landscape' },
-      headers: { Authorization: `Client-ID ${key}` },
+    const json = await new Promise<any>((resolve, reject) => {
+      const qs = new URLSearchParams({ query: q, per_page: '12', orientation: 'landscape' }).toString()
+      https.get(`https://api.unsplash.com/search/photos?${qs}`, { headers: { Authorization: `Client-ID ${key}` } }, (r) => {
+        let body = ''
+        r.on('data', (chunk) => { body += chunk })
+        r.on('end', () => { try { resolve(JSON.parse(body)) } catch (e) { reject(e) } })
+      }).on('error', reject)
     })
 
     const results = (json.results ?? []).map((p: any) => ({
@@ -359,8 +363,13 @@ export async function importResourceImageFromUrl(req: Request, res: Response, ne
     const resource = await prisma.resource.findFirst({ where: { id, tenantId: req.user!.tenantId } })
     if (!resource) throw new AppError(404, 'RESOURCE_NOT_FOUND', 'Resource not found')
 
-    const imageResp = await axios.get(imageUrl, { responseType: 'arraybuffer' })
-    const buffer = Buffer.from(imageResp.data)
+    const buffer = await new Promise<Buffer>((resolve, reject) => {
+      const chunks: Buffer[] = []
+      https.get(imageUrl, (r) => {
+        r.on('data', (chunk) => chunks.push(Buffer.from(chunk)))
+        r.on('end', () => resolve(Buffer.concat(chunks)))
+      }).on('error', reject)
+    })
 
     const oldPath = (resource as any)[field] as string | null
     if (oldPath) await deleteFromCloudinary(oldPath).catch(() => {})
