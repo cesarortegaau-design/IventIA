@@ -18,6 +18,7 @@ const OBJECT_DATA_SCHEMAS: Record<string, object> = {
     subtotal: 'number — monto sin IVA en MXN',
     total: 'number — monto total con IVA en MXN',
     cliente: 'string — nombre o razón social del CLIENTE de la orden (no confundir con organización)',
+    clienteRfc: 'string|null — RFC / Tax ID del cliente de la orden. Vacío = null. Usar para condiciones como "RFC no vacío" o "RFC específico".',
     listaPrecios: 'string — nombre de la lista de precios aplicada',
     organizacion: 'string|null — descripción/nombre de la ORGANIZACIÓN a la que pertenece la orden (ej. "Expo Santa Fe"). Distinto del cliente.',
     organizacionClave: 'string|null — clave corta de la organización (ej. "EXPO-SF")',
@@ -32,6 +33,7 @@ const OBJECT_DATA_SCHEMAS: Record<string, object> = {
     subtotal: 'number — monto sin IVA en MXN',
     total: 'number — monto total con IVA en MXN',
     cliente: 'string — nombre o razón social del CLIENTE (no confundir con organización)',
+    clienteRfc: 'string|null — RFC / Tax ID del cliente. Vacío = null. Usar para condiciones como "RFC no vacío" o "RFC específico".',
     listaPrecios: 'string — nombre de la lista de precios aplicada',
     organizacion: 'string|null — descripción/nombre de la ORGANIZACIÓN (ej. "Expo Santa Fe"). Distinto del cliente.',
     organizacionClave: 'string|null — clave corta de la organización',
@@ -285,7 +287,11 @@ Regla "cliente es AFMF Asociación de Flag Football" → return objectData.clien
 Regla "cliente contiene AFMF" → return objectData.cliente.includes('AFMF');
 Regla "organización sea Expo Santa Fe" → return objectData.organizacion === 'Expo Santa Fe';
 Regla "campo de organización sea Expo Santa Fe" → return objectData.organizacion === 'Expo Santa Fe';
+Regla "RFC del cliente no sea vacío" → return !!objectData.clienteRfc;
+Regla "RFC no sea nulo" → return objectData.clienteRfc !== null && objectData.clienteRfc !== '';
+Regla "RFC del cliente sea XAXX010101000" → return objectData.clienteRfc === 'XAXX010101000';
 Regla "total mayor a 50000 y cliente sea AFMF y organización sea Expo Santa Fe" → return objectData.total > 50000 && objectData.cliente.includes('AFMF') && objectData.organizacion === 'Expo Santa Fe';
+Regla "total mayor a 50000 y organización sea Expo Santa Fe y RFC no vacío y cliente sea AFMF" → return objectData.total > 50000 && objectData.organizacion === 'Expo Santa Fe' && !!objectData.clienteRfc && objectData.cliente.includes('AFMF');
 Regla "proveedor activo" → return objectData.estado === 'ACTIVE';
 Regla "más de 5 items" → return objectData.cantidadItems > 5;`,
       }],
