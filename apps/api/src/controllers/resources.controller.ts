@@ -273,6 +273,104 @@ export async function deleteResourceImage(req: Request, res: Response, next: Nex
   }
 }
 
+// ─── AI: Generate portal description ──────────────────────────────────────────
+
+export async function generateResourceDescription(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params
+    const resource = await prisma.resource.findFirst({
+      where: { id, tenantId: req.user!.tenantId },
+      include: { department: { select: { name: true } } },
+    })
+    if (!resource) throw new AppError(404, 'RESOURCE_NOT_FOUND', 'Resource not found')
+
+    const Anthropic = (await import('@anthropic-ai/sdk')).default
+    const client = new Anthropic()
+
+    const typeLabels: Record<string, string> = {
+      CONSUMABLE: 'Consumible', CONCEPT: 'Concepto', EQUIPMENT: 'Equipo', SPACE: 'Espacio',
+      FURNITURE: 'Mobiliario', SERVICE: 'Servicio', DISCOUNT: 'Descuento',
+      TAX: 'Impuesto', PERSONAL: 'Personal', TICKET: 'Boleto',
+    }
+
+    const msg = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 300,
+      messages: [{
+        role: 'user',
+        content: `Eres un redactor de catálogos para una empresa de organización de eventos.
+Genera una descripción atractiva en español (2-3 oraciones, máx 250 caracteres) para el portal de expositores del siguiente recurso:
+
+Nombre: ${resource.name}
+Tipo: ${typeLabels[resource.type] ?? resource.type}
+Departamento: ${resource.department?.name ?? 'General'}
+Notas internas: ${resource.description ?? 'Sin notas'}
+
+La descripción debe ser clara, profesional y orientada al cliente expositor. Solo responde con la descripción, sin comillas ni texto adicional.`,
+      }],
+    })
+
+    const description = (msg.content[0] as any).text?.trim() ?? ''
+    res.json({ data: { description } })
+  } catch (err) {
+    next(err)
+  }
+}
+
+// ─── Image search via Unsplash ─────────────────────────────────────────────────
+
+export async function searchResourceImages(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { q } = req.query as { q?: string }
+    const key = process.env.UNSPLASH_ACCESS_KEY
+    if (!key) return res.json({ data: [], configured: false })
+    if (!q?.trim()) return res.json({ data: [], configured: true })
+
+    const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(q)}&per_page=12&orientation=landscape`
+    const resp = await fetch(url, { headers: { Authorization: `Client-ID ${key}` } })
+    const json = await resp.json() as any
+
+    const results = (json.results ?? []).map((p: any) => ({
+      id: p.id,
+      thumb: p.urls.thumb,
+      small: p.urls.small,
+      regular: p.urls.regular,
+      author: p.user?.name ?? '',
+    }))
+    res.json({ data: results, configured: true })
+  } catch (err) {
+    next(err)
+  }
+}
+
+// ─── Import image from URL → Cloudinary ───────────────────────────────────────
+
+export async function importResourceImageFromUrl(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id, slot } = req.params
+    const { url: imageUrl } = req.body as { url: string }
+    const field = SLOT_FIELDS[slot]
+    if (!field) throw new AppError(400, 'INVALID_SLOT', 'Slot must be main, desc or extra')
+    if (!imageUrl) throw new AppError(400, 'NO_URL', 'URL requerida')
+
+    const resource = await prisma.resource.findFirst({ where: { id, tenantId: req.user!.tenantId } })
+    if (!resource) throw new AppError(404, 'RESOURCE_NOT_FOUND', 'Resource not found')
+
+    const resp = await fetch(imageUrl)
+    if (!resp.ok) throw new AppError(400, 'FETCH_FAILED', 'No se pudo descargar la imagen')
+    const buffer = Buffer.from(await resp.arrayBuffer())
+
+    const oldPath = (resource as any)[field] as string | null
+    if (oldPath) await deleteFromCloudinary(oldPath).catch(() => {})
+
+    const { url: savedUrl } = await uploadToCloudinary(buffer, 'iventia/resources', 'image')
+    const updated = await prisma.resource.update({ where: { id }, data: { [field]: savedUrl } })
+    res.json({ success: true, data: updated })
+  } catch (err) {
+    next(err)
+  }
+}
+
 // ─── Package Components ────────────────────────────────────────────────────────
 
 export async function getPackageComponents(req: Request, res: Response, next: NextFunction) {

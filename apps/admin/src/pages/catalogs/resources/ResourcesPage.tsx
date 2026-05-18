@@ -3,17 +3,19 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Table, Button, Card, Select, Space, Tag, Modal, Form, Typography,
   Row, Col, App, Switch, Tabs, InputNumber, Upload, Image, Popconfirm, Input,
+  Drawer, Divider, Spin, Alert, Collapse,
 } from 'antd'
 import {
   PlusOutlined, EditOutlined, PoweroffOutlined, UploadOutlined,
   DeleteOutlined, DownloadOutlined, ImportOutlined, FileTextOutlined,
+  ThunderboltOutlined, SearchOutlined, CheckOutlined,
 } from '@ant-design/icons'
 import { resourcesApi } from '../../../api/resources'
 import { PackageComponentsManager } from './PackageComponentsManager'
 import { PageHeader, FilterBar } from '../../../components/ui'
 import { formatPercent } from '../../../utils/format'
 
-const { Text } = Typography
+const { Text, Title } = Typography
 
 const TYPE_LABELS: Record<string, string> = {
   CONSUMABLE: 'Consumible', CONCEPT: 'Concepto', EQUIPMENT: 'Equipo', SPACE: 'Espacio',
@@ -45,20 +47,17 @@ const apiUrl = import.meta.env.VITE_API_URL || ''
 const imgSrc = (path: string | null | undefined) =>
   path ? (path.startsWith('/uploads') ? `${apiUrl}${path}` : path) : undefined
 
-const IMAGE_SLOTS: { slot: 'main' | 'desc' | 'extra'; label: string; field: string }[] = [
-  { slot: 'main',  label: 'Imagen Principal',   field: 'imageMain' },
-  { slot: 'desc',  label: 'Imagen Descriptiva',  field: 'imageDesc' },
-  { slot: 'extra', label: 'Imagen Adicional',    field: 'imageExtra' },
-]
+// ─── Compact Image Slot (for desc/extra) ──────────────────────────────────────
 
-function ResourceImageSlot({
-  resourceId, slot, label, currentUrl, onDone,
+function CompactImageSlot({
+  resourceId, slot, label, currentUrl, onDone, onSearchClick,
 }: {
   resourceId: string
   slot: 'main' | 'desc' | 'extra'
   label: string
   currentUrl: string | null
   onDone: () => void
+  onSearchClick?: () => void
 }) {
   const { message } = App.useApp()
   const [uploading, setUploading] = useState(false)
@@ -73,7 +72,7 @@ function ResourceImageSlot({
     setUploading(true)
     try {
       await resourcesApi.uploadImage(resourceId, slot, file)
-      message.success('Imagen subida correctamente')
+      message.success('Imagen subida')
       onDone()
     } catch {
       message.error('Error al subir imagen')
@@ -84,41 +83,140 @@ function ResourceImageSlot({
   }
 
   return (
-    <div style={{ border: '1px solid #f0f0f0', borderRadius: 8, padding: 12, marginBottom: 16 }}>
-      <Text strong style={{ display: 'block', marginBottom: 8 }}>{label}</Text>
-      {currentUrl ? (
-        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-          <Image
-            src={imgSrc(currentUrl)}
-            width={120}
-            height={90}
-            style={{ objectFit: 'cover', borderRadius: 4 }}
-            fallback="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mN8z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg=="
-          />
-          <Space direction="vertical" size={4}>
-            <Upload beforeUpload={handleUpload} showUploadList={false} accept="image/*">
-              <Button size="small" icon={<UploadOutlined />} loading={uploading}>Reemplazar</Button>
-            </Upload>
-            <Popconfirm title="¿Eliminar imagen?" onConfirm={() => deleteMutation.mutate()}>
-              <Button size="small" danger icon={<DeleteOutlined />} loading={deleteMutation.isPending}>Eliminar</Button>
-            </Popconfirm>
-          </Space>
-        </div>
-      ) : (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
+      <div style={{ width: 56, height: 42, borderRadius: 6, overflow: 'hidden', background: '#f5f5f5', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {currentUrl
+          ? <img src={imgSrc(currentUrl)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          : <span style={{ fontSize: 18, opacity: 0.4 }}>🖼️</span>
+        }
+      </div>
+      <Text style={{ flex: 1, fontSize: 12, color: 'rgba(0,0,0,0.55)' }}>{label}</Text>
+      <Space size={4}>
         <Upload beforeUpload={handleUpload} showUploadList={false} accept="image/*">
-          <Button icon={<UploadOutlined />} loading={uploading}>Subir imagen</Button>
+          <Button size="small" icon={<UploadOutlined />} loading={uploading} type="text" />
         </Upload>
-      )}
+        {onSearchClick && (
+          <Button size="small" icon={<SearchOutlined />} type="text" onClick={onSearchClick} />
+        )}
+        {currentUrl && (
+          <Popconfirm title="¿Eliminar?" onConfirm={() => deleteMutation.mutate()}>
+            <Button size="small" danger icon={<DeleteOutlined />} type="text" loading={deleteMutation.isPending} />
+          </Popconfirm>
+        )}
+      </Space>
     </div>
   )
 }
+
+// ─── Image Search Modal ────────────────────────────────────────────────────────
+
+function ImageSearchModal({
+  open, onClose, onSelect,
+}: {
+  open: boolean
+  onClose: () => void
+  onSelect: (imageUrl: string) => void
+}) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const [notConfigured, setNotConfigured] = useState(false)
+  const [selected, setSelected] = useState<string | null>(null)
+  const { message } = App.useApp()
+
+  async function handleSearch() {
+    if (!query.trim()) return
+    setLoading(true)
+    try {
+      const res = await resourcesApi.searchImages(query)
+      if (!res.configured) { setNotConfigured(true); setResults([]); return }
+      setNotConfigured(false)
+      setResults(res.data)
+    } catch {
+      message.error('Error al buscar imágenes')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Modal
+      title="Buscar imagen"
+      open={open}
+      onCancel={onClose}
+      footer={null}
+      width={680}
+    >
+      <Space.Compact style={{ width: '100%', marginBottom: 16 }}>
+        <Input
+          placeholder="Ej: exposition booth, trade show, furniture..."
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onPressEnter={handleSearch}
+        />
+        <Button type="primary" icon={<SearchOutlined />} onClick={handleSearch} loading={loading}>
+          Buscar
+        </Button>
+      </Space.Compact>
+
+      {notConfigured && (
+        <Alert
+          type="warning"
+          message="Búsqueda de imágenes no configurada"
+          description="Agrega la variable UNSPLASH_ACCESS_KEY en Render para habilitar la búsqueda de imágenes de Unsplash."
+          showIcon
+        />
+      )}
+
+      {loading && <div style={{ textAlign: 'center', padding: 32 }}><Spin /></div>}
+
+      {!loading && results.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+          {results.map(img => (
+            <div
+              key={img.id}
+              onClick={() => setSelected(img.regular)}
+              style={{
+                borderRadius: 8,
+                overflow: 'hidden',
+                cursor: 'pointer',
+                border: selected === img.regular ? '2px solid #6B46C1' : '2px solid transparent',
+                position: 'relative',
+              }}
+            >
+              <img src={img.thumb} style={{ width: '100%', height: 80, objectFit: 'cover', display: 'block' }} />
+              {selected === img.regular && (
+                <div style={{ position: 'absolute', top: 4, right: 4, background: '#6B46C1', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <CheckOutlined style={{ color: '#fff', fontSize: 11 }} />
+                </div>
+              )}
+              <div style={{ fontSize: 10, color: 'rgba(0,0,0,0.45)', padding: '2px 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {img.author}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {selected && (
+        <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
+          <Button type="primary" onClick={() => { onSelect(selected); onClose(); setSelected(null) }}>
+            Usar esta imagen
+          </Button>
+        </div>
+      )}
+    </Modal>
+  )
+}
+
+// ─── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function ResourcesPage() {
   const [form] = Form.useForm()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
 
-  const [modalOpen, setModalOpen] = useState(false)
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingRecord, setEditingRecord] = useState<any>(null)
   const [filters, setFilters] = useState({ type: '', search: '', active: 'true' })
@@ -127,11 +225,14 @@ export default function ResourcesPage() {
   const [packageComponents, setPackageComponents] = useState<any[]>([])
   const [importing, setImporting] = useState(false)
   const importInputRef = useRef<HTMLInputElement>(null)
-
-  // Sidebar category selection: '' = all, or a type key
   const [sidebarType, setSidebarType] = useState('')
 
-  // CSV template columns (must match import format)
+  // AI & image search state
+  const [generatingDesc, setGeneratingDesc] = useState(false)
+  const [imageSearchOpen, setImageSearchOpen] = useState(false)
+  const [imageSearchSlot, setImageSearchSlot] = useState<'main' | 'desc' | 'extra'>('main')
+  const [importingImageUrl, setImportingImageUrl] = useState(false)
+
   const CSV_TEMPLATE_COLS = ['codigo','nombre','tipo','descripcion','unidad','factor','departamento','esPaquete','esSubstituto','stock','ubicacionStock','tiempoRecuperacion','areaSqm','capacidad','checarStock','verificarDuplicado','activo']
 
   function downloadTemplate() {
@@ -206,18 +307,14 @@ export default function ResourcesPage() {
     queryFn: () => resourcesApi.listDepartments(),
   })
 
-  // Derive counts per type for sidebar
   const allResources: any[] = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : []
   const deptList: any[] = Array.isArray(departments) ? departments : []
   const typeCounts = useMemo(() => {
     const counts: Record<string, number> = {}
-    allResources.forEach((r: any) => {
-      counts[r.type] = (counts[r.type] || 0) + 1
-    })
+    allResources.forEach((r: any) => { counts[r.type] = (counts[r.type] || 0) + 1 })
     return counts
   }, [allResources])
 
-  // Filter by sidebar selection (applied client-side on top of server filters)
   const displayResources = useMemo(() => {
     if (!sidebarType) return allResources
     return allResources.filter((r: any) => r.type === sidebarType)
@@ -241,7 +338,7 @@ export default function ResourcesPage() {
         setEditingRecord(res.data)
         setSelectedType(res.data.type)
         setIsPackage(res.data.isPackage)
-        message.success('Recurso creado. Ahora puedes agregar imágenes.')
+        message.success('Recurso creado. Ahora puedes agregar imágenes y descripción.')
       } else {
         setSelectedType(res.data.type)
         setIsPackage(res.data.isPackage)
@@ -267,13 +364,18 @@ export default function ResourcesPage() {
 
   const toggleMutation = useMutation({
     mutationFn: (id: string) => resourcesApi.toggle(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['resources'] }),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['resources'] })
+      if (editingRecord && res.data?.id === editingRecord.id) {
+        setEditingRecord(res.data)
+      }
+    },
   })
 
   function openCreate() {
     setEditingId(null); setEditingRecord(null); setSelectedType('')
     setIsPackage(false); setPackageComponents([])
-    form.resetFields(); setModalOpen(true)
+    form.resetFields(); setDrawerOpen(true)
   }
 
   function openEdit(record: any) {
@@ -287,7 +389,12 @@ export default function ResourcesPage() {
     } else {
       setPackageComponents([])
     }
-    setModalOpen(true)
+    setDrawerOpen(true)
+  }
+
+  function closeDrawer() {
+    setDrawerOpen(false); form.resetFields(); setEditingId(null)
+    setEditingRecord(null); setSelectedType(''); setIsPackage(false); setPackageComponents([])
   }
 
   function refreshEditingRecord() {
@@ -305,7 +412,34 @@ export default function ResourcesPage() {
     })
   }
 
-  // Margin helper
+  async function handleGenerateDescription() {
+    if (!editingId) { message.warning('Guarda el recurso primero'); return }
+    setGeneratingDesc(true)
+    try {
+      const res = await resourcesApi.generateDescription(editingId)
+      form.setFieldValue('portalDesc', res.description)
+      message.success('Descripción generada')
+    } catch {
+      message.error('Error al generar descripción')
+    } finally {
+      setGeneratingDesc(false)
+    }
+  }
+
+  async function handleSelectImage(imageUrl: string) {
+    if (!editingId) return
+    setImportingImageUrl(true)
+    try {
+      await resourcesApi.importImageFromUrl(editingId, imageSearchSlot, imageUrl)
+      message.success('Imagen guardada')
+      refreshEditingRecord()
+    } catch {
+      message.error('Error al guardar imagen')
+    } finally {
+      setImportingImageUrl(false)
+    }
+  }
+
   function calcMargin(r: any): { value: number | null; display: string; tone: 'success' | 'warning' | 'error' | 'muted' } {
     const cost = Number(r.cost ?? r.costPrice ?? 0)
     const price = Number(r.defaultPrice ?? r.basePrice ?? 0)
@@ -330,14 +464,11 @@ export default function ResourcesPage() {
           </div>,
     },
     {
-      title: 'Código',
-      dataIndex: 'code',
-      width: 100,
+      title: 'Código', dataIndex: 'code', width: 100,
       render: (v: string) => <span style={{ fontFamily: 'monospace', fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>{v}</span>,
     },
     {
-      title: 'Nombre',
-      dataIndex: 'name',
+      title: 'Nombre', dataIndex: 'name',
       render: (v: string, r: any) => (
         <div>
           <div style={{ fontWeight: 500, fontSize: 13 }}>
@@ -351,9 +482,7 @@ export default function ResourcesPage() {
       ),
     },
     {
-      title: 'Tipo',
-      dataIndex: 'type',
-      width: 160,
+      title: 'Tipo', dataIndex: 'type', width: 160,
       render: (v: string, r: any) => (
         <Space size={4} wrap>
           <Tag color={TYPE_COLORS[v]} style={{ fontSize: 11, margin: 0 }}>{TYPE_LABELS[v]}</Tag>
@@ -362,36 +491,25 @@ export default function ResourcesPage() {
       ),
     },
     {
-      title: 'Stock',
-      dataIndex: 'stock',
-      width: 70,
-      align: 'center' as const,
+      title: 'Stock', dataIndex: 'stock', width: 70, align: 'center' as const,
       render: (v: number | null, r: any) => {
         if (r.type === 'SERVICE') return <Text type="secondary" style={{ fontSize: 12 }}>—</Text>
         return <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>{v ?? 0}</span>
       },
     },
     {
-      title: 'Margen',
-      key: 'margin',
-      width: 80,
-      align: 'center' as const,
+      title: 'Margen', key: 'margin', width: 80, align: 'center' as const,
       render: (_: any, r: any) => {
         const m = calcMargin(r)
         return <span style={{ fontSize: 12, fontWeight: 500, color: marginColor[m.tone] }}>{m.display}</span>
       },
     },
     {
-      title: 'Estado',
-      dataIndex: 'isActive',
-      width: 90,
+      title: 'Estado', dataIndex: 'isActive', width: 90,
       render: (v: boolean) => <Tag color={v ? 'success' : 'default'}>{v ? 'Activo' : 'Inactivo'}</Tag>,
     },
     {
-      title: '',
-      key: 'actions',
-      width: 72,
-      fixed: 'right' as const,
+      title: '', key: 'actions', width: 72, fixed: 'right' as const,
       render: (_: any, r: any) => (
         <Space size={4}>
           <Button size="small" type="text" icon={<EditOutlined />} onClick={() => openEdit(r)} />
@@ -401,114 +519,10 @@ export default function ResourcesPage() {
     },
   ]
 
-  // Modal tabs (unchanged logic, just render)
-  const modalTabs = [
-    {
-      key: '1', label: 'Datos Generales',
-      children: (
-        <Row gutter={16}>
-          <Col span={12}>
-            <Form.Item name="type" label="Tipo de Recurso" rules={[{ required: true }]}>
-              <Select options={Object.entries(TYPE_LABELS).map(([value, label]) => ({ value, label }))} onChange={setSelectedType} />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item name="code" label="Código" rules={[{ required: true }]}><Input /></Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item name="name" label="Nombre" rules={[{ required: true }]}><Input /></Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item name="departmentId" label="Departamento">
-              <Select allowClear placeholder="Seleccionar departamento" showSearch optionFilterProp="label"
-                options={deptList.filter((d: any) => d.isActive).map((d: any) => ({ value: d.id, label: d.name }))} />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item name="unit" label="Unidad">
-              <Select allowClear placeholder="Seleccionar unidad" options={UNIT_OPTIONS} />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item name="factor" label="Factor" initialValue={1}>
-              <InputNumber min={0.001} step={0.01} style={{ width: '100%' }} precision={2} />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item name="portalVisible" label="Visible en Portal" valuePropName="checked"><Switch /></Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item name="isPackage" label="¿Es Paquete?" valuePropName="checked">
-              <Switch onChange={setIsPackage} />
-            </Form.Item>
-          </Col>
-          {isPackage && (
-            <Col span={12}>
-              <Form.Item name="isSubstitute" label="¿Componentes Sustitutos?" valuePropName="checked"><Switch /></Form.Item>
-            </Col>
-          )}
-          <Col span={24}>
-            <Form.Item name="description" label="Notas"><Input.TextArea rows={2} /></Form.Item>
-          </Col>
-        </Row>
-      ),
-    },
-    {
-      key: '2', label: 'Inventario',
-      children: (
-        <Row gutter={16}>
-          <Col span={8}><Form.Item name="stock" label="Stock"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
-          <Col span={16}><Form.Item name="stockLocation" label="Ubicación de Stock"><Input /></Form.Item></Col>
-          <Col span={8}><Form.Item name="recoveryTime" label="Tiempo de Recuperación (hrs)"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
-          <Col span={8}><Form.Item name="areaSqm" label="Metros Cuadrados"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
-          <Col span={8}><Form.Item name="capacity" label="Capacidad"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
-          <Col span={12}><Form.Item name="checkStock" label="Checar Stock" valuePropName="checked"><Switch /></Form.Item></Col>
-          <Col span={12}>
-            <Form.Item name="checkDuplicate" label="Verificar duplicado en Orden" valuePropName="checked"
-              tooltip="Si está activo, no se podrá agregar este recurso más de una vez en una OS">
-              <Switch />
-            </Form.Item>
-          </Col>
-        </Row>
-      ),
-    },
-    {
-      key: '3', label: 'Portal',
-      children: (
-        <Form.Item name="portalDesc" label="Descripción para Portal">
-          <Input.TextArea rows={3} />
-        </Form.Item>
-      ),
-    },
-    {
-      key: '4', label: 'Imágenes',
-      children: editingId && editingRecord ? (
-        <div>
-          {IMAGE_SLOTS.map(({ slot, label, field }) => (
-            <ResourceImageSlot key={slot} resourceId={editingId} slot={slot} label={label} currentUrl={editingRecord[field] ?? null} onDone={refreshEditingRecord} />
-          ))}
-        </div>
-      ) : (
-        <div style={{ padding: 24, color: '#888', textAlign: 'center' }}>
-          Guarda el recurso primero para poder agregar imágenes.
-        </div>
-      ),
-    },
-    ...(isPackage && editingId && editingRecord
-      ? [{
-          key: '5', label: 'Componentes del Paquete',
-          children: (
-            <PackageComponentsManager
-              packageResourceId={editingId}
-              isSubstitute={editingRecord.isSubstitute}
-              components={packageComponents}
-              onComponentsChange={setPackageComponents}
-              allResources={allResources}
-            />
-          ),
-        }]
-      : []),
-  ]
+  // ── Drawer content sections ──────────────────────────────────────────────────
+  const drawerName = Form.useWatch('name', form) ?? editingRecord?.name ?? ''
+  const drawerType = Form.useWatch('type', form) ?? editingRecord?.type ?? selectedType
+  const watchIsPackage = Form.useWatch('isPackage', form) ?? isPackage
 
   return (
     <div style={{ minHeight: '100vh', background: '#fafafa' }}>
@@ -517,48 +531,27 @@ export default function ResourcesPage() {
         meta={`Productos, servicios y personal cotizables · ${data?.meta?.total ?? 0} totales`}
         actions={
           <>
-            <input
-              ref={importInputRef}
-              type="file"
-              accept=".csv"
-              style={{ display: 'none' }}
-              onChange={handleImportFile}
-            />
-            <Button icon={<FileTextOutlined />} onClick={downloadTemplate}>
-              Plantilla
-            </Button>
-            <Button icon={<ImportOutlined />} loading={importing} onClick={() => importInputRef.current?.click()}>
-              Importar
-            </Button>
-            <Button icon={<DownloadOutlined />} onClick={handleExportCsv}>
-              Exportar
-            </Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-              Nuevo recurso
-            </Button>
+            <input ref={importInputRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleImportFile} />
+            <Button icon={<FileTextOutlined />} onClick={downloadTemplate}>Plantilla</Button>
+            <Button icon={<ImportOutlined />} loading={importing} onClick={() => importInputRef.current?.click()}>Importar</Button>
+            <Button icon={<DownloadOutlined />} onClick={handleExportCsv}>Exportar</Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>Nuevo recurso</Button>
           </>
         }
       />
 
       {/* Split layout */}
       <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: 0, minHeight: 'calc(100vh - 120px)' }}>
-        {/* ── Left: Category sidebar ── */}
+        {/* Left sidebar */}
         <div style={{ borderRight: '1px solid #f0f0f0', background: '#fff', padding: 16 }}>
           <div style={{ fontSize: 11, color: 'rgba(0,0,0,0.45)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>
             Tipo de recurso
           </div>
-
-          {/* "Todas" option */}
           <div
             onClick={() => { setSidebarType(''); setFilters(f => ({ ...f, type: '' })) }}
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '6px 10px',
-              borderRadius: 6,
-              cursor: 'pointer',
-              marginBottom: 2,
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '6px 10px', borderRadius: 6, cursor: 'pointer', marginBottom: 2,
               background: sidebarType === '' ? '#f4eeff' : 'transparent',
               color: sidebarType === '' ? '#6B46C1' : 'rgba(0,0,0,0.88)',
               fontWeight: sidebarType === '' ? 600 : 400,
@@ -569,8 +562,6 @@ export default function ResourcesPage() {
               {allResources.length}
             </Tag>
           </div>
-
-          {/* Type options */}
           {Object.entries(TYPE_LABELS).map(([typeKey, typeLabel]) => {
             const count = typeCounts[typeKey] ?? 0
             const active = sidebarType === typeKey
@@ -579,13 +570,8 @@ export default function ResourcesPage() {
                 key={typeKey}
                 onClick={() => { setSidebarType(typeKey); setFilters(f => ({ ...f, type: typeKey })) }}
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '6px 10px',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  marginBottom: 2,
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '6px 10px', borderRadius: 6, cursor: 'pointer', marginBottom: 2,
                   background: active ? '#f4eeff' : 'transparent',
                   color: active ? '#6B46C1' : 'rgba(0,0,0,0.75)',
                   fontWeight: active ? 600 : 400,
@@ -594,21 +580,17 @@ export default function ResourcesPage() {
               >
                 <span style={{ fontSize: 14 }}>{TYPE_EMOJI[typeKey]}</span>
                 <span style={{ fontSize: 13, flex: 1 }}>{typeLabel}</span>
-                <Tag
-                  style={{
-                    fontSize: 11, lineHeight: '16px', padding: '0 5px', border: 'none',
-                    background: active ? '#e9d5ff' : '#f5f5f5',
-                    color: active ? '#6B46C1' : 'rgba(0,0,0,0.55)',
-                  }}
-                >
-                  {count}
-                </Tag>
+                <Tag style={{
+                  fontSize: 11, lineHeight: '16px', padding: '0 5px', border: 'none',
+                  background: active ? '#e9d5ff' : '#f5f5f5',
+                  color: active ? '#6B46C1' : 'rgba(0,0,0,0.55)',
+                }}>{count}</Tag>
               </div>
             )
           })}
         </div>
 
-        {/* ── Right: filter + table ── */}
+        {/* Table */}
         <div>
           <FilterBar
             search={filters.search}
@@ -618,8 +600,7 @@ export default function ResourcesPage() {
             <Select
               value={filters.type || undefined}
               onChange={v => setFilters(f => ({ ...f, type: v || '' }))}
-              allowClear
-              placeholder="Tipo"
+              allowClear placeholder="Tipo"
               options={Object.entries(TYPE_LABELS).map(([value, label]) => ({ value, label }))}
               style={{ width: 140 }}
             />
@@ -634,7 +615,6 @@ export default function ResourcesPage() {
               style={{ width: 120 }}
             />
           </FilterBar>
-
           <Table
             dataSource={displayResources}
             columns={columns}
@@ -643,41 +623,307 @@ export default function ResourcesPage() {
             size="middle"
             scroll={{ x: 900 }}
             pagination={{
-              pageSize: 25,
-              showSizeChanger: true,
-              total: displayResources.length,
-              showTotal: t => `${t} recursos`,
-              style: { padding: '12px 24px' },
+              pageSize: 25, showSizeChanger: true, total: displayResources.length,
+              showTotal: t => `${t} recursos`, style: { padding: '12px 24px' },
             }}
           />
         </div>
       </div>
 
-      {/* ── Modal (logic unchanged) ── */}
-      <Modal
-        title={editingId ? 'Editar Recurso' : 'Agregar Recurso'}
-        open={modalOpen}
-        onCancel={() => {
-          setModalOpen(false); form.resetFields(); setEditingId(null)
-          setEditingRecord(null); setSelectedType(''); setIsPackage(false); setPackageComponents([])
-        }}
-        onOk={() => form.submit()}
-        width={700}
-        confirmLoading={saveMutation.isPending}
-        okText={editingId ? 'Guardar' : 'Crear'}
+      {/* ── Drawer ── */}
+      <Drawer
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 18 }}>{TYPE_EMOJI[drawerType] ?? '📄'}</span>
+            <span style={{ fontWeight: 600, fontSize: 15, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {drawerName || (editingId ? 'Editar recurso' : 'Nuevo recurso')}
+            </span>
+            {editingRecord && (
+              <Tag color={editingRecord.isActive ? 'success' : 'default'} style={{ marginLeft: 4 }}>
+                {editingRecord.isActive ? 'Activo' : 'Inactivo'}
+              </Tag>
+            )}
+            {drawerType && <Tag color={TYPE_COLORS[drawerType]} style={{ marginLeft: 0 }}>{TYPE_LABELS[drawerType]}</Tag>}
+          </div>
+        }
+        open={drawerOpen}
+        onClose={closeDrawer}
+        width={520}
+        styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column', height: '100%' } }}
+        footer={
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button
+              type="primary"
+              block
+              loading={saveMutation.isPending}
+              onClick={() => form.submit()}
+              style={{ background: '#16a34a', borderColor: '#16a34a', fontWeight: 600, height: 40 }}
+            >
+              {editingId ? 'Guardar cambios' : 'Crear recurso'}
+            </Button>
+            {editingId && editingRecord && (
+              <Button
+                block
+                danger={editingRecord.isActive}
+                loading={toggleMutation.isPending}
+                onClick={() => toggleMutation.mutate(editingId)}
+                style={{ height: 40, maxWidth: 160 }}
+              >
+                {editingRecord.isActive ? 'Desactivar' : 'Activar'}
+              </Button>
+            )}
+          </div>
+        }
       >
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={saveMutation.mutate}
-          onFinishFailed={({ errorFields }) => {
-            const campos = errorFields.map(f => f.errors[0]).join(', ')
-            message.warning(`Campos con error: ${campos}`)
-          }}
-        >
-          <Tabs items={modalTabs} />
-        </Form>
-      </Modal>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+          <Form
+            form={form}
+            layout="vertical"
+            onFinish={saveMutation.mutate}
+            onFinishFailed={({ errorFields }) => {
+              const campos = errorFields.map(f => f.errors[0]).join(', ')
+              message.warning(`Campos con error: ${campos}`)
+            }}
+          >
+
+            {/* ── Descripción para Portal ── */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <Text style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(0,0,0,0.45)' }}>
+                  Descripción para Portal
+                </Text>
+                <Button
+                  size="small"
+                  icon={<ThunderboltOutlined />}
+                  loading={generatingDesc}
+                  onClick={handleGenerateDescription}
+                  style={{ fontSize: 12, color: '#6B46C1', borderColor: '#6B46C1' }}
+                >
+                  Generar con IA
+                </Button>
+              </div>
+              <Form.Item name="portalDesc" noStyle>
+                <Input.TextArea
+                  rows={3}
+                  placeholder="Descripción visible para los expositores en el portal..."
+                  style={{ borderRadius: 8, fontSize: 13 }}
+                />
+              </Form.Item>
+              <Form.Item name="portalVisible" valuePropName="checked" noStyle>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                  <Form.Item name="portalVisible" valuePropName="checked" noStyle>
+                    <Switch size="small" />
+                  </Form.Item>
+                  <Text style={{ fontSize: 12, color: 'rgba(0,0,0,0.55)' }}>Visible en el portal de expositores</Text>
+                </div>
+              </Form.Item>
+            </div>
+
+            <Divider style={{ margin: '0 0 20px' }} />
+
+            {/* ── Imagen Principal ── */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <Text style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(0,0,0,0.45)' }}>
+                  Imagen Principal
+                </Text>
+                {editingId && (
+                  <Space size={4}>
+                    <Upload
+                      beforeUpload={async (file) => {
+                        try {
+                          await resourcesApi.uploadImage(editingId, 'main', file)
+                          message.success('Imagen subida')
+                          refreshEditingRecord()
+                        } catch { message.error('Error al subir') }
+                        return false
+                      }}
+                      showUploadList={false} accept="image/*"
+                    >
+                      <Button size="small" icon={<UploadOutlined />}>Subir</Button>
+                    </Upload>
+                    <Button
+                      size="small"
+                      icon={<SearchOutlined />}
+                      loading={importingImageUrl}
+                      onClick={() => { setImageSearchSlot('main'); setImageSearchOpen(true) }}
+                    >
+                      Buscar
+                    </Button>
+                  </Space>
+                )}
+              </div>
+
+              {editingRecord?.imageMain ? (
+                <div style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', background: '#f5f5f5' }}>
+                  <img
+                    src={imgSrc(editingRecord.imageMain)}
+                    style={{ width: '100%', height: 180, objectFit: 'cover', display: 'block' }}
+                  />
+                  <Popconfirm title="¿Eliminar imagen principal?" onConfirm={async () => {
+                    await resourcesApi.deleteImage(editingId!, 'main')
+                    message.success('Imagen eliminada')
+                    refreshEditingRecord()
+                  }}>
+                    <Button
+                      size="small" danger icon={<DeleteOutlined />}
+                      style={{ position: 'absolute', top: 8, right: 8, opacity: 0.9 }}
+                    >
+                      Eliminar
+                    </Button>
+                  </Popconfirm>
+                </div>
+              ) : (
+                <div style={{
+                  height: 120, border: '1.5px dashed #d9d9d9', borderRadius: 10,
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  background: '#fafafa', color: 'rgba(0,0,0,0.35)', gap: 6, cursor: editingId ? 'pointer' : 'default',
+                }}>
+                  <span style={{ fontSize: 28 }}>🖼️</span>
+                  <Text style={{ fontSize: 12, color: 'rgba(0,0,0,0.35)' }}>
+                    {editingId ? 'Sube o busca una imagen para este recurso' : 'Guarda el recurso primero'}
+                  </Text>
+                </div>
+              )}
+
+              {/* Secondary images */}
+              {editingId && editingRecord && (
+                <div style={{ marginTop: 12 }}>
+                  <Text style={{ fontSize: 11, color: 'rgba(0,0,0,0.35)', display: 'block', marginBottom: 6 }}>
+                    Imágenes adicionales
+                  </Text>
+                  <CompactImageSlot
+                    resourceId={editingId} slot="desc" label="Imagen Descriptiva"
+                    currentUrl={editingRecord.imageDesc ?? null} onDone={refreshEditingRecord}
+                    onSearchClick={() => { setImageSearchSlot('desc'); setImageSearchOpen(true) }}
+                  />
+                  <CompactImageSlot
+                    resourceId={editingId} slot="extra" label="Imagen Adicional"
+                    currentUrl={editingRecord.imageExtra ?? null} onDone={refreshEditingRecord}
+                    onSearchClick={() => { setImageSearchSlot('extra'); setImageSearchOpen(true) }}
+                  />
+                </div>
+              )}
+            </div>
+
+            <Divider style={{ margin: '0 0 20px' }} />
+
+            {/* ── Datos Generales ── */}
+            <div style={{ marginBottom: 4 }}>
+              <Text style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(0,0,0,0.45)', display: 'block', marginBottom: 12 }}>
+                Datos Generales
+              </Text>
+              <Row gutter={12}>
+                <Col span={12}>
+                  <Form.Item name="type" label="Tipo" rules={[{ required: true }]}>
+                    <Select
+                      options={Object.entries(TYPE_LABELS).map(([value, label]) => ({ value, label }))}
+                      onChange={setSelectedType}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item name="code" label="Código" rules={[{ required: true }]}>
+                    <Input />
+                  </Form.Item>
+                </Col>
+                <Col span={24}>
+                  <Form.Item name="name" label="Nombre" rules={[{ required: true }]}>
+                    <Input />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item name="departmentId" label="Departamento">
+                    <Select allowClear placeholder="Seleccionar" showSearch optionFilterProp="label"
+                      options={deptList.filter((d: any) => d.isActive).map((d: any) => ({ value: d.id, label: d.name }))} />
+                  </Form.Item>
+                </Col>
+                <Col span={6}>
+                  <Form.Item name="unit" label="Unidad">
+                    <Select allowClear options={UNIT_OPTIONS} />
+                  </Form.Item>
+                </Col>
+                <Col span={6}>
+                  <Form.Item name="factor" label="Factor" initialValue={1}>
+                    <InputNumber min={0.001} step={0.01} style={{ width: '100%' }} precision={2} />
+                  </Form.Item>
+                </Col>
+                <Col span={24}>
+                  <Form.Item name="description" label="Notas internas">
+                    <Input.TextArea rows={2} />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item name="isPackage" label="¿Es Paquete?" valuePropName="checked">
+                    <Switch onChange={setIsPackage} />
+                  </Form.Item>
+                </Col>
+                {watchIsPackage && (
+                  <Col span={12}>
+                    <Form.Item name="isSubstitute" label="Componentes Sustitutos" valuePropName="checked">
+                      <Switch />
+                    </Form.Item>
+                  </Col>
+                )}
+              </Row>
+            </div>
+
+            <Divider style={{ margin: '4px 0 20px' }} />
+
+            {/* ── Inventario ── */}
+            <Collapse
+              ghost
+              items={[{
+                key: 'inv',
+                label: <Text style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(0,0,0,0.45)' }}>Inventario</Text>,
+                children: (
+                  <Row gutter={12}>
+                    <Col span={8}><Form.Item name="stock" label="Stock"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+                    <Col span={16}><Form.Item name="stockLocation" label="Ubicación"><Input /></Form.Item></Col>
+                    <Col span={8}><Form.Item name="recoveryTime" label="Recuperación (hrs)"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+                    <Col span={8}><Form.Item name="areaSqm" label="m²"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+                    <Col span={8}><Form.Item name="capacity" label="Capacidad"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+                    <Col span={12}><Form.Item name="checkStock" label="Checar Stock" valuePropName="checked"><Switch /></Form.Item></Col>
+                    <Col span={12}>
+                      <Form.Item name="checkDuplicate" label="Verificar duplicado en OS" valuePropName="checked"
+                        tooltip="No permite agregar este recurso más de una vez en una OS">
+                        <Switch />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+                ),
+              }]}
+            />
+
+            {/* ── Componentes del Paquete ── */}
+            {watchIsPackage && editingId && editingRecord && (
+              <>
+                <Divider style={{ margin: '4px 0 20px' }} />
+                <div>
+                  <Text style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(0,0,0,0.45)', display: 'block', marginBottom: 12 }}>
+                    Componentes del Paquete
+                  </Text>
+                  <PackageComponentsManager
+                    packageResourceId={editingId}
+                    isSubstitute={editingRecord.isSubstitute}
+                    components={packageComponents}
+                    onComponentsChange={setPackageComponents}
+                    allResources={allResources}
+                  />
+                </div>
+              </>
+            )}
+
+          </Form>
+        </div>
+      </Drawer>
+
+      {/* Image Search Modal */}
+      <ImageSearchModal
+        open={imageSearchOpen}
+        onClose={() => setImageSearchOpen(false)}
+        onSelect={handleSelectImage}
+      />
     </div>
   )
 }

@@ -11,6 +11,9 @@ import {
   toggleResourceActive,
   uploadResourceImage,
   deleteResourceImage,
+  generateResourceDescription,
+  searchResourceImages,
+  importResourceImageFromUrl,
   getPackageComponents,
   addPackageComponent,
   removePackageComponent,
@@ -38,11 +41,14 @@ router.get('/', requirePrivilege(PRIVILEGES.RESOURCE_VIEW), listResources)
 router.post('/', requirePrivilege(PRIVILEGES.RESOURCE_CREATE), createResource)
 router.get('/export-csv', requirePrivilege(PRIVILEGES.RESOURCE_VIEW), exportResourcesCsv)
 router.post('/import-csv', requirePrivilege(PRIVILEGES.RESOURCE_CREATE), importResourcesCsv)
+router.get('/search-images', requirePrivilege(PRIVILEGES.RESOURCE_VIEW), searchResourceImages)
 router.get('/:id', requirePrivilege(PRIVILEGES.RESOURCE_VIEW), getResource)
 router.put('/:id', requirePrivilege(PRIVILEGES.RESOURCE_EDIT), updateResource)
 router.patch('/:id/toggle', requirePrivilege(PRIVILEGES.RESOURCE_EDIT), toggleResourceActive)
 router.post('/:id/images/:slot', requirePrivilege(PRIVILEGES.RESOURCE_EDIT), upload.single('image'), uploadResourceImage)
 router.delete('/:id/images/:slot', requirePrivilege(PRIVILEGES.RESOURCE_EDIT), deleteResourceImage)
+router.post('/:id/images/:slot/import-url', requirePrivilege(PRIVILEGES.RESOURCE_EDIT), importResourceImageFromUrl)
+router.post('/:id/generate-description', requirePrivilege(PRIVILEGES.RESOURCE_EDIT), generateResourceDescription)
 
 // Package Components
 router.get('/:id/package-components', requirePrivilege(PRIVILEGES.RESOURCE_VIEW), getPackageComponents)
