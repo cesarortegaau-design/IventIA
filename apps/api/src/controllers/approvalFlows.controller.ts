@@ -6,66 +6,122 @@ import { auditService } from '../services/audit.service'
 import { notifyTaskById } from './collabTasks.controller'
 import { fetchObjectData } from '../services/approvalGate.service'
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Object data schemas — tell Claude which fields are available per type
-// ─────────────────────────────────────────────────────────────────────────────
-
-const OBJECT_DATA_SCHEMAS: Record<string, object> = {
+// ─── Base fields always present in objectData ────────────────────────────────
+const BASE_SCHEMAS: Record<string, Record<string, string>> = {
   ORDER: {
     numeroOrden: 'string — número de la orden',
     estado: 'string — QUOTED|CONFIRMED|EXECUTED|INVOICED|CANCELLED',
     esBudget: 'boolean — true si es orden de presupuesto',
     subtotal: 'number — monto sin IVA en MXN',
     total: 'number — monto total con IVA en MXN',
-    cliente: 'string — nombre o razón social del CLIENTE de la orden (no confundir con organización)',
-    clienteRfc: 'string|null — RFC / Tax ID del cliente de la orden. Vacío = null. Usar para condiciones como "RFC no vacío" o "RFC específico".',
-    listaPrecios: 'string — nombre de la lista de precios aplicada',
-    organizacion: 'string|null — descripción/nombre de la ORGANIZACIÓN a la que pertenece la orden (ej. "Expo Santa Fe"). Distinto del cliente.',
-    organizacionClave: 'string|null — clave corta de la organización (ej. "EXPO-SF")',
-    evento: 'string|null — nombre del evento al que pertenece la orden',
-    cantidadItems: 'number — número de líneas de la orden',
-    fechaCreacion: 'string — fecha YYYY-MM-DD de creación',
+    cliente: 'string — nombre/razón social del cliente',
+    listaPrecios: 'string — nombre de la lista de precios',
+    organizacion: 'string|null — nombre de la organización de la orden',
+    organizacionClave: 'string|null — clave de la organización',
+    evento: 'string|null — nombre del evento',
+    cantidadItems: 'number — número de líneas',
+    fechaCreacion: 'string — YYYY-MM-DD',
   },
   BUDGET_ORDER: {
-    numeroOrden: 'string — número de la orden de presupuesto',
+    numeroOrden: 'string',
     estado: 'string — QUOTED|CONFIRMED|EXECUTED|INVOICED|CANCELLED',
     esBudget: 'boolean — siempre true',
-    subtotal: 'number — monto sin IVA en MXN',
-    total: 'number — monto total con IVA en MXN',
-    cliente: 'string — nombre o razón social del CLIENTE (no confundir con organización)',
-    clienteRfc: 'string|null — RFC / Tax ID del cliente. Vacío = null. Usar para condiciones como "RFC no vacío" o "RFC específico".',
-    listaPrecios: 'string — nombre de la lista de precios aplicada',
-    organizacion: 'string|null — descripción/nombre de la ORGANIZACIÓN (ej. "Expo Santa Fe"). Distinto del cliente.',
-    organizacionClave: 'string|null — clave corta de la organización',
-    evento: 'string|null — nombre del evento al que pertenece la orden',
-    cantidadItems: 'number — número de líneas',
-    fechaCreacion: 'string — fecha YYYY-MM-DD de creación',
+    subtotal: 'number — MXN sin IVA',
+    total: 'number — MXN con IVA',
+    cliente: 'string — nombre/razón social del cliente',
+    listaPrecios: 'string',
+    organizacion: 'string|null',
+    organizacionClave: 'string|null',
+    evento: 'string|null',
+    cantidadItems: 'number',
+    fechaCreacion: 'string — YYYY-MM-DD',
   },
   EVENT: {
-    nombre: 'string',
-    estado: 'string (QUOTED|CONFIRMED|IN_EXECUTION|CLOSED|CANCELLED)',
-    inicio: 'string (YYYY-MM-DD)',
-    fin: 'string (YYYY-MM-DD)',
-    lugar: 'string',
+    nombre: 'string — nombre del evento',
+    estado: 'string — QUOTED|CONFIRMED|IN_EXECUTION|CLOSED|CANCELLED',
+    inicio: 'string — YYYY-MM-DD',
+    fin: 'string — YYYY-MM-DD',
+    lugar: 'string — ubicación/venue',
   },
   SUPPLIER: {
     nombre: 'string',
-    tipo: 'string (DISTRIBUTOR|MANUFACTURER|WHOLESALER|SERVICES)',
-    estado: 'string (ACTIVE|INACTIVE|BLOCKED)',
+    tipo: 'string — DISTRIBUTOR|MANUFACTURER|WHOLESALER|SERVICES',
+    estado: 'string — ACTIVE|INACTIVE|BLOCKED',
   },
   PURCHASE_ORDER: {
     numero: 'string',
-    estado: 'string (DRAFT|CONFIRMED|PARTIALLY_RECEIVED|RECEIVED|INVOICED|CANCELLED)',
-    subtotal: 'number (MXN)',
-    total: 'number (MXN)',
-    proveedor: 'string',
+    estado: 'string — DRAFT|CONFIRMED|PARTIALLY_RECEIVED|RECEIVED|INVOICED|CANCELLED',
+    subtotal: 'number — MXN',
+    total: 'number — MXN',
+    proveedor: 'string — nombre del proveedor',
   },
   COLLAB_TASK: {
     titulo: 'string',
-    estado: 'string (PENDING|IN_PROGRESS|ON_HOLD|DONE|CANCELLED)',
-    prioridad: 'string (LOW|MEDIUM|HIGH|CRITICAL)',
-    progreso: 'number (0-100)',
+    estado: 'string — PENDING|IN_PROGRESS|ON_HOLD|DONE|CANCELLED',
+    prioridad: 'string — LOW|MEDIUM|HIGH|CRITICAL',
+    progreso: 'number — 0-100',
   },
+}
+
+// ─── Available relations per object type — for dynamic field discovery ────────
+const RELATION_SCHEMAS: Record<string, Record<string, Record<string, string>>> = {
+  ORDER: {
+    client: {
+      rfc: 'string|null — RFC / Tax ID del cliente',
+      taxRegime: 'string|null — Régimen fiscal del cliente',
+      email: 'string|null — Email del cliente',
+      phone: 'string|null — Teléfono del cliente',
+      addressCity: 'string|null — Ciudad del cliente',
+      addressState: 'string|null — Estado del cliente',
+      personType: 'string — FISICA|MORAL — tipo de persona del cliente',
+    },
+    event: {
+      status: 'string — QUOTED|CONFIRMED|IN_EXECUTION|CLOSED|CANCELLED — estado del evento',
+    },
+    organizacion: {
+      descripcion: 'string|null — nombre completo de la organización',
+      clave: 'string|null — clave corta de la organización',
+    },
+    priceList: {
+      name: 'string — nombre de la lista de precios',
+    },
+  },
+  BUDGET_ORDER: {
+    client: {
+      rfc: 'string|null — RFC / Tax ID del cliente',
+      taxRegime: 'string|null — Régimen fiscal del cliente',
+      email: 'string|null — Email del cliente',
+      phone: 'string|null — Teléfono del cliente',
+      addressCity: 'string|null — Ciudad del cliente',
+      addressState: 'string|null — Estado del cliente',
+      personType: 'string — FISICA|MORAL',
+    },
+    event: {
+      status: 'string — estado del evento',
+    },
+    organizacion: {
+      descripcion: 'string|null',
+      clave: 'string|null',
+    },
+  },
+  PURCHASE_ORDER: {
+    supplier: {
+      type: 'string — DISTRIBUTOR|MANUFACTURER|WHOLESALER|SERVICES',
+      status: 'string — ACTIVE|INACTIVE|BLOCKED',
+    },
+  },
+  COLLAB_TASK: {
+    event: {
+      name: 'string — nombre del evento relacionado',
+      status: 'string — estado del evento',
+    },
+    client: {
+      companyName: 'string|null — razón social del cliente',
+      rfc: 'string|null — RFC del cliente',
+    },
+  },
+  EVENT: {},
+  SUPPLIER: {},
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -254,54 +310,71 @@ export async function compileRule(req: Request, res: Response, next: NextFunctio
     const apiKey = process.env.ANTHROPIC_API_KEY
     if (!apiKey) throw new AppError(503, 'AI_UNAVAILABLE', 'ANTHROPIC_API_KEY no configurado')
 
-    const schema = OBJECT_DATA_SCHEMAS[objectType] ?? {}
+    const baseSchema = BASE_SCHEMAS[objectType] ?? {}
+    const relationSchema = RELATION_SCHEMAS[objectType] ?? {}
 
     const client = new Anthropic({ apiKey })
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 500,
+      max_tokens: 800,
       messages: [{
         role: 'user',
-        content: `Convierte la siguiente regla de negocio a código JavaScript puro.
+        content: `Eres un compilador de reglas de negocio. Convierte la siguiente regla en código JavaScript.
 
 REGLA: "${ruleText}"
+TIPO DE OBJETO: ${objectType}
 
-El código es el CUERPO de una función que recibe el parámetro "objectData".
-Estructura disponible de objectData para el tipo "${objectType}":
-${JSON.stringify(schema, null, 2)}
+CAMPOS BASE (siempre disponibles en objectData):
+${JSON.stringify(baseSchema, null, 2)}
 
-INSTRUCCIONES CRÍTICAS:
-- Responde ÚNICAMENTE con el código JavaScript, sin markdown, sin comentarios, sin función wrapper
-- El código debe terminar con "return true;" o "return false;"
-- Usa solo operadores básicos: >, <, >=, <=, ===, !==, &&, ||, !
-- No uses fetch, require, import, eval ni acceso a variables globales
-- USA EXACTAMENTE los nombres de campo del schema anterior — no inventes nombres
-- Si la regla menciona múltiples condiciones (Y, O, etc.), inclúyelas TODAS en el código
-- DISTINCIÓN IMPORTANTE: "cliente" y "organización" son campos DIFERENTES:
-  * "cliente" → objectData.cliente (quién compra)
-  * "organización" / "campo de organización" → objectData.organizacion (estructura interna a la que pertenece la orden)
+RELACIONES DISPONIBLES (campos de objetos relacionados que puedes usar):
+${JSON.stringify(relationSchema, null, 2)}
 
-EJEMPLOS:
-Regla "monto total mayor a 50000" → return objectData.total > 50000;
-Regla "cliente es AFMF Asociación de Flag Football" → return objectData.cliente === 'AFMF Asociación de Flag Football de México';
-Regla "cliente contiene AFMF" → return objectData.cliente.includes('AFMF');
-Regla "organización sea Expo Santa Fe" → return objectData.organizacion === 'Expo Santa Fe';
-Regla "campo de organización sea Expo Santa Fe" → return objectData.organizacion === 'Expo Santa Fe';
-Regla "RFC del cliente no sea vacío" → return !!objectData.clienteRfc;
-Regla "RFC no sea nulo" → return objectData.clienteRfc !== null && objectData.clienteRfc !== '';
-Regla "RFC del cliente sea XAXX010101000" → return objectData.clienteRfc === 'XAXX010101000';
-Regla "total mayor a 50000 y cliente sea AFMF y organización sea Expo Santa Fe" → return objectData.total > 50000 && objectData.cliente.includes('AFMF') && objectData.organizacion === 'Expo Santa Fe';
-Regla "total mayor a 50000 y organización sea Expo Santa Fe y RFC no vacío y cliente sea AFMF" → return objectData.total > 50000 && objectData.organizacion === 'Expo Santa Fe' && !!objectData.clienteRfc && objectData.cliente.includes('AFMF');
-Regla "proveedor activo" → return objectData.estado === 'ACTIVE';
-Regla "más de 5 items" → return objectData.cantidadItems > 5;`,
+INSTRUCCIONES:
+- Para campos base: úsalos directamente como objectData.campo
+- Para campos de relaciones: asígnales un alias descriptivo (ej: "clienteRfc" para client.rfc) y úsalos como objectData.miAlias
+- Si un campo no existe en ninguna relación, márcalo con found:false y explica por qué en "note"
+- Incluye TODAS las condiciones de la regla
+- Usa solo: >, <, >=, <=, ===, !==, &&, ||, !, includes(), !!
+
+Responde ÚNICAMENTE con este JSON (sin markdown, sin texto extra):
+{
+  "ruleCode": "return <condición booleana completa>;",
+  "extraFields": [
+    {"alias": "nombreEnObjectData", "path": "relacion.campo", "found": true, "note": "descripción"},
+    {"alias": "campoInexistente", "path": "", "found": false, "note": "No existe este campo en ninguna relación disponible"}
+  ]
+}
+
+Si no hay campos extra, extraFields debe ser [].`,
       }],
     })
 
     const raw = response.content[0]?.type === 'text' ? response.content[0].text.trim() : ''
-    // Strip any accidental markdown fences
-    const ruleCode = raw.replace(/^```[\w]*\n?/, '').replace(/\n?```$/, '').trim() || 'return true;'
+    const cleaned = raw.replace(/^```[\w]*\n?/, '').replace(/\n?```$/, '').trim()
 
-    res.json({ success: true, data: { ruleCode } })
+    let ruleCode: string
+    let extraFields: Array<{ alias: string; path: string; found: boolean; note?: string }> = []
+
+    try {
+      const parsed = JSON.parse(cleaned)
+      ruleCode = parsed.ruleCode ?? 'return true;'
+      extraFields = Array.isArray(parsed.extraFields) ? parsed.extraFields : []
+    } catch {
+      // Fallback: treat the whole response as plain ruleCode
+      ruleCode = cleaned || 'return true;'
+    }
+
+    // Embed found extra fields as a comment at the top of ruleCode
+    const foundFields = extraFields.filter(f => f.found && f.path)
+    if (foundFields.length > 0) {
+      const comment = `// @extraFields: ${JSON.stringify(foundFields.map(f => ({ alias: f.alias, path: f.path })))}`
+      ruleCode = `${comment}\n${ruleCode}`
+    }
+
+    const unknownFields = extraFields.filter(f => !f.found)
+
+    res.json({ success: true, data: { ruleCode, extraFields, unknownFields } })
   } catch (err) {
     next(err)
   }
@@ -942,7 +1015,7 @@ export async function testRule(req: Request, res: Response, next: NextFunction) 
       throw new AppError(400, 'VALIDATION_ERROR', 'objectType, objectId y ruleCode son requeridos')
     }
 
-    const objectData = await fetchObjectData(objectType, objectId)
+    const objectData = await fetchObjectData(objectType, objectId, ruleCode)
     if (!objectData || Object.keys(objectData).length === 0) {
       throw new AppError(404, 'NOT_FOUND', 'Objeto no encontrado')
     }

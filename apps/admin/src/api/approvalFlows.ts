@@ -24,7 +24,12 @@ export const approvalFlowsApi = {
     apiClient.post(`/approval-flows/requests/${requestId}/cancel`).then(r => r.data.data),
 
   compileRule: (ruleText: string, objectType: string) =>
-    apiClient.post('/approval-flows/compile-rule', { ruleText, objectType }).then(r => r.data.data),
+    apiClient.post('/approval-flows/compile-rule', { ruleText, objectType })
+      .then(r => r.data.data as {
+        ruleCode: string;
+        extraFields: Array<{ alias: string; path: string; found: boolean; note?: string }>;
+        unknownFields: Array<{ alias: string; path: string; found: boolean; note?: string }>;
+      }),
 
   searchObjects: (objectType: string, q?: string) =>
     apiClient.get('/approval-flows/search-objects', { params: { objectType, q } })

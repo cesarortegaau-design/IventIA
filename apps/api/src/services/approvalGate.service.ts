@@ -23,10 +23,79 @@ function executeRuleCode(ruleCode: string, objectData: Record<string, any>): boo
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Extra field helpers — parse and fetch relation fields embedded in ruleCode
+// ─────────────────────────────────────────────────────────────────────────────
+
+function parseExtraFields(ruleCode: string): Array<{ alias: string; path: string }> {
+  const match = ruleCode.match(/^\/\/ @extraFields: (.+)$/m)
+  if (!match) return []
+  try { return JSON.parse(match[1]) } catch { return [] }
+}
+
+async function fetchExtraFields(
+  objectType: string,
+  objectId: string,
+  extraFields: Array<{ alias: string; path: string }>,
+): Promise<Record<string, any>> {
+  if (extraFields.length === 0) return {}
+
+  // Group fields by relation name
+  const byRelation: Record<string, string[]> = {}
+  for (const { path } of extraFields) {
+    const dot = path.indexOf('.')
+    if (dot < 0) continue
+    const relation = path.slice(0, dot)
+    const field = path.slice(dot + 1)
+    if (!byRelation[relation]) byRelation[relation] = []
+    if (!byRelation[relation].includes(field)) byRelation[relation].push(field)
+  }
+
+  if (Object.keys(byRelation).length === 0) return {}
+
+  // Build Prisma select
+  const select: Record<string, any> = {}
+  for (const [relation, fields] of Object.entries(byRelation)) {
+    select[relation] = { select: Object.fromEntries(fields.map(f => [f, true])) }
+  }
+
+  // Query the right model
+  let record: any = null
+  try {
+    if (objectType === 'ORDER' || objectType === 'BUDGET_ORDER') {
+      record = await prisma.order.findUnique({ where: { id: objectId }, select })
+    } else if (objectType === 'EVENT') {
+      record = await prisma.event.findUnique({ where: { id: objectId }, select })
+    } else if (objectType === 'SUPPLIER') {
+      record = await prisma.supplier.findUnique({ where: { id: objectId }, select })
+    } else if (objectType === 'PURCHASE_ORDER') {
+      record = await prisma.purchaseOrder.findUnique({ where: { id: objectId }, select })
+    } else if (objectType === 'COLLAB_TASK') {
+      record = await prisma.collabTask.findUnique({ where: { id: objectId }, select })
+    }
+  } catch (err) {
+    console.error('[fetchExtraFields] query error:', err)
+    return {}
+  }
+
+  if (!record) return {}
+
+  // Map results to aliases
+  const result: Record<string, any> = {}
+  for (const { alias, path } of extraFields) {
+    const dot = path.indexOf('.')
+    if (dot < 0) continue
+    const relation = path.slice(0, dot)
+    const field = path.slice(dot + 1)
+    result[alias] = record[relation]?.[field] ?? null
+  }
+  return result
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Object data fetchers — provide rich context to the AI evaluator
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function fetchObjectData(objectType: string, objectId: string): Promise<Record<string, any>> {
+export async function fetchObjectData(objectType: string, objectId: string, ruleCode?: string): Promise<Record<string, any>> {
   if (objectType === 'ORDER' || objectType === 'BUDGET_ORDER') {
     const order = await prisma.order.findUnique({
       where: { id: objectId },
@@ -45,7 +114,7 @@ export async function fetchObjectData(objectType: string, objectId: string): Pro
       },
     })
     if (!order) return {}
-    return {
+    const base = {
       numeroOrden: order.orderNumber,
       estado: order.status,
       esBudget: order.isBudgetOrder,
@@ -60,6 +129,8 @@ export async function fetchObjectData(objectType: string, objectId: string): Pro
       cantidadItems: order._count.lineItems,
       fechaCreacion: order.createdAt?.toISOString().slice(0, 10),
     }
+    const extra = await fetchExtraFields(objectType, objectId, parseExtraFields(ruleCode ?? ''))
+    return { ...base, ...extra }
   }
 
   if (objectType === 'EVENT') {
@@ -74,13 +145,15 @@ export async function fetchObjectData(objectType: string, objectId: string): Pro
       },
     })
     if (!event) return {}
-    return {
+    const base = {
       nombre: event.name,
       estado: event.status,
       inicio: event.eventStart?.toISOString().slice(0, 10),
       fin: event.eventEnd?.toISOString().slice(0, 10),
       lugar: event.venueLocation,
     }
+    const extra = await fetchExtraFields(objectType, objectId, parseExtraFields(ruleCode ?? ''))
+    return { ...base, ...extra }
   }
 
   if (objectType === 'SUPPLIER') {
@@ -89,7 +162,9 @@ export async function fetchObjectData(objectType: string, objectId: string): Pro
       select: { name: true, type: true, status: true },
     })
     if (!supplier) return {}
-    return { nombre: supplier.name, tipo: supplier.type, estado: supplier.status }
+    const base = { nombre: supplier.name, tipo: supplier.type, estado: supplier.status }
+    const extra = await fetchExtraFields(objectType, objectId, parseExtraFields(ruleCode ?? ''))
+    return { ...base, ...extra }
   }
 
   if (objectType === 'PURCHASE_ORDER') {
@@ -104,13 +179,31 @@ export async function fetchObjectData(objectType: string, objectId: string): Pro
       },
     })
     if (!po) return {}
-    return {
+    const base = {
       numero: po.poNumber,
       estado: po.status,
       subtotal: Number(po.subtotal),
       total: Number(po.total),
       proveedor: po.supplier?.name,
     }
+    const extra = await fetchExtraFields(objectType, objectId, parseExtraFields(ruleCode ?? ''))
+    return { ...base, ...extra }
+  }
+
+  if (objectType === 'COLLAB_TASK') {
+    const task = await prisma.collabTask.findUnique({
+      where: { id: objectId },
+      select: { title: true, status: true, priority: true, progress: true },
+    })
+    if (!task) return {}
+    const base = {
+      titulo: task.title,
+      estado: task.status,
+      prioridad: task.priority,
+      progreso: task.progress ?? 0,
+    }
+    const extra = await fetchExtraFields(objectType, objectId, parseExtraFields(ruleCode ?? ''))
+    return { ...base, ...extra }
   }
 
   return {}
@@ -152,7 +245,7 @@ export async function checkApprovalGate(
   if (!flow || !flow.blocksTransition) return { blocked: false, message: '' }
 
   // Fetch object data once — used for both minAmount and AI evaluation
-  const objectData = await fetchObjectData(objectType, objectId)
+  const objectData = await fetchObjectData(objectType, objectId, flow.ruleCode ?? undefined)
 
   // 1. Structured minAmount check (no AI needed)
   if (flow.minAmount !== null && (objectType === 'ORDER' || objectType === 'BUDGET_ORDER')) {

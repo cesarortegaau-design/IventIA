@@ -342,6 +342,10 @@ export default function ApprovalFlowsPage() {
   const [selectedTargetStatus, setSelectedTargetStatus] = useState<string | undefined>()
   const [ruleCode, setRuleCode] = useState<string | undefined>()
   const [compiling, setCompiling] = useState(false)
+  const [compilationMeta, setCompilationMeta] = useState<{
+    extraFields: Array<{ alias: string; path: string; found: boolean; note?: string }>;
+    unknownFields: Array<{ alias: string; path: string; found: boolean; note?: string }>;
+  } | null>(null)
   const [testObjectOptions, setTestObjectOptions] = useState<Array<{ id: string; label: string }>>([])
   const [testObjectSearching, setTestObjectSearching] = useState(false)
   const [testObjectId, setTestObjectId] = useState<string | undefined>()
@@ -455,6 +459,7 @@ export default function ApprovalFlowsPage() {
     setSelectedObjectType(undefined)
     setSelectedTargetStatus(undefined)
     setRuleCode(undefined)
+    setCompilationMeta(null)
     setTestObjectId(undefined)
     setTestObjectOptions([])
     setTestResult(null)
@@ -834,7 +839,12 @@ export default function ApprovalFlowsPage() {
                   try {
                     const result = await approvalFlowsApi.compileRule(ruleText, selectedObjectType)
                     setRuleCode(result.ruleCode)
-                    message.success('Regla compilada correctamente')
+                    setCompilationMeta({ extraFields: result.extraFields, unknownFields: result.unknownFields })
+                    if (result.unknownFields.length > 0) {
+                      message.warning(`Regla compilada con ${result.unknownFields.length} campo(s) no encontrado(s)`)
+                    } else {
+                      message.success('Regla compilada correctamente')
+                    }
                   } catch {
                     message.error('Error al compilar la regla')
                   } finally {
@@ -861,7 +871,7 @@ export default function ApprovalFlowsPage() {
                 </div>
                 <Input.TextArea
                   value={ruleCode}
-                  onChange={e => setRuleCode(e.target.value)}
+                  onChange={e => { setRuleCode(e.target.value); setCompilationMeta(null) }}
                   rows={3}
                   style={{
                     fontFamily: 'monospace',
@@ -875,6 +885,23 @@ export default function ApprovalFlowsPage() {
                 <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
                   Puedes editar este código directamente. Se ejecuta en cada cambio de estado — sin llamadas a IA.
                 </Text>
+                {compilationMeta && (compilationMeta.extraFields.length > 0 || compilationMeta.unknownFields.length > 0) && (
+                  <div style={{ marginTop: 10, padding: '10px 14px', background: '#f9f0ff', border: '1px solid #d3adf7', borderRadius: 6 }}>
+                    <Text style={{ fontSize: 12, fontWeight: 600, color: '#722ed1', display: 'block', marginBottom: 6 }}>
+                      Campos descubiertos automáticamente:
+                    </Text>
+                    {compilationMeta.extraFields.filter(f => f.found).map(f => (
+                      <div key={f.alias} style={{ fontSize: 12, color: '#389e0d', marginBottom: 2 }}>
+                        ✅ <code>{f.alias}</code> → <code>{f.path}</code>{f.note ? ` — ${f.note}` : ''}
+                      </div>
+                    ))}
+                    {compilationMeta.unknownFields.map(f => (
+                      <div key={f.alias} style={{ fontSize: 12, color: '#cf1322', marginBottom: 2 }}>
+                        ❌ <code>{f.alias}</code> — {f.note ?? 'Campo no encontrado en ninguna relación disponible'}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
