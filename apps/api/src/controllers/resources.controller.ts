@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express'
 import { z, ZodError } from 'zod'
 import { Decimal } from '@prisma/client/runtime/library'
+import axios from 'axios'
 import { prisma } from '../config/database'
 import { env } from '../config/env'
 import { AppError } from '../middleware/errorHandler'
@@ -327,9 +328,10 @@ export async function searchResourceImages(req: Request, res: Response, next: Ne
     if (!key) return res.json({ data: [], configured: false })
     if (!q?.trim()) return res.json({ data: [], configured: true })
 
-    const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(q)}&per_page=12&orientation=landscape`
-    const resp = await fetch(url, { headers: { Authorization: `Client-ID ${key}` } })
-    const json = await resp.json() as any
+    const { data: json } = await axios.get('https://api.unsplash.com/search/photos', {
+      params: { query: q, per_page: 12, orientation: 'landscape' },
+      headers: { Authorization: `Client-ID ${key}` },
+    })
 
     const results = (json.results ?? []).map((p: any) => ({
       id: p.id,
@@ -357,9 +359,8 @@ export async function importResourceImageFromUrl(req: Request, res: Response, ne
     const resource = await prisma.resource.findFirst({ where: { id, tenantId: req.user!.tenantId } })
     if (!resource) throw new AppError(404, 'RESOURCE_NOT_FOUND', 'Resource not found')
 
-    const resp = await fetch(imageUrl)
-    if (!resp.ok) throw new AppError(400, 'FETCH_FAILED', 'No se pudo descargar la imagen')
-    const buffer = Buffer.from(await resp.arrayBuffer())
+    const imageResp = await axios.get(imageUrl, { responseType: 'arraybuffer' })
+    const buffer = Buffer.from(imageResp.data)
 
     const oldPath = (resource as any)[field] as string | null
     if (oldPath) await deleteFromCloudinary(oldPath).catch(() => {})
