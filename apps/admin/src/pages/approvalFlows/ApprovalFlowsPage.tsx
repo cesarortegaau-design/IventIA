@@ -342,6 +342,11 @@ export default function ApprovalFlowsPage() {
   const [selectedTargetStatus, setSelectedTargetStatus] = useState<string | undefined>()
   const [ruleCode, setRuleCode] = useState<string | undefined>()
   const [compiling, setCompiling] = useState(false)
+  const [testObjectOptions, setTestObjectOptions] = useState<Array<{ id: string; label: string }>>([])
+  const [testObjectSearching, setTestObjectSearching] = useState(false)
+  const [testObjectId, setTestObjectId] = useState<string | undefined>()
+  const [testResult, setTestResult] = useState<{ result: boolean; objectData: Record<string, any>; error?: string } | null>(null)
+  const [testLoading, setTestLoading] = useState(false)
   const statusOptions = STATUS_OPTIONS_BY_TYPE[selectedObjectType ?? ''] ?? []
   const showMinAmount = autoTriggerOn && (selectedObjectType === 'ORDER' || selectedObjectType === 'BUDGET_ORDER')
 
@@ -450,6 +455,9 @@ export default function ApprovalFlowsPage() {
     setSelectedObjectType(undefined)
     setSelectedTargetStatus(undefined)
     setRuleCode(undefined)
+    setTestObjectId(undefined)
+    setTestObjectOptions([])
+    setTestResult(null)
     form.resetFields()
   }
 
@@ -870,6 +878,112 @@ export default function ApprovalFlowsPage() {
               </div>
             )}
           </div>
+
+          {/* ── Rule tester ─────────────────────────────────────────────── */}
+          {ruleCode && selectedObjectType && (
+            <div style={{
+              marginBottom: 20,
+              border: '1px dashed #722ed1',
+              borderRadius: 8,
+              padding: '14px 16px',
+              background: '#faf5ff',
+            }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: '#722ed1', marginBottom: 10 }}>
+                🧪 Probar regla con objeto real
+              </div>
+              <Select
+                showSearch
+                placeholder={`Buscar ${OBJECT_TYPE_LABELS[selectedObjectType] ?? selectedObjectType}…`}
+                value={testObjectId}
+                onChange={(val) => { setTestObjectId(val); setTestResult(null) }}
+                onSearch={async (q) => {
+                  setTestObjectSearching(true)
+                  try {
+                    const opts = await approvalFlowsApi.searchObjects(selectedObjectType, q)
+                    setTestObjectOptions(opts)
+                  } finally {
+                    setTestObjectSearching(false)
+                  }
+                }}
+                onFocus={async () => {
+                  if (testObjectOptions.length === 0) {
+                    setTestObjectSearching(true)
+                    try {
+                      const opts = await approvalFlowsApi.searchObjects(selectedObjectType)
+                      setTestObjectOptions(opts)
+                    } finally {
+                      setTestObjectSearching(false)
+                    }
+                  }
+                }}
+                options={testObjectOptions.map(o => ({ value: o.id, label: o.label }))}
+                filterOption={false}
+                loading={testObjectSearching}
+                style={{ width: '100%', marginBottom: 8 }}
+                allowClear
+                onClear={() => { setTestObjectId(undefined); setTestResult(null) }}
+              />
+              <Button
+                type="primary"
+                ghost
+                disabled={!testObjectId}
+                loading={testLoading}
+                onClick={async () => {
+                  if (!testObjectId || !ruleCode || !selectedObjectType) return
+                  setTestLoading(true)
+                  try {
+                    const res = await approvalFlowsApi.testRule(selectedObjectType, testObjectId, ruleCode)
+                    setTestResult(res)
+                  } catch {
+                    message.error('Error al evaluar la regla')
+                  } finally {
+                    setTestLoading(false)
+                  }
+                }}
+              >
+                Evaluar
+              </Button>
+
+              {testResult && (
+                <div style={{ marginTop: 12 }}>
+                  <Alert
+                    type={testResult.result ? 'success' : 'error'}
+                    showIcon
+                    message={
+                      testResult.result
+                        ? '✅ La regla SE CUMPLE — el flujo se activaría para este objeto'
+                        : '❌ La regla NO se cumple — el flujo no se activaría'
+                    }
+                  />
+                  {testResult.error && (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      message={`Error de ejecución: ${testResult.error}`}
+                      style={{ marginTop: 6 }}
+                    />
+                  )}
+                  <div style={{ marginTop: 10 }}>
+                    <Text style={{ fontSize: 11, color: '#722ed1', fontWeight: 600 }}>
+                      Datos del objeto evaluado:
+                    </Text>
+                    <pre style={{
+                      fontSize: 11,
+                      background: '#1e1e1e',
+                      color: '#d4d4d4',
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      marginTop: 4,
+                      overflow: 'auto',
+                      maxHeight: 180,
+                    }}>
+                      {JSON.stringify(testResult.objectData, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <Form.Item
             name="finalEffectsText"

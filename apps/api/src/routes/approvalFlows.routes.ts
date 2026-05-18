@@ -14,6 +14,8 @@ import {
   reviewStep,
   cancelRequest,
   compileRule,
+  testRule,
+  searchObjects,
 } from '../controllers/approvalFlows.controller'
 
 const router = Router()
@@ -22,6 +24,8 @@ router.use(authenticate)
 router.get('/', requirePrivilege(PRIVILEGES.APPROVAL_FLOW_VIEW), listFlows)
 router.post('/', requirePrivilege(PRIVILEGES.APPROVAL_FLOW_CREATE), createFlow)
 router.post('/compile-rule', requirePrivilege(PRIVILEGES.APPROVAL_FLOW_CREATE), compileRule)
+router.post('/test-rule', requirePrivilege(PRIVILEGES.APPROVAL_FLOW_CREATE), testRule)
+router.get('/search-objects', requirePrivilege(PRIVILEGES.APPROVAL_FLOW_VIEW), searchObjects)
 router.get('/requests', requirePrivilege(PRIVILEGES.APPROVAL_REQUEST_VIEW), listRequests)
 router.get('/requests/active', requirePrivilege(PRIVILEGES.APPROVAL_REQUEST_VIEW), getActiveRequest)
 router.post('/requests', requirePrivilege(PRIVILEGES.APPROVAL_REQUEST_TRIGGER), triggerRequest)

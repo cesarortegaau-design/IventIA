@@ -25,4 +25,12 @@ export const approvalFlowsApi = {
 
   compileRule: (ruleText: string, objectType: string) =>
     apiClient.post('/approval-flows/compile-rule', { ruleText, objectType }).then(r => r.data.data),
+
+  searchObjects: (objectType: string, q?: string) =>
+    apiClient.get('/approval-flows/search-objects', { params: { objectType, q } })
+      .then(r => r.data.data as Array<{ id: string; label: string }>),
+
+  testRule: (objectType: string, objectId: string, ruleCode: string) =>
+    apiClient.post('/approval-flows/test-rule', { objectType, objectId, ruleCode })
+      .then(r => r.data.data as { result: boolean; objectData: Record<string, any>; error?: string }),
 }

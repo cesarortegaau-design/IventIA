@@ -26,7 +26,7 @@ function executeRuleCode(ruleCode: string, objectData: Record<string, any>): boo
 // Object data fetchers — provide rich context to the AI evaluator
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function fetchObjectData(objectType: string, objectId: string): Promise<Record<string, any>> {
+export async function fetchObjectData(objectType: string, objectId: string): Promise<Record<string, any>> {
   if (objectType === 'ORDER' || objectType === 'BUDGET_ORDER') {
     const order = await prisma.order.findUnique({
       where: { id: objectId },

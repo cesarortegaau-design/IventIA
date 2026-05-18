@@ -4,6 +4,7 @@ import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { auditService } from '../services/audit.service'
 import { notifyTaskById } from './collabTasks.controller'
+import { fetchObjectData } from '../services/approvalGate.service'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Object data schemas — tell Claude which fields are available per type
@@ -919,6 +920,127 @@ export async function cancelRequest(req: Request, res: Response, next: NextFunct
     })
 
     res.json({ success: true, data: updated })
+  } catch (err) {
+    next(err)
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rule tester — evaluate compiled ruleCode against a real object
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function testRule(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { objectType, objectId, ruleCode } = req.body
+    if (!objectType || !objectId || !ruleCode) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'objectType, objectId y ruleCode son requeridos')
+    }
+
+    const objectData = await fetchObjectData(objectType, objectId)
+    if (!objectData || Object.keys(objectData).length === 0) {
+      throw new AppError(404, 'NOT_FOUND', 'Objeto no encontrado')
+    }
+
+    let result = false
+    let error: string | undefined
+    try {
+      // eslint-disable-next-line no-new-func
+      result = Boolean(new Function('objectData', ruleCode)(objectData))
+    } catch (e: any) {
+      error = e.message
+    }
+
+    res.json({ success: true, data: { result, objectData, error } })
+  } catch (err) {
+    next(err)
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Object search — return objects of a given type for the rule tester selector
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function searchObjects(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { objectType, q } = req.query as Record<string, string>
+    const tenantId = req.user!.tenantId
+    let results: Array<{ id: string; label: string }> = []
+
+    if (objectType === 'ORDER' || objectType === 'BUDGET_ORDER') {
+      const orders = await prisma.order.findMany({
+        where: {
+          tenantId,
+          isBudgetOrder: objectType === 'BUDGET_ORDER',
+          ...(q ? {
+            OR: [
+              { orderNumber: { contains: q, mode: 'insensitive' } },
+              { client: { companyName: { contains: q, mode: 'insensitive' } } },
+            ],
+          } : {}),
+        },
+        select: { id: true, orderNumber: true, client: { select: { companyName: true, firstName: true, lastName: true } } },
+        take: 20,
+        orderBy: { createdAt: 'desc' },
+      })
+      results = orders.map(o => ({
+        id: o.id,
+        label: `#${o.orderNumber} — ${o.client?.companyName ?? `${o.client?.firstName ?? ''} ${o.client?.lastName ?? ''}`.trim()}`,
+      }))
+    }
+
+    if (objectType === 'EVENT') {
+      const events = await prisma.event.findMany({
+        where: {
+          tenantId,
+          ...(q ? { name: { contains: q, mode: 'insensitive' } } : {}),
+        },
+        select: { id: true, name: true, code: true },
+        take: 20,
+        orderBy: { createdAt: 'desc' },
+      })
+      results = events.map(e => ({ id: e.id, label: `${e.name}${e.code ? ` (${e.code})` : ''}` }))
+    }
+
+    if (objectType === 'SUPPLIER') {
+      const suppliers = await prisma.supplier.findMany({
+        where: {
+          tenantId,
+          ...(q ? { name: { contains: q, mode: 'insensitive' } } : {}),
+        },
+        select: { id: true, name: true },
+        take: 20,
+        orderBy: { name: 'asc' },
+      })
+      results = suppliers.map(s => ({ id: s.id, label: s.name }))
+    }
+
+    if (objectType === 'PURCHASE_ORDER') {
+      const pos = await prisma.purchaseOrder.findMany({
+        where: {
+          tenantId,
+          ...(q ? { poNumber: { contains: q, mode: 'insensitive' } } : {}),
+        },
+        select: { id: true, poNumber: true, supplier: { select: { name: true } } },
+        take: 20,
+        orderBy: { createdAt: 'desc' },
+      })
+      results = pos.map(p => ({ id: p.id, label: `OC #${p.poNumber} — ${p.supplier?.name ?? ''}` }))
+    }
+
+    if (objectType === 'COLLAB_TASK') {
+      const tasks = await prisma.collabTask.findMany({
+        where: {
+          tenantId,
+          ...(q ? { title: { contains: q, mode: 'insensitive' } } : {}),
+        },
+        select: { id: true, title: true },
+        take: 20,
+        orderBy: { createdAt: 'desc' },
+      })
+      results = tasks.map(t => ({ id: t.id, label: t.title }))
+    }
+
+    res.json({ success: true, data: results })
   } catch (err) {
     next(err)
   }
