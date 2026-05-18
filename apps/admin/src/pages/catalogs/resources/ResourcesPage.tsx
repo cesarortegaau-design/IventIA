@@ -110,8 +110,6 @@ function CompactImageSlot({
 
 // ─── Image Search Modal ────────────────────────────────────────────────────────
 
-const UNSPLASH_KEY = (import.meta as any).env?.VITE_UNSPLASH_ACCESS_KEY as string | undefined
-
 function ImageSearchModal({
   open, onClose, onSelect,
 }: {
@@ -123,20 +121,19 @@ function ImageSearchModal({
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
+  const [configured, setConfigured] = useState<boolean | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [pastedUrl, setPastedUrl] = useState('')
   const { message } = App.useApp()
 
   async function handleSearch() {
-    if (!query.trim() || !UNSPLASH_KEY) return
+    if (!query.trim()) return
     setLoading(true)
     try {
-      const resp = await fetch(
-        `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=12&orientation=landscape`,
-        { headers: { Authorization: `Client-ID ${UNSPLASH_KEY}` } }
-      )
-      const json = await resp.json() as any
-      setResults(json.results ?? [])
+      const res = await resourcesApi.searchImages(query)
+      setConfigured(res.configured)
+      if (!res.configured) { setResults([]); return }
+      setResults(res.data)
     } catch {
       message.error('Error al buscar imágenes')
     } finally {
@@ -145,30 +142,17 @@ function ImageSearchModal({
   }
 
   function handleClose() {
-    setSelected(null); setPastedUrl(''); setResults([]); setQuery('')
+    setSelected(null); setPastedUrl(''); setResults([]); setQuery(''); setConfigured(null)
     onClose()
   }
 
   return (
-    <Modal
-      title="Imagen para el recurso"
-      open={open}
-      onCancel={handleClose}
-      footer={null}
-      width={680}
-    >
+    <Modal title="Imagen para el recurso" open={open} onCancel={handleClose} footer={null} width={680}>
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        <Button
-          type={tab === 'search' ? 'primary' : 'default'}
-          icon={<SearchOutlined />}
-          onClick={() => setTab('search')}
-        >
+        <Button type={tab === 'search' ? 'primary' : 'default'} icon={<SearchOutlined />} onClick={() => setTab('search')}>
           Buscar en Unsplash
         </Button>
-        <Button
-          type={tab === 'url' ? 'primary' : 'default'}
-          onClick={() => setTab('url')}
-        >
+        <Button type={tab === 'url' ? 'primary' : 'default'} onClick={() => setTab('url')}>
           Pegar URL
         </Button>
       </div>
@@ -193,16 +177,7 @@ function ImageSearchModal({
         </div>
       )}
 
-      {tab === 'search' && !UNSPLASH_KEY && (
-        <Alert
-          type="info"
-          message="Configura VITE_UNSPLASH_ACCESS_KEY en Vercel para habilitar la búsqueda, o usa 'Pegar URL'."
-          showIcon
-          style={{ marginBottom: 12 }}
-        />
-      )}
-
-      {tab === 'search' && UNSPLASH_KEY && (
+      {tab === 'search' && (
         <>
           <Space.Compact style={{ width: '100%', marginBottom: 16 }}>
             <Input
@@ -215,44 +190,51 @@ function ImageSearchModal({
               Buscar
             </Button>
           </Space.Compact>
-        </>
-      )}
 
-      {loading && <div style={{ textAlign: 'center', padding: 32 }}><Spin /></div>}
+          {configured === false && (
+            <Alert
+              type="warning"
+              message="Agrega UNSPLASH_ACCESS_KEY en las variables de Render y redeploy. Por ahora usa la pestaña 'Pegar URL'."
+              showIcon style={{ marginBottom: 12 }}
+            />
+          )}
 
-      {tab === 'search' && !loading && results.length > 0 && (
-        <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 12 }}>
-            {results.map((img: any) => (
-              <div
-                key={img.id}
-                onClick={() => setSelected(img.urls.regular)}
-                style={{
-                  borderRadius: 8, overflow: 'hidden', cursor: 'pointer',
-                  border: selected === img.urls.regular ? '2px solid #6B46C1' : '2px solid transparent',
-                  position: 'relative',
-                }}
-              >
-                <img src={img.urls.thumb} style={{ width: '100%', height: 80, objectFit: 'cover', display: 'block' }} />
-                {selected === img.urls.regular && (
-                  <div style={{ position: 'absolute', top: 4, right: 4, background: '#6B46C1', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <CheckOutlined style={{ color: '#fff', fontSize: 11 }} />
+          {loading && <div style={{ textAlign: 'center', padding: 32 }}><Spin /></div>}
+
+          {!loading && results.length > 0 && (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 12 }}>
+                {results.map((img: any) => (
+                  <div
+                    key={img.id}
+                    onClick={() => setSelected(img.small)}
+                    style={{
+                      borderRadius: 8, overflow: 'hidden', cursor: 'pointer',
+                      border: selected === img.small ? '2px solid #6B46C1' : '2px solid transparent',
+                      position: 'relative',
+                    }}
+                  >
+                    <img src={img.thumb} style={{ width: '100%', height: 80, objectFit: 'cover', display: 'block' }} />
+                    {selected === img.small && (
+                      <div style={{ position: 'absolute', top: 4, right: 4, background: '#6B46C1', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <CheckOutlined style={{ color: '#fff', fontSize: 11 }} />
+                      </div>
+                    )}
+                    <div style={{ fontSize: 10, color: 'rgba(0,0,0,0.45)', padding: '2px 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {img.author}
+                    </div>
                   </div>
-                )}
-                <div style={{ fontSize: 10, color: 'rgba(0,0,0,0.45)', padding: '2px 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {img.user?.name}
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
-          {selected && (
-            <Button type="primary" block onClick={() => { onSelect(selected); handleClose() }}>
-              Usar esta imagen
-            </Button>
+              {selected && (
+                <Button type="primary" block onClick={() => { onSelect(selected); handleClose() }}>
+                  Usar esta imagen
+                </Button>
+              )}
+            </>
           )}
         </>
       )}
-
     </Modal>
   )
 }
