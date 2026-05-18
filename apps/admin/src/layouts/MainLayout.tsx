@@ -404,13 +404,15 @@ export default function MainLayout() {
       )}
 
       {/* Notifications bell */}
-      <button style={{
-        width: 32, height: 32, border: 'none',
-        background: 'transparent', color: 'white',
-        borderRadius: 6, cursor: 'pointer',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        position: 'relative',
-      }}>
+      <button
+        onClick={() => navigate('/chat')}
+        style={{
+          width: 32, height: 32, border: 'none',
+          background: 'transparent', color: 'white',
+          borderRadius: 6, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          position: 'relative',
+        }}>
         <Badge count={bellCount} size="small" offset={[0, 0]}>
           <BellOutlined style={{ fontSize: 16, color: 'white' }} />
         </Badge>
