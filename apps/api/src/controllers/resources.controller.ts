@@ -325,16 +325,26 @@ export async function searchResourceImages(req: Request, res: Response, next: Ne
   try {
     const { q } = req.query as { q?: string }
     const key = env.UNSPLASH_ACCESS_KEY
-    if (!key) return res.json({ data: [], configured: false })
+    console.log('[searchResourceImages] key present:', !!key, '| key length:', key?.length ?? 0, '| q:', q)
+    if (!key) return res.json({ data: [], configured: false, debug: 'UNSPLASH_ACCESS_KEY not set in env' })
     if (!q?.trim()) return res.json({ data: [], configured: true })
 
     const json = await new Promise<any>((resolve, reject) => {
       const qs = new URLSearchParams({ query: q, per_page: '12', orientation: 'landscape' }).toString()
-      https.get(`https://api.unsplash.com/search/photos?${qs}`, { headers: { Authorization: `Client-ID ${key}` } }, (r) => {
+      const url = `https://api.unsplash.com/search/photos?${qs}`
+      console.log('[searchResourceImages] calling:', url)
+      https.get(url, { headers: { Authorization: `Client-ID ${key}` } }, (r) => {
+        console.log('[searchResourceImages] Unsplash status:', r.statusCode)
         let body = ''
         r.on('data', (chunk) => { body += chunk })
-        r.on('end', () => { try { resolve(JSON.parse(body)) } catch (e) { reject(e) } })
-      }).on('error', reject)
+        r.on('end', () => {
+          console.log('[searchResourceImages] body preview:', body.slice(0, 200))
+          try { resolve(JSON.parse(body)) } catch (e) { reject(e) }
+        })
+      }).on('error', (e) => {
+        console.error('[searchResourceImages] https error:', e.message)
+        reject(e)
+      })
     })
 
     const results = (json.results ?? []).map((p: any) => ({
