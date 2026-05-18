@@ -120,7 +120,7 @@ export async function getWhatsAppStatus(req: Request, res: Response, next: NextF
         configured: isConfigured,
         message: isConfigured
           ? 'WhatsApp is configured and ready to use'
-          : 'WhatsApp is not configured. Please set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_WHATSAPP_FROM',
+          : 'WhatsApp is not configured. Please set META_WA_ACCESS_TOKEN and META_WA_PHONE_NUMBER_ID',
       },
     })
   } catch (error) {

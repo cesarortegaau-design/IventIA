@@ -1,200 +1,105 @@
-import twilio from 'twilio'
 import { env } from '../config/env'
 import { AppError } from '../middleware/errorHandler'
 
-// Initialize Twilio client
-const client = env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN
-  ? twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN)
-  : null
+// Meta WhatsApp Business Cloud API
+// Docs: https://developers.facebook.com/docs/whatsapp/cloud-api/messages
+
+const META_API_BASE = 'https://graph.facebook.com/v19.0'
 
 export interface SendWhatsAppOptions {
-  to: string // Recipient phone number in E.164 format (e.g., +34123456789)
+  to: string     // E.164 format, e.g. +521234567890
   message: string
-  templateName?: string // For template-based messages
-  variables?: Record<string, string>
 }
 
 /**
- * Send a WhatsApp message via Twilio
+ * Send a plain-text WhatsApp message via Meta Cloud API.
+ * Returns the message ID on success.
  */
 export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise<string> {
-  if (!client || !env.TWILIO_WHATSAPP_FROM) {
-    console.warn('⚠️ WhatsApp not configured: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, or TWILIO_WHATSAPP_FROM missing')
+  if (!env.META_WA_ACCESS_TOKEN || !env.META_WA_PHONE_NUMBER_ID) {
+    console.warn('⚠️ WhatsApp not configured: META_WA_ACCESS_TOKEN or META_WA_PHONE_NUMBER_ID missing')
     return 'SKIPPED'
   }
 
-  try {
-    const message = await client.messages.create({
-      from: `whatsapp:${env.TWILIO_WHATSAPP_FROM}`,
-      to: `whatsapp:${options.to}`,
-      body: options.message,
-    })
-
-    console.log(`✓ WhatsApp sent to ${options.to}: ${message.sid}`)
-    return message.sid
-  } catch (error) {
-    console.error(`✗ Failed to send WhatsApp to ${options.to}:`, error)
-    throw new AppError(500, 'WHATSAPP_SEND_FAILED', 'Failed to send WhatsApp message')
-  }
-}
-
-/**
- * Order confirmation message
- */
-export async function sendOrderConfirmation(
-  phoneNumber: string,
-  orderData: { orderNumber: string; total: number; itemCount: number; estimatedDelivery?: string }
-) {
-  const message = `
-¡Hola! 👋
-
-Tu pedido *${orderData.orderNumber}* ha sido confirmado.
-
-📦 Resumen:
-• Artículos: ${orderData.itemCount}
-• Total: $${orderData.total.toFixed(2)}
-${orderData.estimatedDelivery ? `• Entrega estimada: ${orderData.estimatedDelivery}` : ''}
-
-Rastrearemos tu envío y te notificaremos cuando esté en camino.
-
-¡Gracias por tu compra! 🎨
-`.trim()
-
-  return sendWhatsAppMessage({ to: phoneNumber, message })
-}
-
-/**
- * Order status update message
- */
-export async function sendOrderStatusUpdate(
-  phoneNumber: string,
-  orderData: { orderNumber: string; status: string; trackingNumber?: string; estimatedDelivery?: string }
-) {
-  let statusEmoji = '📦'
-  let statusText = orderData.status
-
-  switch (orderData.status) {
-    case 'PAID':
-      statusEmoji = '✅'
-      statusText = 'Pagado'
-      break
-    case 'SHIPPED':
-      statusEmoji = '🚚'
-      statusText = 'En camino'
-      break
-    case 'DELIVERED':
-      statusEmoji = '🎉'
-      statusText = 'Entregado'
-      break
-    case 'CANCELLED':
-      statusEmoji = '❌'
-      statusText = 'Cancelado'
-      break
+  const url = `${META_API_BASE}/${env.META_WA_PHONE_NUMBER_ID}/messages`
+  const body = {
+    messaging_product: 'whatsapp',
+    to: options.to,
+    type: 'text',
+    text: { body: options.message },
   }
 
-  const message = `
-${statusEmoji} Actualización de tu pedido
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${env.META_WA_ACCESS_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
 
-Pedido: *${orderData.orderNumber}*
-Estado: *${statusText}*
-${orderData.trackingNumber ? `Rastreo: ${orderData.trackingNumber}` : ''}
-${orderData.estimatedDelivery ? `Entrega: ${orderData.estimatedDelivery}` : ''}
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}))
+    console.error(`✗ Meta WhatsApp error for ${options.to}:`, JSON.stringify(err))
+    throw new AppError(500, 'WHATSAPP_SEND_FAILED', (err as any)?.error?.message ?? 'Failed to send WhatsApp message')
+  }
 
-¡Gracias por tu paciencia! 🙌
-`.trim()
-
-  return sendWhatsAppMessage({ to: phoneNumber, message })
+  const data = await response.json() as any
+  const msgId: string = data?.messages?.[0]?.id ?? 'unknown'
+  console.log(`✓ WhatsApp sent to ${options.to}: ${msgId}`)
+  return msgId
 }
 
 /**
- * Class enrollment confirmation
+ * Send a document/media message via Meta Cloud API.
+ * Used for PDFs (tickets, etc.) accessible via a public URL.
  */
-export async function sendClassEnrollmentConfirmation(
-  phoneNumber: string,
-  classData: { className: string; instructor: string; dateTime: string; location: string; meetingLink?: string }
-) {
-  const message = `
-¡Bienvenido! 🎨
+export async function sendWhatsAppDocument(params: {
+  to: string
+  documentUrl: string
+  caption?: string
+  filename?: string
+}): Promise<string> {
+  if (!env.META_WA_ACCESS_TOKEN || !env.META_WA_PHONE_NUMBER_ID) {
+    console.warn('⚠️ WhatsApp not configured: cannot send document')
+    return 'SKIPPED'
+  }
 
-Te has inscrito exitosamente en:
-*${classData.className}*
+  const url = `${META_API_BASE}/${env.META_WA_PHONE_NUMBER_ID}/messages`
+  const body = {
+    messaging_product: 'whatsapp',
+    to: params.to,
+    type: 'document',
+    document: {
+      link: params.documentUrl,
+      ...(params.caption && { caption: params.caption }),
+      ...(params.filename && { filename: params.filename }),
+    },
+  }
 
-📋 Detalles:
-• Instructor: ${classData.instructor}
-• Fecha y hora: ${classData.dateTime}
-• Ubicación: ${classData.location}
-${classData.meetingLink ? `• Link: ${classData.meetingLink}` : ''}
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${env.META_WA_ACCESS_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
 
-¡Esperamos verte pronto!
-`.trim()
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}))
+    console.error(`✗ Meta WhatsApp document error for ${params.to}:`, JSON.stringify(err))
+    throw new AppError(500, 'WHATSAPP_SEND_FAILED', (err as any)?.error?.message ?? 'Failed to send WhatsApp document')
+  }
 
-  return sendWhatsAppMessage({ to: phoneNumber, message })
+  const data = await response.json() as any
+  const msgId: string = data?.messages?.[0]?.id ?? 'unknown'
+  console.log(`✓ WhatsApp document sent to ${params.to}: ${msgId}`)
+  return msgId
 }
 
 /**
- * Gallery location information and WhatsApp business link
- */
-export async function sendLocationInfo(
-  phoneNumber: string,
-  locationData: { name: string; address: string; phone?: string; whatsappPhone?: string; hours?: string }
-) {
-  const message = `
-🏛️ *${locationData.name}*
-
-📍 ${locationData.address}
-${locationData.hours ? `⏰ Horario: ${locationData.hours}` : ''}
-${locationData.phone ? `📱 Tel: ${locationData.phone}` : ''}
-
-¿Preguntas? Contáctanos directamente por WhatsApp para atención personalizada.
-
-¡Te esperamos! 🎨
-`.trim()
-
-  return sendWhatsAppMessage({ to: phoneNumber, message })
-}
-
-/**
- * Generic notification with CTA
- */
-export async function sendGenericNotification(
-  phoneNumber: string,
-  data: { title: string; message: string; actionUrl?: string; actionText?: string }
-) {
-  const message = `
-*${data.title}*
-
-${data.message}
-
-${data.actionUrl ? `👉 ${data.actionText || 'Ver más'}: ${data.actionUrl}` : ''}
-`.trim()
-
-  return sendWhatsAppMessage({ to: phoneNumber, message })
-}
-
-/**
- * Bulk send to multiple recipients
- */
-export async function sendBulkWhatsApp(
-  recipients: string[],
-  messageTemplate: (phone: string) => string
-) {
-  const results = await Promise.allSettled(
-    recipients.map((phone) =>
-      sendWhatsAppMessage({
-        to: phone,
-        message: messageTemplate(phone),
-      })
-    )
-  )
-
-  const successful = results.filter((r) => r.status === 'fulfilled').length
-  const failed = results.filter((r) => r.status === 'rejected').length
-
-  return { successful, failed, results }
-}
-
-/**
- * Ticket confirmation with PDF attachment
+ * Ticket confirmation — sends text + PDF document
  */
 export async function sendTicketWhatsApp(params: {
   to: string
@@ -203,25 +108,13 @@ export async function sendTicketWhatsApp(params: {
   eventDate: string
   pdfUrl: string
 }): Promise<string> {
-  if (!client || !env.TWILIO_WHATSAPP_FROM) {
-    console.warn('⚠️ WhatsApp not configured: cannot send ticket')
-    return 'SKIPPED'
-  }
-
-  try {
-    const message = await client.messages.create({
-      from: `whatsapp:${env.TWILIO_WHATSAPP_FROM}`,
-      to: `whatsapp:${params.to}`,
-      body: `🎟️ Hola ${params.buyerName}, aquí están tus boletos para *${params.eventName}* (${params.eventDate}). Presenta el QR en la entrada. 👇`,
-      mediaUrl: [params.pdfUrl],
-    })
-
-    console.log(`✓ Ticket WhatsApp sent to ${params.to}: ${message.sid}`)
-    return message.sid
-  } catch (error) {
-    console.error(`✗ Failed to send ticket WhatsApp to ${params.to}:`, error)
-    throw new AppError(500, 'WHATSAPP_SEND_FAILED', 'Failed to send ticket WhatsApp')
-  }
+  const caption = `🎟️ Hola ${params.buyerName}, aquí están tus boletos para *${params.eventName}* (${params.eventDate}). Presenta el QR en la entrada.`
+  return sendWhatsAppDocument({
+    to: params.to,
+    documentUrl: params.pdfUrl,
+    caption,
+    filename: `boletos-${params.eventName.replace(/\s+/g, '-').toLowerCase()}.pdf`,
+  })
 }
 
 /**
@@ -235,28 +128,44 @@ export async function sendGuestInvitationWhatsApp(params: {
   code: string
   ticketsAppUrl: string
 }): Promise<string> {
-  if (!client || !env.TWILIO_WHATSAPP_FROM) {
-    console.warn('⚠️ WhatsApp not configured: cannot send guest invitation')
-    return 'SKIPPED'
-  }
-
   const eventUrl = `${params.ticketsAppUrl}/evento/${params.slug}`
-  const body =
+  const message =
     `🎟️ Hola ${params.guestName}, tienes una invitación para *${params.eventName}*.\n\n` +
     `Tu código de acceso es: *${params.code}*\n\n` +
     `Regístrate aquí para obtener tu boleto:\n${eventUrl}`
+  return sendWhatsAppMessage({ to: params.to, message })
+}
 
-  try {
-    const message = await client.messages.create({
-      from: `whatsapp:${env.TWILIO_WHATSAPP_FROM}`,
-      to: `whatsapp:${params.to}`,
-      body,
-    })
-    console.log(`✓ Guest invitation WhatsApp sent to ${params.to}: ${message.sid}`)
-    return message.sid
-  } catch (error) {
-    console.error(`✗ Failed to send guest invitation WhatsApp to ${params.to}:`, error)
-    throw new AppError(500, 'WHATSAPP_SEND_FAILED', 'Failed to send guest invitation WhatsApp')
+/**
+ * Generic notification with optional CTA link
+ */
+export async function sendGenericNotification(
+  phoneNumber: string,
+  data: { title: string; message: string; actionUrl?: string; actionText?: string }
+): Promise<string> {
+  const message = [
+    `*${data.title}*`,
+    '',
+    data.message,
+    data.actionUrl ? `\n👉 ${data.actionText || 'Ver más'}: ${data.actionUrl}` : '',
+  ].join('\n').trim()
+  return sendWhatsAppMessage({ to: phoneNumber, message })
+}
+
+/**
+ * Bulk send to multiple recipients — failures don't stop the rest
+ */
+export async function sendBulkWhatsApp(
+  recipients: string[],
+  messageTemplate: (phone: string) => string
+) {
+  const results = await Promise.allSettled(
+    recipients.map(phone => sendWhatsAppMessage({ to: phone, message: messageTemplate(phone) }))
+  )
+  return {
+    successful: results.filter(r => r.status === 'fulfilled').length,
+    failed: results.filter(r => r.status === 'rejected').length,
+    results,
   }
 }
 
@@ -264,5 +173,5 @@ export async function sendGuestInvitationWhatsApp(params: {
  * Check if WhatsApp is configured
  */
 export function isWhatsAppConfigured(): boolean {
-  return !!(client && env.TWILIO_WHATSAPP_FROM)
+  return !!(env.META_WA_ACCESS_TOKEN && env.META_WA_PHONE_NUMBER_ID)
 }

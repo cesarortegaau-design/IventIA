@@ -31,8 +31,8 @@ router.get('/debug/health', async (_req: Request, res: Response) => {
       STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET ? '✅ set' : '❌ missing',
       TICKETS_APP_URL: env.TICKETS_APP_URL,
       API_BASE_URL: env.API_BASE_URL || '❌ missing',
-      TWILIO_ACCOUNT_SID: env.TWILIO_ACCOUNT_SID ? '✅ set' : '❌ missing',
-      TWILIO_WHATSAPP_FROM: env.TWILIO_WHATSAPP_FROM || '❌ missing',
+      META_WA_ACCESS_TOKEN: env.META_WA_ACCESS_TOKEN ? '✅ set' : '❌ missing',
+      META_WA_PHONE_NUMBER_ID: env.META_WA_PHONE_NUMBER_ID || '❌ missing',
     },
   }
 
