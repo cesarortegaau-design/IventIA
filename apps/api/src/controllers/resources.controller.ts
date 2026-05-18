@@ -325,8 +325,16 @@ export async function searchResourceImages(req: Request, res: Response, next: Ne
   try {
     const { q } = req.query as { q?: string }
     const key = env.UNSPLASH_ACCESS_KEY
-    console.log('[searchResourceImages] key present:', !!key, '| key length:', key?.length ?? 0, '| q:', q)
-    if (!key) return res.json({ data: [], configured: false, debug: 'UNSPLASH_ACCESS_KEY not set in env' })
+    console.error('[searchResourceImages] key present:', !!key, '| key length:', key?.length ?? 0, '| q:', q)
+    if (!key) return res.json({
+      data: [],
+      configured: false,
+      debug: {
+        reason: 'UNSPLASH_ACCESS_KEY not set in env',
+        envKeys: Object.keys(process.env).filter(k => k.includes('UNSPLASH')),
+        nodeEnv: process.env.NODE_ENV,
+      },
+    })
     if (!q?.trim()) return res.json({ data: [], configured: true })
 
     const json = await new Promise<any>((resolve, reject) => {
