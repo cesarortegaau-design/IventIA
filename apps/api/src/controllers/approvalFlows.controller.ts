@@ -11,25 +11,32 @@ import { notifyTaskById } from './collabTasks.controller'
 
 const OBJECT_DATA_SCHEMAS: Record<string, object> = {
   ORDER: {
-    numeroOrden: 'string',
-    estado: 'string (QUOTED|CONFIRMED|EXECUTED|INVOICED|CANCELLED)',
-    esBudget: 'boolean',
-    subtotal: 'number (MXN)',
-    total: 'number (MXN, incluye IVA)',
-    cliente: 'string (nombre del cliente)',
-    listaPrecios: 'string',
-    cantidadItems: 'number',
-    fechaCreacion: 'string (YYYY-MM-DD)',
+    numeroOrden: 'string — número de la orden',
+    estado: 'string — QUOTED|CONFIRMED|EXECUTED|INVOICED|CANCELLED',
+    esBudget: 'boolean — true si es orden de presupuesto',
+    subtotal: 'number — monto sin IVA en MXN',
+    total: 'number — monto total con IVA en MXN',
+    cliente: 'string — nombre o razón social del CLIENTE de la orden (no confundir con organización)',
+    listaPrecios: 'string — nombre de la lista de precios aplicada',
+    organizacion: 'string|null — descripción/nombre de la ORGANIZACIÓN a la que pertenece la orden (ej. "Expo Santa Fe"). Distinto del cliente.',
+    organizacionClave: 'string|null — clave corta de la organización (ej. "EXPO-SF")',
+    evento: 'string|null — nombre del evento al que pertenece la orden',
+    cantidadItems: 'number — número de líneas de la orden',
+    fechaCreacion: 'string — fecha YYYY-MM-DD de creación',
   },
   BUDGET_ORDER: {
-    numeroOrden: 'string',
-    estado: 'string (QUOTED|CONFIRMED|EXECUTED|INVOICED|CANCELLED)',
-    esBudget: 'boolean (siempre true)',
-    subtotal: 'number (MXN)',
-    total: 'number (MXN, incluye IVA)',
-    cliente: 'string',
-    cantidadItems: 'number',
-    fechaCreacion: 'string (YYYY-MM-DD)',
+    numeroOrden: 'string — número de la orden de presupuesto',
+    estado: 'string — QUOTED|CONFIRMED|EXECUTED|INVOICED|CANCELLED',
+    esBudget: 'boolean — siempre true',
+    subtotal: 'number — monto sin IVA en MXN',
+    total: 'number — monto total con IVA en MXN',
+    cliente: 'string — nombre o razón social del CLIENTE (no confundir con organización)',
+    listaPrecios: 'string — nombre de la lista de precios aplicada',
+    organizacion: 'string|null — descripción/nombre de la ORGANIZACIÓN (ej. "Expo Santa Fe"). Distinto del cliente.',
+    organizacionClave: 'string|null — clave corta de la organización',
+    evento: 'string|null — nombre del evento al que pertenece la orden',
+    cantidadItems: 'number — número de líneas',
+    fechaCreacion: 'string — fecha YYYY-MM-DD de creación',
   },
   EVENT: {
     nombre: 'string',
@@ -249,7 +256,7 @@ export async function compileRule(req: Request, res: Response, next: NextFunctio
     const client = new Anthropic({ apiKey })
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 300,
+      max_tokens: 500,
       messages: [{
         role: 'user',
         content: `Convierte la siguiente regla de negocio a código JavaScript puro.
@@ -260,15 +267,24 @@ El código es el CUERPO de una función que recibe el parámetro "objectData".
 Estructura disponible de objectData para el tipo "${objectType}":
 ${JSON.stringify(schema, null, 2)}
 
-INSTRUCCIONES:
+INSTRUCCIONES CRÍTICAS:
 - Responde ÚNICAMENTE con el código JavaScript, sin markdown, sin comentarios, sin función wrapper
 - El código debe terminar con "return true;" o "return false;"
 - Usa solo operadores básicos: >, <, >=, <=, ===, !==, &&, ||, !
 - No uses fetch, require, import, eval ni acceso a variables globales
+- USA EXACTAMENTE los nombres de campo del schema anterior — no inventes nombres
+- Si la regla menciona múltiples condiciones (Y, O, etc.), inclúyelas TODAS en el código
+- DISTINCIÓN IMPORTANTE: "cliente" y "organización" son campos DIFERENTES:
+  * "cliente" → objectData.cliente (quién compra)
+  * "organización" / "campo de organización" → objectData.organizacion (estructura interna a la que pertenece la orden)
 
 EJEMPLOS:
 Regla "monto total mayor a 50000" → return objectData.total > 50000;
-Regla "cliente con nombre que contiene AFMF" → return objectData.cliente.includes('AFMF');
+Regla "cliente es AFMF Asociación de Flag Football" → return objectData.cliente === 'AFMF Asociación de Flag Football de México';
+Regla "cliente contiene AFMF" → return objectData.cliente.includes('AFMF');
+Regla "organización sea Expo Santa Fe" → return objectData.organizacion === 'Expo Santa Fe';
+Regla "campo de organización sea Expo Santa Fe" → return objectData.organizacion === 'Expo Santa Fe';
+Regla "total mayor a 50000 y cliente sea AFMF y organización sea Expo Santa Fe" → return objectData.total > 50000 && objectData.cliente.includes('AFMF') && objectData.organizacion === 'Expo Santa Fe';
 Regla "proveedor activo" → return objectData.estado === 'ACTIVE';
 Regla "más de 5 items" → return objectData.cantidadItems > 5;`,
       }],

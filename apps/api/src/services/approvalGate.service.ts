@@ -39,6 +39,8 @@ async function fetchObjectData(objectType: string, objectId: string): Promise<Re
         createdAt: true,
         client: { select: { companyName: true, firstName: true, lastName: true } },
         priceList: { select: { name: true } },
+        organizacion: { select: { descripcion: true, clave: true } },
+        event: { select: { name: true } },
         _count: { select: { lineItems: true } },
       },
     })
@@ -51,6 +53,9 @@ async function fetchObjectData(objectType: string, objectId: string): Promise<Re
       total: Number(order.total),
       cliente: order.client?.companyName ?? `${order.client?.firstName ?? ''} ${order.client?.lastName ?? ''}`.trim(),
       listaPrecios: order.priceList?.name,
+      organizacion: order.organizacion?.descripcion ?? null,
+      organizacionClave: order.organizacion?.clave ?? null,
+      evento: order.event?.name ?? null,
       cantidadItems: order._count.lineItems,
       fechaCreacion: order.createdAt?.toISOString().slice(0, 10),
     }
