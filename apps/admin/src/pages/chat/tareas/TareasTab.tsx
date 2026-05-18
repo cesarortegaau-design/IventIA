@@ -178,12 +178,12 @@ function MyTasksOverview({
   )
 }
 
-export function TareasTab() {
+export function TareasTab({ initialTaskId }: { initialTaskId?: string | null }) {
   const qc = useQueryClient()
   const currentUser = useAuthStore((s) => s.user)
   const currentUserId = currentUser?.id ?? ''
 
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(initialTaskId ?? null)
   const [showFormModal, setShowFormModal] = useState(false)
   const [editingTask, setEditingTask] = useState<any | null>(null)
   const [showActivityModal, setShowActivityModal] = useState(false)

@@ -1,4 +1,5 @@
 import { useState } from 'react' // v2
+import { useSearchParams } from 'react-router-dom'
 import { Typography } from 'antd'
 import { MessageOutlined, CheckSquareOutlined, TeamOutlined } from '@ant-design/icons'
 import { T } from '../../styles/tokens'
@@ -19,7 +20,11 @@ const BTN_SECONDARY: React.CSSProperties = {
 }
 
 export default function ColaboraPage() {
-  const [activeTab, setActiveTab] = useState('tareas')
+  const [searchParams] = useSearchParams()
+  const initialTab = searchParams.get('tab') ?? 'tareas'
+  const initialTaskId = searchParams.get('taskId')
+
+  const [activeTab, setActiveTab] = useState(initialTab)
 
   return (
     <div style={{ height: 'calc(100vh - 112px)', display: 'flex', flexDirection: 'column', background: T.bg }}>
@@ -77,7 +82,7 @@ export default function ColaboraPage() {
       {/* ── Content Area ─────────────────────────────────────────────────── */}
       <div style={{ flex: 1, overflow: 'auto' }}>
         {activeTab === 'conversaciones' && <ConversacionesTab />}
-        {activeTab === 'tareas' && <TareasTab />}
+        {activeTab === 'tareas' && <TareasTab initialTaskId={initialTaskId} />}
       </div>
     </div>
   )
