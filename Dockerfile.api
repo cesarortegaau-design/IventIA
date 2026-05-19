@@ -8,11 +8,26 @@ RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 WORKDIR /app
 
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json .npmrc ./
-COPY packages/ ./packages/
-COPY apps/ ./apps/
 
-# Install only API and its workspace dependencies (skips unrelated frontend deps)
+# Workspace package.json stubs — give pnpm the full graph without copying sources
+COPY packages/shared/package.json    ./packages/shared/package.json
+COPY packages/prisma/package.json    ./packages/prisma/package.json
+COPY apps/api/package.json           ./apps/api/package.json
+COPY apps/admin/package.json         ./apps/admin/package.json
+COPY apps/portal/package.json        ./apps/portal/package.json
+COPY apps/planner/package.json       ./apps/planner/package.json
+COPY apps/supplier-portal/package.json ./apps/supplier-portal/package.json
+COPY apps/tickets/package.json       ./apps/tickets/package.json
+COPY apps/community/package.json     ./apps/community/package.json
+COPY apps/iflag/package.json         ./apps/iflag/package.json
+COPY apps/arte-capital/package.json  ./apps/arte-capital/package.json
+
+# Install ONLY API + its workspace deps — no frontend packages
 RUN pnpm install --frozen-lockfile --filter @iventia/api...
+
+# Now copy actual sources needed for the build
+COPY packages/ ./packages/
+COPY apps/api/ ./apps/api/
 
 # Explicitly regenerate Prisma client so it always matches the current schema
 RUN cd packages/prisma && npx prisma generate
