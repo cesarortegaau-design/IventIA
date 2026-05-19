@@ -1121,8 +1121,12 @@ function PdfWidget({
   const pdfName: string = config.pdfName || 'documento.pdf'
 
   const handleUpload = (file: File) => {
-    const url = URL.createObjectURL(file)
-    onConfigChange({ pdfUrl: url, pdfName: file.name })
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string
+      onConfigChange({ pdfUrl: dataUrl, pdfName: file.name })
+    }
+    reader.readAsDataURL(file)
     return false
   }
 

@@ -5,12 +5,12 @@
  * No afecta producción más allá de los datos en localStorage del browser.
  */
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Spin, Typography } from 'antd'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Spin, Typography, Input, Button } from 'antd'
 
 const { Text } = Typography
 
-const EID = '3bc99b38-d059-4d8d-9fdf-346e88811780'
+const DEFAULT_EID = '3bc99b38-d059-4d8d-9fdf-346e88811780'
 
 const TIMELINE = {
   updatedAt: new Date().toISOString(),
@@ -152,40 +152,77 @@ const PRESUPUESTO = {
 
 export default function SeedPage() {
   const navigate = useNavigate()
-  const [status, setStatus] = useState<'loading' | 'done'>('loading')
+  const [searchParams] = useSearchParams()
+  const [status, setStatus] = useState<'idle' | 'loading' | 'done'>('idle')
+  const [manualId, setManualId] = useState('')
+
+  const runSeed = (eid: string) => {
+    setStatus('loading')
+    localStorage.setItem(`iventia-timeline-${eid}`,    JSON.stringify(TIMELINE))
+    localStorage.setItem(`iventia-tareas-${eid}`,      JSON.stringify(TAREAS))
+    localStorage.setItem(`iventia-presupuesto-${eid}`, JSON.stringify(PRESUPUESTO))
+    setStatus('done')
+    setTimeout(() => navigate(`/eventos/${eid}/lienzo`), 1500)
+  }
 
   useEffect(() => {
-    localStorage.setItem(`iventia-timeline-${EID}`,    JSON.stringify(TIMELINE))
-    localStorage.setItem(`iventia-tareas-${EID}`,      JSON.stringify(TAREAS))
-    localStorage.setItem(`iventia-presupuesto-${EID}`, JSON.stringify(PRESUPUESTO))
-    setStatus('done')
-    const t = setTimeout(() => navigate(`/eventos/${EID}/lienzo`), 1200)
-    return () => clearTimeout(t)
-  }, [navigate])
+    const id = searchParams.get('id')
+    if (id) {
+      runSeed(id)
+    }
+    // If no ?id= param, show the manual entry form
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  if (status === 'loading') {
+    return (
+      <div style={{ height:'100vh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', background:'#F8F7FF', gap:16 }}>
+        <Spin size="large" />
+        <Text style={{ color:'#7C3AED', fontWeight:600 }}>Cargando datos demo…</Text>
+      </div>
+    )
+  }
+
+  if (status === 'done') {
+    return (
+      <div style={{ height:'100vh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', background:'#F8F7FF', gap:16 }}>
+        <span style={{ fontSize:48 }}>💍</span>
+        <Text style={{ fontSize:18, fontWeight:800, color:'#1a1a1a' }}>Boda García López — datos cargados</Text>
+        <Text style={{ color:'#888' }}>7 fases · 46 actividades · 20 tareas · 8 capítulos de presupuesto</Text>
+        <Text style={{ color:'#bbb', fontSize:12 }}>Redirigiendo al lienzo…</Text>
+      </div>
+    )
+  }
+
+  // No ?id= param — show form to enter event ID manually
   return (
-    <div style={{
-      height: '100vh', display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center',
-      background: '#F8F7FF', gap: 16,
-    }}>
-      {status === 'loading' ? (
-        <>
-          <Spin size="large" />
-          <Text style={{ color: '#7C3AED', fontWeight: 600 }}>Cargando datos demo…</Text>
-        </>
-      ) : (
-        <>
-          <span style={{ fontSize: 48 }}>💍</span>
-          <Text style={{ fontSize: 18, fontWeight: 800, color: '#1a1a1a' }}>
-            Boda García López — datos cargados
-          </Text>
-          <Text style={{ color: '#888' }}>
-            7 fases · 46 actividades · 20 tareas · 8 capítulos de presupuesto
-          </Text>
-          <Text style={{ color: '#bbb', fontSize: 12 }}>Redirigiendo al lienzo…</Text>
-        </>
-      )}
+    <div style={{ height:'100vh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', background:'#F8F7FF', gap:16 }}>
+      <span style={{ fontSize:48 }}>💍</span>
+      <Text style={{ fontSize:18, fontWeight:800, color:'#1a1a1a' }}>Seed: Boda García López</Text>
+      <Text style={{ color:'#888', fontSize:13, textAlign:'center', maxWidth:400 }}>
+        Abre el evento en el Planner, copia el ID de la URL<br/>
+        (<code>/eventos/<strong>ID</strong>/lienzo</code>) y pégalo aquí:
+      </Text>
+      <div style={{ display:'flex', gap:8, width:420, maxWidth:'90vw' }}>
+        <Input
+          placeholder="Pega el ID del evento aquí..."
+          value={manualId}
+          onChange={e => setManualId(e.target.value)}
+          onPressEnter={() => manualId.trim() && runSeed(manualId.trim())}
+          size="large"
+          style={{ borderColor:'#7C3AED', borderRadius:8 }}
+        />
+        <Button
+          type="primary" size="large"
+          disabled={!manualId.trim()}
+          onClick={() => runSeed(manualId.trim())}
+          style={{ background:'#7C3AED', borderColor:'#7C3AED', borderRadius:8, fontWeight:600 }}
+        >
+          Cargar
+        </Button>
+      </div>
+      <Text style={{ color:'#bbb', fontSize:11 }}>
+        También puedes ir directo a <code>/seed?id=EVENT_ID</code>
+      </Text>
     </div>
   )
 }
