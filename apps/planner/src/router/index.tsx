@@ -16,6 +16,7 @@ import ClientDetailPage from '../pages/clients/ClientDetailPage'
 import SuppliersPage from '../pages/suppliers/SuppliersPage'
 import SupplierDetailPage from '../pages/suppliers/SupplierDetailPage'
 import StudioPage from '../pages/studio/StudioPage'
+import SeedPage from '../pages/seed/SeedPage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.accessToken)
@@ -56,6 +57,7 @@ export default function AppRouter() {
         <Route path="editar" element={<EventFormPage />} />
       </Route>
 
+      <Route path="/seed" element={<SeedPage />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   )
