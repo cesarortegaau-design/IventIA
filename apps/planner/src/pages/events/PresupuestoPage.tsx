@@ -690,7 +690,7 @@ export default function PresupuestoPage() {
               <InputNumber
                 prefix="$" min={0} style={{ width: '100%' }}
                 formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                parser={v => Number(v!.replace(/[$,]/g, ''))}
+                parser={v => Number(v!.replace(/[$,]/g, '')) as unknown as 0}
               />
             </Form.Item>
           </div>
