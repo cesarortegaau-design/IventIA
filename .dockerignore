@@ -1,0 +1,35 @@
+# Dependencies - never copy node_modules into Docker context
+**/node_modules
+
+# Build outputs
+**/dist
+**/.vite
+
+# Git and tooling
+.git
+.claude
+.devcontainer
+
+# Frontend app sources (only API source needed)
+apps/admin/src
+apps/admin/public
+apps/portal/src
+apps/portal/public
+apps/planner/src
+apps/planner/public
+apps/planner/index.html
+apps/supplier-portal/src
+apps/supplier-portal/public
+apps/tickets/src
+apps/tickets/public
+apps/community/src
+apps/community/public
+apps/iflag/src
+apps/iflag/public
+apps/arte-capital/src
+apps/arte-capital/public
+
+# Misc
+**/*.log
+**/.env.local
+**/.DS_Store
