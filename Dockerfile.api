@@ -9,20 +9,10 @@ WORKDIR /app
 
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json .npmrc ./
 COPY packages/ ./packages/
-COPY apps/api/ ./apps/api/
+COPY apps/ ./apps/
 
-# Copy package.json stubs for all other workspace apps so pnpm can resolve
-# the full workspace graph required by --frozen-lockfile
-COPY apps/admin/package.json ./apps/admin/package.json
-COPY apps/portal/package.json ./apps/portal/package.json
-COPY apps/planner/package.json ./apps/planner/package.json
-COPY apps/supplier-portal/package.json ./apps/supplier-portal/package.json
-COPY apps/tickets/package.json ./apps/tickets/package.json
-COPY apps/community/package.json ./apps/community/package.json
-COPY apps/iflag/package.json ./apps/iflag/package.json
-
-# Install all deps
-RUN pnpm install --frozen-lockfile
+# Install only API and its workspace dependencies (skips unrelated frontend deps)
+RUN pnpm install --frozen-lockfile --filter @iventia/api...
 
 # Explicitly regenerate Prisma client so it always matches the current schema
 RUN cd packages/prisma && npx prisma generate
