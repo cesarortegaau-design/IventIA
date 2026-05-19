@@ -1,16 +1,19 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { useParams, useOutletContext } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { Button, Tooltip, Typography, Tag, Avatar, Checkbox, Divider, Input, ColorPicker, Switch, InputNumber } from 'antd'
+import {
+  Button, Tooltip, Typography, Tag, Avatar, Checkbox, Divider,
+  Input, Switch, InputNumber, Modal, Spin, Alert, App, Upload,
+} from 'antd'
+import type { UploadFile } from 'antd'
 import {
   SelectOutlined, DragOutlined, AppstoreAddOutlined, FileTextOutlined,
   FontSizeOutlined, PictureOutlined, PlusOutlined, MinusOutlined,
   CloseOutlined, CheckCircleOutlined, ExclamationCircleOutlined,
-  WarningOutlined,
+  UploadOutlined, SearchOutlined, DeleteOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { eventsApi } from '../../../api/events'
-import { clientsApi } from '../../../api/clients'
+import { resourcesApi } from '../../../api/resources'
 
 const { Text, Title } = Typography
 
@@ -197,28 +200,246 @@ function TextoWidget({ config }: { config: any }) {
   )
 }
 
-function ImagenWidget() {
+// ── Image Search Modal (ported from Admin) ─────────────────────────────────────
+function ImageSearchModal({
+  open, onClose, onSelect,
+}: {
+  open: boolean
+  onClose: () => void
+  onSelect: (url: string) => void
+}) {
+  const { message } = App.useApp()
+  const [tab, setTab] = useState<'search' | 'url'>('search')
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const [unsplashKey, setUnsplashKey] = useState<string | null | undefined>(undefined)
+  const [selected, setSelected] = useState<string | null>(null)
+  const [pastedUrl, setPastedUrl] = useState('')
+
+  if (open && unsplashKey === undefined) {
+    resourcesApi.getSearchConfig()
+      .then((cfg) => setUnsplashKey(cfg.unsplashKey))
+      .catch(() => setUnsplashKey(null))
+  }
+
+  async function handleSearch() {
+    if (!query.trim() || !unsplashKey) return
+    setLoading(true)
+    try {
+      const qs = new URLSearchParams({ query: query.trim(), per_page: '12', orientation: 'landscape' }).toString()
+      const resp = await fetch(`https://api.unsplash.com/search/photos?${qs}`, {
+        headers: { Authorization: `Client-ID ${unsplashKey}` },
+      })
+      const json = await resp.json()
+      setResults(json.results ?? [])
+    } catch {
+      message.error('Error al buscar imágenes')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function handleClose() {
+    setSelected(null); setPastedUrl(''); setResults([]); setQuery(''); setUnsplashKey(undefined)
+    onClose()
+  }
+
+  return (
+    <Modal title="Buscar imagen" open={open} onCancel={handleClose} footer={null} width={680}
+      styles={{ header: { borderBottom: '1px solid var(--pl-border)', paddingBottom: 12 } }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <Button type={tab === 'search' ? 'primary' : 'default'} icon={<SearchOutlined />}
+          onClick={() => setTab('search')}
+          style={tab === 'search' ? { background: 'var(--pl-primary)', borderColor: 'var(--pl-primary)' } : {}}>
+          Buscar en Unsplash
+        </Button>
+        <Button type={tab === 'url' ? 'primary' : 'default'} onClick={() => setTab('url')}
+          style={tab === 'url' ? { background: 'var(--pl-primary)', borderColor: 'var(--pl-primary)' } : {}}>
+          Pegar URL
+        </Button>
+      </div>
+
+      {tab === 'url' && (
+        <div>
+          <Input placeholder="https://ejemplo.com/imagen.jpg" value={pastedUrl}
+            onChange={(e) => setPastedUrl(e.target.value)} style={{ marginBottom: 12, borderRadius: 10 }} />
+          {pastedUrl && (
+            <div style={{ marginBottom: 12 }}>
+              <img src={pastedUrl} style={{ width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 10 }}
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} alt="" />
+            </div>
+          )}
+          <Button type="primary" block disabled={!pastedUrl.trim()}
+            onClick={() => { onSelect(pastedUrl.trim()); handleClose() }}
+            style={{ background: 'var(--pl-primary)', borderColor: 'var(--pl-primary)', borderRadius: 10 }}>
+            Usar esta imagen
+          </Button>
+        </div>
+      )}
+
+      {tab === 'search' && (
+        <>
+          <Input.Search
+            placeholder="Ej: wedding venue, concert stage, corporate event..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onSearch={handleSearch}
+            enterButton={<Button type="primary"
+              style={{ background: 'var(--pl-primary)', borderColor: 'var(--pl-primary)' }}
+              loading={loading} disabled={!unsplashKey}>Buscar</Button>}
+            style={{ marginBottom: 16 }}
+          />
+
+          {unsplashKey === null && (
+            <Alert type="warning" showIcon style={{ marginBottom: 12, borderRadius: 10 }}
+              message="UNSPLASH_ACCESS_KEY no configurada. Usa la pestaña 'Pegar URL'." />
+          )}
+
+          {loading && <div style={{ textAlign: 'center', padding: 32 }}><Spin /></div>}
+
+          {!loading && results.length > 0 && (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, marginBottom: 12 }}>
+                {results.map((img: any) => (
+                  <div key={img.id} onClick={() => setSelected(img.urls.small)}
+                    style={{
+                      borderRadius: 8, overflow: 'hidden', cursor: 'pointer',
+                      border: selected === img.urls.small ? '2px solid var(--pl-primary)' : '2px solid transparent',
+                      position: 'relative',
+                    }}>
+                    <img src={img.urls.thumb} alt={img.alt_description || ''}
+                      style={{ width: '100%', height: 80, objectFit: 'cover', display: 'block' }} />
+                    {selected === img.urls.small && (
+                      <div style={{
+                        position: 'absolute', top: 4, right: 4, background: 'var(--pl-primary)',
+                        borderRadius: '50%', width: 20, height: 20,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <CheckCircleOutlined style={{ color: '#fff', fontSize: 11 }} />
+                      </div>
+                    )}
+                    <div style={{ fontSize: 10, color: 'rgba(0,0,0,0.45)', padding: '2px 4px',
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {img.user?.name}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {selected && (
+                <Button type="primary" block onClick={() => { onSelect(selected!); handleClose() }}
+                  style={{ background: 'var(--pl-primary)', borderColor: 'var(--pl-primary)', borderRadius: 10 }}>
+                  Usar esta imagen
+                </Button>
+              )}
+            </>
+          )}
+        </>
+      )}
+    </Modal>
+  )
+}
+
+// ── Imagen Widget ──────────────────────────────────────────────────────────────
+function ImagenWidget({
+  config,
+  onConfigChange,
+}: {
+  config: any
+  onConfigChange: (patch: Record<string, any>) => void
+}) {
+  const [searchOpen, setSearchOpen] = useState(false)
+  const imageUrl: string | null = config.imageUrl || null
+
+  const handleUpload = (file: File) => {
+    const url = URL.createObjectURL(file)
+    onConfigChange({ imageUrl: url })
+    return false // prevent default upload
+  }
+
+  if (imageUrl) {
+    return (
+      <div style={{ width: '100%', height: '100%', position: 'relative', borderRadius: 12, overflow: 'hidden' }}>
+        <img src={imageUrl} alt="widget" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        {/* Overlay controls on hover */}
+        <div className="imagen-overlay" style={{
+          position: 'absolute', inset: 0,
+          background: 'rgba(0,0,0,0.45)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          opacity: 0, transition: 'opacity 0.2s',
+        }}
+          onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.opacity = '1'}
+          onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.opacity = '0'}
+        >
+          <Upload showUploadList={false} beforeUpload={handleUpload} accept="image/*">
+            <Button size="small" icon={<UploadOutlined />}
+              style={{ borderRadius: 8, background: '#fff', color: '#333', fontWeight: 600 }}>
+              Subir
+            </Button>
+          </Upload>
+          <Button size="small" icon={<SearchOutlined />} onClick={(e) => { e.stopPropagation(); setSearchOpen(true) }}
+            style={{ borderRadius: 8, background: '#fff', color: '#333', fontWeight: 600 }}>
+            Buscar
+          </Button>
+          <Button size="small" danger icon={<DeleteOutlined />}
+            onClick={(e) => { e.stopPropagation(); onConfigChange({ imageUrl: null }) }}
+            style={{ borderRadius: 8, fontWeight: 600 }}>
+            Eliminar
+          </Button>
+        </div>
+        <ImageSearchModal open={searchOpen} onClose={() => setSearchOpen(false)}
+          onSelect={(url) => onConfigChange({ imageUrl: url })} />
+      </div>
+    )
+  }
+
   return (
     <div style={{
       width: '100%', height: '100%', borderRadius: 12, border: '2px dashed #DDD6FE',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      flexDirection: 'column', gap: 8, color: '#A78BFA', background: '#F5F3FF',
+      flexDirection: 'column', gap: 12, color: '#A78BFA', background: '#F5F3FF',
       userSelect: 'none',
     }}>
-      <PictureOutlined style={{ fontSize: 28 }} />
-      <Text style={{ fontSize: 12, color: '#A78BFA' }}>Imagen</Text>
+      <PictureOutlined style={{ fontSize: 32 }} />
+      <Text style={{ fontSize: 13, color: '#7C3AED', fontWeight: 500 }}>Imagen del evento</Text>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <Upload showUploadList={false} beforeUpload={handleUpload} accept="image/*">
+          <Button size="small" icon={<UploadOutlined />}
+            style={{ borderRadius: 8, borderColor: 'var(--pl-primary)', color: 'var(--pl-primary)', fontWeight: 600 }}>
+            Subir
+          </Button>
+        </Upload>
+        <Button size="small" icon={<SearchOutlined />}
+          onClick={(e) => { e.stopPropagation(); setSearchOpen(true) }}
+          style={{ borderRadius: 8, background: 'var(--pl-primary)', borderColor: 'var(--pl-primary)', color: '#fff', fontWeight: 600 }}>
+          Buscar
+        </Button>
+      </div>
+      <ImageSearchModal open={searchOpen} onClose={() => setSearchOpen(false)}
+        onSelect={(url) => onConfigChange({ imageUrl: url })} />
     </div>
   )
 }
 
-function WidgetRenderer({ widget, event }: { widget: Widget; event: any }) {
+function WidgetRenderer({
+  widget, event, onConfigChange,
+}: {
+  widget: Widget
+  event: any
+  onConfigChange: (id: string, patch: Record<string, any>) => void
+}) {
   switch (widget.type) {
     case 'portada':     return <PortadaWidget event={event} />
     case 'tareas':      return <TareasWidget />
     case 'proveedores': return <ProveedoresWidget />
     case 'nota':        return <NotaWidget config={widget.config} />
     case 'texto':       return <TextoWidget config={widget.config} />
-    case 'imagen':      return <ImagenWidget />
+    case 'imagen':      return (
+      <ImagenWidget
+        config={widget.config}
+        onConfigChange={(patch) => onConfigChange(widget.id, { config: { ...widget.config, ...patch } })}
+      />
+    )
     default:            return null
   }
 }
@@ -595,7 +816,7 @@ export default function LienzoPage() {
                   }}
                   onMouseDown={(e) => onWidgetMouseDown(e, w.id)}
                 >
-                  <WidgetRenderer widget={w} event={event} />
+                  <WidgetRenderer widget={w} event={event} onConfigChange={updateWidget} />
 
                   {/* Resize handle */}
                   {isSelected && (
