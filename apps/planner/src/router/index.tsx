@@ -9,6 +9,7 @@ import EventFormPage from '../pages/events/EventFormPage'
 import EventDetailPage from '../pages/events/EventDetailPage'
 import LienzoPage from '../pages/events/lienzo/LienzoPage'
 import PresupuestoPage from '../pages/events/PresupuestoPage'
+import TimelinePage from '../pages/events/TimelinePage'
 import ClientsPage from '../pages/clients/ClientsPage'
 import ClientDetailPage from '../pages/clients/ClientDetailPage'
 import SuppliersPage from '../pages/suppliers/SuppliersPage'
@@ -43,7 +44,7 @@ export default function AppRouter() {
       <Route path="/eventos/:id" element={<RequireAuth><EventLayout /></RequireAuth>}>
         <Route index element={<Navigate to="lienzo" replace />} />
         <Route path="lienzo" element={<LienzoPage />} />
-        <Route path="timeline" element={<EventDetailPage defaultTab="timeline" />} />
+        <Route path="timeline" element={<TimelinePage />} />
         <Route path="tareas" element={<EventDetailPage defaultTab="tareas" />} />
         <Route path="presupuesto" element={<PresupuestoPage />} />
         <Route path="crm" element={<EventDetailPage defaultTab="crm" />} />
