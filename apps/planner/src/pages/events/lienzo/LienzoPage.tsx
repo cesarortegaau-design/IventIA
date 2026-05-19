@@ -12,6 +12,7 @@ import {
   CloseOutlined, CheckCircleOutlined, ExclamationCircleOutlined,
   UploadOutlined, SearchOutlined, DeleteOutlined, FilePdfOutlined,
   EyeOutlined, BarChartOutlined, CalendarOutlined, DollarOutlined,
+  PrinterOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { eventsApi } from '../../../api/events'
@@ -21,7 +22,7 @@ import { ordersApi } from '../../../api/orders'
 const { Text, Title } = Typography
 
 // ── Types ──────────────────────────────────────────────────────────────────────
-type WidgetType = 'portada' | 'tareas' | 'proveedores' | 'nota' | 'texto' | 'imagen' | 'pdf' | 'resumen'
+type WidgetType = 'portada' | 'tareas' | 'proveedores' | 'nota' | 'texto' | 'imagen' | 'pdf' | 'resumen' | 'timeline'
 
 interface Widget {
   id: string
@@ -579,6 +580,366 @@ function ResumenWidget({ eventId }: { eventId: string }) {
   )
 }
 
+// ── Timeline Widget ────────────────────────────────────────────────────────────
+type EventTheme = { primary: string; secondary: string; light: string; bg: string; label: string }
+
+function getEventTheme(eventType?: string): EventTheme {
+  const themes: Record<string, EventTheme> = {
+    'Boda':        { primary: '#B5546A', secondary: '#C9728A', light: '#F7D6E0', bg: '#FEF8F9', label: 'Wedding Day Schedule' },
+    'Social':      { primary: '#B5546A', secondary: '#C9728A', light: '#F7D6E0', bg: '#FEF8F9', label: 'Programa Social' },
+    'Corporativo': { primary: '#3730A3', secondary: '#4F46E5', light: '#C7D2FE', bg: '#F0F4FF', label: 'Agenda del Evento' },
+    'Concierto':   { primary: '#C2410C', secondary: '#EA580C', light: '#FED7AA', bg: '#FFF8F5', label: 'Show Schedule' },
+    'Deportivo':   { primary: '#1E40AF', secondary: '#2563EB', light: '#BFDBFE', bg: '#EFF6FF', label: 'Programa Deportivo' },
+    'Festival':    { primary: '#6D28D9', secondary: '#7C3AED', light: '#DDD6FE', bg: '#F5F3FF', label: 'Festival Schedule' },
+  }
+  return themes[eventType || ''] ?? { primary: '#7C3AED', secondary: '#9333EA', light: '#DDD6FE', bg: '#F5F3FF', label: 'Timeline del Evento' }
+}
+
+const ACT_ICONS: Record<string, string> = {
+  MILESTONE: '★', TASK: '◆', LOGISTICS: '◉', TECHNICAL: '◈',
+  MEETING: '●', CATERING: '◑', CEREMONY: '✦', ROUND: '▲', default: '◆',
+}
+
+function generateTimelinePdf(event: any, activities: any[]) {
+  const theme = getEventTheme(event?.eventType)
+
+  const phases = activities
+    .filter((a: any) => a.activityType === 'PHASE')
+    .sort((a: any, b: any) => new Date(a.startDate || 0).getTime() - new Date(b.startDate || 0).getTime())
+
+  const phaseMap: Record<string, string> = {}
+  phases.forEach((p: any) => { phaseMap[p.id] = p.title })
+
+  const items = activities
+    .filter((a: any) => a.activityType !== 'PHASE')
+    .sort((a: any, b: any) => new Date(a.startDate || 0).getTime() - new Date(b.startDate || 0).getTime())
+
+  const fmtTime = (iso?: string) => iso
+    ? new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true }).toUpperCase()
+    : ''
+
+  const fmtDate = (iso?: string) => iso
+    ? new Date(iso).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    : ''
+
+  // Group items by parentId phase
+  let lastParent = ''
+  const rows: string[] = []
+  for (const act of items) {
+    const parent = act.parentId || ''
+    if (parent && parent !== lastParent && phaseMap[parent]) {
+      rows.push(`
+        <tr class="phase-sep">
+          <td colspan="4">
+            <div class="phase-label">${phaseMap[parent]}</div>
+          </td>
+        </tr>`)
+      lastParent = parent
+    }
+    const icon = ACT_ICONS[act.activityType] || ACT_ICONS.default
+    const time = fmtTime(act.startDate)
+    rows.push(`
+      <tr class="act-row">
+        <td class="icon-cell">${icon}</td>
+        <td class="dash-cell"><div class="dash"></div></td>
+        <td class="time-cell">${time}</td>
+        <td class="desc-cell">${act.title || ''}</td>
+      </tr>`)
+  }
+
+  const eventDate = fmtDate(event?.eventStart)
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>${event?.name || 'Timeline'}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;1,400;1,600&family=Jost:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  @page{size:A4 portrait;margin:0}
+  html,body{width:210mm;min-height:297mm;background:#fff;font-family:'Jost',Arial,sans-serif}
+
+  /* ── Header ── */
+  .header{
+    background:${theme.primary};
+    padding:48px 64px 40px;
+    text-align:center;
+    color:#fff;
+    position:relative;
+    overflow:hidden;
+  }
+  .header::before{
+    content:'';position:absolute;inset:0;
+    background:radial-gradient(ellipse at 30% 0%,rgba(255,255,255,0.12) 0%,transparent 60%),
+               radial-gradient(ellipse at 70% 100%,rgba(0,0,0,0.12) 0%,transparent 60%);
+  }
+  .header-eyebrow{
+    font-size:11px;letter-spacing:.35em;text-transform:uppercase;
+    opacity:.8;margin-bottom:14px;position:relative;
+  }
+  .header-name{
+    font-family:'Cormorant Garamond',Georgia,serif;
+    font-size:52px;font-style:italic;line-height:1.05;
+    margin-bottom:8px;position:relative;
+  }
+  .header-subtitle{
+    font-size:12px;letter-spacing:.25em;text-transform:uppercase;
+    opacity:.75;margin-bottom:0;position:relative;
+  }
+  .header-meta{
+    margin-top:18px;font-size:12px;opacity:.7;letter-spacing:.05em;
+    position:relative;
+  }
+  .header-divider{
+    width:60px;height:1px;background:rgba(255,255,255,.4);
+    margin:14px auto;position:relative;
+  }
+
+  /* ── Body ── */
+  .body{
+    padding:0 64px 48px;
+    background:${theme.bg};
+  }
+
+  table{width:100%;border-collapse:collapse}
+
+  .phase-sep td{
+    padding:14px 0 6px;
+  }
+  .phase-label{
+    font-size:9px;letter-spacing:.25em;text-transform:uppercase;
+    color:${theme.primary};font-weight:600;
+    border-top:1px solid ${theme.light};
+    padding-top:14px;
+    opacity:.85;
+  }
+
+  .act-row td{
+    padding:11px 6px;
+    border-bottom:1px solid ${theme.light};
+    vertical-align:middle;
+  }
+  .act-row:last-child td{border-bottom:none}
+
+  .icon-cell{
+    width:32px;text-align:center;
+    font-size:14px;color:${theme.primary};
+    opacity:.8;
+  }
+  .dash-cell{width:44px;padding:0 8px}
+  .dash{
+    width:28px;height:1.5px;
+    background:${theme.primary};opacity:.3;
+  }
+  .time-cell{
+    width:88px;
+    font-size:13px;font-weight:600;
+    color:${theme.primary};white-space:nowrap;
+  }
+  .desc-cell{
+    font-size:12.5px;color:#2d2d2d;line-height:1.4;
+  }
+
+  /* ── Footer ── */
+  .footer{
+    text-align:center;padding:18px;
+    font-size:10px;letter-spacing:.08em;
+    color:${theme.primary};opacity:.5;
+    border-top:1px solid ${theme.light};
+    background:${theme.bg};
+  }
+
+  /* ── Print button (hidden when printing) ── */
+  .print-btn{
+    position:fixed;bottom:24px;right:24px;
+    background:${theme.primary};color:#fff;
+    border:none;padding:10px 22px;border-radius:30px;
+    font-size:13px;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.2);
+    font-family:'Jost',Arial,sans-serif;letter-spacing:.04em;
+  }
+  @media print{.print-btn{display:none}}
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="header-eyebrow">${event?.eventType || 'Evento'} &nbsp;·&nbsp; ${event?.code || ''}</div>
+  <div class="header-name">${event?.name || 'Evento'}</div>
+  <div class="header-divider"></div>
+  <div class="header-subtitle">${theme.label}</div>
+  ${eventDate ? `<div class="header-meta">${eventDate}</div>` : ''}
+  ${event?.venueLocation ? `<div class="header-meta" style="margin-top:4px">${event.venueLocation}</div>` : ''}
+</div>
+
+<div class="body">
+  <table>
+    <tbody>
+      ${rows.join('')}
+    </tbody>
+  </table>
+</div>
+
+<div class="footer">IventIA Planner &nbsp;·&nbsp; ${new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+
+<button class="print-btn" onclick="window.print()">⎙ Imprimir / Guardar PDF</button>
+<script>setTimeout(()=>window.print(),800)</script>
+</body>
+</html>`
+
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+  const url  = URL.createObjectURL(blob)
+  window.open(url, '_blank')
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
+}
+
+function TimelineWidget({ eventId, event }: { eventId: string; event: any }) {
+  const { data: activitiesData, isLoading } = useQuery({
+    queryKey: ['planner-activities', eventId],
+    queryFn: () => eventsApi.getActivities(eventId),
+    enabled: !!eventId,
+    staleTime: 60_000,
+  })
+
+  const activities: any[] = activitiesData?.data ?? activitiesData ?? []
+  const theme = getEventTheme(event?.eventType)
+
+  const preview = activities
+    .filter((a: any) => a.activityType !== 'PHASE')
+    .sort((a: any, b: any) => new Date(a.startDate || 0).getTime() - new Date(b.startDate || 0).getTime())
+    .slice(0, 9)
+
+  const totalItems = activities.filter((a: any) => a.activityType !== 'PHASE').length
+
+  const fmtTime = (iso?: string) => iso
+    ? dayjs(iso).format('h:mm A')
+    : ''
+
+  if (isLoading) {
+    return (
+      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Spin size="small" />
+      </div>
+    )
+  }
+
+  const handlePdf = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    generateTimelinePdf(event, activities)
+  }
+
+  return (
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', userSelect: 'none' }}>
+      {/* Header — matches PDF style */}
+      <div style={{
+        background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.secondary} 100%)`,
+        padding: '12px 16px', flexShrink: 0, position: 'relative', overflow: 'hidden',
+      }}>
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'radial-gradient(ellipse at 20% 0%, rgba(255,255,255,0.12), transparent 60%)',
+          pointerEvents: 'none',
+        }} />
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', position: 'relative' }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 9, letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: 3 }}>
+              {event?.eventType || 'Evento'} · {event?.code || ''}
+            </div>
+            <div style={{
+              color: '#fff', fontSize: 15, fontStyle: 'italic',
+              fontFamily: 'Georgia, serif', fontWeight: 700, lineHeight: 1.15,
+              maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              {event?.name || '—'}
+            </div>
+            <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', marginTop: 4 }}>
+              {theme.label}
+            </div>
+          </div>
+          <Tooltip title="Generar PDF del Timeline">
+            <Button
+              size="small"
+              icon={<PrinterOutlined />}
+              onClick={handlePdf}
+              style={{
+                background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)',
+                color: '#fff', borderRadius: 8, height: 28, fontSize: 11, flexShrink: 0,
+                backdropFilter: 'blur(4px)',
+              }}
+            >
+              PDF
+            </Button>
+          </Tooltip>
+        </div>
+        {/* Thin decorative divider */}
+        <div style={{
+          width: 40, height: 1, background: 'rgba(255,255,255,0.35)', margin: '8px 0 0',
+        }} />
+      </div>
+
+      {/* Timeline rows */}
+      <div style={{ flex: 1, overflow: 'auto', background: theme.bg }}>
+        {preview.length === 0 ? (
+          <div style={{ textAlign: 'center', color: '#aaa', fontSize: 12, padding: '24px 0' }}>
+            Sin actividades registradas
+          </div>
+        ) : preview.map((act: any, i: number) => (
+          <div key={act.id || i} style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '8px 14px',
+            borderBottom: `1px solid ${theme.light}`,
+          }}>
+            {/* Icon */}
+            <span style={{
+              fontSize: 12, color: theme.primary, opacity: 0.8,
+              minWidth: 18, textAlign: 'center', flexShrink: 0,
+            }}>
+              {ACT_ICONS[act.activityType] || ACT_ICONS.default}
+            </span>
+            {/* Dash */}
+            <div style={{ width: 16, height: 1.5, background: theme.primary, opacity: 0.3, flexShrink: 0 }} />
+            {/* Time */}
+            <span style={{
+              fontSize: 10, fontWeight: 700, color: theme.primary,
+              minWidth: 52, whiteSpace: 'nowrap', flexShrink: 0,
+            }}>
+              {fmtTime(act.startDate)}
+            </span>
+            {/* Description */}
+            <span style={{
+              fontSize: 11, color: '#2d2d2d', lineHeight: 1.3,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
+            }}>
+              {act.title}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Footer CTA */}
+      <div style={{
+        padding: '7px 14px', background: theme.light, flexShrink: 0,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      }}>
+        <Text style={{ fontSize: 10, color: theme.primary, opacity: 0.8 }}>
+          {totalItems} actividades · {activities.filter((a: any) => a.activityType === 'PHASE').length} fases
+        </Text>
+        <Button
+          size="small"
+          type="primary"
+          icon={<PrinterOutlined />}
+          onClick={handlePdf}
+          style={{
+            background: theme.primary, borderColor: theme.primary,
+            height: 24, fontSize: 10, borderRadius: 6, color: '#fff',
+          }}
+        >
+          Generar PDF
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 function WidgetRenderer({
   widget, event, onConfigChange,
 }: {
@@ -605,6 +966,7 @@ function WidgetRenderer({
       />
     )
     case 'resumen':     return <ResumenWidget eventId={event?.id ?? ''} />
+    case 'timeline':    return <TimelineWidget eventId={event?.id ?? ''} event={event} />
     default:            return null
   }
 }
@@ -621,7 +983,7 @@ function PropertiesPanel({
 }) {
   const WIDGET_LABELS: Record<WidgetType, string> = {
     portada: 'Portada', tareas: 'Tareas', proveedores: 'Proveedores',
-    nota: 'Nota', texto: 'Texto', imagen: 'Imagen', pdf: 'PDF', resumen: 'Resumen del evento',
+    nota: 'Nota', texto: 'Texto', imagen: 'Imagen', pdf: 'PDF', resumen: 'Resumen del evento', timeline: 'Timeline del evento',
   }
 
   return (
@@ -840,7 +1202,8 @@ const WIDGET_MENU: { type: WidgetType; label: string; icon: React.ReactNode; def
   { type: 'texto', label: 'Texto', icon: <FontSizeOutlined />, defaultSize: [280, 80] },
   { type: 'imagen', label: 'Imagen', icon: <PictureOutlined />, defaultSize: [300, 200] },
   { type: 'pdf', label: 'PDF', icon: <FilePdfOutlined />, defaultSize: [340, 420] },
-  { type: 'resumen', label: 'Resumen del evento', icon: <BarChartOutlined />, defaultSize: [480, 520] },
+  { type: 'resumen',   label: 'Resumen del evento',  icon: <BarChartOutlined />,  defaultSize: [480, 520] },
+  { type: 'timeline',  label: 'Timeline del evento',  icon: <CalendarOutlined />,  defaultSize: [380, 560] },
 ]
 
 // ── Persistence helpers ────────────────────────────────────────────────────────
