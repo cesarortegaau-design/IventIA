@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from 'react'
 import { useParams, useOutletContext } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import {
   Button, Tooltip, Typography, Tag, Avatar, Checkbox, Divider,
   Input, Switch, InputNumber, Modal, Spin, Alert, App, Upload,
@@ -10,16 +11,17 @@ import {
   FontSizeOutlined, PictureOutlined, PlusOutlined, MinusOutlined,
   CloseOutlined, CheckCircleOutlined, ExclamationCircleOutlined,
   UploadOutlined, SearchOutlined, DeleteOutlined, FilePdfOutlined,
-  EyeOutlined,
+  EyeOutlined, BarChartOutlined, CalendarOutlined, DollarOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { eventsApi } from '../../../api/events'
 import { resourcesApi } from '../../../api/resources'
+import { ordersApi } from '../../../api/orders'
 
 const { Text, Title } = Typography
 
 // ── Types ──────────────────────────────────────────────────────────────────────
-type WidgetType = 'portada' | 'tareas' | 'proveedores' | 'nota' | 'texto' | 'imagen' | 'pdf'
+type WidgetType = 'portada' | 'tareas' | 'proveedores' | 'nota' | 'texto' | 'imagen' | 'pdf' | 'resumen'
 
 interface Widget {
   id: string
@@ -422,6 +424,161 @@ function ImagenWidget({
   )
 }
 
+// ── Resumen Widget ─────────────────────────────────────────────────────────────
+const PHASE_COLORS: Record<string, string> = {
+  SETUP: '#F97316', EVENT: '#7C3AED', TEARDOWN: '#0D9488', GENERAL: '#6B7280',
+}
+const PHASE_LABELS: Record<string, string> = {
+  SETUP: 'Montaje', EVENT: 'Evento', TEARDOWN: 'Desmontaje', GENERAL: 'General',
+}
+
+function formatMoney(n: number, currency = 'MXN') {
+  return new Intl.NumberFormat('es-MX', { style: 'currency', currency, maximumFractionDigits: 0 }).format(n)
+}
+
+function ResumenWidget({ eventId }: { eventId: string }) {
+  const { data: activitiesData, isLoading: loadingAct } = useQuery({
+    queryKey: ['planner-activities', eventId],
+    queryFn: () => eventsApi.getActivities(eventId),
+    enabled: !!eventId,
+  })
+  const { data: ordersData, isLoading: loadingOrders } = useQuery({
+    queryKey: ['planner-orders', eventId],
+    queryFn: () => ordersApi.list({ eventId }),
+    enabled: !!eventId,
+  })
+
+  const activities: any[] = activitiesData?.data ?? activitiesData ?? []
+  const orders: any[] = ordersData?.data ?? ordersData ?? []
+
+  const totalRevenue = orders.reduce((s: number, o: any) => s + (o.totalAmount ?? o.total ?? 0), 0)
+  const totalPaid = orders.reduce((s: number, o: any) => s + (o.amountPaid ?? 0), 0)
+  const totalBalance = totalRevenue - totalPaid
+  const lineItems = orders.reduce((s: number, o: any) => s + (o.lineItems?.length ?? 0), 0)
+
+  const phaseGroups = activities.reduce((acc: Record<string, any[]>, a: any) => {
+    const p = a.phase || 'GENERAL'
+    acc[p] = acc[p] || []
+    acc[p].push(a)
+    return acc
+  }, {})
+
+  if (loadingAct || loadingOrders) {
+    return (
+      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Spin size="small" />
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', userSelect: 'none' }}>
+      {/* Header */}
+      <div style={{
+        padding: '10px 14px', borderBottom: '1px solid #F0EBFF', flexShrink: 0,
+        background: 'linear-gradient(135deg, #7C3AED08, #EC489908)',
+        display: 'flex', alignItems: 'center', gap: 8,
+      }}>
+        <BarChartOutlined style={{ color: '#7C3AED', fontSize: 16 }} />
+        <Text strong style={{ fontSize: 13, color: '#1a1a1a' }}>Resumen del evento</Text>
+      </div>
+
+      <div style={{ flex: 1, overflow: 'auto', padding: '12px 14px' }}>
+        {/* KPI row */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 14 }}>
+          {[
+            { label: 'Ingresos', value: formatMoney(totalRevenue), color: '#7C3AED', icon: <DollarOutlined /> },
+            { label: 'Cobrado', value: formatMoney(totalPaid), color: '#059669', icon: <CheckCircleOutlined /> },
+            { label: 'Por cobrar', value: formatMoney(totalBalance), color: totalBalance > 0 ? '#F97316' : '#059669', icon: <DollarOutlined /> },
+          ].map((kpi) => (
+            <div key={kpi.label} style={{
+              background: '#FAFAFA', border: '1px solid #F0EBFF', borderRadius: 8, padding: '8px 10px',
+            }}>
+              <div style={{ fontSize: 10, color: '#888', fontWeight: 600, letterSpacing: '0.05em', marginBottom: 4 }}>
+                {kpi.label}
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: kpi.color }}>{kpi.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Stats row */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 8, marginBottom: 14 }}>
+          {[
+            { label: 'Actividades', value: activities.length, icon: <CalendarOutlined style={{ color: '#7C3AED' }} /> },
+            { label: 'Renglones', value: lineItems, icon: <FileTextOutlined style={{ color: '#EC4899' }} /> },
+          ].map((s) => (
+            <div key={s.label} style={{
+              background: '#F5F3FF', border: '1px solid #DDD6FE', borderRadius: 8,
+              padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 8,
+            }}>
+              <span style={{ fontSize: 16 }}>{s.icon}</span>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: '#1a1a1a', lineHeight: 1 }}>{s.value}</div>
+                <div style={{ fontSize: 10, color: '#888' }}>{s.label}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Activities by phase */}
+        {activities.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#888', letterSpacing: '0.08em', marginBottom: 8 }}>
+              ACTIVIDADES POR FASE
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {['SETUP', 'EVENT', 'TEARDOWN', 'GENERAL'].map((phase) => {
+                const count = phaseGroups[phase]?.length ?? 0
+                if (!count) return null
+                const pct = Math.round((count / activities.length) * 100)
+                return (
+                  <div key={phase} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ width: 56, fontSize: 10, fontWeight: 600, color: PHASE_COLORS[phase] }}>
+                      {PHASE_LABELS[phase]}
+                    </div>
+                    <div style={{ flex: 1, height: 6, borderRadius: 3, background: '#F0EBFF', overflow: 'hidden' }}>
+                      <div style={{ width: `${pct}%`, height: '100%', background: PHASE_COLORS[phase], borderRadius: 3 }} />
+                    </div>
+                    <div style={{ fontSize: 10, color: '#888', minWidth: 20, textAlign: 'right' }}>{count}</div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Financial summary */}
+        {orders.length > 0 && (
+          <div style={{
+            background: '#F0FFF4', border: '1px solid #BBF7D0', borderRadius: 8, padding: '8px 10px',
+          }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#065F46', letterSpacing: '0.06em', marginBottom: 6 }}>
+              RESUMEN FINANCIERO
+            </div>
+            {[
+              { label: 'Total facturado', value: formatMoney(totalRevenue), bold: true },
+              { label: 'Cobrado', value: formatMoney(totalPaid), color: '#059669' },
+              { label: 'Saldo pendiente', value: formatMoney(totalBalance), color: totalBalance > 0 ? '#DC2626' : '#059669' },
+            ].map((row) => (
+              <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                <Text style={{ fontSize: 11, color: '#444', fontWeight: row.bold ? 600 : 400 }}>{row.label}</Text>
+                <Text style={{ fontSize: 11, fontWeight: 700, color: row.color || '#1a1a1a' }}>{row.value}</Text>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activities.length === 0 && orders.length === 0 && (
+          <div style={{ textAlign: 'center', color: '#aaa', fontSize: 12, padding: '20px 0' }}>
+            Sin datos disponibles para este evento
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function WidgetRenderer({
   widget, event, onConfigChange,
 }: {
@@ -447,6 +604,7 @@ function WidgetRenderer({
         onConfigChange={(patch) => onConfigChange(widget.id, { config: { ...widget.config, ...patch } })}
       />
     )
+    case 'resumen':     return <ResumenWidget eventId={event?.id ?? ''} />
     default:            return null
   }
 }
@@ -463,7 +621,7 @@ function PropertiesPanel({
 }) {
   const WIDGET_LABELS: Record<WidgetType, string> = {
     portada: 'Portada', tareas: 'Tareas', proveedores: 'Proveedores',
-    nota: 'Nota', texto: 'Texto', imagen: 'Imagen', pdf: 'PDF',
+    nota: 'Nota', texto: 'Texto', imagen: 'Imagen', pdf: 'PDF', resumen: 'Resumen del evento',
   }
 
   return (
@@ -682,6 +840,7 @@ const WIDGET_MENU: { type: WidgetType; label: string; icon: React.ReactNode; def
   { type: 'texto', label: 'Texto', icon: <FontSizeOutlined />, defaultSize: [280, 80] },
   { type: 'imagen', label: 'Imagen', icon: <PictureOutlined />, defaultSize: [300, 200] },
   { type: 'pdf', label: 'PDF', icon: <FilePdfOutlined />, defaultSize: [340, 420] },
+  { type: 'resumen', label: 'Resumen del evento', icon: <BarChartOutlined />, defaultSize: [480, 520] },
 ]
 
 // ── Main page ───────────────────────────────────────────────────────────────────
