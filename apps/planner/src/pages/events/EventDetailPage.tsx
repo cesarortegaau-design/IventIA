@@ -1118,10 +1118,10 @@ function FlujosTab({ eventId }: { eventId: string }) {
 }
 
 // ── Main EventDetailPage ──────────────────────────────────────────────────────
-export default function EventDetailPage() {
+export default function EventDetailPage({ defaultTab }: { defaultTab?: string } = {}) {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const [activeTab, setActiveTab] = useState('info')
+  const [activeTab, setActiveTab] = useState(defaultTab || 'info')
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['planner-event', id],
