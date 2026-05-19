@@ -10,6 +10,7 @@ import EventDetailPage from '../pages/events/EventDetailPage'
 import LienzoPage from '../pages/events/lienzo/LienzoPage'
 import PresupuestoPage from '../pages/events/PresupuestoPage'
 import TimelinePage from '../pages/events/TimelinePage'
+import TareasPage from '../pages/events/TareasPage'
 import ClientsPage from '../pages/clients/ClientsPage'
 import ClientDetailPage from '../pages/clients/ClientDetailPage'
 import SuppliersPage from '../pages/suppliers/SuppliersPage'
@@ -45,7 +46,7 @@ export default function AppRouter() {
         <Route index element={<Navigate to="lienzo" replace />} />
         <Route path="lienzo" element={<LienzoPage />} />
         <Route path="timeline" element={<TimelinePage />} />
-        <Route path="tareas" element={<EventDetailPage defaultTab="tareas" />} />
+        <Route path="tareas" element={<TareasPage />} />
         <Route path="presupuesto" element={<PresupuestoPage />} />
         <Route path="crm" element={<EventDetailPage defaultTab="crm" />} />
         <Route path="mapa" element={<EventDetailPage defaultTab="mapa" />} />
