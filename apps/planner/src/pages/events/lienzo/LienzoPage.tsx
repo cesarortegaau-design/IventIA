@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useParams, useOutletContext } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -843,18 +843,52 @@ const WIDGET_MENU: { type: WidgetType; label: string; icon: React.ReactNode; def
   { type: 'resumen', label: 'Resumen del evento', icon: <BarChartOutlined />, defaultSize: [480, 520] },
 ]
 
+// ── Persistence helpers ────────────────────────────────────────────────────────
+function lienzoKey(eventId: string) { return `iventia-lienzo-${eventId}` }
+
+function loadWidgets(eventId: string): Widget[] {
+  try {
+    const raw = localStorage.getItem(lienzoKey(eventId))
+    if (raw) return JSON.parse(raw)
+  } catch { /* ignore */ }
+  return makeDefaultWidgets()
+}
+
+function saveWidgets(eventId: string, widgets: Widget[]) {
+  try {
+    // Skip blob URLs — they don't survive a page reload anyway
+    const serializable = widgets.map((w) => ({
+      ...w,
+      config: {
+        ...w.config,
+        imageUrl: w.config.imageUrl?.startsWith('blob:') ? null : w.config.imageUrl,
+        pdfUrl:   w.config.pdfUrl?.startsWith('blob:')   ? null : w.config.pdfUrl,
+        pdfName:  w.config.pdfUrl?.startsWith('blob:')   ? null : w.config.pdfName,
+      },
+    }))
+    localStorage.setItem(lienzoKey(eventId), JSON.stringify(serializable))
+  } catch { /* ignore */ }
+}
+
 // ── Main page ───────────────────────────────────────────────────────────────────
 export default function LienzoPage() {
   const { id } = useParams<{ id: string }>()
   const { event } = useOutletContext<{ event: any }>()
 
-  const [widgets, setWidgets] = useState<Widget[]>(makeDefaultWidgets)
+  const [widgets, setWidgets] = useState<Widget[]>(() => id ? loadWidgets(id) : makeDefaultWidgets())
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [tool, setTool] = useState<Tool>('select')
   const [zoom, setZoom] = useState(100)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [showAddMenu, setShowAddMenu] = useState(false)
-  const [lastSync] = useState(dayjs().format('HH:mm'))
+  const [lastSync, setLastSync] = useState(dayjs().format('HH:mm'))
+
+  // Auto-save on every widgets change
+  useEffect(() => {
+    if (!id) return
+    saveWidgets(id, widgets)
+    setLastSync(dayjs().format('HH:mm'))
+  }, [id, widgets])
 
   // Drag state
   const dragging = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number } | null>(null)
