@@ -9,7 +9,8 @@ import {
   SelectOutlined, DragOutlined, AppstoreAddOutlined, FileTextOutlined,
   FontSizeOutlined, PictureOutlined, PlusOutlined, MinusOutlined,
   CloseOutlined, CheckCircleOutlined, ExclamationCircleOutlined,
-  UploadOutlined, SearchOutlined, DeleteOutlined,
+  UploadOutlined, SearchOutlined, DeleteOutlined, FilePdfOutlined,
+  EyeOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { eventsApi } from '../../../api/events'
@@ -18,7 +19,7 @@ import { resourcesApi } from '../../../api/resources'
 const { Text, Title } = Typography
 
 // ── Types ──────────────────────────────────────────────────────────────────────
-type WidgetType = 'portada' | 'tareas' | 'proveedores' | 'nota' | 'texto' | 'imagen'
+type WidgetType = 'portada' | 'tareas' | 'proveedores' | 'nota' | 'texto' | 'imagen' | 'pdf'
 
 interface Widget {
   id: string
@@ -440,6 +441,12 @@ function WidgetRenderer({
         onConfigChange={(patch) => onConfigChange(widget.id, { config: { ...widget.config, ...patch } })}
       />
     )
+    case 'pdf':         return (
+      <PdfWidget
+        config={widget.config}
+        onConfigChange={(patch) => onConfigChange(widget.id, { config: { ...widget.config, ...patch } })}
+      />
+    )
     default:            return null
   }
 }
@@ -456,7 +463,7 @@ function PropertiesPanel({
 }) {
   const WIDGET_LABELS: Record<WidgetType, string> = {
     portada: 'Portada', tareas: 'Tareas', proveedores: 'Proveedores',
-    nota: 'Nota', texto: 'Texto', imagen: 'Imagen',
+    nota: 'Nota', texto: 'Texto', imagen: 'Imagen', pdf: 'PDF',
   }
 
   return (
@@ -582,6 +589,90 @@ function PropertiesPanel({
   )
 }
 
+// ── PDF Widget ─────────────────────────────────────────────────────────────────
+function PdfWidget({
+  config,
+  onConfigChange,
+}: {
+  config: any
+  onConfigChange: (patch: Record<string, any>) => void
+}) {
+  const pdfUrl: string | null = config.pdfUrl || null
+  const pdfName: string = config.pdfName || 'documento.pdf'
+
+  const handleUpload = (file: File) => {
+    const url = URL.createObjectURL(file)
+    onConfigChange({ pdfUrl: url, pdfName: file.name })
+    return false
+  }
+
+  if (pdfUrl) {
+    return (
+      <div style={{
+        width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
+        borderRadius: 12, overflow: 'hidden', background: '#fff',
+      }}>
+        {/* Header bar */}
+        <div style={{
+          padding: '10px 14px', borderBottom: '1px solid var(--pl-border)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          flexShrink: 0,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <FilePdfOutlined style={{ color: '#DC2626', fontSize: 18, flexShrink: 0 }} />
+            <Text style={{ fontSize: 12, fontWeight: 600, color: '#1a1a1a' }}
+              ellipsis={{ tooltip: pdfName }}>
+              {pdfName}
+            </Text>
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+            <Tooltip title="Ver PDF">
+              <Button type="text" size="small" icon={<EyeOutlined />}
+                onClick={(e) => { e.stopPropagation(); window.open(pdfUrl, '_blank') }}
+                style={{ color: 'var(--pl-primary)' }} />
+            </Tooltip>
+            <Upload showUploadList={false} beforeUpload={handleUpload} accept="application/pdf">
+              <Tooltip title="Reemplazar PDF">
+                <Button type="text" size="small" icon={<UploadOutlined />}
+                  style={{ color: '#888' }} />
+              </Tooltip>
+            </Upload>
+            <Tooltip title="Eliminar">
+              <Button type="text" size="small" icon={<DeleteOutlined />}
+                onClick={(e) => { e.stopPropagation(); onConfigChange({ pdfUrl: null, pdfName: null }) }}
+                style={{ color: '#DC2626' }} />
+            </Tooltip>
+          </div>
+        </div>
+
+        {/* PDF preview via iframe */}
+        <iframe
+          src={`${pdfUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+          style={{ flex: 1, border: 'none', display: 'block' }}
+          title={pdfName}
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div style={{
+      width: '100%', height: '100%', borderRadius: 12, border: '2px dashed #FECACA',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      flexDirection: 'column', gap: 12, background: '#FFF5F5', userSelect: 'none',
+    }}>
+      <FilePdfOutlined style={{ fontSize: 36, color: '#DC2626' }} />
+      <Text style={{ fontSize: 13, color: '#DC2626', fontWeight: 500 }}>Documento PDF</Text>
+      <Upload showUploadList={false} beforeUpload={handleUpload} accept="application/pdf">
+        <Button icon={<UploadOutlined />} size="small"
+          style={{ borderRadius: 8, borderColor: '#DC2626', color: '#DC2626', fontWeight: 600 }}>
+          Subir PDF
+        </Button>
+      </Upload>
+    </div>
+  )
+}
+
 // ── Widget add menu ──────────────────────────────────────────────────────────────
 const WIDGET_MENU: { type: WidgetType; label: string; icon: React.ReactNode; defaultSize: [number, number] }[] = [
   { type: 'portada', label: 'Portada del evento', icon: <AppstoreAddOutlined />, defaultSize: [420, 200] },
@@ -590,6 +681,7 @@ const WIDGET_MENU: { type: WidgetType; label: string; icon: React.ReactNode; def
   { type: 'nota', label: 'Nota', icon: <FileTextOutlined />, defaultSize: [240, 180] },
   { type: 'texto', label: 'Texto', icon: <FontSizeOutlined />, defaultSize: [280, 80] },
   { type: 'imagen', label: 'Imagen', icon: <PictureOutlined />, defaultSize: [300, 200] },
+  { type: 'pdf', label: 'PDF', icon: <FilePdfOutlined />, defaultSize: [340, 420] },
 ]
 
 // ── Main page ───────────────────────────────────────────────────────────────────
