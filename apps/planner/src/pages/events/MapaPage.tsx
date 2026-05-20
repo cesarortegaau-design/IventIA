@@ -6,6 +6,7 @@ import {
   useState, useEffect, useRef, useCallback, useLayoutEffect,
 } from 'react'
 import { useParams, useOutletContext } from 'react-router-dom'
+import { usePlannerStore } from '../../hooks/usePlannerStore'
 import {
   Button, Modal, Form, Input, InputNumber, Select, Switch, App, Typography, Space,
   Checkbox, Popconfirm, Tag,
@@ -691,7 +692,11 @@ export default function MapaPage() {
   const { event } = useOutletContext<{ event: any }>()
   const { message } = App.useApp()
 
-  const [store, setStore] = useState<MapStore>(() => loadStore(eventId))
+  const { store, update, syncStatus, ready } = usePlannerStore<MapStore>(
+    eventId, 'mapa',
+    { zones: [], status: 'DRAFT' as MapStatus, venueName: '', updatedAt: '', seating: {}, waypoints: [], staff: [] },
+    `iventia-mapa-${eventId}`,
+  )
   const [activeTool, setActiveTool] = useState<Tool>('select')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState('cenital')
@@ -714,13 +719,10 @@ export default function MapaPage() {
   const [poiForm] = Form.useForm()
   const [textoForm] = Form.useForm()
 
-  const [allTasks, setAllTasks] = useState<any[]>(() => {
-    try {
-      const raw = localStorage.getItem(`iventia-tareas-${eventId}`)
-      if (raw) return JSON.parse(raw).tasks ?? []
-    } catch { /* ignore */ }
-    return []
-  })
+  const { store: tareasStore } = usePlannerStore<{ tasks: any[] }>(
+    eventId, 'tareas', { tasks: [] }, `iventia-tareas-${eventId}`,
+  )
+  const allTasks = tareasStore.tasks ?? []
 
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 })
   const [stageScale, setStageScale] = useState(1)
@@ -729,14 +731,6 @@ export default function MapaPage() {
 
   const transformerRef = useRef<Konva.Transformer>(null)
   const shapeRefs = useRef<Record<string, Konva.Group>>({})
-
-  const update = useCallback((next: Partial<MapStore>) => {
-    setStore(prev => {
-      const merged = { ...prev, ...next }
-      saveStore(eventId, merged)
-      return merged
-    })
-  }, [eventId])
 
   useLayoutEffect(() => {
     const measure = () => {

@@ -5,6 +5,7 @@
  */
 import { useState, useRef, useEffect } from 'react'
 import { useParams, useOutletContext } from 'react-router-dom'
+import { usePlannerStore } from '../../hooks/usePlannerStore'
 import { useQuery } from '@tanstack/react-query'
 import {
   Input, Button, Avatar, Tag, Typography, Tooltip, App,
@@ -249,24 +250,24 @@ export default function MensajesPage() {
   })
   const event = ctxEvent || data?.data
 
-  const [msgs, setMsgs] = useState<Mensaje[]>(() => {
-    const loaded = loadMsgs(id || '')
-    // Add welcome system message if empty
-    if (loaded.length === 0) {
-      const welcome: Mensaje = {
-        id: 'sys-welcome',
-        text: `Canal de mensajes creado para "${event?.name || 'el evento'}"`,
-        authorId: 'system',
-        authorName: 'Sistema',
-        authorInitials: 'S',
-        authorColor: '#888',
-        timestamp: new Date().toISOString(),
-        type: 'system',
-      }
-      return [welcome]
-    }
-    return loaded
-  })
+  const { store: msgsStore, update: updateMsgsStore, ready: msgsReady } = usePlannerStore<{ messages: Mensaje[] }>(
+    id || '', 'mensajes', { messages: [] }, `iventia-mensajes-${id}`,
+  )
+
+  // Compat: migrate from flat array to { messages: [] } structure
+  const msgs = Array.isArray(msgsStore) ? (msgsStore as unknown as Mensaje[]) : (msgsStore.messages ?? [])
+  const setMsgs = (updated: Mensaje[]) => updateMsgsStore({ messages: updated })
+
+  // Add welcome system message if empty
+  useEffect(() => {
+    if (!msgsReady || msgs.length > 0) return
+    setMsgs([{
+      id: 'sys-welcome',
+      text: `Canal de mensajes creado para "${event?.name || 'el evento'}"`,
+      authorId: 'system', authorName: 'Sistema', authorInitials: 'S', authorColor: '#888',
+      timestamp: new Date().toISOString(), type: 'system',
+    }])
+  }, [msgsReady])
 
   const [text, setText] = useState('')
   const [search, setSearch] = useState('')
@@ -297,7 +298,6 @@ export default function MensajesPage() {
 
     const updated = [...msgs, newMsg]
     setMsgs(updated)
-    saveMsgs(id!, updated)
     setText('')
     setReplyTo(null)
   }
@@ -314,13 +314,11 @@ export default function MensajesPage() {
       return { ...m, reactions }
     })
     setMsgs(updated)
-    saveMsgs(id!, updated)
   }
 
   function handleDelete(msgId: string) {
     const updated = msgs.filter((m) => m.id !== msgId)
     setMsgs(updated)
-    saveMsgs(id!, updated)
   }
 
   function handleReply(msg: Mensaje) {
@@ -515,7 +513,6 @@ export default function MensajesPage() {
                   }
                   const updated = [...msgs, newMsg]
                   setMsgs(updated)
-                  saveMsgs(id!, updated)
                 }
                 reader.readAsDataURL(file)
                 return false

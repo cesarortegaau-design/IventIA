@@ -5,6 +5,7 @@
  */
 import { useState, useMemo, useRef } from 'react'
 import { useParams, useOutletContext } from 'react-router-dom'
+import { usePlannerStore } from '../../hooks/usePlannerStore'
 import {
   Button, Modal, Form, Input, Select, DatePicker, App, Typography, Space, Popconfirm, Tooltip,
 } from 'antd'
@@ -140,7 +141,11 @@ export default function TareasPage() {
   useOutletContext<{ event: any }>()
   const { message } = App.useApp()
 
-  const [store, setStore] = useState<TasksStore>(() => loadStore(eventId))
+  const { store, update, syncStatus, ready } = usePlannerStore<TasksStore>(
+    eventId, 'tareas',
+    { tasks: [], counter: 0, updatedAt: '' },
+    `iventia-tareas-${eventId}`,
+  )
   const [view, setView]   = useState<ViewMode>('kanban')
   const [myTasks, setMyTasks] = useState(false)
   const [myInitials] = useState('YO')
@@ -156,12 +161,6 @@ export default function TareasPage() {
 
   // Drag
   const dragId = useRef<string | null>(null)
-
-  const update = (next: Partial<TasksStore>) => {
-    const merged = { ...store, ...next }
-    setStore(merged)
-    saveStore(eventId, merged)
-  }
 
   // ── Stats ──────────────────────────────────────────────────────────────────
   const stats = useMemo(() => {

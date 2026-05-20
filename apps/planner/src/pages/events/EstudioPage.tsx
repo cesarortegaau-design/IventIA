@@ -5,6 +5,7 @@
  */
 import { useState, useRef } from 'react'
 import { useParams, useOutletContext } from 'react-router-dom'
+import { usePlannerStore } from '../../hooks/usePlannerStore'
 import {
   Button, Input, Select, App, Typography, Tag, Modal, Spin, Upload, Tooltip,
 } from 'antd'
@@ -507,7 +508,9 @@ export default function EstudioPage() {
   const { event } = useOutletContext<{ event: any }>()
   const { message } = App.useApp()
 
-  const [branding, setBranding] = useState<EventBranding>(() => loadBranding(eventId))
+  const { store: branding, update: updateBranding, syncStatus } = usePlannerStore<EventBranding>(
+    eventId, 'branding', { ...DEFAULT_BRANDING }, `iventia-branding-${eventId}`,
+  )
   const [activeTab, setActiveTab] = useState<'moodboard' | 'plantillas' | 'arte' | 'banner' | 'ia'>('moodboard')
   const [aiLoading, setAiLoading] = useState(false)
   const [aiResult, setAiResult] = useState<string | null>(null)
@@ -524,14 +527,11 @@ export default function EstudioPage() {
   const [analyzeResult, setAnalyzeResult] = useState<string | null>(null)
 
   const update = (patch: Partial<EventBranding>) => {
-    const next = { ...branding, ...patch }
-    setBranding(next)
-    saveBranding(eventId, next)
+    updateBranding(patch)
     setSaved(false)
   }
 
   const handleSave = () => {
-    saveBranding(eventId, branding)
     setSaved(true)
     message.success('Estilo del evento guardado')
     setTimeout(() => setSaved(false), 2500)

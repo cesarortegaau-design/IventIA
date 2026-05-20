@@ -5,6 +5,7 @@
  */
 import { useState, useMemo, useRef } from 'react'
 import { useParams, useOutletContext } from 'react-router-dom'
+import { usePlannerStore } from '../../hooks/usePlannerStore'
 import {
   Button, Modal, Form, Input, InputNumber, Select, Space,
   Popconfirm, App, Typography, Divider,
@@ -185,7 +186,11 @@ export default function PresupuestoPage() {
   const { message, modal } = App.useApp()
   const importInputRef = useRef<HTMLInputElement>(null)
 
-  const [store, setStore] = useState<BudgetStore>(() => loadStore(eventId))
+  const { store, update, syncStatus, ready } = usePlannerStore<BudgetStore>(
+    eventId, 'presupuesto',
+    { chapters: [], items: [], updatedAt: '' },
+    `iventia-presupuesto-${eventId}`,
+  )
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
 
   // Modals
@@ -202,13 +207,6 @@ export default function PresupuestoPage() {
   const watchQty   = Form.useWatch('quantity',  itemForm) ?? 0
   const watchPrice = Form.useWatch('unitPrice', itemForm) ?? 0
   const watchCost  = Form.useWatch('unitCost',  itemForm) ?? 0
-
-  // Persist helper
-  const update = (next: Partial<BudgetStore>) => {
-    const merged = { ...store, ...next }
-    setStore(merged)
-    saveStore(eventId, merged)
-  }
 
   // ── Excel import ──────────────────────────────────────────────────────────
   async function importFromExcel(file: File) {

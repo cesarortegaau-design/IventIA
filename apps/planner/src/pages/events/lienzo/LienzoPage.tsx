@@ -17,10 +17,12 @@ import {
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { eventsApi } from '../../../api/events'
+import { usePlannerStore } from '../../../hooks/usePlannerStore'
 import { resourcesApi } from '../../../api/resources'
 import { ordersApi } from '../../../api/orders'
 import { suppliersApi } from '../../../api/suppliers'
-import { loadBranding } from '../EstudioPage'
+import { DEFAULT_BRANDING } from '../EstudioPage'
+import type { EventBranding } from '../EstudioPage'
 
 const { Text, Title } = Typography
 
@@ -53,7 +55,9 @@ function PortadaWidget({ event, eventId }: { event: any; eventId: string }) {
   const [editOpen, setEditOpen] = useState(false)
   const [form] = Form.useForm()
   const [saving, setSaving] = useState(false)
-  const branding = loadBranding(eventId)
+  const { store: branding } = usePlannerStore<EventBranding>(
+    eventId, 'branding', { ...DEFAULT_BRANDING }, `iventia-branding-${eventId}`,
+  )
 
   const bg = branding.coverStyle === 'gradient'
     ? `linear-gradient(135deg, ${branding.primaryColor} 0%, ${branding.secondaryColor} 100%)`
@@ -224,8 +228,10 @@ const STATUS_COLORS: Record<string, string> = {
 function TareasWidget({ eventId }: { eventId: string }) {
   const [selectedTask, setSelectedTask] = useState<any | null>(null)
 
-  const rawTareas = localStorage.getItem(`iventia-tareas-${eventId}`)
-  const allTasks = rawTareas ? (JSON.parse(rawTareas).tasks || []) : []
+  const { store: tareasStore } = usePlannerStore<{ tasks: any[] }>(
+    eventId, 'tareas', { tasks: [] }, `iventia-tareas-${eventId}`,
+  )
+  const allTasks = tareasStore.tasks ?? []
   const urgentTasks = allTasks
     .filter((t: any) => t.status !== 'LISTA')
     .sort((a: any, b: any) => {
@@ -342,20 +348,17 @@ const SUPPLIER_CATEGORY_OPTIONS: Record<string, string> = {
 
 function ProveedoresWidget({ eventId }: { eventId: string }) {
   const navigate = useNavigate()
-  const [eventSuppliers, setEventSuppliers] = useState<any[]>(() => {
-    try {
-      const raw = localStorage.getItem(`iventia-event-suppliers-${eventId}`)
-      return raw ? JSON.parse(raw) : []
-    } catch { return [] }
-  })
+  const { store: suppStore, update: updateSuppStore } = usePlannerStore<{ suppliers: any[] }>(
+    eventId, 'suppliers', { suppliers: [] }, `iventia-event-suppliers-${eventId}`,
+  )
+  const eventSuppliers = Array.isArray(suppStore) ? (suppStore as unknown as any[]) : (suppStore.suppliers ?? [])
   const [addOpen, setAddOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [searching, setSearching] = useState(false)
 
   function saveSuppliers(list: any[]) {
-    setEventSuppliers(list)
-    localStorage.setItem(`iventia-event-suppliers-${eventId}`, JSON.stringify(list))
+    updateSuppStore({ suppliers: list })
   }
 
   function removeSupplier(supplierId: string) {
@@ -1197,47 +1200,14 @@ function generateTimelinePdf(event: any, localData: { phases: any[]; activities:
   setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }
 
-function loadTimelineData(eventId: string): { phases: any[]; activities: any[] } {
-  try {
-    const raw = localStorage.getItem(`iventia-timeline-${eventId}`)
-    if (raw) return JSON.parse(raw)
-  } catch { /* ignore */ }
-  return { phases: [], activities: [] }
-}
-
 const STATUS_DOT: Record<string, string> = {
   COMPLETED: '#059669', IN_PROGRESS: '#F97316', PENDING: '#9CA3AF',
 }
 
 function TimelineWidget({ eventId, event }: { eventId: string; event: any }) {
-  const [localData, setLocalData] = useState<{ phases: any[]; activities: any[] }>(() =>
-    eventId ? loadTimelineData(eventId) : { phases: [], activities: [] }
+  const { store: localData } = usePlannerStore<{ phases: any[]; activities: any[] }>(
+    eventId, 'timeline', { phases: [], activities: [] }, `iventia-timeline-${eventId}`,
   )
-
-  useEffect(() => {
-    if (!eventId) return
-    // Load fresh data whenever eventId becomes available or changes
-    setLocalData(loadTimelineData(eventId))
-
-    const refresh = () => setLocalData(loadTimelineData(eventId))
-
-    // Listen to TimelinePage saves (same-tab custom event)
-    const onCustom = (e: Event) => {
-      if ((e as CustomEvent).detail?.eventId === eventId) refresh()
-    }
-    window.addEventListener('iventia-timeline-changed', onCustom)
-
-    // Listen to localStorage changes from other tabs
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === `iventia-timeline-${eventId}`) refresh()
-    }
-    window.addEventListener('storage', onStorage)
-
-    return () => {
-      window.removeEventListener('iventia-timeline-changed', onCustom)
-      window.removeEventListener('storage', onStorage)
-    }
-  }, [eventId])
 
   const theme = getEventTheme(event?.eventType)
 
@@ -1874,22 +1844,10 @@ th.r{text-align:right}
 
 // ── Presupuesto Widget ─────────────────────────────────────────────────────────
 function PresupuestoWidget({ eventId, event }: { eventId: string; event: any }) {
-  const [store, setStore] = useState<LienzoBudgetStore>(() => loadBudgetStore(eventId))
+  const { store } = usePlannerStore<LienzoBudgetStore>(
+    eventId, 'presupuesto', { chapters: [], items: [] }, `iventia-presupuesto-${eventId}`,
+  )
   const [pdfMenuOpen, setPdfMenuOpen] = useState(false)
-
-  // Refresh from localStorage whenever the user switches back
-  useEffect(() => {
-    const refresh = () => setStore(loadBudgetStore(eventId))
-    window.addEventListener('focus', refresh)
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === `iventia-presupuesto-${eventId}`) refresh()
-    }
-    window.addEventListener('storage', onStorage)
-    return () => {
-      window.removeEventListener('focus', refresh)
-      window.removeEventListener('storage', onStorage)
-    }
-  }, [eventId])
 
   const active    = store.items.filter(i => i.status !== 'CANCELLED')
   const ingTotal  = active.reduce((s, i) => s + i.quantity * i.unitPrice, 0)

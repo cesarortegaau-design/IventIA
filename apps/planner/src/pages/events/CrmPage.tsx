@@ -5,6 +5,7 @@
  */
 import { useState, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
+import { usePlannerStore } from '../../hooks/usePlannerStore'
 import { useQuery } from '@tanstack/react-query'
 import {
   Button, Input, Select, Typography, Avatar, Popconfirm, App,
@@ -105,7 +106,9 @@ export default function CrmPage() {
   const { id: eventId = '' } = useParams<{ id: string }>()
   const { message } = App.useApp()
 
-  const [store, setStore] = useState<CrmStore>(() => loadCrm(eventId))
+  const { store, update: updateStore, syncStatus, ready } = usePlannerStore<CrmStore>(
+    eventId, 'crm', { suppliers: [], updatedAt: '' }, `iventia-crm-${eventId}`,
+  )
   const [search, setSearch] = useState('')
   const [addModal, setAddModal] = useState(false)
   const [addSearch, setAddSearch] = useState('')
@@ -126,7 +129,7 @@ export default function CrmPage() {
   })
   const catalogSuppliers: any[] = suppliersData?.data || []
 
-  const save = (next: CrmStore) => { setStore(next); saveCrm(eventId, next) }
+  const save = (next: CrmStore) => { updateStore(next) }
 
   const handleSavePanel = () => {
     if (!selected || !draft) return

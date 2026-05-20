@@ -7,6 +7,7 @@
  */
 import { useState, useMemo, useRef } from 'react'
 import { useParams, useOutletContext } from 'react-router-dom'
+import { usePlannerStore } from '../../hooks/usePlannerStore'
 import {
   Button, Modal, Form, Input, Select, Space, Popconfirm, App, Typography, DatePicker, TimePicker,
 } from 'antd'
@@ -158,7 +159,11 @@ export default function TimelinePage() {
   const { message, modal } = App.useApp()
   const importInputRef = useRef<HTMLInputElement>(null)
 
-  const [store, setStore] = useState<TimelineStore>(() => loadStore(eventId))
+  const { store, update, syncStatus, ready } = usePlannerStore<TimelineStore>(
+    eventId, 'timeline',
+    { phases: [], activities: [], updatedAt: '' },
+    `iventia-timeline-${eventId}`,
+  )
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
 
   // ── Panel state (HSODAK pattern) ──────────────────────────────────────────
@@ -185,26 +190,20 @@ export default function TimelinePage() {
 
   const handleSavePanel = () => {
     if (!selectedActivity || !draft) return
-    const next = {
-      ...store,
+    update({
       activities: store.activities.map(a =>
         a.id === selectedActivity.id ? { ...a, ...draft } : a
       ),
-    }
-    setStore(next)
-    saveStore(eventId, next)
+    })
     setDirty(false)
     message.success('Actividad actualizada')
   }
 
   const handleDeletePanel = () => {
     if (!selectedActivity) return
-    const next = {
-      ...store,
+    update({
       activities: store.activities.filter(a => a.id !== selectedActivity.id),
-    }
-    setStore(next)
-    saveStore(eventId, next)
+    })
     closePanel()
     message.success('Actividad eliminada')
   }
@@ -217,12 +216,6 @@ export default function TimelinePage() {
   // New activity modal
   const [newActModal, setNewActModal] = useState<{ open: boolean; phaseId: string }>({ open: false, phaseId: '' })
   const [actForm] = Form.useForm()
-
-  const update = (next: Partial<TimelineStore>) => {
-    const merged = { ...store, ...next }
-    setStore(merged)
-    saveStore(eventId, merged)
-  }
 
   // ── Excel import ──────────────────────────────────────────────────────────
   async function importFromExcel(file: File) {
@@ -397,9 +390,7 @@ export default function TimelinePage() {
       status:      vals.status || 'PENDING',
       notes:       vals.notes || '',
     }
-    const next = { ...store, activities: [...store.activities, newAct] }
-    setStore(next)
-    saveStore(eventId, next)
+    update({ activities: [...store.activities, newAct] })
     setNewActModal({ open: false, phaseId: '' })
     message.success('Actividad agregada')
     // Open the panel for the new activity
@@ -944,9 +935,7 @@ export default function TimelinePage() {
                                 title="¿Eliminar esta actividad?"
                                 onConfirm={() => {
                                   if (selectedActivity?.id === act.id) closePanel()
-                                  const next = { ...store, activities: store.activities.filter(a => a.id !== act.id) }
-                                  setStore(next)
-                                  saveStore(eventId, next)
+                                  update({ activities: store.activities.filter(a => a.id !== act.id) })
                                   message.success('Actividad eliminada')
                                 }}
                                 okButtonProps={{ danger: true }}

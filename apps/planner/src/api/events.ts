@@ -51,4 +51,10 @@ export const eventsApi = {
     apiClient.get(`/events/${id}/lienzo`).then((r) => r.data),
   saveLienzo: (id: string, widgets: any[]) =>
     apiClient.put(`/events/${id}/lienzo`, { widgets }).then((r) => r.data),
+  getPlannerStore: (id: string, key: string) =>
+    apiClient.get(`/events/${id}/planner-store/${key}`).then((r) => r.data),
+  savePlannerStore: (id: string, key: string, data: any) =>
+    apiClient.put(`/events/${id}/planner-store/${key}`, { data }).then((r) => r.data),
+  getAllPlannerStores: (id: string) =>
+    apiClient.get(`/events/${id}/planner-stores`).then((r) => r.data),
 }

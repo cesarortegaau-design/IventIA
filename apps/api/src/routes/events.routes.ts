@@ -13,6 +13,7 @@ import { listEventActivities, createEventActivity, updateEventActivity, deleteEv
 import { updateMatchScore } from '../controllers/tournament.controller'
 import { publishPlannerPortal } from '../controllers/planner-portal.controller'
 import { getLienzo, saveLienzo } from '../controllers/lienzo.controller'
+import { getPlannerStore, savePlannerStore, getAllPlannerStores } from '../controllers/planner-store.controller'
 import activityDocumentsRouter from './activityDocuments.routes'
 import tournamentRouter from './tournament.routes'
 
@@ -91,6 +92,11 @@ router.use('/:eventId/activities/:activityId/documents', activityDocumentsRouter
 
 // Planner portal
 router.post('/:id/planner-portal/publish', publishPlannerPortal)
+
+// Planner stores (presupuesto, timeline, tareas, etc.)
+router.get('/:id/planner-stores', getAllPlannerStores)
+router.get('/:id/planner-store/:key', getPlannerStore)
+router.put('/:id/planner-store/:key', savePlannerStore)
 
 // Lienzo (canvas widgets)
 router.get('/:id/lienzo', getLienzo)
