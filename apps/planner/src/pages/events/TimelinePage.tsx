@@ -77,6 +77,8 @@ function saveStore(id: string, store: TimelineStore) {
       ...store,
       updatedAt: new Date().toISOString(),
     }))
+    // Notify widgets in the same app (e.g. Lienzo TimelineWidget)
+    window.dispatchEvent(new CustomEvent('iventia-timeline-changed', { detail: { eventId: id } }))
   } catch { /* ignore */ }
 }
 

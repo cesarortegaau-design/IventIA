@@ -823,9 +823,29 @@ function TimelineWidget({ eventId, event }: { eventId: string; event: any }) {
     eventId ? loadTimelineData(eventId) : { phases: [], activities: [] }
   )
 
-  // Re-read from localStorage whenever eventId changes
   useEffect(() => {
-    if (eventId) setLocalData(loadTimelineData(eventId))
+    if (!eventId) return
+    // Load fresh data whenever eventId becomes available or changes
+    setLocalData(loadTimelineData(eventId))
+
+    const refresh = () => setLocalData(loadTimelineData(eventId))
+
+    // Listen to TimelinePage saves (same-tab custom event)
+    const onCustom = (e: Event) => {
+      if ((e as CustomEvent).detail?.eventId === eventId) refresh()
+    }
+    window.addEventListener('iventia-timeline-changed', onCustom)
+
+    // Listen to localStorage changes from other tabs
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === `iventia-timeline-${eventId}`) refresh()
+    }
+    window.addEventListener('storage', onStorage)
+
+    return () => {
+      window.removeEventListener('iventia-timeline-changed', onCustom)
+      window.removeEventListener('storage', onStorage)
+    }
   }, [eventId])
 
   const theme = getEventTheme(event?.eventType)
@@ -972,10 +992,11 @@ function TimelineWidget({ eventId, event }: { eventId: string; event: any }) {
 }
 
 function WidgetRenderer({
-  widget, event, onConfigChange,
+  widget, event, eventId, onConfigChange,
 }: {
   widget: Widget
   event: any
+  eventId: string
   onConfigChange: (id: string, patch: Record<string, any>) => void
 }) {
   switch (widget.type) {
@@ -996,8 +1017,8 @@ function WidgetRenderer({
         onConfigChange={(patch) => onConfigChange(widget.id, { config: { ...widget.config, ...patch } })}
       />
     )
-    case 'resumen':     return <ResumenWidget eventId={event?.id ?? ''} />
-    case 'timeline':    return <TimelineWidget eventId={event?.id ?? ''} event={event} />
+    case 'resumen':     return <ResumenWidget eventId={eventId || event?.id || ''} />
+    case 'timeline':    return <TimelineWidget eventId={eventId || event?.id || ''} event={event} />
     default:            return null
   }
 }
@@ -1499,7 +1520,7 @@ export default function LienzoPage() {
                   }}
                   onMouseDown={(e) => onWidgetMouseDown(e, w.id)}
                 >
-                  <WidgetRenderer widget={w} event={event} onConfigChange={updateWidget} />
+                  <WidgetRenderer widget={w} event={event} eventId={id || ''} onConfigChange={updateWidget} />
 
                   {/* Resize handle */}
                   {isSelected && (
