@@ -1,10 +1,10 @@
 /**
  * usePlannerStore — generic hook for planner pages that need synced JSON storage.
  *
- * Replaces the old localStorage pattern with backend-backed persistence.
- * On mount: fetches from API, falls back to localStorage for one-time migration.
- * On update: debounced PUT to API (1200ms). Flushes on unmount so navigating away
- * never loses data.
+ * On mount: fetches from API (once), falls back to localStorage for migration.
+ * On update: debounced PUT to API (1200ms).
+ * On unmount: flushes any pending save so navigation never loses data.
+ * After each save the React Query cache is updated so the next mount is instant.
  */
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -34,28 +34,31 @@ export function usePlannerStore<T extends Record<string, any>>(
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('loading')
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSavedJson = useRef('')
-  const didMigrate = useRef(false)
+  const initialized = useRef(false)
   const storeRef = useRef(store)
   storeRef.current = store
 
-  const queryKey = ['planner-store', eventId, storeKey]
+  const qk = useRef(['planner-store', eventId, storeKey])
+  qk.current = ['planner-store', eventId, storeKey]
 
-  // Fetch from backend — default staleTime so data refreshes on remount
+  // Fetch from backend — staleTime Infinity because we update the cache after every save
   const { data: remote, isLoading } = useQuery({
-    queryKey,
+    queryKey: qk.current,
     queryFn: () => eventsApi.getPlannerStore(eventId, storeKey),
     enabled: !!eventId,
+    staleTime: Infinity,
   })
 
-  // Initialize from remote or migrate from localStorage
+  // Initialize ONCE from remote or migrate from localStorage
   useEffect(() => {
-    if (isLoading || !eventId) return
+    if (isLoading || !eventId || initialized.current) return
+    initialized.current = true
+
     const remoteData = remote?.data
     if (remoteData && typeof remoteData === 'object' && Object.keys(remoteData).length > 0) {
       setStore(remoteData as T)
       lastSavedJson.current = JSON.stringify(remoteData)
-    } else if (localStorageKey && !didMigrate.current) {
-      didMigrate.current = true
+    } else if (localStorageKey) {
       try {
         const raw = localStorage.getItem(localStorageKey)
         if (raw) {
@@ -75,14 +78,17 @@ export function usePlannerStore<T extends Record<string, any>>(
     if (!ready || !eventId) return
     const json = JSON.stringify(store)
     if (json === lastSavedJson.current) return
+
     setSyncStatus('saving')
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
-      eventsApi.savePlannerStore(eventId, storeKey, store)
+      const current = storeRef.current
+      eventsApi.savePlannerStore(eventId, storeKey, current)
         .then(() => {
           setSyncStatus('saved')
-          lastSavedJson.current = JSON.stringify(store)
-          queryClient.setQueryData(queryKey, { data: store })
+          lastSavedJson.current = JSON.stringify(current)
+          // Update RQ cache so next mount loads instantly (no re-fetch needed)
+          queryClient.setQueryData(qk.current, { data: current })
         })
         .catch(() => setSyncStatus('idle'))
     }, DEBOUNCE_MS)
@@ -98,7 +104,7 @@ export function usePlannerStore<T extends Record<string, any>>(
       const json = JSON.stringify(storeRef.current)
       if (json !== lastSavedJson.current && eventId) {
         eventsApi.savePlannerStore(eventId, storeKey, storeRef.current).catch(() => {})
-        queryClient.setQueryData(['planner-store', eventId, storeKey], { data: storeRef.current })
+        queryClient.setQueryData(qk.current, { data: storeRef.current })
       }
     }
   }, [eventId, storeKey, queryClient])
