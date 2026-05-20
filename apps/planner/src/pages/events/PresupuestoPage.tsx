@@ -1,5 +1,5 @@
 /**
- * PresupuestoPage.tsx
+ * PresupuestoPage.tsx — v2
  * Presupuesto P&L — precio de venta, costo y utilidad por item/capítulo/evento
  * Persiste en localStorage por evento
  */
