@@ -5,7 +5,7 @@
  * 4 KPIs (Total, Completadas, En progreso, Pendientes) y barra de avance.
  * Edición de actividades: panel lateral derecho estilo HSODAK.
  */
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useParams, useOutletContext } from 'react-router-dom'
 import {
   Button, Modal, Form, Input, Select, Space, Popconfirm, App, Typography, DatePicker, TimePicker,
@@ -155,7 +155,8 @@ async function exportToExcel(store: TimelineStore, eventName: string) {
 export default function TimelinePage() {
   const { id: eventId = '' } = useParams<{ id: string }>()
   const { event } = useOutletContext<{ event: any }>()
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
+  const importInputRef = useRef<HTMLInputElement>(null)
 
   const [store, setStore] = useState<TimelineStore>(() => loadStore(eventId))
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
@@ -221,6 +222,95 @@ export default function TimelinePage() {
     const merged = { ...store, ...next }
     setStore(merged)
     saveStore(eventId, merged)
+  }
+
+  // ── Excel import ──────────────────────────────────────────────────────────
+  async function importFromExcel(file: File) {
+    try {
+      const ExcelJS = await import('exceljs')
+      const wb = new ExcelJS.Workbook()
+      await wb.xlsx.load(await file.arrayBuffer())
+      const ws = wb.worksheets[0]
+      if (!ws) { message.error('El archivo no contiene hojas'); return }
+
+      const colMap: Record<string, number> = {}
+      ws.getRow(1).eachCell((cell, ci) => {
+        const v = String(cell.value ?? '').trim()
+        if (v) colMap[v] = ci
+      })
+
+      if (!colMap['Actividad']) {
+        message.error('El archivo no tiene la columna "Actividad". Usa el Excel exportado como plantilla.')
+        return
+      }
+
+      const STATUS_REVERSE: Record<string, TimelineActivity['status']> = {
+        completada: 'COMPLETED', 'en progreso': 'IN_PROGRESS', pendiente: 'PENDING',
+      }
+
+      type ParsedRow = {
+        phase: string; name: string; responsible: string
+        startTime: string; endTime: string
+        status: TimelineActivity['status']; notes: string
+      }
+      const rows: ParsedRow[] = []
+      ws.eachRow((row, ri) => {
+        if (ri === 1) return
+        const str = (col: string) => {
+          const idx = colMap[col]; if (!idx) return ''
+          const v = row.getCell(idx).value
+          return v == null ? '' : String(v).trim()
+        }
+        const name = str('Actividad')
+        if (!name) return
+        const statusKey = str('Estado').toLowerCase()
+        rows.push({
+          phase:       str('Fase') || 'General',
+          name,
+          responsible: str('Responsable'),
+          startTime:   str('Inicio'),
+          endTime:     str('Fin'),
+          status:      STATUS_REVERSE[statusKey] ?? 'PENDING',
+          notes:       str('Notas'),
+        })
+      })
+
+      if (rows.length === 0) { message.warning('No se encontraron filas con datos'); return }
+
+      modal.confirm({
+        title: `Importar ${rows.length} actividades`,
+        content: `Se reemplazará el timeline actual con las ${rows.length} actividades del archivo "${file.name}". Esta acción no se puede deshacer.`,
+        okText: 'Reemplazar',
+        cancelText: 'Cancelar',
+        okButtonProps: { danger: true },
+        onOk() {
+          const COLORS = ['#7C3AED','#2563EB','#059669','#D97706','#DC2626','#0891B2','#7C2D8E']
+          const phaseNames = [...new Set(rows.map(r => r.phase))]
+          const newPhases: TimelinePhase[] = phaseNames.map((name, i) => ({
+            id: `ph-${Date.now()}-${i}`, name, color: COLORS[i % COLORS.length], sortOrder: i,
+          }))
+          const phIdByName: Record<string, string> = {}
+          newPhases.forEach(ph => { phIdByName[ph.name] = ph.id })
+          const newActivities: TimelineActivity[] = rows.map((r, i) => ({
+            id: `act-${Date.now()}-${i}`,
+            phaseId:     phIdByName[r.phase],
+            name:        r.name,
+            responsible: r.responsible,
+            startTime:   r.startTime,
+            endTime:     r.endTime,
+            status:      r.status,
+            notes:       r.notes,
+          }))
+          update({ phases: newPhases, activities: newActivities })
+          message.success(`${rows.length} actividades importadas correctamente`)
+        },
+      })
+    } catch (err) {
+      console.error(err)
+      message.error('Error al leer el archivo Excel')
+    } finally {
+      if (importInputRef.current) importInputRef.current.value = ''
+    }
   }
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
@@ -540,9 +630,16 @@ export default function TimelinePage() {
           </div>
 
           <Space>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".xlsx"
+              style={{ display: 'none' }}
+              onChange={e => { const f = e.target.files?.[0]; if (f) importFromExcel(f) }}
+            />
             <Button
               icon={<UploadOutlined />}
-              onClick={() => message.info('Importación desde Excel — próximamente')}
+              onClick={() => importInputRef.current?.click()}
             >
               Importar Excel
             </Button>

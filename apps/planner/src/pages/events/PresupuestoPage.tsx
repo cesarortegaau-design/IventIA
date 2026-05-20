@@ -3,7 +3,7 @@
  * Presupuesto P&L — precio de venta, costo y utilidad por item/capítulo/evento
  * Persiste en localStorage por evento
  */
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useParams, useOutletContext } from 'react-router-dom'
 import {
   Button, Modal, Form, Input, InputNumber, Select, Space,
@@ -182,7 +182,8 @@ async function exportToExcel(store: BudgetStore, eventName: string) {
 export default function PresupuestoPage() {
   const { id: eventId = '' } = useParams<{ id: string }>()
   const { event } = useOutletContext<{ event: any }>()
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
+  const importInputRef = useRef<HTMLInputElement>(null)
 
   const [store, setStore] = useState<BudgetStore>(() => loadStore(eventId))
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
@@ -207,6 +208,104 @@ export default function PresupuestoPage() {
     const merged = { ...store, ...next }
     setStore(merged)
     saveStore(eventId, merged)
+  }
+
+  // ── Excel import ──────────────────────────────────────────────────────────
+  async function importFromExcel(file: File) {
+    try {
+      const ExcelJS = await import('exceljs')
+      const wb = new ExcelJS.Workbook()
+      await wb.xlsx.load(await file.arrayBuffer())
+      const ws = wb.worksheets[0]
+      if (!ws) { message.error('El archivo no contiene hojas'); return }
+
+      // Map header names → column indices
+      const colMap: Record<string, number> = {}
+      ws.getRow(1).eachCell((cell, ci) => {
+        const v = String(cell.value ?? '').trim()
+        if (v) colMap[v] = ci
+      })
+
+      if (!colMap['Concepto']) {
+        message.error('El archivo no tiene la columna "Concepto". Usa el Excel exportado como plantilla.')
+        return
+      }
+
+      const STATUS_REVERSE: Record<string, BudgetItem['status']> = {
+        confirmado: 'CONFIRMED', cancelado: 'CANCELLED',
+      }
+
+      type ParsedRow = {
+        chapter: string; code: string; concept: string; provider: string
+        quantity: number; unit: string; unitPrice: number; unitCost: number
+        status: BudgetItem['status']; notes: string
+      }
+      const rows: ParsedRow[] = []
+      ws.eachRow((row, ri) => {
+        if (ri === 1) return
+        const str = (col: string) => {
+          const idx = colMap[col]; if (!idx) return ''
+          const v = row.getCell(idx).value
+          return v == null ? '' : String(v).trim()
+        }
+        const num = (col: string) => {
+          const idx = colMap[col]; if (!idx) return 0
+          const v = row.getCell(idx).value
+          if (v == null) return 0
+          const n = typeof v === 'number' ? v : parseFloat(String(v).replace(/[^0-9.-]/g, ''))
+          return isNaN(n) ? 0 : n
+        }
+        const concept = str('Concepto')
+        if (!concept) return
+        const statusKey = str('Estado').toLowerCase()
+        rows.push({
+          chapter:   str('Capítulo') || 'General',
+          code:      str('Código'),
+          concept,
+          provider:  str('Proveedor'),
+          quantity:  num('Cant.') || 1,
+          unit:      str('Unidad') || 'pza',
+          unitPrice: num('P. Unit.'),
+          unitCost:  num('Costo Unit.'),
+          status:    STATUS_REVERSE[statusKey] ?? 'PENDING',
+          notes:     str('Notas'),
+        })
+      })
+
+      if (rows.length === 0) { message.warning('No se encontraron filas con datos'); return }
+
+      modal.confirm({
+        title: `Importar ${rows.length} items`,
+        content: `Se reemplazará el presupuesto actual con los ${rows.length} items del archivo "${file.name}". Esta acción no se puede deshacer.`,
+        okText: 'Reemplazar',
+        cancelText: 'Cancelar',
+        okButtonProps: { danger: true },
+        onOk() {
+          const COLORS = ['#7C3AED','#2563EB','#059669','#D97706','#DC2626','#0891B2','#7C2D8E']
+          const chapterNames = [...new Set(rows.map(r => r.chapter))]
+          const newChapters: BudgetChapter[] = chapterNames.map((name, i) => ({
+            id: `ch-${Date.now()}-${i}`, name, color: COLORS[i % COLORS.length], sortOrder: i,
+          }))
+          const chIdByName: Record<string, string> = {}
+          newChapters.forEach(ch => { chIdByName[ch.name] = ch.id })
+          const newItems: BudgetItem[] = rows.map((r, i) => ({
+            id: `item-${Date.now()}-${i}`,
+            chapterId: chIdByName[r.chapter],
+            concept: r.concept, code: r.code, provider: r.provider,
+            quantity: r.quantity, unit: r.unit,
+            unitPrice: r.unitPrice, unitCost: r.unitCost,
+            status: r.status, notes: r.notes,
+          }))
+          update({ chapters: newChapters, items: newItems })
+          message.success(`${rows.length} items importados correctamente`)
+        },
+      })
+    } catch (err) {
+      console.error(err)
+      message.error('Error al leer el archivo Excel')
+    } finally {
+      if (importInputRef.current) importInputRef.current.value = ''
+    }
   }
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
@@ -344,9 +443,16 @@ export default function PresupuestoPage() {
           </div>
 
           <Space>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".xlsx"
+              style={{ display: 'none' }}
+              onChange={e => { const f = e.target.files?.[0]; if (f) importFromExcel(f) }}
+            />
             <Button
               icon={<UploadOutlined />}
-              onClick={() => message.info('Importación desde Excel — próximamente')}
+              onClick={() => importInputRef.current?.click()}
             >
               Importar Excel
             </Button>
