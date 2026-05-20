@@ -16,6 +16,7 @@ import ClientsPage from '../pages/clients/ClientsPage'
 import ClientDetailPage from '../pages/clients/ClientDetailPage'
 import SuppliersPage from '../pages/suppliers/SuppliersPage'
 import SupplierDetailPage from '../pages/suppliers/SupplierDetailPage'
+import CrmPage from '../pages/events/CrmPage'
 import StudioPage from '../pages/studio/StudioPage'
 import SeedPage from '../pages/seed/SeedPage'
 
@@ -50,7 +51,7 @@ export default function AppRouter() {
         <Route path="timeline" element={<TimelinePage />} />
         <Route path="tareas" element={<TareasPage />} />
         <Route path="presupuesto" element={<PresupuestoPage />} />
-        <Route path="crm" element={<EventDetailPage defaultTab="crm" />} />
+        <Route path="crm" element={<CrmPage />} />
         <Route path="mapa" element={<MapaPage />} />
         <Route path="portal" element={<EventDetailPage defaultTab="portal" />} />
         <Route path="moodboard" element={<EventDetailPage defaultTab="moodboard" />} />
