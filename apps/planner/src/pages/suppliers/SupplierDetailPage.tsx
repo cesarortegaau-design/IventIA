@@ -1,14 +1,17 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Typography, Avatar, Button, Spin, Alert, Space, Row, Col,
-  Form, Input, Select, App, Tag,
+  Form, Input, Select, App, Tag, Popconfirm,
 } from 'antd'
 import {
   ArrowLeftOutlined, EditOutlined, SaveOutlined, MailOutlined, PhoneOutlined,
   GlobalOutlined, ShopOutlined,
+  UploadOutlined, LinkOutlined, PaperClipOutlined, FileOutlined,
+  DownloadOutlined, DeleteOutlined,
 } from '@ant-design/icons'
+import dayjs from 'dayjs'
 import { suppliersApi } from '../../api/suppliers'
 
 const { Title, Text, Paragraph } = Typography
@@ -44,6 +47,60 @@ export default function SupplierDetailPage() {
   const { message } = App.useApp()
   const [editing, setEditing] = useState(false)
   const [form] = Form.useForm()
+
+  // Documents state
+  const [docs, setDocs] = useState<any[]>(() => {
+    try {
+      const raw = localStorage.getItem(`iventia-supplier-docs-${id}`)
+      return raw ? JSON.parse(raw) : []
+    } catch { return [] }
+  })
+  const [addingDoc, setAddingDoc] = useState(false)
+  const [docUrl, setDocUrl] = useState('')
+  const [docName, setDocName] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  function saveDocs(list: any[]) {
+    setDocs(list)
+    localStorage.setItem(`iventia-supplier-docs-${id!}`, JSON.stringify(list))
+  }
+
+  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const doc = {
+        id: Date.now().toString(),
+        name: file.name,
+        type: file.type,
+        url: reader.result as string,
+        uploadedAt: new Date().toISOString(),
+        size: file.size,
+      }
+      saveDocs([...docs, doc])
+      message.success(`${file.name} adjuntado`)
+    }
+    reader.readAsDataURL(file)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  function handleAddUrl() {
+    if (!docUrl.trim()) return
+    const doc = {
+      id: Date.now().toString(),
+      name: docName.trim() || docUrl,
+      type: 'url',
+      url: docUrl.trim(),
+      uploadedAt: new Date().toISOString(),
+    }
+    saveDocs([...docs, doc])
+    setDocUrl(''); setDocName(''); setAddingDoc(false)
+  }
+
+  function removeDoc(docId: string) {
+    saveDocs(docs.filter((d) => d.id !== docId))
+  }
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['planner-supplier', id],
@@ -189,6 +246,92 @@ export default function SupplierDetailPage() {
           </Row>
         </Card>
       )}
+
+      {/* Documents Card */}
+      <Card
+        style={{ borderRadius: 20, boxShadow: 'var(--pl-shadow)', marginTop: 24 }}
+        title={<><PaperClipOutlined style={{ marginRight: 8 }} />Documentos anexos</>}
+        extra={
+          <Space>
+            <Button size="small" onClick={() => fileInputRef.current?.click()}>
+              <UploadOutlined /> Subir archivo
+            </Button>
+            <Button size="small" onClick={() => setAddingDoc(true)}>
+              <LinkOutlined /> Agregar URL
+            </Button>
+          </Space>
+        }
+      >
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          style={{ display: 'none' }}
+          accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.txt"
+          onChange={handleFileUpload}
+        />
+
+        {/* Add URL form */}
+        {addingDoc && (
+          <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 14, marginBottom: 16, border: '1px solid #E5E7EB' }}>
+            <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13 }}>Agregar enlace</div>
+            <Input
+              placeholder="Nombre del documento (opcional)"
+              value={docName}
+              onChange={(e) => setDocName(e.target.value)}
+              style={{ marginBottom: 8 }}
+            />
+            <Input
+              placeholder="URL del documento"
+              value={docUrl}
+              onChange={(e) => setDocUrl(e.target.value)}
+              style={{ marginBottom: 10 }}
+            />
+            <Space>
+              <Button type="primary" size="small" onClick={handleAddUrl}
+                style={{ background: 'var(--pl-primary)', border: 'none' }}>Agregar</Button>
+              <Button size="small" onClick={() => { setAddingDoc(false); setDocUrl(''); setDocName('') }}>Cancelar</Button>
+            </Space>
+          </div>
+        )}
+
+        {/* Document list */}
+        {docs.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '24px 0', color: '#9CA3AF' }}>
+            <PaperClipOutlined style={{ fontSize: 28, marginBottom: 8, display: 'block' }} />
+            <div style={{ fontSize: 13 }}>Sin documentos adjuntos</div>
+          </div>
+        ) : docs.map((doc) => (
+          <div key={doc.id} style={{
+            display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0',
+            borderBottom: '1px solid #F3F4F6',
+          }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: 8, background: '#F0EBFF',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+              <FileOutlined style={{ color: '#7C3AED', fontSize: 16 }} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#1F2937', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {doc.name}
+              </div>
+              <div style={{ fontSize: 11, color: '#9CA3AF' }}>
+                {dayjs(doc.uploadedAt).format('D MMM YYYY')}
+                {doc.size ? ` · ${(doc.size / 1024).toFixed(0)} KB` : ''}
+              </div>
+            </div>
+            <Space>
+              <a href={doc.url} target="_blank" rel="noreferrer" download={doc.type !== 'url' ? doc.name : undefined}>
+                <Button size="small" icon={<DownloadOutlined />} type="text" />
+              </a>
+              <Popconfirm title="¿Eliminar documento?" onConfirm={() => removeDoc(doc.id)} okText="Sí" cancelText="No">
+                <Button size="small" icon={<DeleteOutlined />} type="text" danger />
+              </Popconfirm>
+            </Space>
+          </div>
+        ))}
+      </Card>
     </div>
   )
 }

@@ -1,9 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { useParams, useOutletContext } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useParams, useOutletContext, useNavigate } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Button, Tooltip, Typography, Tag, Avatar, Checkbox, Divider,
   Input, Switch, InputNumber, Modal, Spin, Alert, App, Upload,
+  Form, Select, DatePicker,
 } from 'antd'
 import type { UploadFile } from 'antd'
 import {
@@ -18,6 +19,7 @@ import dayjs from 'dayjs'
 import { eventsApi } from '../../../api/events'
 import { resourcesApi } from '../../../api/resources'
 import { ordersApi } from '../../../api/orders'
+import { suppliersApi } from '../../../api/suppliers'
 import { loadBranding } from '../EstudioPage'
 
 const { Text, Title } = Typography
@@ -46,6 +48,11 @@ const makeDefaultWidgets = (): Widget[] => [
 
 // ── Widget renderers ───────────────────────────────────────────────────────────
 function PortadaWidget({ event, eventId }: { event: any; eventId: string }) {
+  const qc = useQueryClient()
+  const { message } = App.useApp()
+  const [editOpen, setEditOpen] = useState(false)
+  const [form] = Form.useForm()
+  const [saving, setSaving] = useState(false)
   const branding = loadBranding(eventId)
 
   const bg = branding.coverStyle === 'gradient'
@@ -72,6 +79,26 @@ function PortadaWidget({ event, eventId }: { event: any; eventId: string }) {
     }}>
       {/* Accent top bar */}
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: branding.accentColor }} />
+      {/* Edit button */}
+      <Button
+        size="small"
+        icon={<EditOutlined />}
+        style={{ position: 'absolute', top: 10, right: 10, opacity: 0.7 }}
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation()
+          form.setFieldsValue({
+            name: event?.name,
+            eventType: event?.eventType,
+            venueLocation: event?.venueLocation,
+            eventStart: event?.eventStart ? dayjs(event.eventStart) : null,
+            eventEnd: event?.eventEnd ? dayjs(event.eventEnd) : null,
+            expectedAttendance: event?.expectedAttendance,
+            description: event?.description,
+          })
+          setEditOpen(true)
+        }}
+      />
       <div>
         <div style={{ fontSize: 11, fontWeight: 600, color: muted, letterSpacing: '0.06em', marginBottom: 6 }}>
           {event?.eventType || 'EVENTO'} · {event?.code || '—'}
@@ -102,19 +129,113 @@ function PortadaWidget({ event, eventId }: { event: any; eventId: string }) {
           </div>
         </div>
       )}
+      {/* Edit modal */}
+      <Modal
+        open={editOpen}
+        onCancel={() => setEditOpen(false)}
+        title="Editar evento"
+        footer={null}
+        width={560}
+      >
+        <div onMouseDown={(e) => e.stopPropagation()}>
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={async (vals) => {
+            setSaving(true)
+            try {
+              const data = {
+                ...vals,
+                eventStart: vals.eventStart ? vals.eventStart.toISOString() : undefined,
+                eventEnd: vals.eventEnd ? vals.eventEnd.toISOString() : undefined,
+              }
+              await eventsApi.update(eventId, data)
+              qc.invalidateQueries({ queryKey: ['planner-event', eventId] })
+              qc.invalidateQueries({ queryKey: ['planner-event-header', eventId] })
+              message.success('Evento actualizado')
+              setEditOpen(false)
+            } catch {
+              message.error('Error al guardar')
+            } finally {
+              setSaving(false)
+            }
+          }}
+        >
+          <Form.Item name="name" label="Nombre" rules={[{ required: true }]}>
+            <Input onMouseDown={(e) => e.stopPropagation()} />
+          </Form.Item>
+          <Form.Item name="eventType" label="Tipo de evento">
+            <Select
+              onMouseDown={(e) => e.stopPropagation()}
+              options={[
+                { value: 'WEDDING', label: 'Boda' },
+                { value: 'CORPORATE', label: 'Corporativo' },
+                { value: 'BIRTHDAY', label: 'Cumpleaños' },
+                { value: 'GALA', label: 'Gala' },
+                { value: 'CONFERENCE', label: 'Congreso' },
+                { value: 'CONCERT', label: 'Concierto' },
+                { value: 'EXHIBITION', label: 'Exposición' },
+                { value: 'OTHER', label: 'Otro' },
+              ]}
+              allowClear
+            />
+          </Form.Item>
+          <Form.Item name="venueLocation" label="Venue / Ubicación">
+            <Input onMouseDown={(e) => e.stopPropagation()} />
+          </Form.Item>
+          <Form.Item name="eventStart" label="Inicio del evento">
+            <DatePicker showTime format="DD/MM/YYYY HH:mm" style={{ width: '100%' }} onMouseDown={(e) => e.stopPropagation()} />
+          </Form.Item>
+          <Form.Item name="eventEnd" label="Fin del evento">
+            <DatePicker showTime format="DD/MM/YYYY HH:mm" style={{ width: '100%' }} onMouseDown={(e) => e.stopPropagation()} />
+          </Form.Item>
+          <Form.Item name="expectedAttendance" label="Asistentes esperados">
+            <InputNumber min={1} style={{ width: '100%' }} onMouseDown={(e) => e.stopPropagation()} />
+          </Form.Item>
+          <Form.Item name="description" label="Descripción">
+            <Input.TextArea rows={2} onMouseDown={(e) => e.stopPropagation()} />
+          </Form.Item>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <Button onClick={() => setEditOpen(false)}>Cancelar</Button>
+            <Button type="primary" htmlType="submit" loading={saving} style={{ background: 'var(--pl-primary)', border: 'none' }}>
+              Guardar
+            </Button>
+          </div>
+        </Form>
+        </div>
+      </Modal>
     </div>
   )
 }
 
-const MOCK_TASKS = [
-  { id: '1', title: 'Diseño de invitación digital v3', dept: 'Diseño · PL', days: 3, urgent: true },
-  { id: '2', title: 'Recorrido técnico en venue con DJ y AV', dept: 'Producción · JC', days: 7, urgent: false },
-  { id: '3', title: 'Pago anticipo Flores del Valle', dept: 'Pagos · MR', days: 2, urgent: true },
-  { id: '4', title: 'Revisar propuesta de seating chart (v2)', dept: 'Cliente · AF', days: 5, urgent: false },
-]
+const STATUS_LABELS: Record<string, string> = {
+  POR_HACER: 'Por hacer',
+  EN_CURSO: 'En curso',
+  ESPERANDO_OK: 'Esperando OK',
+  LISTA: 'Lista',
+}
+const STATUS_COLORS: Record<string, string> = {
+  POR_HACER: '#6B7280',
+  EN_CURSO: '#2563EB',
+  ESPERANDO_OK: '#F97316',
+  LISTA: '#059669',
+}
 
-function TareasWidget() {
-  const [checked, setChecked] = useState<string[]>([])
+function TareasWidget({ eventId }: { eventId: string }) {
+  const [selectedTask, setSelectedTask] = useState<any | null>(null)
+
+  const rawTareas = localStorage.getItem(`iventia-tareas-${eventId}`)
+  const allTasks = rawTareas ? (JSON.parse(rawTareas).tasks || []) : []
+  const urgentTasks = allTasks
+    .filter((t: any) => t.status !== 'LISTA')
+    .sort((a: any, b: any) => {
+      if (a.dueDate && b.dueDate) return dayjs(a.dueDate).diff(dayjs(b.dueDate))
+      if (a.dueDate) return -1
+      if (b.dueDate) return 1
+      return 0
+    })
+    .slice(0, 6)
+
   return (
     <div style={{ width: '100%', height: '100%', padding: '14px 16px', display: 'flex', flexDirection: 'column', userSelect: 'none' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -125,76 +246,253 @@ function TareasWidget() {
         <Button type="text" size="small" icon={<PlusOutlined />} style={{ color: 'var(--pl-primary)' }} />
       </div>
       <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {MOCK_TASKS.map((task) => (
-          <div key={task.id} style={{
-            display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 10px',
-            borderRadius: 8, background: '#FAFAFA', border: '1px solid #F0EBFF',
-          }}>
-            <Checkbox
-              checked={checked.includes(task.id)}
-              onChange={(e) => setChecked(e.target.checked
-                ? [...checked, task.id]
-                : checked.filter((x) => x !== task.id))}
-              style={{ marginTop: 2 }}
-            />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{
-                fontSize: 12, fontWeight: 500, color: checked.includes(task.id) ? '#aaa' : '#1a1a1a',
-                textDecoration: checked.includes(task.id) ? 'line-through' : 'none',
-              }}>{task.title}</div>
-              <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{task.dept}</div>
-            </div>
-            <Tag style={{
-              background: task.days <= 2 ? '#FEF2F2' : task.days <= 4 ? '#FFF7ED' : '#F0F9FF',
-              color: task.days <= 2 ? '#DC2626' : task.days <= 4 ? '#D97706' : '#2563EB',
-              border: 'none', borderRadius: 20, fontSize: 11, fontWeight: 600,
-            }}>{task.days}d</Tag>
+        {urgentTasks.length === 0 ? (
+          <div style={{ textAlign: 'center', color: '#9CA3AF', fontSize: 12, padding: '20px 0' }}>
+            Sin tareas pendientes
           </div>
-        ))}
+        ) : urgentTasks.map((task: any) => {
+          const daysUntil = task.dueDate ? dayjs(task.dueDate).diff(dayjs(), 'day') : null
+          return (
+            <div
+              key={task.id}
+              onClick={() => setSelectedTask(task)}
+              style={{
+                display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 10px',
+                borderRadius: 8, background: '#FAFAFA', border: '1px solid #F0EBFF',
+                cursor: 'pointer',
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 500, color: '#1a1a1a' }}>{task.title}</div>
+                {task.assignedTo && (
+                  <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{task.assignedTo}</div>
+                )}
+              </div>
+              {daysUntil !== null && (
+                <Tag style={{
+                  background: daysUntil <= 2 ? '#FEF2F2' : daysUntil <= 4 ? '#FFF7ED' : '#F0F9FF',
+                  color: daysUntil <= 2 ? '#DC2626' : daysUntil <= 4 ? '#D97706' : '#2563EB',
+                  border: 'none', borderRadius: 20, fontSize: 11, fontWeight: 600,
+                }}>{daysUntil}d</Tag>
+              )}
+            </div>
+          )
+        })}
       </div>
+      <Modal
+        open={!!selectedTask}
+        onCancel={() => setSelectedTask(null)}
+        footer={null}
+        title="Detalle de tarea"
+      >
+        {selectedTask && (
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#1a1a1a', marginBottom: 12 }}>
+              {selectedTask.title}
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <Tag style={{
+                background: (STATUS_COLORS[selectedTask.status] || '#6B7280') + '18',
+                color: STATUS_COLORS[selectedTask.status] || '#6B7280',
+                border: 'none', borderRadius: 20,
+              }}>
+                {STATUS_LABELS[selectedTask.status] || selectedTask.status}
+              </Tag>
+              {selectedTask.priority && (
+                <Tag color={selectedTask.priority === 'ALTA' ? 'red' : selectedTask.priority === 'MEDIA' ? 'orange' : 'blue'}>
+                  {selectedTask.priority === 'ALTA' ? 'Alta' : selectedTask.priority === 'MEDIA' ? 'Media' : 'Baja'}
+                </Tag>
+              )}
+            </div>
+            {selectedTask.dueDate && (
+              <div style={{ marginBottom: 8 }}>
+                <span style={{ fontSize: 11, color: '#888', fontWeight: 600 }}>Fecha límite: </span>
+                <span style={{ fontSize: 13 }}>{dayjs(selectedTask.dueDate).format('D MMM YYYY')}</span>
+              </div>
+            )}
+            {selectedTask.assignedTo && (
+              <div style={{ marginBottom: 8 }}>
+                <span style={{ fontSize: 11, color: '#888', fontWeight: 600 }}>Asignado a: </span>
+                <span style={{ fontSize: 13 }}>{selectedTask.assignedTo}</span>
+              </div>
+            )}
+            {selectedTask.description && (
+              <div style={{ marginTop: 12, fontSize: 13, color: '#444', lineHeight: 1.6 }}>
+                {selectedTask.description}
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }
 
-const MOCK_SUPPLIERS = [
-  { id: '1', name: 'Flores del Valle', cat: 'Florería', initials: 'FV', color: '#0D9488' },
-  { id: '2', name: 'Catering Aurora', cat: 'Catering', initials: 'CA', color: '#7C3AED' },
-  { id: '3', name: 'DJ Estelar', cat: 'Audio · DJ', initials: 'DJ', color: '#F97316' },
-  { id: '4', name: 'Carpas y Más', cat: 'Mobiliario', initials: 'CM', color: '#EC4899' },
-  { id: '5', name: 'Fotografía Luz', cat: 'Foto · Video', initials: 'FL', color: '#2563EB' },
-]
+const SUPPLIER_CATEGORY_OPTIONS: Record<string, string> = {
+  CATERING: 'Catering',
+  DECORATION: 'Decoración',
+  PHOTOGRAPHY: 'Fotografía',
+  MUSIC: 'Música / DJ',
+  TRANSPORT: 'Transporte',
+  VENUE: 'Espacio / Salón',
+  AUDIO_VIDEO: 'Audio y Video',
+  FLOWERS: 'Flores',
+  OTHER: 'Otro',
+}
 
-function ProveedoresWidget() {
+function ProveedoresWidget({ eventId }: { eventId: string }) {
+  const navigate = useNavigate()
+  const [eventSuppliers, setEventSuppliers] = useState<any[]>(() => {
+    try {
+      const raw = localStorage.getItem(`iventia-event-suppliers-${eventId}`)
+      return raw ? JSON.parse(raw) : []
+    } catch { return [] }
+  })
+  const [addOpen, setAddOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [searching, setSearching] = useState(false)
+
+  function saveSuppliers(list: any[]) {
+    setEventSuppliers(list)
+    localStorage.setItem(`iventia-event-suppliers-${eventId}`, JSON.stringify(list))
+  }
+
+  function removeSupplier(supplierId: string) {
+    saveSuppliers(eventSuppliers.filter((s) => s.id !== supplierId))
+  }
+
+  async function handleSearch() {
+    if (!searchQuery.trim()) return
+    setSearching(true)
+    try {
+      const result = await suppliersApi.list({ search: searchQuery, pageSize: 20 })
+      setSearchResults(result.data || result || [])
+    } catch {
+      setSearchResults([])
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  function addSupplier(s: any) {
+    if (eventSuppliers.find((es) => es.id === s.id)) return
+    saveSuppliers([...eventSuppliers, {
+      id: s.id,
+      name: s.companyName || s.name,
+      category: s.category,
+      contactName: s.contactName,
+    }])
+  }
+
   return (
     <div style={{ width: '100%', height: '100%', padding: '14px 16px', display: 'flex', flexDirection: 'column', userSelect: 'none' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <Text strong style={{ fontSize: 13, color: '#1a1a1a' }}>PROVEEDORES ACTIVOS</Text>
-        <Button type="text" size="small" icon={<PlusOutlined />} style={{ color: 'var(--pl-primary)' }} />
+        <Button type="text" size="small" icon={<PlusOutlined />} style={{ color: 'var(--pl-primary)' }}
+          onClick={() => setAddOpen(true)} />
       </div>
       <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {MOCK_SUPPLIERS.map((s) => (
-          <div key={s.id} style={{
-            display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
-            borderRadius: 8, background: '#FAFAFA', border: '1px solid #F0EBFF',
-          }}>
-            <Avatar size={32} style={{ background: s.color, fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
-              {s.initials}
-            </Avatar>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#1a1a1a' }}>{s.name}</div>
-              <div style={{ fontSize: 11, color: '#888' }}>{s.cat}</div>
-            </div>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#059669', flexShrink: 0 }} />
+        {eventSuppliers.length === 0 ? (
+          <div style={{ textAlign: 'center', color: '#9CA3AF', fontSize: 12, padding: '20px 0' }}>
+            Sin proveedores asignados
           </div>
-        ))}
+        ) : eventSuppliers.map((s) => {
+          const initials = (s.name || '?').slice(0, 2).toUpperCase()
+          const catLabel = SUPPLIER_CATEGORY_OPTIONS[s.category] || s.category || ''
+          return (
+            <div
+              key={s.id}
+              onClick={() => navigate('/proveedores/' + s.id)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
+                borderRadius: 8, background: '#FAFAFA', border: '1px solid #F0EBFF',
+                cursor: 'pointer',
+              }}
+            >
+              <Avatar size={32} style={{ background: '#7C3AED', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
+                {initials}
+              </Avatar>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#1a1a1a' }}>{s.name}</div>
+                <div style={{ fontSize: 11, color: '#888' }}>{catLabel}</div>
+              </div>
+              <Button
+                type="text"
+                size="small"
+                icon={<CloseOutlined />}
+                style={{ color: '#9CA3AF', flexShrink: 0 }}
+                onClick={(e) => { e.stopPropagation(); removeSupplier(s.id) }}
+              />
+            </div>
+          )
+        })}
       </div>
       <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #F0EBFF',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Text style={{ fontSize: 11, color: '#888' }}>
           <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#059669', display: 'inline-block', marginRight: 4 }} />
-          Sincronizado · {dayjs().format('HH:mm')}
+          {eventSuppliers.length} proveedor{eventSuppliers.length !== 1 ? 'es' : ''}
         </Text>
       </div>
+
+      {/* Add supplier modal */}
+      <Modal
+        open={addOpen}
+        onCancel={() => { setAddOpen(false); setSearchQuery(''); setSearchResults([]) }}
+        title="Agregar proveedor al evento"
+        footer={null}
+        width={520}
+      >
+        <div onMouseDown={(e) => e.stopPropagation()}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          <Input
+            placeholder="Buscar proveedor..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onPressEnter={handleSearch}
+            onMouseDown={(e) => e.stopPropagation()}
+            style={{ flex: 1 }}
+          />
+          <Button type="primary" onClick={handleSearch} loading={searching}
+            style={{ background: 'var(--pl-primary)', border: 'none' }}>
+            Buscar
+          </Button>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {searchResults.map((s: any) => {
+            const already = eventSuppliers.some((es) => es.id === s.id)
+            const catLabel = SUPPLIER_CATEGORY_OPTIONS[s.category] || s.category || ''
+            return (
+              <div key={s.id} style={{
+                display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
+                borderRadius: 8, background: '#FAFAFA', border: '1px solid #E5E7EB',
+              }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{s.companyName || s.name}</div>
+                  <div style={{ fontSize: 11, color: '#888' }}>{catLabel}</div>
+                </div>
+                <Button
+                  size="small"
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  disabled={already}
+                  onClick={() => addSupplier(s)}
+                  style={{ background: already ? undefined : 'var(--pl-primary)', border: 'none' }}
+                >
+                  {already ? 'Agregado' : 'Agregar'}
+                </Button>
+              </div>
+            )
+          })}
+          {searchResults.length === 0 && searchQuery && !searching && (
+            <div style={{ textAlign: 'center', color: '#9CA3AF', padding: '16px 0', fontSize: 13 }}>
+              Sin resultados para "{searchQuery}"
+            </div>
+          )}
+        </div>
+        </div>
+      </Modal>
     </div>
   )
 }
@@ -1288,8 +1586,8 @@ function WidgetRenderer({
 }) {
   switch (widget.type) {
     case 'portada':     return <PortadaWidget event={event} eventId={eventId} />
-    case 'tareas':      return <TareasWidget />
-    case 'proveedores': return <ProveedoresWidget />
+    case 'tareas':      return <TareasWidget eventId={eventId} />
+    case 'proveedores': return <ProveedoresWidget eventId={eventId} />
     case 'nota':        return (
       <NotaWidget
         config={widget.config}
