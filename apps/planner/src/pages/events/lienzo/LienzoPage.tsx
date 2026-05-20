@@ -12,7 +12,7 @@ import {
   CloseOutlined, CheckCircleOutlined, ExclamationCircleOutlined,
   UploadOutlined, SearchOutlined, DeleteOutlined, FilePdfOutlined,
   EyeOutlined, BarChartOutlined, CalendarOutlined, DollarOutlined,
-  PrinterOutlined,
+  PrinterOutlined, LinkOutlined, YoutubeOutlined, EditOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { eventsApi } from '../../../api/events'
@@ -22,7 +22,7 @@ import { ordersApi } from '../../../api/orders'
 const { Text, Title } = Typography
 
 // ── Types ──────────────────────────────────────────────────────────────────────
-type WidgetType = 'portada' | 'tareas' | 'proveedores' | 'nota' | 'texto' | 'imagen' | 'pdf' | 'resumen' | 'timeline'
+type WidgetType = 'portada' | 'tareas' | 'proveedores' | 'nota' | 'texto' | 'imagen' | 'pdf' | 'resumen' | 'timeline' | 'links'
 
 interface Widget {
   id: string
@@ -180,25 +180,99 @@ function ProveedoresWidget() {
   )
 }
 
-function NotaWidget({ config }: { config: any }) {
+function NotaWidget({ config, onConfigChange }: { config: any; onConfigChange: (patch: Record<string, any>) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [text, setText] = useState(config.text || '')
+
+  const handleSave = () => {
+    onConfigChange({ text })
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <div style={{
+        width: '100%', height: '100%', padding: 16, borderRadius: 12,
+        background: config.color || '#FFF9C4', display: 'flex', flexDirection: 'column',
+      }}>
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: '#555' }}>📝 Nota</div>
+        <textarea
+          autoFocus
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onBlur={handleSave}
+          onKeyDown={e => { if (e.key === 'Escape') handleSave() }}
+          onMouseDown={e => e.stopPropagation()}
+          style={{
+            flex: 1, border: 'none', background: 'transparent',
+            resize: 'none', outline: '1px dashed #bbb', outlineOffset: 4,
+            fontSize: 13, color: '#333', lineHeight: 1.6,
+            fontFamily: 'inherit', padding: 4, borderRadius: 4,
+          }}
+        />
+      </div>
+    )
+  }
+
   return (
-    <div style={{
-      width: '100%', height: '100%', padding: 16, borderRadius: 12,
-      background: config.color || '#FFF9C4', userSelect: 'none',
-    }}>
+    <div
+      style={{
+        width: '100%', height: '100%', padding: 16, borderRadius: 12,
+        background: config.color || '#FFF9C4', userSelect: 'none', cursor: 'text',
+      }}
+      onDoubleClick={() => { setText(config.text || ''); setEditing(true) }}
+    >
       <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: '#555' }}>📝 Nota</div>
-      <div style={{ fontSize: 13, color: '#333', lineHeight: 1.6 }}>
-        {config.text || 'Doble click para editar...'}
+      <div style={{ fontSize: 13, color: config.text ? '#333' : '#aaa', lineHeight: 1.6, fontStyle: config.text ? 'normal' : 'italic' }}>
+        {config.text || 'Doble clic para editar...'}
       </div>
     </div>
   )
 }
 
-function TextoWidget({ config }: { config: any }) {
+function TextoWidget({ config, onConfigChange }: { config: any; onConfigChange: (patch: Record<string, any>) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [text, setText] = useState(config.text || '')
+
+  const handleSave = () => {
+    onConfigChange({ text })
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <div style={{ width: '100%', height: '100%', padding: 12, display: 'flex', alignItems: 'center' }}>
+        <input
+          autoFocus
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onBlur={handleSave}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') handleSave() }}
+          onMouseDown={e => e.stopPropagation()}
+          style={{
+            width: '100%', border: 'none', background: 'transparent',
+            outline: '1px dashed #bbb', outlineOffset: 4,
+            fontSize: config.fontSize || 16,
+            fontWeight: config.bold ? 700 : 400,
+            color: config.color || '#1a1a1a',
+            fontFamily: 'inherit', padding: '2px 6px', borderRadius: 4,
+          }}
+        />
+      </div>
+    )
+  }
+
   return (
-    <div style={{ width: '100%', height: '100%', padding: 12, display: 'flex', alignItems: 'center', userSelect: 'none' }}>
-      <div style={{ fontSize: config.fontSize || 16, fontWeight: config.bold ? 700 : 400, color: config.color || '#1a1a1a' }}>
-        {config.text || 'Texto libre...'}
+    <div
+      style={{ width: '100%', height: '100%', padding: 12, display: 'flex', alignItems: 'center', userSelect: 'none', cursor: 'text' }}
+      onDoubleClick={() => { setText(config.text || ''); setEditing(true) }}
+    >
+      <div style={{
+        fontSize: config.fontSize || 16, fontWeight: config.bold ? 700 : 400,
+        color: config.text ? (config.color || '#1a1a1a') : '#ccc',
+        fontStyle: config.text ? 'normal' : 'italic',
+      }}>
+        {config.text || 'Doble clic para editar...'}
       </div>
     </div>
   )
@@ -991,6 +1065,200 @@ function TimelineWidget({ eventId, event }: { eventId: string; event: any }) {
   )
 }
 
+// ── URL helpers ────────────────────────────────────────────────────────────────
+function extractYouTubeId(url: string): string | null {
+  const patterns = [
+    /youtube\.com\/watch\?v=([^&\s]+)/,
+    /youtu\.be\/([^?\s]+)/,
+    /youtube\.com\/embed\/([^?\s]+)/,
+    /youtube\.com\/shorts\/([^?\s]+)/,
+  ]
+  for (const p of patterns) {
+    const m = url.match(p)
+    if (m) return m[1]
+  }
+  return null
+}
+
+function extractTikTokId(url: string): string | null {
+  const m = url.match(/tiktok\.com\/@[^/]+\/video\/(\d+)/)
+  return m ? m[1] : null
+}
+
+// ── Links Widget ───────────────────────────────────────────────────────────────
+function LinksWidget({
+  config,
+  onConfigChange,
+}: {
+  config: any
+  onConfigChange: (patch: Record<string, any>) => void
+}) {
+  const url: string = config.url || ''
+  const [inputUrl, setInputUrl] = useState('')
+  const [editing, setEditing] = useState(false)
+
+  const ytId  = url ? extractYouTubeId(url)  : null
+  const ttId  = url ? extractTikTokId(url)   : null
+
+  const handleSet = () => {
+    const trimmed = inputUrl.trim()
+    if (!trimmed) return
+    onConfigChange({ url: trimmed })
+    setInputUrl('')
+    setEditing(false)
+  }
+
+  // Render the video embed or generic link
+  const renderContent = () => {
+    if (ytId) {
+      return (
+        <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', background: '#000', borderRadius: 12, overflow: 'hidden' }}>
+          <iframe
+            src={`https://www.youtube.com/embed/${ytId}?rel=0&modestbranding=1`}
+            style={{ flex: 1, border: 'none', display: 'block' }}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+            title="YouTube video"
+          />
+          <div style={{
+            padding: '5px 10px', background: '#fff', borderTop: '1px solid #EDE9FE',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
+          }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: '#888' }}>
+              <YoutubeOutlined style={{ color: '#FF0000', fontSize: 14 }} /> YouTube
+            </span>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <Button type="text" size="small" icon={<EditOutlined />}
+                onClick={e => { e.stopPropagation(); setEditing(true); setInputUrl(url) }}
+                style={{ height: 22, width: 22, padding: 0, color: '#aaa' }} />
+              <Button type="text" size="small" icon={<DeleteOutlined />}
+                onClick={e => { e.stopPropagation(); onConfigChange({ url: '' }) }}
+                style={{ height: 22, width: 22, padding: 0, color: '#DC2626' }} />
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    if (ttId) {
+      return (
+        <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', background: '#000', borderRadius: 12, overflow: 'hidden' }}>
+          <iframe
+            src={`https://www.tiktok.com/embed/v2/${ttId}`}
+            style={{ flex: 1, border: 'none', display: 'block' }}
+            allowFullScreen
+            title="TikTok video"
+          />
+          <div style={{
+            padding: '5px 10px', background: '#fff', borderTop: '1px solid #EDE9FE',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
+          }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: '#888' }}>
+              🎵 TikTok
+            </span>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <Button type="text" size="small" icon={<EditOutlined />}
+                onClick={e => { e.stopPropagation(); setEditing(true); setInputUrl(url) }}
+                style={{ height: 22, width: 22, padding: 0, color: '#aaa' }} />
+              <Button type="text" size="small" icon={<DeleteOutlined />}
+                onClick={e => { e.stopPropagation(); onConfigChange({ url: '' }) }}
+                style={{ height: 22, width: 22, padding: 0, color: '#DC2626' }} />
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    // Generic link card
+    let displayUrl = url
+    try { displayUrl = new URL(url).hostname } catch { /* keep raw */ }
+
+    return (
+      <div style={{
+        width: '100%', height: '100%', padding: 16, display: 'flex', flexDirection: 'column',
+        justifyContent: 'center', gap: 10, background: '#F5F3FF', borderRadius: 12,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: 8, background: '#7C3AED',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>
+            <LinkOutlined style={{ color: '#fff', fontSize: 16 }} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#7C3AED', marginBottom: 2 }}>Enlace</div>
+            <div style={{ fontSize: 12, color: '#555', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {displayUrl}
+            </div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <Button
+            size="small" type="primary"
+            icon={<EyeOutlined />}
+            href={url} target="_blank" rel="noreferrer"
+            onClick={e => e.stopPropagation()}
+            style={{ background: '#7C3AED', borderColor: '#7C3AED', borderRadius: 8, fontSize: 11 }}
+          >
+            Abrir
+          </Button>
+          <Button size="small" icon={<EditOutlined />}
+            onClick={e => { e.stopPropagation(); setEditing(true); setInputUrl(url) }}
+            style={{ borderRadius: 8, fontSize: 11 }}>
+            Cambiar URL
+          </Button>
+          <Button size="small" danger icon={<DeleteOutlined />}
+            onClick={e => { e.stopPropagation(); onConfigChange({ url: '' }) }}
+            style={{ borderRadius: 8, fontSize: 11 }} />
+        </div>
+      </div>
+    )
+  }
+
+  // URL input form (empty or editing)
+  if (!url || editing) {
+    return (
+      <div style={{
+        width: '100%', height: '100%', padding: 20, display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', gap: 14,
+        background: '#F5F3FF', borderRadius: 12, userSelect: 'none',
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <LinkOutlined style={{ fontSize: 32, color: '#7C3AED', display: 'block', marginBottom: 8 }} />
+          <Text style={{ fontSize: 13, color: '#7C3AED', fontWeight: 600 }}>Widget de enlace</Text>
+          <br />
+          <Text style={{ fontSize: 11, color: '#aaa' }}>YouTube, TikTok o cualquier URL</Text>
+        </div>
+        <div style={{ display: 'flex', gap: 8, width: '100%', maxWidth: 340 }}>
+          <Input
+            autoFocus={editing}
+            value={inputUrl}
+            onChange={e => setInputUrl(e.target.value)}
+            onMouseDown={e => e.stopPropagation()}
+            placeholder="https://youtube.com/watch?v=..."
+            style={{ flex: 1, borderRadius: 8 }}
+            onPressEnter={handleSet}
+          />
+          <Button
+            type="primary"
+            onClick={e => { e.stopPropagation(); handleSet() }}
+            style={{ background: '#7C3AED', borderColor: '#7C3AED', borderRadius: 8 }}
+          >
+            OK
+          </Button>
+        </div>
+        {editing && (
+          <Button type="text" size="small" onClick={() => setEditing(false)} style={{ color: '#aaa' }}>
+            Cancelar
+          </Button>
+        )}
+      </div>
+    )
+  }
+
+  return renderContent()
+}
+
 function WidgetRenderer({
   widget, event, eventId, onConfigChange,
 }: {
@@ -1003,8 +1271,24 @@ function WidgetRenderer({
     case 'portada':     return <PortadaWidget event={event} />
     case 'tareas':      return <TareasWidget />
     case 'proveedores': return <ProveedoresWidget />
-    case 'nota':        return <NotaWidget config={widget.config} />
-    case 'texto':       return <TextoWidget config={widget.config} />
+    case 'nota':        return (
+      <NotaWidget
+        config={widget.config}
+        onConfigChange={(patch) => onConfigChange(widget.id, { config: { ...widget.config, ...patch } })}
+      />
+    )
+    case 'texto':       return (
+      <TextoWidget
+        config={widget.config}
+        onConfigChange={(patch) => onConfigChange(widget.id, { config: { ...widget.config, ...patch } })}
+      />
+    )
+    case 'links':       return (
+      <LinksWidget
+        config={widget.config}
+        onConfigChange={(patch) => onConfigChange(widget.id, { config: { ...widget.config, ...patch } })}
+      />
+    )
     case 'imagen':      return (
       <ImagenWidget
         config={widget.config}
@@ -1035,7 +1319,7 @@ function PropertiesPanel({
 }) {
   const WIDGET_LABELS: Record<WidgetType, string> = {
     portada: 'Portada', tareas: 'Tareas', proveedores: 'Proveedores',
-    nota: 'Nota', texto: 'Texto', imagen: 'Imagen', pdf: 'PDF', resumen: 'Resumen del evento', timeline: 'Timeline del evento',
+    nota: 'Nota', texto: 'Texto', imagen: 'Imagen', pdf: 'PDF', resumen: 'Resumen del evento', timeline: 'Timeline del evento', links: 'Enlace / Video',
   }
 
   return (
@@ -1260,6 +1544,7 @@ const WIDGET_MENU: { type: WidgetType; label: string; icon: React.ReactNode; def
   { type: 'pdf', label: 'PDF', icon: <FilePdfOutlined />, defaultSize: [340, 420] },
   { type: 'resumen',   label: 'Resumen del evento',  icon: <BarChartOutlined />,  defaultSize: [480, 520] },
   { type: 'timeline',  label: 'Timeline del evento',  icon: <CalendarOutlined />,  defaultSize: [380, 560] },
+  { type: 'links',     label: 'Enlace / Video',        icon: <LinkOutlined />,       defaultSize: [400, 260] },
 ]
 
 // ── Persistence helpers ────────────────────────────────────────────────────────
