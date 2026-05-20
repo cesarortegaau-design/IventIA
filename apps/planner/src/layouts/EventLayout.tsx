@@ -5,8 +5,7 @@ import { Avatar, Badge, Button, Dropdown, Spin, Tooltip, Typography } from 'antd
 import {
   ArrowLeftOutlined, AppstoreOutlined, CalendarOutlined, CheckSquareOutlined,
   DollarOutlined, TeamOutlined, ApartmentOutlined, GlobalOutlined,
-  PictureOutlined, MessageOutlined, LogoutOutlined, SettingOutlined,
-  DownloadOutlined,
+  BgColorsOutlined, MessageOutlined, LogoutOutlined, SettingOutlined,
 } from '@ant-design/icons'
 import { useAuthStore } from '../stores/authStore'
 import { eventsApi } from '../api/events'
@@ -63,7 +62,7 @@ export default function EventLayout() {
     {
       group: 'EXTRAS',
       items: [
-        { key: 'moodboard', label: 'Moodboard', icon: <PictureOutlined /> },
+        { key: 'estudio', label: 'Estudio · Arte e IA', icon: <BgColorsOutlined />, badge: 'NEW' },
         { key: 'mensajes', label: 'Mensajes', icon: <MessageOutlined />, badge: 3 },
       ],
     },

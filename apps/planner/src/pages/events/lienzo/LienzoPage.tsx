@@ -18,6 +18,7 @@ import dayjs from 'dayjs'
 import { eventsApi } from '../../../api/events'
 import { resourcesApi } from '../../../api/resources'
 import { ordersApi } from '../../../api/orders'
+import { loadBranding } from '../EstudioPage'
 
 const { Text, Title } = Typography
 
@@ -44,7 +45,20 @@ const makeDefaultWidgets = (): Widget[] => [
 ]
 
 // ── Widget renderers ───────────────────────────────────────────────────────────
-function PortadaWidget({ event }: { event: any }) {
+function PortadaWidget({ event, eventId }: { event: any; eventId: string }) {
+  const branding = loadBranding(eventId)
+
+  const bg = branding.coverStyle === 'gradient'
+    ? `linear-gradient(135deg, ${branding.primaryColor} 0%, ${branding.secondaryColor} 100%)`
+    : branding.coverStyle === 'split'
+      ? `linear-gradient(90deg, ${branding.primaryColor} 50%, ${branding.secondaryColor} 50%)`
+      : branding.coverStyle === 'dark'
+        ? '#0D0D1A'
+        : branding.primaryColor
+
+  const textColor = branding.textOnBg || '#ffffff'
+  const muted = textColor === '#ffffff' ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.55)'
+
   const daysUntil = event?.eventStart
     ? Math.max(0, dayjs(event.eventStart).diff(dayjs(), 'day'))
     : null
@@ -52,18 +66,23 @@ function PortadaWidget({ event }: { event: any }) {
   return (
     <div style={{
       width: '100%', height: '100%', borderRadius: 12, overflow: 'hidden',
-      background: 'linear-gradient(135deg, #F97316 0%, #EC4899 50%, #7C3AED 100%)',
+      background: bg,
       padding: 20, display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-      color: '#fff', userSelect: 'none',
+      color: textColor, userSelect: 'none', position: 'relative',
     }}>
+      {/* Accent top bar */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: branding.accentColor }} />
       <div>
-        <div style={{ fontSize: 11, fontWeight: 600, opacity: 0.8, letterSpacing: '0.06em', marginBottom: 6 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: muted, letterSpacing: '0.06em', marginBottom: 6 }}>
           {event?.eventType || 'EVENTO'} · {event?.code || '—'}
         </div>
         <div style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.2, marginBottom: 4 }}>
           {event?.name || 'Sin nombre'}
         </div>
-        <div style={{ display: 'flex', gap: 12, fontSize: 12, opacity: 0.85 }}>
+        {branding.tagline && (
+          <div style={{ fontSize: 12, color: muted, fontStyle: 'italic', marginBottom: 4 }}>"{branding.tagline}"</div>
+        )}
+        <div style={{ display: 'flex', gap: 12, fontSize: 12, color: muted }}>
           {event?.venueLocation && <span>📍 {event.venueLocation}</span>}
           {event?.eventStart && <span>📅 {dayjs(event.eventStart).format('D MMM YYYY')}</span>}
         </div>
@@ -71,11 +90,11 @@ function PortadaWidget({ event }: { event: any }) {
       {daysUntil !== null && (
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ fontSize: 11, opacity: 0.75, marginBottom: 2 }}>FALTAN</div>
+            <div style={{ fontSize: 11, color: muted, marginBottom: 2 }}>FALTAN</div>
             <div style={{ fontSize: 52, fontWeight: 900, lineHeight: 1 }}>{daysUntil}</div>
-            <div style={{ fontSize: 13, opacity: 0.85 }}>días para el evento</div>
+            <div style={{ fontSize: 13, color: muted }}>días para el evento</div>
           </div>
-          <div style={{ textAlign: 'right', opacity: 0.85 }}>
+          <div style={{ textAlign: 'right', color: muted }}>
             <div style={{ fontSize: 11 }}>Asistentes</div>
             <div style={{ fontSize: 18, fontWeight: 700 }}>
               {event?.expectedAttendance ? `0/${event.expectedAttendance}` : '—'}
@@ -1268,7 +1287,7 @@ function WidgetRenderer({
   onConfigChange: (id: string, patch: Record<string, any>) => void
 }) {
   switch (widget.type) {
-    case 'portada':     return <PortadaWidget event={event} />
+    case 'portada':     return <PortadaWidget event={event} eventId={eventId} />
     case 'tareas':      return <TareasWidget />
     case 'proveedores': return <ProveedoresWidget />
     case 'nota':        return (
