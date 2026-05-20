@@ -409,6 +409,25 @@ function LoginScreen({
   )
 }
 
+// ── Error screen ───────────────────────────────────────────────────────────────
+function ErrorScreen({ message, onRetry }: { message: string; onRetry: () => void }) {
+  const branding = DEFAULT_BRANDING
+  const bg = `linear-gradient(135deg, ${branding.primaryColor} 0%, ${branding.secondaryColor} 100%)`
+  return (
+    <div style={{ minHeight: '100vh', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ background: '#fff', borderRadius: 20, padding: 40, width: '100%', maxWidth: 400, textAlign: 'center', boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}>
+        <div style={{ fontSize: 40, marginBottom: 16 }}>⚠️</div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: '#1F2937', marginBottom: 12 }}>Portal no disponible</div>
+        <div style={{ fontSize: 14, color: '#6B7280', marginBottom: 24, lineHeight: 1.6 }}>{message}</div>
+        <Button type="primary" onClick={onRetry} style={{ background: branding.primaryColor, borderColor: branding.primaryColor }}>
+          Volver a intentar
+        </Button>
+        <div style={{ marginTop: 24, fontSize: 11, color: '#9CA3AF' }}>Powered by IventIA Planner</div>
+      </div>
+    </div>
+  )
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function ClientPortalPage() {
   const { id } = useParams<{ id: string }>()
@@ -418,6 +437,7 @@ export default function ClientPortalPage() {
   const [snapshot, setSnapshot] = useState<PortalSnapshot | null>(null)
   const [loading, setLoading] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
+  const [authed, setAuthed] = useState(false)
 
   async function fetchSnapshot(token: string) {
     setLoading(true)
@@ -425,9 +445,18 @@ export default function ClientPortalPage() {
     try {
       const res = await plannerPortalApi.getSnapshot(eventId, token)
       setSnapshot(res.data ?? res)
+      setAuthed(true)
     } catch (err: any) {
-      setFetchError('No se pudo cargar el portal. Intenta de nuevo.')
+      const status = err?.response?.status
       sessionStorage.removeItem(sessionKey)
+      if (status === 404) {
+        setFetchError('El organizador aún no ha publicado el contenido del portal. Pídele que haga clic en "Publicar portal" en su Planner.')
+      } else if (status === 403) {
+        setFetchError('No tienes acceso a este evento. Verifica con tu event designer.')
+      } else {
+        setFetchError('No se pudo conectar con el servidor. Verifica tu conexión e intenta de nuevo.')
+      }
+      setAuthed(false)
     } finally {
       setLoading(false)
     }
@@ -449,37 +478,28 @@ export default function ClientPortalPage() {
     await fetchSnapshot(accessToken)
   }
 
-  // Not logged in yet
-  if (!snapshot && !loading) {
-    return (
-      <>
-        <LoginScreen onLogin={handleLogin} />
-        {fetchError && (
-          <div style={{
-            position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-            background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10,
-            padding: '10px 20px', color: '#B91C1C', fontSize: 13,
-          }}>
-            {fetchError}
-          </div>
-        )}
-      </>
-    )
-  }
-
   // Loading spinner
   if (loading) {
     return (
-      <div style={{
-        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: '#F3F4F6',
-      }}>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F3F4F6' }}>
         <Spin size="large" />
       </div>
     )
   }
 
-  if (!snapshot) return null
+  // Error after auth (snapshot not published, no access, etc.)
+  if (authed && fetchError) {
+    return <ErrorScreen message={fetchError} onRetry={() => { setFetchError(null); setAuthed(false) }} />
+  }
+  if (!authed && fetchError) {
+    return <ErrorScreen message={fetchError} onRetry={() => setFetchError(null)} />
+  }
+
+  // Not logged in yet
+  if (!snapshot) {
+    return <LoginScreen onLogin={handleLogin} />
+  }
+
 
   const branding: EventBranding = { ...DEFAULT_BRANDING, ...(snapshot.branding || {}) }
   const visible: string[] = snapshot.portalConfig?.visibleWidgets || ['portada', 'timeline', 'presupuesto']
