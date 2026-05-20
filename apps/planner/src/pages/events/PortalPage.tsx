@@ -114,7 +114,15 @@ function PreviewPortada({ event, branding }: { event: any; branding: EventBrandi
 }
 
 function PreviewTimeline({ eventId }: { eventId: string }) {
-  const activities = JSON.parse(localStorage.getItem(`iventia-timeline-${eventId}`) || '[]')
+  // TimelinePage stores { phases, activities, updatedAt } — extract the activities array
+  let activities: any[] = []
+  try {
+    const raw = localStorage.getItem(`iventia-timeline-${eventId}`)
+    if (raw) {
+      const stored = JSON.parse(raw)
+      activities = Array.isArray(stored) ? stored : (stored.activities || [])
+    }
+  } catch { /* ignore */ }
   const shown = activities.slice(0, 4)
   return (
     <div style={{ background: '#fff', borderRadius: 12, padding: 16, marginBottom: 14, boxShadow: '0 2px 8px rgba(0,0,0,0.07)' }}>
@@ -205,9 +213,21 @@ function PreviewTareas({ eventId }: { eventId: string }) {
   )
 }
 
+function readLienzoWidgets(eventId: string): any[] {
+  try {
+    const raw = localStorage.getItem(`iventia-lienzo-${eventId}`)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      // LienzoPage stores a raw array of widgets
+      return Array.isArray(parsed) ? parsed : (parsed.widgets || [])
+    }
+  } catch { /* ignore */ }
+  return []
+}
+
 function PreviewGaleria({ eventId }: { eventId: string }) {
-  const lienzoData = JSON.parse(localStorage.getItem(`iventia-lienzo-${eventId}`) || '{"widgets":[]}')
-  const imageWidgets = (lienzoData.widgets || []).filter((w: any) => w.type === 'imagen' && w.config?.src)
+  const widgets = readLienzoWidgets(eventId)
+  const imageWidgets = widgets.filter((w: any) => w.type === 'imagen' && w.config?.src)
   return (
     <div style={{ background: '#fff', borderRadius: 12, padding: 16, marginBottom: 14, boxShadow: '0 2px 8px rgba(0,0,0,0.07)' }}>
       <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -248,8 +268,7 @@ function PreviewEquipo({ event }: { event: any }) {
 }
 
 function PreviewLinks({ eventId }: { eventId: string }) {
-  const lienzoData = JSON.parse(localStorage.getItem(`iventia-lienzo-${eventId}`) || '{"widgets":[]}')
-  const linkWidgets = (lienzoData.widgets || []).filter((w: any) => w.type === 'links')
+  const linkWidgets = readLienzoWidgets(eventId).filter((w: any) => w.type === 'links')
   const allLinks: any[] = linkWidgets.flatMap((w: any) => w.config?.links || [])
   return (
     <div style={{ background: '#fff', borderRadius: 12, padding: 16, marginBottom: 14, boxShadow: '0 2px 8px rgba(0,0,0,0.07)' }}>
