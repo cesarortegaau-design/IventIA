@@ -25,7 +25,7 @@ import { loadBranding } from '../EstudioPage'
 const { Text, Title } = Typography
 
 // ── Types ──────────────────────────────────────────────────────────────────────
-type WidgetType = 'portada' | 'tareas' | 'proveedores' | 'nota' | 'texto' | 'imagen' | 'pdf' | 'resumen' | 'timeline' | 'links'
+type WidgetType = 'portada' | 'tareas' | 'proveedores' | 'nota' | 'texto' | 'imagen' | 'pdf' | 'resumen' | 'timeline' | 'links' | 'presupuesto'
 
 interface Widget {
   id: string
@@ -1576,6 +1576,517 @@ function LinksWidget({
   return renderContent()
 }
 
+// ── Budget helpers ─────────────────────────────────────────────────────────────
+interface LienzoBudgetItem {
+  id: string; chapterId: string; concept: string; code: string
+  provider: string; quantity: number; unit: string
+  unitPrice: number; unitCost?: number
+  status: 'CONFIRMED' | 'PENDING' | 'CANCELLED'; notes?: string
+}
+interface LienzoBudgetChapter { id: string; name: string; color: string; sortOrder: number }
+interface LienzoBudgetStore { chapters: LienzoBudgetChapter[]; items: LienzoBudgetItem[] }
+
+function loadBudgetStore(eventId: string): LienzoBudgetStore {
+  try {
+    const raw = localStorage.getItem(`iventia-presupuesto-${eventId}`)
+    if (raw) return JSON.parse(raw)
+  } catch { /* ignore */ }
+  return { chapters: [], items: [] }
+}
+
+const fmtBudget = (n: number) =>
+  `$${n.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+
+function openHtmlBlob(html: string) {
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+  const url  = URL.createObjectURL(blob)
+  window.open(url, '_blank')
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
+}
+
+// PDF Organizador — precios + costos + utilidad
+function generatePresupuestoOrgPdf(event: any, store: LienzoBudgetStore) {
+  const fmtDate = (iso?: string) => iso
+    ? new Date(iso).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
+    : ''
+
+  const active    = store.items.filter(i => i.status !== 'CANCELLED')
+  const ingTotal  = active.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+  const costTotal = active.reduce((s, i) => s + i.quantity * (i.unitCost ?? 0), 0)
+  const utilTotal = ingTotal - costTotal
+  const margenPct = ingTotal > 0 ? Math.round(utilTotal / ingTotal * 100) : 0
+
+  const chapters = [...store.chapters].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+
+  const chapterRows = chapters.map(ch => {
+    const items = store.items.filter(i => i.chapterId === ch.id)
+    const active = items.filter(i => i.status !== 'CANCELLED')
+    const ing  = active.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+    const cost = active.reduce((s, i) => s + i.quantity * (i.unitCost ?? 0), 0)
+    const util = ing - cost
+    const pct  = ing > 0 ? Math.round(util / ing * 100) : 0
+
+    const itemRows = items.map(item => {
+      const ing2  = item.quantity * item.unitPrice
+      const cost2 = item.quantity * (item.unitCost ?? 0)
+      const util2 = ing2 - cost2
+      const p2    = ing2 > 0 ? Math.round(util2 / ing2 * 100) : 0
+      const sColor = item.status === 'CONFIRMED' ? '#059669' : item.status === 'PENDING' ? '#D97706' : '#9CA3AF'
+      const sLabel = item.status === 'CONFIRMED' ? 'Conf.' : item.status === 'PENDING' ? 'Pend.' : 'Cancel.'
+      return `
+      <tr class="item-row ${item.status === 'CANCELLED' ? 'cancelled' : ''}">
+        <td class="td-concept">${item.concept}<br><span class="code">${item.code}</span></td>
+        <td class="td-prov">${item.provider || '—'}</td>
+        <td class="td-num">${item.quantity.toLocaleString('es-MX')} ${item.unit}</td>
+        <td class="td-num">${fmtBudget(item.unitPrice)}</td>
+        <td class="td-num">${(item.unitCost ?? 0) > 0 ? fmtBudget(item.unitCost!) : '—'}</td>
+        <td class="td-num bold">${fmtBudget(ing2)}</td>
+        <td class="td-num bold" style="color:${util2 >= 0 ? '#059669' : '#DC2626'}">${fmtBudget(util2)} <span class="pct">${p2}%</span></td>
+        <td class="td-status" style="color:${sColor}">${sLabel}</td>
+      </tr>`
+    }).join('')
+
+    return `
+    <tr class="ch-header" style="border-left:4px solid ${ch.color}">
+      <td colspan="5" style="padding:10px 14px;font-weight:700;font-size:13px;color:${ch.color}">${ch.name}</td>
+      <td class="td-num bold" style="color:#7C3AED">${fmtBudget(ing)}</td>
+      <td class="td-num bold" style="color:${util >= 0 ? '#059669' : '#DC2626'}">${fmtBudget(util)} <span class="pct">${pct}%</span></td>
+      <td></td>
+    </tr>
+    ${itemRows}
+    <tr class="ch-spacer"><td colspan="8"></td></tr>`
+  }).join('')
+
+  const html = `<!DOCTYPE html><html lang="es">
+<head><meta charset="utf-8"><title>Presupuesto — ${event?.name || 'Evento'}</title>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+@page{size:A4 landscape;margin:14mm 16mm}
+html,body{font-family:'Jost',Arial,sans-serif;font-size:11px;color:#1a1a1a;background:#fff}
+.header{background:linear-gradient(135deg,#7C3AED,#4F46E5);color:#fff;padding:28px 32px;margin-bottom:18px;border-radius:8px;display:flex;justify-content:space-between;align-items:flex-end}
+.header h1{font-size:22px;font-weight:800;margin-bottom:4px}
+.header .sub{font-size:11px;opacity:.75;letter-spacing:.06em}
+.kpi-row{display:flex;gap:12px;margin-bottom:18px}
+.kpi{flex:1;background:#F5F3FF;border:1px solid #DDD6FE;border-radius:8px;padding:10px 14px}
+.kpi-label{font-size:9px;font-weight:700;color:#888;letter-spacing:.12em;margin-bottom:4px}
+.kpi-value{font-size:18px;font-weight:800}
+table{width:100%;border-collapse:collapse}
+th{background:#F5F3FF;font-size:9px;font-weight:700;letter-spacing:.1em;color:#888;padding:7px 8px;text-align:left}
+th.r{text-align:right}
+.ch-header{background:#FAFAFA}
+.item-row td{padding:7px 8px;border-bottom:1px solid #F5F3FF;font-size:11px;vertical-align:middle}
+.item-row.cancelled td{opacity:.45;text-decoration:line-through}
+.ch-spacer td{height:10px}
+.td-concept{max-width:200px}
+.td-prov{color:#666;max-width:120px}
+.td-num{text-align:right;padding-right:12px;white-space:nowrap}
+.td-status{text-align:center;font-weight:600;font-size:10px}
+.bold{font-weight:700}
+.code{font-size:9px;color:#aaa}
+.pct{font-size:9px;font-weight:400;opacity:.8}
+.footer{margin-top:20px;text-align:center;font-size:9px;color:#aaa;border-top:1px solid #EDE9FE;padding-top:10px}
+.print-btn{position:fixed;bottom:20px;right:20px;background:#7C3AED;color:#fff;border:none;padding:9px 20px;border-radius:24px;font-size:12px;cursor:pointer;box-shadow:0 4px 14px rgba(124,58,237,.35);font-family:'Jost',Arial,sans-serif}
+.badge-internal{display:inline-block;background:#FEF9C3;color:#854D0E;border:1px solid #FDE68A;font-size:10px;font-weight:700;padding:2px 10px;border-radius:20px;letter-spacing:.06em;margin-bottom:4px}
+@media print{.print-btn{display:none}}
+</style></head>
+<body>
+<div class="header">
+  <div>
+    <div class="sub">${event?.eventType || 'Evento'} · ${event?.code || ''} · ${fmtDate(event?.eventStart)}</div>
+    <h1>${event?.name || 'Evento'}</h1>
+    <span class="badge-internal">USO INTERNO — CONFIDENCIAL</span>
+  </div>
+  <div style="text-align:right;font-size:11px;opacity:.8">
+    <div>Generado: ${fmtDate(new Date().toISOString())}</div>
+    <div style="font-size:9px;margin-top:2px">IventIA Planner</div>
+  </div>
+</div>
+
+<div class="kpi-row">
+  <div class="kpi"><div class="kpi-label">INGRESO TOTAL</div><div class="kpi-value" style="color:#7C3AED">${fmtBudget(ingTotal)}</div></div>
+  <div class="kpi"><div class="kpi-label">COSTO TOTAL</div><div class="kpi-value" style="color:#DC2626">${fmtBudget(costTotal)}</div></div>
+  <div class="kpi"><div class="kpi-label">UTILIDAD</div><div class="kpi-value" style="color:${margenPct>=20?'#059669':margenPct>=10?'#D97706':'#DC2626'}">${fmtBudget(utilTotal)}</div></div>
+  <div class="kpi"><div class="kpi-label">MARGEN</div><div class="kpi-value" style="color:${margenPct>=20?'#059669':margenPct>=10?'#D97706':'#DC2626'}">${margenPct}%</div></div>
+  <div class="kpi"><div class="kpi-label">CAPÍTULOS</div><div class="kpi-value" style="color:#0D9488">${chapters.length}</div></div>
+  <div class="kpi"><div class="kpi-label">ITEMS</div><div class="kpi-value" style="color:#6B7280">${store.items.length}</div></div>
+</div>
+
+<table>
+<thead><tr>
+  <th>CONCEPTO</th><th>PROVEEDOR</th><th class="r">CANT./U.</th>
+  <th class="r">P.UNIT.</th><th class="r">COSTO U.</th>
+  <th class="r">TOTAL INGRESO</th><th class="r">UTILIDAD</th><th style="text-align:center">ESTADO</th>
+</tr></thead>
+<tbody>${chapterRows}</tbody>
+<tfoot>
+  <tr style="background:#F5F3FF;border-top:2px solid #7C3AED">
+    <td colspan="5" style="padding:10px 14px;font-weight:800;font-size:13px;color:#7C3AED">TOTAL EVENTO</td>
+    <td class="td-num bold" style="color:#7C3AED;font-size:14px">${fmtBudget(ingTotal)}</td>
+    <td class="td-num bold" style="color:${utilTotal>=0?'#059669':'#DC2626'};font-size:14px">${fmtBudget(utilTotal)} <span class="pct">${margenPct}%</span></td>
+    <td></td>
+  </tr>
+</tfoot>
+</table>
+
+<div class="footer">IventIA Planner &nbsp;·&nbsp; Documento confidencial — uso exclusivo del organizador</div>
+<button class="print-btn" onclick="window.print()">⎙ Guardar PDF</button>
+<script>setTimeout(()=>window.print(),800)</script>
+</body></html>`
+
+  openHtmlBlob(html)
+}
+
+// PDF Cliente — solo precios al cliente, sin costos ni márgenes
+function generatePresupuestoClientePdf(event: any, store: LienzoBudgetStore) {
+  const fmtDate = (iso?: string) => iso
+    ? new Date(iso).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
+    : ''
+
+  const active   = store.items.filter(i => i.status !== 'CANCELLED')
+  const ingTotal = active.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+  const confirmed = active.filter(i => i.status === 'CONFIRMED').reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+
+  const chapters = [...store.chapters].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+
+  const chapterRows = chapters.map(ch => {
+    const items  = store.items.filter(i => i.chapterId === ch.id && i.status !== 'CANCELLED')
+    if (!items.length) return ''
+    const chTotal = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+
+    const itemRows = items.map(item => {
+      const total = item.quantity * item.unitPrice
+      const sColor = item.status === 'CONFIRMED' ? '#059669' : '#D97706'
+      const sLabel = item.status === 'CONFIRMED' ? 'Confirmado' : 'Por confirmar'
+      return `
+      <tr class="item-row">
+        <td class="td-concept">${item.concept}${item.notes ? `<br><span class="note">${item.notes}</span>` : ''}</td>
+        <td class="td-prov">${item.provider || '—'}</td>
+        <td class="td-num">${item.quantity.toLocaleString('es-MX')} ${item.unit}</td>
+        <td class="td-num">${fmtBudget(item.unitPrice)}</td>
+        <td class="td-num bold">${fmtBudget(total)}</td>
+        <td class="td-status" style="color:${sColor}">${sLabel}</td>
+      </tr>`
+    }).join('')
+
+    return `
+    <tr class="ch-header" style="border-left:4px solid ${ch.color}">
+      <td colspan="4" style="padding:10px 14px;font-weight:700;font-size:13px;color:${ch.color}">${ch.name}</td>
+      <td class="td-num bold" style="color:#1a1a1a">${fmtBudget(chTotal)}</td>
+      <td></td>
+    </tr>
+    ${itemRows}
+    <tr class="ch-spacer"><td colspan="6"></td></tr>`
+  }).join('')
+
+  const html = `<!DOCTYPE html><html lang="es">
+<head><meta charset="utf-8"><title>Cotización — ${event?.name || 'Evento'}</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;1,400;1,600&family=Jost:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+@page{size:A4 portrait;margin:16mm 18mm}
+html,body{font-family:'Jost',Arial,sans-serif;font-size:11px;color:#1a1a1a;background:#fff}
+.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;padding-bottom:20px;border-bottom:2px solid #7C3AED}
+.header-left h1{font-family:'Cormorant Garamond',Georgia,serif;font-size:28px;font-style:italic;font-weight:600;color:#1a1a1a;margin-bottom:4px}
+.header-left .sub{font-size:11px;color:#888;letter-spacing:.04em}
+.header-right{text-align:right}
+.header-right .label{font-size:9px;font-weight:700;color:#888;letter-spacing:.12em;margin-bottom:4px}
+.header-right .val{font-size:13px;font-weight:600;color:#1a1a1a}
+.kpi-row{display:flex;gap:10px;margin-bottom:22px}
+.kpi{flex:1;background:#F5F3FF;border:1px solid #DDD6FE;border-radius:6px;padding:10px 14px}
+.kpi-label{font-size:9px;font-weight:700;color:#888;letter-spacing:.12em;margin-bottom:4px}
+.kpi-value{font-size:18px;font-weight:800;color:#7C3AED}
+table{width:100%;border-collapse:collapse}
+th{background:#F5F3FF;font-size:9px;font-weight:700;letter-spacing:.1em;color:#888;padding:8px 10px;text-align:left}
+th.r{text-align:right}
+.ch-header{background:#FAFAFA}
+.item-row td{padding:8px 10px;border-bottom:1px solid #FAF8FF;font-size:11px;vertical-align:top}
+.ch-spacer td{height:12px}
+.td-concept{max-width:240px;font-weight:500}
+.td-prov{color:#666;max-width:130px;font-size:10px}
+.td-num{text-align:right;padding-right:12px;white-space:nowrap}
+.td-status{text-align:center;font-weight:600;font-size:10px;white-space:nowrap}
+.bold{font-weight:700}
+.note{font-size:10px;color:#aaa;font-style:italic}
+.total-section{margin-top:24px;border-top:2px solid #7C3AED;padding-top:16px;display:flex;justify-content:flex-end}
+.total-box{min-width:280px}
+.total-row{display:flex;justify-content:space-between;padding:4px 0;font-size:12px}
+.total-row.main{border-top:1px solid #DDD6FE;padding-top:10px;margin-top:6px}
+.total-row.main .l{font-weight:700;font-size:14px;color:#7C3AED}
+.total-row.main .r2{font-weight:800;font-size:20px;color:#7C3AED}
+.footer{margin-top:28px;display:flex;justify-content:space-between;align-items:flex-end;font-size:9px;color:#aaa;border-top:1px solid #EDE9FE;padding-top:10px}
+.sig-box{border-top:1px solid #ccc;min-width:200px;padding-top:6px;text-align:center;font-size:10px;color:#888}
+.print-btn{position:fixed;bottom:20px;right:20px;background:#7C3AED;color:#fff;border:none;padding:9px 20px;border-radius:24px;font-size:12px;cursor:pointer;box-shadow:0 4px 14px rgba(124,58,237,.35);font-family:'Jost',Arial,sans-serif}
+@media print{.print-btn{display:none}}
+</style></head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>${event?.name || 'Propuesta de servicios'}</h1>
+    <div class="sub">
+      ${event?.eventType ? event.eventType + ' · ' : ''}
+      ${event?.venueLocation || ''}
+      ${event?.eventStart ? ' · ' + fmtDate(event.eventStart) : ''}
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="label">COTIZACIÓN</div>
+    <div class="val">${event?.code || 'PPTO-001'}</div>
+    <div class="label" style="margin-top:8px">FECHA</div>
+    <div class="val">${fmtDate(new Date().toISOString())}</div>
+  </div>
+</div>
+
+<div class="kpi-row">
+  <div class="kpi"><div class="kpi-label">TOTAL COTIZADO</div><div class="kpi-value">${fmtBudget(ingTotal)}</div></div>
+  <div class="kpi"><div class="kpi-label">CONFIRMADO</div><div class="kpi-value" style="color:#059669">${fmtBudget(confirmed)}</div></div>
+  <div class="kpi"><div class="kpi-label">POR CONFIRMAR</div><div class="kpi-value" style="color:#D97706">${fmtBudget(ingTotal - confirmed)}</div></div>
+  <div class="kpi"><div class="kpi-label">CAPÍTULOS</div><div class="kpi-value" style="color:#6B7280">${chapters.length}</div></div>
+</div>
+
+<table>
+<thead><tr>
+  <th>CONCEPTO</th><th>PROVEEDOR</th><th class="r">CANTIDAD</th>
+  <th class="r">P. UNIT.</th><th class="r">TOTAL</th><th style="text-align:center">ESTADO</th>
+</tr></thead>
+<tbody>${chapterRows}</tbody>
+</table>
+
+<div class="total-section">
+  <div class="total-box">
+    <div class="total-row"><span class="l">Subtotal confirmado</span><span class="r">${fmtBudget(confirmed)}</span></div>
+    <div class="total-row"><span class="l">Pendiente de confirmar</span><span class="r">${fmtBudget(ingTotal - confirmed)}</span></div>
+    <div class="total-row main"><span class="l">TOTAL</span><span class="r2">${fmtBudget(ingTotal)}</span></div>
+  </div>
+</div>
+
+<div class="footer">
+  <div>IventIA Planner &nbsp;·&nbsp; Los precios están expresados en MXN e incluyen los servicios descritos.</div>
+  <div class="sig-box">Aprobado por el cliente</div>
+</div>
+<button class="print-btn" onclick="window.print()">⎙ Guardar PDF</button>
+<script>setTimeout(()=>window.print(),800)</script>
+</body></html>`
+
+  openHtmlBlob(html)
+}
+
+// ── Presupuesto Widget ─────────────────────────────────────────────────────────
+function PresupuestoWidget({ eventId, event }: { eventId: string; event: any }) {
+  const [store, setStore] = useState<LienzoBudgetStore>(() => loadBudgetStore(eventId))
+  const [pdfMenuOpen, setPdfMenuOpen] = useState(false)
+
+  // Refresh from localStorage whenever the user switches back
+  useEffect(() => {
+    const refresh = () => setStore(loadBudgetStore(eventId))
+    window.addEventListener('focus', refresh)
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === `iventia-presupuesto-${eventId}`) refresh()
+    }
+    window.addEventListener('storage', onStorage)
+    return () => {
+      window.removeEventListener('focus', refresh)
+      window.removeEventListener('storage', onStorage)
+    }
+  }, [eventId])
+
+  const active    = store.items.filter(i => i.status !== 'CANCELLED')
+  const ingTotal  = active.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+  const costTotal = active.reduce((s, i) => s + i.quantity * (i.unitCost ?? 0), 0)
+  const utilidad  = ingTotal - costTotal
+  const margenPct = ingTotal > 0 ? Math.round(utilidad / ingTotal * 100) : 0
+  const confirmed = active.filter(i => i.status === 'CONFIRMED').reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+  const margenColor = margenPct >= 25 ? '#059669' : margenPct >= 10 ? '#D97706' : '#DC2626'
+
+  const chapters = [...store.chapters].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+
+  const isEmpty = store.items.length === 0
+
+  return (
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', userSelect: 'none' }}>
+      {/* Header */}
+      <div style={{
+        background: 'linear-gradient(135deg, #7C3AED 0%, #4F46E5 100%)',
+        padding: '12px 16px', flexShrink: 0, position: 'relative', overflow: 'hidden',
+      }}>
+        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 20% 0%, rgba(255,255,255,0.12), transparent 60%)', pointerEvents: 'none' }} />
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', position: 'relative' }}>
+          <div>
+            <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 9, letterSpacing: '.25em', textTransform: 'uppercase', marginBottom: 3 }}>
+              {event?.eventType || 'Evento'} · {event?.code || ''}
+            </div>
+            <div style={{ color: '#fff', fontSize: 15, fontWeight: 800, lineHeight: 1.15 }}>
+              Presupuesto P&L
+            </div>
+            <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: 9, letterSpacing: '.2em', textTransform: 'uppercase', marginTop: 3 }}>
+              {chapters.length} capítulos · {store.items.length} items
+            </div>
+          </div>
+          <Tooltip title="Generar PDF">
+            <Button
+              size="small"
+              icon={<PrinterOutlined />}
+              onClick={e => { e.stopPropagation(); setPdfMenuOpen(true) }}
+              style={{
+                background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)',
+                color: '#fff', borderRadius: 8, height: 28, fontSize: 11, flexShrink: 0,
+              }}
+            >
+              PDF
+            </Button>
+          </Tooltip>
+        </div>
+      </div>
+
+      <div style={{ flex: 1, overflow: 'auto', padding: '12px 14px' }}>
+        {isEmpty ? (
+          <div style={{ textAlign: 'center', color: '#aaa', fontSize: 12, padding: '24px 0' }}>
+            Sin items en el presupuesto.<br />
+            <span style={{ fontSize: 11 }}>Ve a Presupuesto para agregar capítulos e items.</span>
+          </div>
+        ) : (
+          <>
+            {/* KPI row */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 8, marginBottom: 14 }}>
+              {[
+                { label: 'INGRESO', value: fmtBudget(ingTotal), color: '#7C3AED' },
+                { label: 'COSTO', value: fmtBudget(costTotal), color: '#DC2626' },
+                { label: 'UTILIDAD', value: fmtBudget(utilidad), color: margenColor },
+                { label: 'MARGEN', value: `${margenPct}%`, color: margenColor },
+              ].map(k => (
+                <div key={k.label} style={{
+                  background: '#FAFAFA', border: '1px solid #F0EBFF', borderRadius: 8, padding: '8px 10px',
+                }}>
+                  <div style={{ fontSize: 9, color: '#888', fontWeight: 700, letterSpacing: '0.08em', marginBottom: 3 }}>{k.label}</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: k.color }}>{k.value}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Margin bar */}
+            {ingTotal > 0 && (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ height: 6, borderRadius: 3, background: '#F3F4F6', overflow: 'hidden', display: 'flex' }}>
+                  <div style={{ width: `${Math.min(100, costTotal / ingTotal * 100)}%`, background: '#FCA5A5' }} />
+                  <div style={{ width: `${Math.max(0, Math.min(100 - costTotal / ingTotal * 100, utilidad / ingTotal * 100))}%`, background: '#6EE7B7' }} />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
+                  <span style={{ fontSize: 9, color: '#DC2626', fontWeight: 600 }}>Costo {Math.round(costTotal / ingTotal * 100)}%</span>
+                  <span style={{ fontSize: 9, color: margenColor, fontWeight: 600 }}>Utilidad {margenPct}%</span>
+                </div>
+              </div>
+            )}
+
+            {/* Confirmed */}
+            <div style={{ background: '#ECFDF5', border: '1px solid #BBF7D0', borderRadius: 8, padding: '7px 10px', marginBottom: 12 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#065F46', letterSpacing: '.08em', marginBottom: 3 }}>CONFIRMADO</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 14, fontWeight: 800, color: '#059669' }}>{fmtBudget(confirmed)}</span>
+                <span style={{ fontSize: 10, color: '#888' }}>{ingTotal > 0 ? Math.round(confirmed / ingTotal * 100) : 0}% del ingreso</span>
+              </div>
+            </div>
+
+            {/* Chapter list — top 5 */}
+            <div style={{ fontSize: 9, fontWeight: 700, color: '#888', letterSpacing: '.1em', marginBottom: 8 }}>CAPÍTULOS</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {chapters.slice(0, 5).map(ch => {
+                const items = store.items.filter(i => i.chapterId === ch.id && i.status !== 'CANCELLED')
+                const chIng = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+                const chCost = items.reduce((s, i) => s + i.quantity * (i.unitCost ?? 0), 0)
+                const chUtil = chIng - chCost
+                const chPct = ingTotal > 0 ? Math.round(chIng / ingTotal * 100) : 0
+                return (
+                  <div key={ch.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '6px 8px', borderRadius: 6,
+                    background: '#FAFAFA', borderLeft: `3px solid ${ch.color}`,
+                  }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: '#1a1a1a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {ch.name}
+                      </div>
+                      {chCost > 0 && (
+                        <div style={{ fontSize: 9, color: chUtil >= 0 ? '#059669' : '#DC2626' }}>
+                          Util. {fmtBudget(chUtil)}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: ch.color }}>{fmtBudget(chIng)}</div>
+                      <div style={{ fontSize: 9, color: '#aaa' }}>{chPct}%</div>
+                    </div>
+                  </div>
+                )
+              })}
+              {chapters.length > 5 && (
+                <div style={{ textAlign: 'center', fontSize: 10, color: '#aaa', padding: '4px 0' }}>
+                  +{chapters.length - 5} capítulos más
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* PDF chooser modal */}
+      <Modal
+        open={pdfMenuOpen}
+        onCancel={() => setPdfMenuOpen(false)}
+        title="Generar PDF del presupuesto"
+        footer={null}
+        width={420}
+      >
+        <div onMouseDown={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '8px 0' }}>
+          <div
+            onClick={() => { generatePresupuestoOrgPdf(event, store); setPdfMenuOpen(false) }}
+            style={{
+              background: '#F5F3FF', border: '1px solid #DDD6FE', borderRadius: 10,
+              padding: '16px 18px', cursor: 'pointer', transition: 'border-color 0.15s',
+            }}
+            onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = '#7C3AED'}
+            onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = '#DDD6FE'}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: '#7C3AED', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <DollarOutlined style={{ color: '#fff', fontSize: 18 }} />
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: '#1a1a1a' }}>PDF Organizador</div>
+                <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
+                  Incluye precios, costos y utilidad por item. Uso interno y confidencial.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div
+            onClick={() => { generatePresupuestoClientePdf(event, store); setPdfMenuOpen(false) }}
+            style={{
+              background: '#ECFDF5', border: '1px solid #BBF7D0', borderRadius: 10,
+              padding: '16px 18px', cursor: 'pointer', transition: 'border-color 0.15s',
+            }}
+            onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = '#059669'}
+            onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = '#BBF7D0'}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <FileTextOutlined style={{ color: '#fff', fontSize: 18 }} />
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: '#1a1a1a' }}>PDF Cliente</div>
+                <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
+                  Cotización formal con precios al cliente. Sin costos ni márgenes.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  )
+}
+
 function WidgetRenderer({
   widget, event, eventId, onConfigChange,
 }: {
@@ -1618,8 +2129,9 @@ function WidgetRenderer({
         onConfigChange={(patch) => onConfigChange(widget.id, { config: { ...widget.config, ...patch } })}
       />
     )
-    case 'resumen':     return <ResumenWidget eventId={eventId || event?.id || ''} />
+    case 'resumen':      return <ResumenWidget eventId={eventId || event?.id || ''} />
     case 'timeline':    return <TimelineWidget eventId={eventId || event?.id || ''} event={event} />
+    case 'presupuesto': return <PresupuestoWidget eventId={eventId || event?.id || ''} event={event} />
     default:            return null
   }
 }
@@ -1636,7 +2148,7 @@ function PropertiesPanel({
 }) {
   const WIDGET_LABELS: Record<WidgetType, string> = {
     portada: 'Portada', tareas: 'Tareas', proveedores: 'Proveedores',
-    nota: 'Nota', texto: 'Texto', imagen: 'Imagen', pdf: 'PDF', resumen: 'Resumen del evento', timeline: 'Timeline del evento', links: 'Enlace / Video',
+    nota: 'Nota', texto: 'Texto', imagen: 'Imagen', pdf: 'PDF', resumen: 'Resumen del evento', timeline: 'Timeline del evento', links: 'Enlace / Video', presupuesto: 'Presupuesto P&L',
   }
 
   return (
@@ -1862,6 +2374,7 @@ const WIDGET_MENU: { type: WidgetType; label: string; icon: React.ReactNode; def
   { type: 'resumen',   label: 'Resumen del evento',  icon: <BarChartOutlined />,  defaultSize: [480, 520] },
   { type: 'timeline',  label: 'Timeline del evento',  icon: <CalendarOutlined />,  defaultSize: [380, 560] },
   { type: 'links',     label: 'Enlace / Video',        icon: <LinkOutlined />,       defaultSize: [400, 260] },
+  { type: 'presupuesto', label: 'Presupuesto P&L',    icon: <DollarOutlined />,     defaultSize: [380, 560] },
 ]
 
 // ── Persistence helpers ────────────────────────────────────────────────────────
