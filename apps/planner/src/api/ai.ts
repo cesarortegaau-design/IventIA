@@ -15,8 +15,9 @@ export const aiApi = {
     notes?: string
   }) => apiClient.post('/ai/budget-estimate', data).then((r) => r.data),
   analyzeImage: (data: {
-    imageBase64: string
-    mimeType: string
+    imageBase64?: string
+    imageUrl?: string
+    mimeType?: string
     eventType?: string
     eventName?: string
   }) => apiClient.post('/ai/analyze-image', data).then((r) => r.data),

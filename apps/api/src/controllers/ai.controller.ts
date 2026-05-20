@@ -366,26 +366,13 @@ export async function analyzeImage(req: Request, res: Response, next: NextFuncti
       return
     }
 
-    const { imageBase64, mimeType = 'image/jpeg', eventType = '', eventName = '' } = req.body
-    if (!imageBase64) {
-      res.status(400).json({ success: false, error: 'imageBase64 requerido' })
+    const { imageBase64, imageUrl, mimeType = 'image/jpeg', eventType = '', eventName = '' } = req.body
+    if (!imageBase64 && !imageUrl) {
+      res.status(400).json({ success: false, error: 'Se requiere imageBase64 o imageUrl' })
       return
     }
 
-    const anthropic = new Anthropic({ apiKey })
-    const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 800,
-      messages: [{
-        role: 'user',
-        content: [
-          {
-            type: 'image',
-            source: { type: 'base64', media_type: mimeType as any, data: imageBase64 },
-          },
-          {
-            type: 'text',
-            text: `Analiza esta imagen como referencia visual para diseñar la identidad de un evento${eventName ? ` llamado "${eventName}"` : ''}${eventType ? ` de tipo ${eventType}` : ''}.
+    const analysisPrompt = `Analiza esta imagen como referencia visual para diseñar la identidad de un evento${eventName ? ` llamado "${eventName}"` : ''}${eventType ? ` de tipo ${eventType}` : ''}.
 
 Extrae y proporciona EXACTAMENTE en este formato (sin texto adicional):
 
@@ -400,9 +387,54 @@ ESTILO_PORTADA: degradado|sólido|dividido|oscuro
 TIPOGRAFIA: moderno|clásico|elegante|impactante|festivo
 MOOD: palabra1, palabra2, palabra3
 TAGLINE: frase creativa de máximo 10 palabras que evoca la imagen
-DESCRIPCION: párrafo breve describiendo el ambiente y estética que se puede extraer de la imagen para el evento`,
-          },
-        ],
+DESCRIPCION: párrafo breve describiendo el ambiente y estética que se puede extraer de la imagen para el evento`
+
+    const anthropic = new Anthropic({ apiKey })
+
+    let imageContent: Anthropic.ImageBlockParam
+
+    if (imageUrl) {
+      // Fetch image server-side to avoid CORS and browser memory issues
+      const https = await import('https')
+      const http = await import('http')
+      const urlParsed = new URL(imageUrl)
+      const lib = urlParsed.protocol === 'https:' ? https : http
+
+      const fetchedBase64 = await new Promise<{ data: string; mediaType: string }>((resolve, reject) => {
+        lib.get(imageUrl, (resp) => {
+          const chunks: Buffer[] = []
+          resp.on('data', (chunk: Buffer) => chunks.push(chunk))
+          resp.on('end', () => {
+            const buf = Buffer.concat(chunks)
+            const contentType = (resp.headers['content-type'] || 'image/jpeg').split(';')[0].trim()
+            resolve({ data: buf.toString('base64'), mediaType: contentType })
+          })
+          resp.on('error', reject)
+        }).on('error', reject)
+      })
+
+      const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+      const mediaType = validTypes.includes(fetchedBase64.mediaType) ? fetchedBase64.mediaType : 'image/jpeg'
+
+      imageContent = {
+        type: 'image',
+        source: { type: 'base64', media_type: mediaType as any, data: fetchedBase64.data },
+      }
+    } else {
+      const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+      const mediaType = validTypes.includes(mimeType) ? mimeType : 'image/jpeg'
+      imageContent = {
+        type: 'image',
+        source: { type: 'base64', media_type: mediaType as any, data: imageBase64 },
+      }
+    }
+
+    const response = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 800,
+      messages: [{
+        role: 'user',
+        content: [imageContent, { type: 'text', text: analysisPrompt }],
       }],
     })
 

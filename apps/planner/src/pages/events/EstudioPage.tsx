@@ -589,26 +589,21 @@ ${aiNotes ? `\nContexto adicional: ${aiNotes}` : ''}`,
     setAnalyzeLoading(true)
     setAnalyzeResult(null)
     try {
-      let base64 = refImage.base64
-      let mimeType = refImage.mimeType || 'image/jpeg'
-
-      // If only URL (Unsplash), fetch and convert to base64
-      if (!base64 && refImage.url) {
-        const resp = await fetch(refImage.url)
-        const blob = await resp.blob()
-        mimeType = blob.type || 'image/jpeg'
-        const buf = await blob.arrayBuffer()
-        base64 = btoa(String.fromCharCode(...new Uint8Array(buf)))
-      }
-
-      if (!base64) throw new Error('No se pudo obtener la imagen')
-
-      const res = await aiApi.analyzeImage({
-        imageBase64: base64,
-        mimeType,
+      const commonParams = {
         eventType: event?.eventType || '',
         eventName: event?.name || '',
-      })
+      }
+
+      let res: any
+      if (refImage.url && !refImage.base64) {
+        // Unsplash or remote URL — let backend fetch it (avoids CORS + large buffer issues)
+        res = await aiApi.analyzeImage({ imageUrl: refImage.url, mimeType: 'image/jpeg', ...commonParams })
+      } else if (refImage.base64) {
+        // Local upload — send base64
+        res = await aiApi.analyzeImage({ imageBase64: refImage.base64, mimeType: refImage.mimeType || 'image/jpeg', ...commonParams })
+      } else {
+        throw new Error('No se pudo obtener la imagen')
+      }
 
       const text = res.data?.result || res.result || ''
       setAnalyzeResult(text)
@@ -628,7 +623,8 @@ ${aiNotes ? `\nContexto adicional: ${aiNotes}` : ''}`,
         message.success('Diseño extraído de la imagen y aplicado')
       }
     } catch (err: any) {
-      message.error(err?.response?.data?.error || 'Error al analizar la imagen')
+      const detail = err?.response?.data?.error?.message || err?.response?.data?.error || err?.message || 'Error desconocido'
+      message.error('Error al analizar imagen: ' + detail)
     } finally {
       setAnalyzeLoading(false)
     }
