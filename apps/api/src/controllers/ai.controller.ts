@@ -237,6 +237,126 @@ async function executeTool(name: string, input: any, tenantId: string, userId: s
   }
 }
 
+export async function generateEventConcept(req: Request, res: Response, next: NextFunction) {
+  try {
+    const apiKey = process.env.ANTHROPIC_API_KEY
+    if (!apiKey) {
+      res.status(503).json({ success: false, error: 'ANTHROPIC_API_KEY no configurada' })
+      return
+    }
+
+    const { eventName, eventType, guestCount, budget, notes } = req.body
+
+    const prompt = `Eres un experto en diseño creativo y conceptualización de eventos. Crea un concepto completo y detallado para el siguiente evento.
+
+DATOS DEL EVENTO:
+- Nombre: ${eventName}
+- Tipo: ${eventType}
+${guestCount ? `- Invitados: ${guestCount}` : ''}
+${budget ? `- Presupuesto aproximado: $${Number(budget).toLocaleString('es-MX')} MXN` : ''}
+${notes ? `- Descripción/Preferencias: ${notes}` : ''}
+
+Genera un concepto creativo que incluya:
+
+1. NOMBRE DEL CONCEPTO / TEMA
+   Un nombre evocador y memorable para la propuesta.
+
+2. DESCRIPCIÓN DEL CONCEPTO
+   Párrafo de 3-4 oraciones describiendo la visión general y atmósfera del evento.
+
+3. PALETA DE COLORES
+   3-4 colores principales con su significado dentro del concepto (ej: Dorado champán — elegancia y celebración).
+
+4. ELEMENTOS DECORATIVOS CLAVE
+   Lista de 4-5 elementos decorativos que definan la estética.
+
+5. EXPERIENCIA DEL INVITADO
+   Cómo se sentirá y qué vivirá el invitado desde que llega hasta que se va (3-4 momentos clave).
+
+6. RECOMENDACIÓN DE VENUE / ESPACIOS
+   Tipo de venue ideal y configuración del espacio.
+
+7. FRASE O CLAIM DEL EVENTO
+   Una frase corta e impactante que capture la esencia del evento.
+
+Responde en español de forma profesional, inspiradora y específica. Usa el nombre del evento cuando sea relevante.`
+
+    const anthropic = new Anthropic({ apiKey })
+    const response = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1200,
+      messages: [{ role: 'user', content: prompt }],
+    })
+
+    const result = response.content.find(b => b.type === 'text')?.text ?? ''
+    res.json({ success: true, data: { result } })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function generateBudget(req: Request, res: Response, next: NextFunction) {
+  try {
+    const apiKey = process.env.ANTHROPIC_API_KEY
+    if (!apiKey) {
+      res.status(503).json({ success: false, error: 'ANTHROPIC_API_KEY no configurada' })
+      return
+    }
+
+    const { eventName, eventType, guestCount, notes } = req.body
+
+    const prompt = `Eres un experto en presupuestación y producción de eventos en México. Genera una estimación de presupuesto detallada para el siguiente evento.
+
+DATOS DEL EVENTO:
+- Nombre: ${eventName}
+- Tipo: ${eventType}
+${guestCount ? `- Número de invitados: ${guestCount}` : ''}
+${notes ? `- Detalles adicionales: ${notes}` : ''}
+
+Genera una estimación de presupuesto en MXN que incluya:
+
+1. DESGLOSE POR CATEGORÍA
+   Para cada categoría, indica: Concepto | Estimado mínimo | Estimado máximo | % del total
+   Categorías principales a considerar según el tipo de evento (selecciona las más relevantes):
+   - Venue / Renta de espacio
+   - Alimentos y bebidas (catering)
+   - Decoración y ambientación
+   - Audio, video e iluminación
+   - Fotografía y video
+   - Entretenimiento / Amenidades
+   - Logística y transporte
+   - Personal de servicio
+   - Papelería e invitaciones
+   - Flores y arreglos
+   - Otros / Imprevistos (siempre incluir 10-15%)
+
+2. TOTALES
+   - Inversión total estimada mínima: $X,XXX,XXX MXN
+   - Inversión total estimada máxima: $X,XXX,XXX MXN
+   - Costo por persona (basado en ${guestCount || 'el número de invitados'})
+
+3. RECOMENDACIONES DE OPTIMIZACIÓN
+   2-3 sugerencias para reducir costos sin sacrificar calidad.
+
+4. ALERTAS DE PRESUPUESTO
+   1-2 aspectos que generalmente se subestiman en este tipo de eventos.
+
+Responde en español con formato claro. Usa rangos realistas para el mercado mexicano actual (2025-2026).`
+
+    const anthropic = new Anthropic({ apiKey })
+    const response = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1200,
+      messages: [{ role: 'user', content: prompt }],
+    })
+
+    const result = response.content.find(b => b.type === 'text')?.text ?? ''
+    res.json({ success: true, data: { result } })
+  } catch (err) {
+    next(err)
+  }
+}
+
 export async function chat(req: Request, res: Response, next: NextFunction) {
   try {
     const apiKey = process.env.ANTHROPIC_API_KEY
