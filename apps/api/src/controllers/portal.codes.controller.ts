@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express'
 import { z } from 'zod'
+import bcrypt from 'bcryptjs'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { auditService } from '../services/audit.service'
@@ -114,6 +115,92 @@ export async function revokePortalCode(req: Request, res: Response, next: NextFu
       req?.ip)
 
     res.json({ success: true, data: updated })
+  } catch (err) {
+    next(err)
+  }
+}
+
+/**
+ * Admin creates portal access directly for a client — no access code required from client side.
+ * Creates PortalUser (or reuses existing) + internal PortalAccessCode + PortalUserEvent.
+ * No event status restriction — works for any event status.
+ */
+export async function createPortalDirectAccess(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id: eventId } = req.params
+    const tenantId = req.user!.tenantId
+
+    const schema = z.object({
+      email: z.string().email(),
+      password: z.string().min(6),
+      firstName: z.string().min(1),
+      lastName: z.string().min(1),
+    })
+    const { email, password, firstName, lastName } = schema.parse(req.body)
+
+    const event = await prisma.event.findFirst({ where: { id: eventId, tenantId } })
+    if (!event) throw new AppError(404, 'EVENT_NOT_FOUND', 'Evento no encontrado')
+
+    // Enable portal on event if not already
+    if (!event.portalEnabled) {
+      await prisma.event.update({ where: { id: eventId }, data: { portalEnabled: true } })
+    }
+
+    // Create an internal access code for this direct-access grant
+    let code = generateCode()
+    while (await prisma.portalAccessCode.findUnique({ where: { code } })) {
+      code = generateCode()
+    }
+    const accessCode = await prisma.portalAccessCode.create({
+      data: {
+        tenantId,
+        eventId,
+        code,
+        maxUses: 1,
+        createdById: req.user!.userId,
+      },
+    })
+
+    // Find or create PortalUser
+    let portalUser = await prisma.portalUser.findUnique({ where: { email: email.toLowerCase() } })
+    if (!portalUser) {
+      const passwordHash = await bcrypt.hash(password, 12)
+      portalUser = await prisma.portalUser.create({
+        data: { tenantId, email: email.toLowerCase(), passwordHash, firstName, lastName },
+      })
+    } else {
+      // Update password so admin-generated credentials work
+      const passwordHash = await bcrypt.hash(password, 12)
+      portalUser = await prisma.portalUser.update({
+        where: { id: portalUser.id },
+        data: { passwordHash, firstName, lastName },
+      })
+    }
+
+    // Link user to event (idempotent)
+    const existing = await prisma.portalUserEvent.findUnique({
+      where: { portalUserId_eventId: { portalUserId: portalUser.id, eventId } },
+    })
+    if (!existing) {
+      await prisma.$transaction([
+        prisma.portalUserEvent.create({
+          data: { portalUserId: portalUser.id, eventId, accessCodeId: accessCode.id },
+        }),
+        prisma.portalAccessCode.update({
+          where: { id: accessCode.id },
+          data: { usedCount: 1 },
+        }),
+      ])
+    }
+
+    await auditService.log(tenantId, req.user!.userId, 'PortalUser', portalUser.id, 'CREATE', null, {
+      email: portalUser.email, eventId,
+    }, req?.ip)
+
+    res.status(201).json({
+      success: true,
+      data: { email: portalUser.email, firstName: portalUser.firstName, lastName: portalUser.lastName },
+    })
   } catch (err) {
     next(err)
   }

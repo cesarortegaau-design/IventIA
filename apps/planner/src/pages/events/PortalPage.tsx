@@ -292,17 +292,31 @@ function AccessModal({ open, onClose, event }: { open: boolean; onClose: () => v
   const { message } = App.useApp()
   const [form] = Form.useForm()
   const [generated, setGenerated] = useState<{ email: string; password: string } | null>(null)
+  const [loading, setLoading] = useState(false)
 
   function generatePassword() {
     const chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$'
     return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
   }
 
-  function handleGenerate() {
-    form.validateFields().then((values) => {
+  async function handleGenerate() {
+    try {
+      const values = await form.validateFields()
       const pwd = generatePassword()
+      setLoading(true)
+      await eventsApi.createPortalDirectAccess(event.id, {
+        email: values.email,
+        password: pwd,
+        firstName: values.firstName || 'Cliente',
+        lastName: values.lastName || event?.client?.companyName || '',
+      })
       setGenerated({ email: values.email, password: pwd })
-    })
+    } catch (err: any) {
+      if (err?.errorFields) return // form validation error, already shown
+      message.error('Error al crear acceso: ' + (err?.response?.data?.error?.message || err?.message || 'Error desconocido'))
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function handleCopy(text: string) {
@@ -324,7 +338,11 @@ function AccessModal({ open, onClose, event }: { open: boolean; onClose: () => v
             Genera un acceso seguro para que tu cliente pueda consultar el portal del evento.
             El cliente recibirá sus credenciales por correo o puedes compartirlas manualmente.
           </Text>
-          <Form form={form} layout="vertical" initialValues={{ email: event?.client?.email || '' }}>
+          <Form form={form} layout="vertical" initialValues={{
+            email: event?.client?.email || '',
+            firstName: event?.client?.firstName || '',
+            lastName: event?.client?.lastName || event?.client?.companyName || '',
+          }}>
             <Form.Item
               name="email"
               label="Correo del cliente"
@@ -332,11 +350,14 @@ function AccessModal({ open, onClose, event }: { open: boolean; onClose: () => v
             >
               <Input prefix={<UserOutlined />} placeholder="cliente@ejemplo.com" />
             </Form.Item>
-            <Form.Item name="name" label="Nombre (opcional)">
-              <Input placeholder={event?.client?.companyName || 'Nombre del cliente'} />
+            <Form.Item name="firstName" label="Nombre">
+              <Input placeholder="Nombre" />
+            </Form.Item>
+            <Form.Item name="lastName" label="Apellido o empresa">
+              <Input placeholder="Apellido / Empresa" />
             </Form.Item>
           </Form>
-          <Button type="primary" block onClick={handleGenerate}
+          <Button type="primary" block loading={loading} onClick={handleGenerate}
             style={{ background: '#7C3AED', borderColor: '#7C3AED' }}>
             Generar acceso
           </Button>
