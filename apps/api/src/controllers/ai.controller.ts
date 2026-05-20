@@ -357,6 +357,62 @@ Responde en español con formato claro. Usa rangos realistas para el mercado mex
   }
 }
 
+// ── Analyze image with Claude Vision ─────────────────────────────────────────
+export async function analyzeImage(req: Request, res: Response, next: NextFunction) {
+  try {
+    const apiKey = process.env.ANTHROPIC_API_KEY
+    if (!apiKey) {
+      res.status(503).json({ success: false, error: 'ANTHROPIC_API_KEY no configurada' })
+      return
+    }
+
+    const { imageBase64, mimeType = 'image/jpeg', eventType = '', eventName = '' } = req.body
+    if (!imageBase64) {
+      res.status(400).json({ success: false, error: 'imageBase64 requerido' })
+      return
+    }
+
+    const anthropic = new Anthropic({ apiKey })
+    const response = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 800,
+      messages: [{
+        role: 'user',
+        content: [
+          {
+            type: 'image',
+            source: { type: 'base64', media_type: mimeType as any, data: imageBase64 },
+          },
+          {
+            type: 'text',
+            text: `Analiza esta imagen como referencia visual para diseñar la identidad de un evento${eventName ? ` llamado "${eventName}"` : ''}${eventType ? ` de tipo ${eventType}` : ''}.
+
+Extrae y proporciona EXACTAMENTE en este formato (sin texto adicional):
+
+PALETA:
+PRIMARY: #xxxxxx
+SECONDARY: #xxxxxx
+ACCENT: #xxxxxx
+FONDO: #xxxxxx
+TEXTO: claro|oscuro
+
+ESTILO_PORTADA: degradado|sólido|dividido|oscuro
+TIPOGRAFIA: moderno|clásico|elegante|impactante|festivo
+MOOD: palabra1, palabra2, palabra3
+TAGLINE: frase creativa de máximo 10 palabras que evoca la imagen
+DESCRIPCION: párrafo breve describiendo el ambiente y estética que se puede extraer de la imagen para el evento`,
+          },
+        ],
+      }],
+    })
+
+    const text = response.content.find(b => b.type === 'text')?.text ?? ''
+    res.json({ success: true, data: { result: text } })
+  } catch (err) {
+    next(err)
+  }
+}
+
 export async function chat(req: Request, res: Response, next: NextFunction) {
   try {
     const apiKey = process.env.ANTHROPIC_API_KEY
