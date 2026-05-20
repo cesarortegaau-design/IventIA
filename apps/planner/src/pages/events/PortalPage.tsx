@@ -24,7 +24,7 @@ dayjs.locale('es')
 import { eventsApi } from '../../api/events'
 import { loadBranding, type EventBranding } from './EstudioPage'
 
-const { Text, Title } = Typography
+const { Text } = Typography
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface PortalConfig {
@@ -53,6 +53,7 @@ const DEFAULT_CONFIG: PortalConfig = {
 
 // ── Persistence ────────────────────────────────────────────────────────────────
 const configKey = (id: string) => `iventia-portal-config-${id}`
+const snapshotKey = (id: string) => `iventia-portal-event-snapshot-${id}`
 
 function loadConfig(id: string): PortalConfig {
   try {
@@ -64,6 +65,19 @@ function loadConfig(id: string): PortalConfig {
 
 function saveConfig(id: string, cfg: PortalConfig) {
   localStorage.setItem(configKey(id), JSON.stringify({ ...cfg, updatedAt: new Date().toISOString() }))
+}
+
+function saveEventSnapshot(id: string, event: any) {
+  if (!event) return
+  const snapshot = {
+    name: event.name,
+    eventStart: event.eventStart,
+    eventType: event.eventType,
+    code: event.code,
+    venueLocation: event.venueLocation,
+    client: event.client,
+  }
+  localStorage.setItem(snapshotKey(id), JSON.stringify(snapshot))
 }
 
 // ── Client preview widgets ─────────────────────────────────────────────────────
@@ -291,31 +305,24 @@ function PreviewLinks({ eventId }: { eventId: string }) {
 function AccessModal({ open, onClose, event }: { open: boolean; onClose: () => void; event: any }) {
   const { message } = App.useApp()
   const [form] = Form.useForm()
-  const [generated, setGenerated] = useState<{ email: string; password: string } | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [generated, setGenerated] = useState<{ email: string; token: string; url: string } | null>(null)
 
-  function generatePassword() {
-    const chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$'
-    return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+  function generateToken() {
+    const chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+    return Array.from({ length: 20 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
   }
 
   async function handleGenerate() {
     try {
       const values = await form.validateFields()
-      const pwd = generatePassword()
-      setLoading(true)
-      await eventsApi.createPortalDirectAccess(event.id, {
-        email: values.email,
-        password: pwd,
-        firstName: values.firstName || 'Cliente',
-        lastName: values.lastName || event?.client?.companyName || '',
-      })
-      setGenerated({ email: values.email, password: pwd })
+      const token = generateToken()
+      const eventId = event?.id
+      if (!eventId) return
+      localStorage.setItem(`iventia-portal-token-${eventId}`, JSON.stringify({ token, createdAt: new Date().toISOString() }))
+      const url = `${window.location.origin}/portal-cliente/${eventId}`
+      setGenerated({ email: values.email, token, url })
     } catch (err: any) {
       if (err?.errorFields) return // form validation error, already shown
-      message.error('Error al crear acceso: ' + (err?.response?.data?.error?.message || err?.message || 'Error desconocido'))
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -335,29 +342,19 @@ function AccessModal({ open, onClose, event }: { open: boolean; onClose: () => v
       {!generated ? (
         <>
           <Text style={{ color: '#666', fontSize: 13, display: 'block', marginBottom: 16 }}>
-            Genera un acceso seguro para que tu cliente pueda consultar el portal del evento.
-            El cliente recibirá sus credenciales por correo o puedes compartirlas manualmente.
+            Genera un código de acceso para que tu cliente pueda consultar el portal del evento.
+            Comparte la URL y el código directamente con tu cliente.
           </Text>
-          <Form form={form} layout="vertical" initialValues={{
-            email: event?.client?.email || '',
-            firstName: event?.client?.firstName || '',
-            lastName: event?.client?.lastName || event?.client?.companyName || '',
-          }}>
+          <Form form={form} layout="vertical" initialValues={{ email: event?.client?.email || '' }}>
             <Form.Item
               name="email"
-              label="Correo del cliente"
+              label="Correo del cliente (referencia)"
               rules={[{ required: true, type: 'email', message: 'Correo válido requerido' }]}
             >
               <Input prefix={<UserOutlined />} placeholder="cliente@ejemplo.com" />
             </Form.Item>
-            <Form.Item name="firstName" label="Nombre">
-              <Input placeholder="Nombre" />
-            </Form.Item>
-            <Form.Item name="lastName" label="Apellido o empresa">
-              <Input placeholder="Apellido / Empresa" />
-            </Form.Item>
           </Form>
-          <Button type="primary" block loading={loading} onClick={handleGenerate}
+          <Button type="primary" block onClick={handleGenerate}
             style={{ background: '#7C3AED', borderColor: '#7C3AED' }}>
             Generar acceso
           </Button>
@@ -369,25 +366,25 @@ function AccessModal({ open, onClose, event }: { open: boolean; onClose: () => v
             padding: 16, marginBottom: 16,
           }}>
             <div style={{ color: '#16A34A', fontWeight: 700, fontSize: 13, marginBottom: 10 }}>
-              <CheckCircleOutlined style={{ marginRight: 6 }} />Credenciales generadas
+              <CheckCircleOutlined style={{ marginRight: 6 }} />Acceso generado
             </div>
             <div style={{ marginBottom: 8 }}>
-              <Text style={{ fontSize: 12, color: '#666' }}>Correo</Text>
+              <Text style={{ fontSize: 12, color: '#666' }}>URL del portal</Text>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
-                <Text strong style={{ fontSize: 13 }}>{generated.email}</Text>
+                <Text strong style={{ fontSize: 12, wordBreak: 'break-all' }}>{generated.url}</Text>
                 <Tooltip title="Copiar">
-                  <Button size="small" type="text" icon={<CopyOutlined />} onClick={() => handleCopy(generated.email)} />
+                  <Button size="small" type="text" icon={<CopyOutlined />} onClick={() => handleCopy(generated.url)} />
                 </Tooltip>
               </div>
             </div>
             <div>
-              <Text style={{ fontSize: 12, color: '#666' }}>Contraseña temporal</Text>
+              <Text style={{ fontSize: 12, color: '#666' }}>Código de acceso</Text>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
                 <Text strong style={{ fontSize: 13, fontFamily: 'monospace', letterSpacing: 2 }}>
-                  {generated.password}
+                  {generated.token}
                 </Text>
                 <Tooltip title="Copiar">
-                  <Button size="small" type="text" icon={<CopyOutlined />} onClick={() => handleCopy(generated.password)} />
+                  <Button size="small" type="text" icon={<CopyOutlined />} onClick={() => handleCopy(generated.token)} />
                 </Tooltip>
               </div>
             </div>
@@ -397,12 +394,11 @@ function AccessModal({ open, onClose, event }: { open: boolean; onClose: () => v
             padding: 10, marginBottom: 16, fontSize: 12, color: '#92400E',
           }}>
             <LockOutlined style={{ marginRight: 4 }} />
-            Guarda estas credenciales — no podrás verlas de nuevo.
-            El cliente deberá cambiar la contraseña en su primer acceso.
+            Guarda este código — no podrás verlo de nuevo. Compártelo junto con la URL al cliente.
           </div>
           <Space style={{ width: '100%' }} direction="vertical">
             <Button block onClick={() => {
-              handleCopy(`Acceso al Portal IventIA\nEvento: ${event?.name}\nURL: https://portal.iventia.app\nCorreo: ${generated.email}\nContraseña: ${generated.password}`)
+              handleCopy(`Acceso al Portal IventIA\nEvento: ${event?.name}\nURL: ${generated.url}\nCódigo de acceso: ${generated.token}`)
             }}>
               <CopyOutlined /> Copiar todo para compartir
             </Button>
@@ -449,6 +445,7 @@ export default function PortalPage() {
 
   function handleSave() {
     saveConfig(id!, config)
+    saveEventSnapshot(id!, event)
     message.success('Configuración del portal guardada')
   }
 
@@ -606,8 +603,11 @@ export default function PortalPage() {
         {/* Save */}
         <div style={{ padding: '12px 16px', borderTop: '1px solid #F5F5F5' }}>
           <Button type="primary" block onClick={handleSave}
-            style={{ background: '#7C3AED', borderColor: '#7C3AED' }}>
+            style={{ background: '#7C3AED', borderColor: '#7C3AED', marginBottom: 8 }}>
             Guardar configuración
+          </Button>
+          <Button block onClick={() => window.open(`/portal-cliente/${id}`, '_blank')}>
+            Abrir portal del cliente ↗
           </Button>
           {config.updatedAt && (
             <div style={{ textAlign: 'center', fontSize: 10, color: '#BBB', marginTop: 6 }}>

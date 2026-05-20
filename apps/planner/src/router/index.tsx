@@ -19,6 +19,7 @@ import SupplierDetailPage from '../pages/suppliers/SupplierDetailPage'
 import CrmPage from '../pages/events/CrmPage'
 import EstudioPage from '../pages/events/EstudioPage'
 import PortalPage from '../pages/events/PortalPage'
+import ClientPortalPage from '../pages/events/ClientPortalPage'
 import MensajesPage from '../pages/events/MensajesPage'
 import StudioPage from '../pages/studio/StudioPage'
 import SeedPage from '../pages/seed/SeedPage'
@@ -33,6 +34,7 @@ export default function AppRouter() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/portal-cliente/:id" element={<ClientPortalPage />} />
 
       {/* Global layout (dashboard, lists) */}
       <Route path="/" element={<RequireAuth><MainLayout /></RequireAuth>}>
