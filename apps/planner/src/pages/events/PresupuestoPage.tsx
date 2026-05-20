@@ -1,17 +1,17 @@
 /**
  * PresupuestoPage.tsx
- * Presupuesto por capítulos — persiste en localStorage por evento
- * Diseño: capítulos colapsables, items con Proveedor/Cant/U/P.Unit/Total/Estado,
- * 4 KPIs (Total, Ejecutado, Comprometido, Disponible) y barra de avance apilada.
+ * Presupuesto P&L — precio de venta, costo y utilidad por item/capítulo/evento
+ * Persiste en localStorage por evento
  */
 import { useState, useMemo } from 'react'
 import { useParams, useOutletContext } from 'react-router-dom'
 import {
-  Button, Modal, Form, Input, InputNumber, Select, Space, Popconfirm, App, Typography,
+  Button, Modal, Form, Input, InputNumber, Select, Space,
+  Popconfirm, App, Typography, Divider,
 } from 'antd'
 import {
   PlusOutlined, EditOutlined, DeleteOutlined,
-  FileExcelOutlined, UploadOutlined, RobotOutlined,
+  FileExcelOutlined, UploadOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
@@ -37,7 +37,8 @@ interface BudgetItem {
   provider: string
   quantity: number
   unit: string
-  unitPrice: number
+  unitPrice: number   // precio que cobra el organizador al cliente
+  unitCost: number    // costo real del proveedor (0 = no capturado)
   status: 'CONFIRMED' | 'PENDING' | 'CANCELLED'
   notes?: string
 }
@@ -77,6 +78,9 @@ function saveStore(id: string, store: BudgetStore) {
 const fmt = (n: number) =>
   `$${n.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 
+const pct = (n: number, total: number) =>
+  total > 0 ? `${Math.round(n / total * 100)}%` : '—'
+
 const STATUS_CFG = {
   CONFIRMED: { label: 'Confirmado', color: '#059669', bg: '#ECFDF5', dot: '#059669' },
   PENDING:   { label: 'Pendiente',  color: '#D97706', bg: '#FFFBEB', dot: '#F59E0B' },
@@ -85,40 +89,83 @@ const STATUS_CFG = {
 
 const UNITS = ['pax', 'pza', 'paq', 'global', 'día', 'hora', 'turno', 'm²', 'evento', 'km']
 
-async function exportToExcel(
-  store: BudgetStore,
-  eventName: string,
-) {
+// ── P&L inline preview ────────────────────────────────────────────────────────
+function PLPreview({ qty, price, cost }: { qty: number; price: number; cost: number }) {
+  const ingreso  = qty * price
+  const costo    = qty * cost
+  const utilidad = ingreso - costo
+  const margen   = ingreso > 0 ? utilidad / ingreso : 0
+  const positive = utilidad >= 0
+
+  return (
+    <div style={{
+      background: positive ? '#F0FDF4' : '#FFF1F2',
+      border: `1px solid ${positive ? '#BBF7D0' : '#FECDD3'}`,
+      borderRadius: 8, padding: '10px 14px',
+      display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr',
+      gap: 8, marginTop: 4,
+    }}>
+      {[
+        { label: 'INGRESO',  value: fmt(ingreso),  color: '#7C3AED' },
+        { label: 'COSTO',    value: fmt(costo),    color: '#DC2626' },
+        { label: 'UTILIDAD', value: fmt(utilidad), color: positive ? '#059669' : '#DC2626' },
+        { label: 'MARGEN',   value: `${Math.round(margen * 100)}%`, color: positive ? '#059669' : '#DC2626' },
+      ].map(k => (
+        <div key={k.label} style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 9, fontWeight: 700, color: '#aaa', letterSpacing: '0.1em', marginBottom: 2 }}>
+            {k.label}
+          </div>
+          <div style={{ fontSize: 14, fontWeight: 800, color: k.color }}>{k.value}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ── Excel export ──────────────────────────────────────────────────────────────
+async function exportToExcel(store: BudgetStore, eventName: string) {
   const ExcelJS = await import('exceljs')
   const wb = new ExcelJS.Workbook()
   const ws = wb.addWorksheet('Presupuesto')
   ws.columns = [
-    { header: 'Capítulo',     key: 'chapter',   width: 26 },
-    { header: 'Código',       key: 'code',       width: 10 },
-    { header: 'Concepto',     key: 'concept',    width: 34 },
-    { header: 'Proveedor',    key: 'provider',   width: 22 },
-    { header: 'Cant.',        key: 'quantity',   width: 8  },
-    { header: 'Unidad',       key: 'unit',       width: 8  },
-    { header: 'P. Unit.',     key: 'unitPrice',  width: 14 },
-    { header: 'Total',        key: 'total',      width: 14 },
-    { header: 'Estado',       key: 'status',     width: 14 },
-    { header: 'Notas',        key: 'notes',      width: 30 },
+    { header: 'Capítulo',      key: 'chapter',    width: 26 },
+    { header: 'Código',        key: 'code',        width: 10 },
+    { header: 'Concepto',      key: 'concept',     width: 34 },
+    { header: 'Proveedor',     key: 'provider',    width: 22 },
+    { header: 'Cant.',         key: 'quantity',    width: 8  },
+    { header: 'Unidad',        key: 'unit',        width: 8  },
+    { header: 'P. Unit.',      key: 'unitPrice',   width: 14 },
+    { header: 'Costo Unit.',   key: 'unitCost',    width: 14 },
+    { header: 'Total Ingreso', key: 'total',       width: 16 },
+    { header: 'Total Costo',   key: 'totalCost',   width: 14 },
+    { header: 'Utilidad',      key: 'profit',      width: 14 },
+    { header: 'Margen %',      key: 'margin',      width: 10 },
+    { header: 'Estado',        key: 'status',      width: 14 },
+    { header: 'Notas',         key: 'notes',       width: 30 },
   ]
   ws.getRow(1).font = { bold: true }
 
   for (const item of store.items) {
-    const ch = store.chapters.find(c => c.id === item.chapterId)
+    const ch        = store.chapters.find(c => c.id === item.chapterId)
+    const ingreso   = item.quantity * item.unitPrice
+    const costo     = item.quantity * (item.unitCost ?? 0)
+    const utilidad  = ingreso - costo
+    const margin    = ingreso > 0 ? Math.round(utilidad / ingreso * 100) : 0
     ws.addRow({
-      chapter: ch?.name ?? '',
-      code:    item.code,
-      concept: item.concept,
-      provider: item.provider ?? '',
-      quantity: item.quantity,
-      unit:    item.unit,
+      chapter:   ch?.name ?? '',
+      code:      item.code,
+      concept:   item.concept,
+      provider:  item.provider ?? '',
+      quantity:  item.quantity,
+      unit:      item.unit,
       unitPrice: item.unitPrice,
-      total:   item.quantity * item.unitPrice,
-      status:  STATUS_CFG[item.status]?.label ?? item.status,
-      notes:   item.notes ?? '',
+      unitCost:  item.unitCost ?? 0,
+      total:     ingreso,
+      totalCost: costo,
+      profit:    utilidad,
+      margin:    `${margin}%`,
+      status:    STATUS_CFG[item.status]?.label ?? item.status,
+      notes:     item.notes ?? '',
     })
   }
 
@@ -150,6 +197,11 @@ export default function PresupuestoPage() {
   const [chForm] = Form.useForm()
   const [itemForm] = Form.useForm()
 
+  // Live preview watchers
+  const watchQty   = Form.useWatch('quantity',  itemForm) ?? 0
+  const watchPrice = Form.useWatch('unitPrice', itemForm) ?? 0
+  const watchCost  = Form.useWatch('unitCost',  itemForm) ?? 0
+
   // Persist helper
   const update = (next: Partial<BudgetStore>) => {
     const merged = { ...store, ...next }
@@ -159,17 +211,22 @@ export default function PresupuestoPage() {
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
   const kpi = useMemo(() => {
-    const all = store.items
-    const total       = all.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
-    const ejecutado   = all.filter(i => i.status === 'CONFIRMED').reduce((s, i) => s + i.quantity * i.unitPrice, 0)
-    const comprometido = all.filter(i => i.status === 'PENDING').reduce((s, i) => s + i.quantity * i.unitPrice, 0)
-    const disponible  = Math.max(0, total - ejecutado - comprometido)
-    return { total, ejecutado, comprometido, disponible }
+    // Excluir CANCELLED de todos los cálculos
+    const active    = store.items.filter(i => i.status !== 'CANCELLED')
+    const confirmed = store.items.filter(i => i.status === 'CONFIRMED')
+
+    const ingreso   = active.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+    const costo     = active.reduce((s, i) => s + i.quantity * (i.unitCost ?? 0), 0)
+    const utilidad  = ingreso - costo
+    const confirmado = confirmed.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+
+    return { ingreso, costo, utilidad, confirmado }
   }, [store.items])
 
-  const lastEdit = store.updatedAt
-    ? dayjs(store.updatedAt).fromNow()
-    : null
+  const margenPct = kpi.ingreso > 0 ? Math.round(kpi.utilidad / kpi.ingreso * 100) : 0
+  const margenColor = margenPct >= 25 ? '#059669' : margenPct >= 10 ? '#D97706' : '#DC2626'
+
+  const lastEdit = store.updatedAt ? dayjs(store.updatedAt).fromNow() : null
 
   // ── Chapter CRUD ─────────────────────────────────────────────────────────
   const openNewChapter = () => {
@@ -208,7 +265,7 @@ export default function PresupuestoPage() {
   // ── Item CRUD ─────────────────────────────────────────────────────────────
   const openNewItem = (chapterId: string) => {
     itemForm.resetFields()
-    itemForm.setFieldsValue({ quantity: 1, unit: 'global', status: 'PENDING' })
+    itemForm.setFieldsValue({ quantity: 1, unit: 'global', status: 'PENDING', unitCost: 0 })
     setItemModal({ open: true, chapterId, editing: null })
   }
 
@@ -216,7 +273,8 @@ export default function PresupuestoPage() {
     itemForm.setFieldsValue({
       concept: item.concept, provider: item.provider,
       quantity: item.quantity, unit: item.unit,
-      unitPrice: item.unitPrice, status: item.status, notes: item.notes,
+      unitPrice: item.unitPrice, unitCost: item.unitCost ?? 0,
+      status: item.status, notes: item.notes,
     })
     setItemModal({ open: true, chapterId: item.chapterId, editing: item })
   }
@@ -225,16 +283,18 @@ export default function PresupuestoPage() {
     const { chapterId, editing } = itemModal
     if (editing) {
       update({
-        items: store.items.map(i => i.id === editing.id ? { ...i, ...vals } : i),
+        items: store.items.map(i =>
+          i.id === editing.id ? { ...i, ...vals, unitCost: vals.unitCost ?? 0 } : i
+        ),
       })
     } else {
-      const chIdx = store.chapters.findIndex(c => c.id === chapterId)
+      const chIdx   = store.chapters.findIndex(c => c.id === chapterId)
       const chCount = store.items.filter(i => i.chapterId === chapterId).length
-      const code = `C${chIdx + 1}-${chCount + 1}`
+      const code    = `C${chIdx + 1}-${chCount + 1}`
       update({
         items: [...store.items, {
           id: `item-${Date.now()}`,
-          chapterId, code, ...vals,
+          chapterId, code, ...vals, unitCost: vals.unitCost ?? 0,
         }],
       })
     }
@@ -248,9 +308,9 @@ export default function PresupuestoPage() {
   }
 
   const toggleCollapse = (id: string) =>
-    setCollapsed(c => ({ ...c, [id]: c[id] === false })) // default open = true → false closes
+    setCollapsed(c => ({ ...c, [id]: !isOpen(id) }))
 
-  const isOpen = (id: string) => collapsed[id] !== false
+  const isOpen = (id: string) => collapsed[id] !== true
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -266,9 +326,9 @@ export default function PresupuestoPage() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <Text style={{ fontSize: 22, fontWeight: 800, color: '#1a1a1a' }}>Presupuesto</Text>
-              {kpi.total > 0 && (
+              {kpi.ingreso > 0 && (
                 <Text style={{ fontSize: 22, fontWeight: 800, color: '#7C3AED' }}>
-                  · {fmt(kpi.total)}
+                  · {fmt(kpi.ingreso)}
                 </Text>
               )}
               <span style={{
@@ -313,21 +373,34 @@ export default function PresupuestoPage() {
         {/* ── KPI Cards ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 18 }}>
           {[
-            { label: 'PRESUPUESTO TOTAL', value: kpi.total, sub: 'aprobado por cliente',
-              color: '#7C3AED', border: '#C4B5FD' },
-            { label: 'EJECUTADO', value: kpi.ejecutado,
-              sub: kpi.total ? `${Math.round(kpi.ejecutado / kpi.total * 100)}% del total` : '0% del total',
-              color: '#059669', border: '#6EE7B7' },
-            { label: 'COMPROMETIDO', value: kpi.comprometido,
-              sub: kpi.total ? `${Math.round(kpi.comprometido / kpi.total * 100)}% · OC abiertas` : '0% · OC abiertas',
-              color: '#D97706', border: '#FCD34D' },
-            { label: 'DISPONIBLE', value: Math.max(0, kpi.total - kpi.ejecutado - kpi.comprometido),
-              sub: kpi.total ? `${Math.round(Math.max(0, kpi.total - kpi.ejecutado - kpi.comprometido) / kpi.total * 100)}% · margen libre` : '0%',
-              color: '#DC2626', border: '#FCA5A5' },
+            {
+              label: 'INGRESO TOTAL',
+              value: kpi.ingreso,
+              sub: `${store.items.filter(i => i.status !== 'CANCELLED').length} items activos`,
+              color: '#7C3AED', border: '#C4B5FD',
+            },
+            {
+              label: 'COSTO TOTAL',
+              value: kpi.costo,
+              sub: kpi.ingreso > 0 ? `${pct(kpi.costo, kpi.ingreso)} del ingreso` : 'sin ingreso',
+              color: '#DC2626', border: '#FCA5A5',
+            },
+            {
+              label: 'UTILIDAD',
+              value: kpi.utilidad,
+              sub: `Margen: ${margenPct}%`,
+              color: margenColor, border: margenPct >= 10 ? '#BBF7D0' : '#FCA5A5',
+            },
+            {
+              label: 'CONFIRMADO',
+              value: kpi.confirmado,
+              sub: kpi.ingreso > 0 ? `${pct(kpi.confirmado, kpi.ingreso)} del total` : '—',
+              color: '#0D9488', border: '#99F6E4',
+            },
           ].map(card => (
             <div key={card.label} style={{
               background: '#fff', borderRadius: 12, padding: '16px 20px',
-              border: `1px solid ${card.border}22`,
+              border: `1px solid ${card.border}44`,
               boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
             }}>
               <div style={{ fontSize: 9, fontWeight: 700, color: '#aaa', letterSpacing: '0.14em', marginBottom: 6 }}>
@@ -341,22 +414,20 @@ export default function PresupuestoPage() {
           ))}
         </div>
 
-        {/* ── Stacked progress bar ── */}
-        {kpi.total > 0 && (
+        {/* ── P&L progress bars ── */}
+        {kpi.ingreso > 0 && (
           <div style={{
             background: '#fff', borderRadius: 12, padding: '14px 20px',
             marginBottom: 18, border: '1px solid #EDE9FE',
             boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <Text style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>
-                Avance global de presupuesto
-              </Text>
-              <Space size={16}>
+            {/* Ingreso breakdown */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <Text style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>Ingreso por estado</Text>
+              <Space size={12}>
                 {[
-                  { label: 'Ejecutado',    color: '#059669' },
-                  { label: 'Comprometido', color: '#F59E0B' },
-                  { label: 'Disponible',   color: '#E5E7EB' },
+                  { label: `Confirmado  ${fmt(kpi.confirmado)}`, color: '#7C3AED' },
+                  { label: `Pendiente  ${fmt(kpi.ingreso - kpi.confirmado)}`, color: '#C4B5FD' },
                 ].map(l => (
                   <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                     <div style={{ width: 10, height: 10, borderRadius: 2, background: l.color }} />
@@ -365,24 +436,39 @@ export default function PresupuestoPage() {
                 ))}
               </Space>
             </div>
-            <div style={{
-              height: 12, borderRadius: 6, background: '#F3F4F6',
-              overflow: 'hidden', display: 'flex',
-            }}>
+            <div style={{ height: 8, borderRadius: 4, background: '#EDE9FE', overflow: 'hidden', display: 'flex', marginBottom: 12 }}>
               <div style={{
-                width: `${Math.min(100, kpi.ejecutado / kpi.total * 100)}%`,
-                background: 'linear-gradient(90deg, #059669, #34D399)',
-                transition: 'width 0.5s',
-              }} />
-              <div style={{
-                width: `${Math.min(100 - kpi.ejecutado / kpi.total * 100, kpi.comprometido / kpi.total * 100)}%`,
-                background: 'linear-gradient(90deg, #F59E0B, #FCD34D)',
-                transition: 'width 0.5s',
+                width: `${Math.min(100, kpi.confirmado / kpi.ingreso * 100)}%`,
+                background: '#7C3AED', transition: 'width 0.5s',
               }} />
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-              <Text style={{ fontSize: 10, color: '#aaa' }}>$0</Text>
-              <Text style={{ fontSize: 10, color: '#aaa' }}>{fmt(kpi.total)}</Text>
+
+            {/* Margin structure */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <Text style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>Estructura de margen</Text>
+              <Space size={12}>
+                {[
+                  { label: `Costo  ${fmt(kpi.costo)}`, color: '#FCA5A5' },
+                  { label: `Utilidad  ${fmt(kpi.utilidad)}`, color: '#6EE7B7' },
+                ].map(l => (
+                  <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <div style={{ width: 10, height: 10, borderRadius: 2, background: l.color }} />
+                    <Text style={{ fontSize: 11, color: '#666' }}>{l.label}</Text>
+                  </div>
+                ))}
+              </Space>
+            </div>
+            <div style={{ height: 8, borderRadius: 4, background: '#F3F4F6', overflow: 'hidden', display: 'flex' }}>
+              <div style={{
+                width: `${Math.min(100, kpi.costo / kpi.ingreso * 100)}%`,
+                background: 'linear-gradient(90deg, #DC2626, #FCA5A5)',
+                transition: 'width 0.5s',
+              }} />
+              <div style={{
+                width: `${Math.max(0, Math.min(100 - kpi.costo / kpi.ingreso * 100, kpi.utilidad / kpi.ingreso * 100))}%`,
+                background: 'linear-gradient(90deg, #059669, #6EE7B7)',
+                transition: 'width 0.5s',
+              }} />
             </div>
           </div>
         )}
@@ -397,7 +483,7 @@ export default function PresupuestoPage() {
             <span style={{ fontSize: 48 }}>💰</span>
             <Text strong style={{ fontSize: 16, color: '#555' }}>Sin capítulos presupuestales</Text>
             <Text style={{ color: '#888', fontSize: 13 }}>
-              Crea tu primer capítulo para detallar el presupuesto del evento
+              Crea tu primer capítulo para detallar precio, costo y utilidad del evento
             </Text>
             <Button
               type="primary" icon={<PlusOutlined />} onClick={openNewChapter}
@@ -410,12 +496,15 @@ export default function PresupuestoPage() {
 
         {/* ── Chapter list ── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {store.chapters.map((ch, chIdx) => {
-            const chItems = store.items.filter(i => i.chapterId === ch.id)
-            const planeado = chItems.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
-            const real     = chItems.filter(i => i.status === 'CONFIRMED').reduce((s, i) => s + i.quantity * i.unitPrice, 0)
-            const variance = real - planeado
-            const open     = isOpen(ch.id)
+          {store.chapters.map((ch) => {
+            const chItems  = store.items.filter(i => i.chapterId === ch.id)
+            const active   = chItems.filter(i => i.status !== 'CANCELLED')
+            const chIngreso   = active.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+            const chCosto     = active.reduce((s, i) => s + i.quantity * (i.unitCost ?? 0), 0)
+            const chUtilidad  = chIngreso - chCosto
+            const chMargenPct = chIngreso > 0 ? Math.round(chUtilidad / chIngreso * 100) : 0
+            const chColor2    = chMargenPct >= 25 ? '#059669' : chMargenPct >= 10 ? '#D97706' : '#DC2626'
+            const open        = isOpen(ch.id)
 
             return (
               <div key={ch.id} style={{
@@ -448,21 +537,22 @@ export default function PresupuestoPage() {
                     <span style={{ fontSize: 11, color: '#aaa' }}>{chItems.length} items</span>
                   </div>
 
-                  {/* Right: planeado / real / variance / actions */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                    <Text style={{ fontSize: 12, color: '#888' }}>
-                      Planeado <strong style={{ color: '#1a1a1a' }}>{fmt(planeado)}</strong>
-                    </Text>
-                    <Text style={{ fontSize: 12, color: '#888' }}>
-                      Real <strong style={{ color: ch.color }}>{fmt(real)}</strong>
-                    </Text>
-                    {planeado > 0 && (
+                  {/* Right: P&L summary + actions */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 11, color: '#888' }}>
+                        Ingreso <strong style={{ color: '#7C3AED' }}>{fmt(chIngreso)}</strong>
+                        {'  '}Costo <strong style={{ color: '#DC2626' }}>{fmt(chCosto)}</strong>
+                      </div>
+                    </div>
+                    {chIngreso > 0 && (
                       <span style={{
-                        fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 20,
-                        background: variance <= 0 ? '#ECFDF5' : '#FEF2F2',
-                        color:      variance <= 0 ? '#059669' : '#DC2626',
+                        fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
+                        background: chUtilidad >= 0 ? '#ECFDF5' : '#FEF2F2',
+                        color: chUtilidad >= 0 ? '#059669' : '#DC2626',
+                        border: `1px solid ${chUtilidad >= 0 ? '#BBF7D0' : '#FECDD3'}`,
                       }}>
-                        {variance > 0 ? '+' : ''}{fmt(variance)}
+                        {chUtilidad >= 0 ? '+' : ''}{fmt(chUtilidad)} · {chMargenPct}%
                       </span>
                     )}
                     <Space onClick={e => e.stopPropagation()} size={4}>
@@ -488,18 +578,18 @@ export default function PresupuestoPage() {
                     {chItems.length > 0 && (
                       <div style={{
                         display: 'grid',
-                        gridTemplateColumns: '2fr 1.2fr 70px 60px 110px 110px 130px 72px',
+                        gridTemplateColumns: '2fr 1fr 90px 110px 100px 110px 100px 130px 70px',
                         padding: '6px 18px',
                         background: '#FAFAFA',
                         borderTop: '1px solid #F0EBFF',
                         borderBottom: '1px solid #F0EBFF',
                       }}>
-                        {['CONCEPTO', 'PROVEEDOR', 'CANT.', 'U.', 'P. UNIT.', 'TOTAL', 'ESTADO', ''].map((h, i) => (
+                        {['CONCEPTO', 'PROVEEDOR', 'CANT.×U.', 'P.UNIT.', 'COSTO U.', 'TOTAL', 'UTILIDAD', 'ESTADO', ''].map((h, i) => (
                           <div key={i} style={{
                             fontSize: 9, fontWeight: 700, color: '#aaa',
                             letterSpacing: '0.1em',
-                            textAlign: i >= 2 && i <= 5 ? 'right' : 'left',
-                            paddingRight: i >= 2 && i <= 5 ? 8 : 0,
+                            textAlign: (i >= 2 && i <= 6) ? 'right' : 'left',
+                            paddingRight: (i >= 2 && i <= 6) ? 8 : 0,
                           }}>{h}</div>
                         ))}
                       </div>
@@ -507,14 +597,19 @@ export default function PresupuestoPage() {
 
                     {/* Items */}
                     {chItems.map(item => {
-                      const total = item.quantity * item.unitPrice
-                      const s = STATUS_CFG[item.status] ?? STATUS_CFG.PENDING
+                      const ingreso  = item.quantity * item.unitPrice
+                      const costo    = item.quantity * (item.unitCost ?? 0)
+                      const utilidad = ingreso - costo
+                      const uPct     = ingreso > 0 ? Math.round(utilidad / ingreso * 100) : 0
+                      const hasCost  = (item.unitCost ?? 0) > 0
+                      const uColor   = uPct >= 0 ? '#059669' : '#DC2626'
+                      const s        = STATUS_CFG[item.status] ?? STATUS_CFG.PENDING
                       return (
                         <div
                           key={item.id}
                           style={{
                             display: 'grid',
-                            gridTemplateColumns: '2fr 1.2fr 70px 60px 110px 110px 130px 72px',
+                            gridTemplateColumns: '2fr 1fr 90px 110px 100px 110px 100px 130px 70px',
                             padding: '10px 18px',
                             borderBottom: '1px solid #FAF8FF',
                             alignItems: 'center',
@@ -532,19 +627,37 @@ export default function PresupuestoPage() {
                           </div>
                           {/* Proveedor */}
                           <div style={{ fontSize: 12, color: '#555' }}>{item.provider || '—'}</div>
-                          {/* Cant */}
-                          <div style={{ fontSize: 13, color: '#333', textAlign: 'right', paddingRight: 8 }}>
-                            {item.quantity.toLocaleString('es-MX')}
+                          {/* Cant × Unidad */}
+                          <div style={{ fontSize: 12, color: '#555', textAlign: 'right', paddingRight: 8 }}>
+                            {item.quantity.toLocaleString('es-MX')} {item.unit}
                           </div>
-                          {/* Unidad */}
-                          <div style={{ fontSize: 11, color: '#888' }}>{item.unit}</div>
                           {/* P. Unit */}
-                          <div style={{ fontSize: 13, color: '#333', textAlign: 'right', paddingRight: 8 }}>
+                          <div style={{ fontSize: 13, color: '#7C3AED', fontWeight: 600, textAlign: 'right', paddingRight: 8 }}>
                             {fmt(item.unitPrice)}
                           </div>
-                          {/* Total */}
+                          {/* Costo U */}
+                          <div style={{ fontSize: 13, color: hasCost ? '#DC2626' : '#ccc', textAlign: 'right', paddingRight: 8 }}>
+                            {hasCost ? fmt(item.unitCost) : '—'}
+                          </div>
+                          {/* Total ingreso */}
                           <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1a1a', textAlign: 'right', paddingRight: 8 }}>
-                            {fmt(total)}
+                            {fmt(ingreso)}
+                          </div>
+                          {/* Utilidad */}
+                          <div style={{ textAlign: 'right', paddingRight: 8 }}>
+                            {hasCost ? (
+                              <span style={{
+                                display: 'inline-block',
+                                background: uPct >= 0 ? '#ECFDF5' : '#FEF2F2',
+                                color: uColor,
+                                fontSize: 11, fontWeight: 700,
+                                padding: '2px 8px', borderRadius: 12,
+                              }}>
+                                {fmt(utilidad)} <span style={{ fontWeight: 400 }}>({uPct}%)</span>
+                              </span>
+                            ) : (
+                              <span style={{ color: '#ccc', fontSize: 11 }}>—</span>
+                            )}
                           </div>
                           {/* Estado */}
                           <div>
@@ -578,7 +691,7 @@ export default function PresupuestoPage() {
                       )
                     })}
 
-                    {/* Chapter footer: add item + subtotal */}
+                    {/* Chapter footer */}
                     <div style={{
                       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                       padding: '9px 18px',
@@ -593,9 +706,16 @@ export default function PresupuestoPage() {
                         Agregar item
                       </Button>
                       {chItems.length > 0 && (
-                        <Text strong style={{ fontSize: 13, color: '#1a1a1a' }}>
-                          {fmt(planeado)}
-                        </Text>
+                        <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                          <Text style={{ fontSize: 12, color: '#888' }}>
+                            Ingreso <strong style={{ color: '#7C3AED' }}>{fmt(chIngreso)}</strong>
+                          </Text>
+                          {chCosto > 0 && (
+                            <Text style={{ fontSize: 12, color: '#888' }}>
+                              Utilidad <strong style={{ color: chColor2 }}>{fmt(chUtilidad)}</strong>
+                            </Text>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -635,9 +755,8 @@ export default function PresupuestoPage() {
             rules={[{ required: true, message: 'El nombre es obligatorio' }]}
           >
             <Input
-              placeholder="Ej: Catering y bebidas, Decoración y flores, Producción..."
-              size="large"
-              autoFocus
+              placeholder="Ej: Catering y bebidas, Decoración, Producción..."
+              size="large" autoFocus
             />
           </Form.Item>
         </Form>
@@ -651,7 +770,7 @@ export default function PresupuestoPage() {
         onOk={() => itemForm.submit()}
         okText="Guardar"
         okButtonProps={{ style: { background: '#7C3AED', borderColor: '#7C3AED' } }}
-        width={580}
+        width={620}
         destroyOnClose
       >
         <Form form={itemForm} layout="vertical" onFinish={saveItem}>
@@ -666,26 +785,34 @@ export default function PresupuestoPage() {
             <Input placeholder="Nombre del proveedor..." />
           </Form.Item>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.4fr', gap: 12 }}>
-            <Form.Item
-              name="quantity" label="Cantidad"
-              rules={[{ required: true }]}
-            >
+          {/* Quantity + Unit */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Form.Item name="quantity" label="Cantidad" rules={[{ required: true }]}>
               <InputNumber min={0} style={{ width: '100%' }} />
             </Form.Item>
-            <Form.Item
-              name="unit" label="Unidad"
-              rules={[{ required: true }]}
-            >
+            <Form.Item name="unit" label="Unidad" rules={[{ required: true }]}>
               <Select>
-                {UNITS.map(u => (
-                  <Select.Option key={u} value={u}>{u}</Select.Option>
-                ))}
+                {UNITS.map(u => <Select.Option key={u} value={u}>{u}</Select.Option>)}
               </Select>
             </Form.Item>
+          </div>
+
+          {/* Price + Cost */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Form.Item
-              name="unitPrice" label="Precio unitario"
-              rules={[{ required: true }]}
+              name="unitPrice" label="Precio unitario (cliente)"
+              rules={[{ required: true, message: 'Ingresa el precio' }]}
+              tooltip="Lo que cobra el organizador al cliente"
+            >
+              <InputNumber
+                prefix="$" min={0} style={{ width: '100%' }}
+                formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                parser={v => Number(v!.replace(/[$,]/g, '')) as unknown as 0}
+              />
+            </Form.Item>
+            <Form.Item
+              name="unitCost" label="Costo unitario (proveedor)"
+              tooltip="Costo real que cobra el proveedor. Opcional — define tu utilidad."
             >
               <InputNumber
                 prefix="$" min={0} style={{ width: '100%' }}
@@ -694,6 +821,17 @@ export default function PresupuestoPage() {
               />
             </Form.Item>
           </div>
+
+          {/* Live P&L Preview */}
+          {(watchPrice > 0 || watchCost > 0) && (
+            <>
+              <Text style={{ fontSize: 11, color: '#888', fontWeight: 600 }}>
+                Vista previa P&L
+              </Text>
+              <PLPreview qty={watchQty || 1} price={watchPrice || 0} cost={watchCost || 0} />
+              <Divider style={{ margin: '14px 0 4px' }} />
+            </>
+          )}
 
           <Form.Item name="status" label="Estado">
             <Select>
