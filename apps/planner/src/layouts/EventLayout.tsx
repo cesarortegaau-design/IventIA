@@ -6,6 +6,7 @@ import {
   ArrowLeftOutlined, AppstoreOutlined, CalendarOutlined, CheckSquareOutlined,
   DollarOutlined, TeamOutlined, ApartmentOutlined, GlobalOutlined,
   BgColorsOutlined, MessageOutlined, LogoutOutlined, SettingOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons'
 import { useAuthStore } from '../stores/authStore'
 import { eventsApi } from '../api/events'
@@ -49,6 +50,7 @@ export default function EventLayout() {
         { key: 'timeline', label: 'Timeline', icon: <CalendarOutlined /> },
         { key: 'tareas', label: 'Tareas', icon: <CheckSquareOutlined /> },
         { key: 'presupuesto', label: 'Presupuesto', icon: <DollarOutlined /> },
+        { key: 'contratos', label: 'Contratos y pagos', icon: <FileTextOutlined /> },
       ],
     },
     {
