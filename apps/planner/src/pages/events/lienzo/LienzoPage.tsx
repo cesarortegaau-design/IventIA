@@ -600,51 +600,63 @@ const ACT_ICONS: Record<string, string> = {
   MEETING: '●', CATERING: '◑', CEREMONY: '✦', ROUND: '▲', default: '◆',
 }
 
-function generateTimelinePdf(event: any, activities: any[]) {
+function generateTimelinePdf(event: any, localData: { phases: any[]; activities: any[] }) {
   const theme = getEventTheme(event?.eventType)
 
-  const phases = activities
-    .filter((a: any) => a.activityType === 'PHASE')
-    .sort((a: any, b: any) => new Date(a.startDate || 0).getTime() - new Date(b.startDate || 0).getTime())
+  const phases = [...(localData.phases || [])].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+  const activities = localData.activities || []
 
-  const phaseMap: Record<string, string> = {}
-  phases.forEach((p: any) => { phaseMap[p.id] = p.title })
+  // Group activities by phaseId preserving phase order
+  const phaseMap: Record<string, any> = {}
+  phases.forEach((p) => { phaseMap[p.id] = p })
 
-  const items = activities
-    .filter((a: any) => a.activityType !== 'PHASE')
-    .sort((a: any, b: any) => new Date(a.startDate || 0).getTime() - new Date(b.startDate || 0).getTime())
-
-  const fmtTime = (iso?: string) => iso
-    ? new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true }).toUpperCase()
-    : ''
+  const byPhase: Record<string, any[]> = {}
+  for (const act of activities) {
+    const pid = act.phaseId || '__none__'
+    byPhase[pid] = byPhase[pid] || []
+    byPhase[pid].push(act)
+  }
 
   const fmtDate = (iso?: string) => iso
     ? new Date(iso).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     : ''
 
-  // Group items by parentId phase
-  let lastParent = ''
+  const STATUS_ICON: Record<string, string> = {
+    COMPLETED: '✓', IN_PROGRESS: '◉', PENDING: '◆',
+  }
+
   const rows: string[] = []
-  for (const act of items) {
-    const parent = act.parentId || ''
-    if (parent && parent !== lastParent && phaseMap[parent]) {
+  for (const phase of phases) {
+    const acts = (byPhase[phase.id] || [])
+    if (!acts.length) continue
+
+    const phaseDate = phase.date
+      ? new Date(phase.date).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })
+      : ''
+
+    rows.push(`
+      <tr class="phase-sep">
+        <td colspan="4">
+          <div class="phase-label" style="color:${phase.color || theme.primary};border-top-color:${phase.color ? phase.color + '44' : theme.light}">
+            ${phase.name}${phaseDate ? `  <span style="font-weight:400;opacity:.6">${phaseDate}</span>` : ''}
+          </div>
+        </td>
+      </tr>`)
+
+    for (const act of acts) {
+      const icon = STATUS_ICON[act.status] || '◆'
+      const time = act.startTime || ''
       rows.push(`
-        <tr class="phase-sep">
-          <td colspan="4">
-            <div class="phase-label">${phaseMap[parent]}</div>
+        <tr class="act-row">
+          <td class="icon-cell" style="color:${phase.color || theme.primary}">${icon}</td>
+          <td class="dash-cell"><div class="dash" style="background:${phase.color || theme.primary}"></div></td>
+          <td class="time-cell" style="color:${phase.color || theme.primary}">${time}</td>
+          <td class="desc-cell">
+            <span class="act-name">${act.name || ''}</span>
+            ${act.responsible ? `<span class="act-resp"> — ${act.responsible}</span>` : ''}
           </td>
         </tr>`)
-      lastParent = parent
     }
-    const icon = ACT_ICONS[act.activityType] || ACT_ICONS.default
-    const time = fmtTime(act.startDate)
-    rows.push(`
-      <tr class="act-row">
-        <td class="icon-cell">${icon}</td>
-        <td class="dash-cell"><div class="dash"></div></td>
-        <td class="time-cell">${time}</td>
-        <td class="desc-cell">${act.title || ''}</td>
-      </tr>`)
   }
 
   const eventDate = fmtDate(event?.eventStart)
@@ -740,6 +752,8 @@ function generateTimelinePdf(event: any, activities: any[]) {
   .desc-cell{
     font-size:12.5px;color:#2d2d2d;line-height:1.4;
   }
+  .act-name{font-weight:500}
+  .act-resp{font-size:11px;color:#888;font-style:italic}
 
   /* ── Footer ── */
   .footer{
@@ -792,44 +806,53 @@ function generateTimelinePdf(event: any, activities: any[]) {
   setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }
 
-function TimelineWidget({ eventId, event }: { eventId: string; event: any }) {
-  const { data: activitiesData, isLoading } = useQuery({
-    queryKey: ['planner-activities', eventId],
-    queryFn: () => eventsApi.getActivities(eventId),
-    enabled: !!eventId,
-    staleTime: 60_000,
-  })
+function loadTimelineData(eventId: string): { phases: any[]; activities: any[] } {
+  try {
+    const raw = localStorage.getItem(`iventia-timeline-${eventId}`)
+    if (raw) return JSON.parse(raw)
+  } catch { /* ignore */ }
+  return { phases: [], activities: [] }
+}
 
-  const activities: any[] = activitiesData?.data ?? activitiesData ?? []
+const STATUS_DOT: Record<string, string> = {
+  COMPLETED: '#059669', IN_PROGRESS: '#F97316', PENDING: '#9CA3AF',
+}
+
+function TimelineWidget({ eventId, event }: { eventId: string; event: any }) {
+  const [localData, setLocalData] = useState<{ phases: any[]; activities: any[] }>(() =>
+    eventId ? loadTimelineData(eventId) : { phases: [], activities: [] }
+  )
+
+  // Re-read from localStorage whenever eventId changes
+  useEffect(() => {
+    if (eventId) setLocalData(loadTimelineData(eventId))
+  }, [eventId])
+
   const theme = getEventTheme(event?.eventType)
 
-  const preview = activities
-    .filter((a: any) => a.activityType !== 'PHASE')
-    .sort((a: any, b: any) => new Date(a.startDate || 0).getTime() - new Date(b.startDate || 0).getTime())
-    .slice(0, 9)
+  const phases = [...(localData.phases || [])].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+  const activities = localData.activities || []
 
-  const totalItems = activities.filter((a: any) => a.activityType !== 'PHASE').length
-
-  const fmtTime = (iso?: string) => iso
-    ? dayjs(iso).format('h:mm A')
-    : ''
-
-  if (isLoading) {
-    return (
-      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <Spin size="small" />
-      </div>
-    )
+  // Build phase→activities map for preview
+  const byPhase: Record<string, any[]> = {}
+  for (const act of activities) {
+    const pid = act.phaseId || '__none__'
+    byPhase[pid] = byPhase[pid] || []
+    byPhase[pid].push(act)
   }
+
+  // Preview: first 3 phases, up to 4 activities each
+  const previewPhases = phases.slice(0, 3)
+  const totalActivities = activities.length
 
   const handlePdf = (e: React.MouseEvent) => {
     e.stopPropagation()
-    generateTimelinePdf(event, activities)
+    generateTimelinePdf(event, localData)
   }
 
   return (
     <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', userSelect: 'none' }}>
-      {/* Header — matches PDF style */}
+      {/* Header */}
       <div style={{
         background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.secondary} 100%)`,
         padding: '12px 16px', flexShrink: 0, position: 'relative', overflow: 'hidden',
@@ -870,49 +893,57 @@ function TimelineWidget({ eventId, event }: { eventId: string; event: any }) {
             </Button>
           </Tooltip>
         </div>
-        {/* Thin decorative divider */}
-        <div style={{
-          width: 40, height: 1, background: 'rgba(255,255,255,0.35)', margin: '8px 0 0',
-        }} />
+        <div style={{ width: 40, height: 1, background: 'rgba(255,255,255,0.35)', margin: '8px 0 0' }} />
       </div>
 
       {/* Timeline rows */}
       <div style={{ flex: 1, overflow: 'auto', background: theme.bg }}>
-        {preview.length === 0 ? (
+        {totalActivities === 0 ? (
           <div style={{ textAlign: 'center', color: '#aaa', fontSize: 12, padding: '24px 0' }}>
-            Sin actividades registradas
+            Sin actividades en el timeline
           </div>
-        ) : preview.map((act: any, i: number) => (
-          <div key={act.id || i} style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '8px 14px',
-            borderBottom: `1px solid ${theme.light}`,
-          }}>
-            {/* Icon */}
-            <span style={{
-              fontSize: 12, color: theme.primary, opacity: 0.8,
-              minWidth: 18, textAlign: 'center', flexShrink: 0,
-            }}>
-              {ACT_ICONS[act.activityType] || ACT_ICONS.default}
-            </span>
-            {/* Dash */}
-            <div style={{ width: 16, height: 1.5, background: theme.primary, opacity: 0.3, flexShrink: 0 }} />
-            {/* Time */}
-            <span style={{
-              fontSize: 10, fontWeight: 700, color: theme.primary,
-              minWidth: 52, whiteSpace: 'nowrap', flexShrink: 0,
-            }}>
-              {fmtTime(act.startDate)}
-            </span>
-            {/* Description */}
-            <span style={{
-              fontSize: 11, color: '#2d2d2d', lineHeight: 1.3,
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
-            }}>
-              {act.title}
-            </span>
+        ) : previewPhases.map((phase) => {
+          const phaseActs = (byPhase[phase.id] || []).slice(0, 4)
+          if (!phaseActs.length) return null
+          const phaseColor = phase.color || theme.primary
+          return (
+            <div key={phase.id}>
+              {/* Phase header */}
+              <div style={{
+                padding: '6px 14px 2px',
+                fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase',
+                color: phaseColor, borderTop: `1px solid ${phaseColor}22`,
+              }}>
+                {phase.name}
+              </div>
+              {phaseActs.map((act: any, i: number) => (
+                <div key={act.id || i} style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '7px 14px',
+                  borderBottom: `1px solid ${theme.light}`,
+                }}>
+                  <div style={{
+                    width: 6, height: 6, borderRadius: '50%',
+                    background: STATUS_DOT[act.status] || '#9CA3AF',
+                    flexShrink: 0,
+                  }} />
+                  <div style={{ width: 16, height: 1.5, background: phaseColor, opacity: 0.3, flexShrink: 0 }} />
+                  <span style={{ fontSize: 10, fontWeight: 700, color: phaseColor, minWidth: 44, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                    {act.startTime || ''}
+                  </span>
+                  <span style={{ fontSize: 11, color: '#2d2d2d', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                    {act.name}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )
+        })}
+        {phases.length > 3 && (
+          <div style={{ textAlign: 'center', color: '#aaa', fontSize: 11, padding: '8px 0', fontStyle: 'italic' }}>
+            +{phases.length - 3} fases más en el PDF
           </div>
-        ))}
+        )}
       </div>
 
       {/* Footer CTA */}
@@ -921,7 +952,7 @@ function TimelineWidget({ eventId, event }: { eventId: string; event: any }) {
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       }}>
         <Text style={{ fontSize: 10, color: theme.primary, opacity: 0.8 }}>
-          {totalItems} actividades · {activities.filter((a: any) => a.activityType === 'PHASE').length} fases
+          {totalActivities} actividades · {phases.length} fases
         </Text>
         <Button
           size="small"
