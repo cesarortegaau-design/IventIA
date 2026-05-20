@@ -2380,7 +2380,8 @@ const WIDGET_MENU: { type: WidgetType; label: string; icon: React.ReactNode; def
 // ── Persistence helpers ────────────────────────────────────────────────────────
 function lienzoKey(eventId: string) { return `iventia-lienzo-${eventId}` }
 
-function loadWidgets(eventId: string): Widget[] {
+function loadWidgets(eventId: string, remoteData?: Widget[]): Widget[] {
+  if (Array.isArray(remoteData) && remoteData.length > 0) return remoteData
   try {
     const raw = localStorage.getItem(lienzoKey(eventId))
     if (raw) return JSON.parse(raw)
@@ -2388,20 +2389,17 @@ function loadWidgets(eventId: string): Widget[] {
   return makeDefaultWidgets()
 }
 
-function saveWidgets(eventId: string, widgets: Widget[]) {
-  try {
-    // Skip blob URLs — they don't survive a page reload anyway
-    const serializable = widgets.map((w) => ({
-      ...w,
-      config: {
-        ...w.config,
-        imageUrl: w.config.imageUrl?.startsWith('blob:') ? null : w.config.imageUrl,
-        pdfUrl:   w.config.pdfUrl?.startsWith('blob:')   ? null : w.config.pdfUrl,
-        pdfName:  w.config.pdfUrl?.startsWith('blob:')   ? null : w.config.pdfName,
-      },
-    }))
-    localStorage.setItem(lienzoKey(eventId), JSON.stringify(serializable))
-  } catch { /* ignore */ }
+function serializeWidgets(widgets: Widget[]) {
+  // Skip blob URLs — they don't survive a page reload
+  return widgets.map((w) => ({
+    ...w,
+    config: {
+      ...w.config,
+      imageUrl: w.config.imageUrl?.startsWith('blob:') ? null : w.config.imageUrl,
+      pdfUrl:   w.config.pdfUrl?.startsWith('blob:')   ? null : w.config.pdfUrl,
+      pdfName:  w.config.pdfUrl?.startsWith('blob:')   ? null : w.config.pdfName,
+    },
+  }))
 }
 
 // ── Main page ───────────────────────────────────────────────────────────────────
@@ -2409,20 +2407,58 @@ export default function LienzoPage() {
   const { id } = useParams<{ id: string }>()
   const { event } = useOutletContext<{ event: any }>()
 
-  const [widgets, setWidgets] = useState<Widget[]>(() => id ? loadWidgets(id) : makeDefaultWidgets())
+  const [widgets, setWidgets] = useState<Widget[]>(makeDefaultWidgets)
+  const [lienzoReady, setLienzoReady] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [tool, setTool] = useState<Tool>('select')
   const [zoom, setZoom] = useState(100)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [showAddMenu, setShowAddMenu] = useState(false)
-  const [lastSync, setLastSync] = useState(dayjs().format('HH:mm'))
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const [lastSync, setLastSync] = useState('')
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Auto-save on every widgets change
+  // Fetch lienzo from backend
+  const { data: lienzoRemote, isLoading: lienzoLoading } = useQuery({
+    queryKey: ['planner-lienzo', id],
+    queryFn: () => eventsApi.getLienzo(id!),
+    enabled: !!id,
+    staleTime: Infinity,
+  })
+
+  // Initialize widgets from backend (with localStorage migration fallback)
   useEffect(() => {
-    if (!id) return
-    saveWidgets(id, widgets)
-    setLastSync(dayjs().format('HH:mm'))
-  }, [id, widgets])
+    if (lienzoLoading || !id) return
+    const remoteWidgets = lienzoRemote?.data
+    if (Array.isArray(remoteWidgets) && remoteWidgets.length > 0) {
+      setWidgets(loadWidgets(id, remoteWidgets))
+    } else {
+      // Migrate from localStorage if available
+      const local = loadWidgets(id)
+      setWidgets(local)
+      if (local.length > 0) {
+        // Persist migrated data to backend immediately
+        eventsApi.saveLienzo(id, serializeWidgets(local)).catch(() => {})
+      }
+    }
+    setLienzoReady(true)
+  }, [lienzoLoading, id, lienzoRemote])
+
+  // Debounced API save on every widgets change (after initial load)
+  useEffect(() => {
+    if (!id || !lienzoReady) return
+    setSyncStatus('saving')
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => {
+      const serializable = serializeWidgets(widgets)
+      eventsApi.saveLienzo(id, serializable)
+        .then(() => {
+          setSyncStatus('saved')
+          setLastSync(dayjs().format('HH:mm'))
+        })
+        .catch(() => setSyncStatus('idle'))
+    }, 1200)
+  }, [id, lienzoReady, widgets])
 
   // Drag state
   const dragging = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number } | null>(null)
@@ -2511,6 +2547,14 @@ export default function LienzoPage() {
     { key: 'texto', label: 'Texto', icon: <FontSizeOutlined />, shortcut: 'T' },
     { key: 'imagen', label: 'Imagen', icon: <PictureOutlined />, shortcut: 'I' },
   ]
+
+  if (lienzoLoading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+        <Spin size="large" tip="Cargando lienzo..." />
+      </div>
+    )
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#F8F7FF', overflow: 'hidden' }}>
@@ -2692,8 +2736,22 @@ export default function LienzoPage() {
           {widgets.length} widgets
         </Text>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#059669', display: 'inline-block' }} />
-          <Text style={{ fontSize: 12, color: '#888' }}>Sincronizado · {lastSync}</Text>
+          {syncStatus === 'saving' ? (
+            <>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#F59E0B', display: 'inline-block' }} />
+              <Text style={{ fontSize: 12, color: '#888' }}>Guardando...</Text>
+            </>
+          ) : syncStatus === 'saved' && lastSync ? (
+            <>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#059669', display: 'inline-block' }} />
+              <Text style={{ fontSize: 12, color: '#888' }}>Sincronizado · {lastSync}</Text>
+            </>
+          ) : (
+            <>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#D1D5DB', display: 'inline-block' }} />
+              <Text style={{ fontSize: 12, color: '#aaa' }}>Sin cambios</Text>
+            </>
+          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Button type="text" size="small" icon={<MinusOutlined />}

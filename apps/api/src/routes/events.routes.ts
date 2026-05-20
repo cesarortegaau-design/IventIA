@@ -12,6 +12,7 @@ import { listFloorPlans, getFloorPlanUploadSignature, createFloorPlanRecord, del
 import { listEventActivities, createEventActivity, updateEventActivity, deleteEventActivity, bulkReorderActivities, exportActivitiesCsv, importActivitiesCsv } from '../controllers/eventActivities.controller'
 import { updateMatchScore } from '../controllers/tournament.controller'
 import { publishPlannerPortal } from '../controllers/planner-portal.controller'
+import { getLienzo, saveLienzo } from '../controllers/lienzo.controller'
 import activityDocumentsRouter from './activityDocuments.routes'
 import tournamentRouter from './tournament.routes'
 
@@ -90,6 +91,10 @@ router.use('/:eventId/activities/:activityId/documents', activityDocumentsRouter
 
 // Planner portal
 router.post('/:id/planner-portal/publish', publishPlannerPortal)
+
+// Lienzo (canvas widgets)
+router.get('/:id/lienzo', getLienzo)
+router.put('/:id/lienzo', saveLienzo)
 
 // Tournament module
 router.use('/:eventId/tournament', tournamentRouter)

@@ -566,6 +566,7 @@ model Event {
   teamRegistrations   TeamEventRegistration[]
   tournamentConfig    TournamentConfig?
   tournamentVenues    TournamentVenue[]
+  lienzoData            Json?                  @map("lienzo_data")
   plannerPortalSnapshot PlannerPortalSnapshot?
 
   @@unique([tenantId, code])

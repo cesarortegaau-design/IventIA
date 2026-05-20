@@ -47,4 +47,8 @@ export const eventsApi = {
     apiClient.post(`/events/${id}/portal-codes/direct-access`, data).then((r) => r.data),
   publishPlannerPortal: (id: string, data: object) =>
     apiClient.post(`/events/${id}/planner-portal/publish`, { data }).then((r) => r.data),
+  getLienzo: (id: string) =>
+    apiClient.get(`/events/${id}/lienzo`).then((r) => r.data),
+  saveLienzo: (id: string, widgets: any[]) =>
+    apiClient.put(`/events/${id}/lienzo`, { widgets }).then((r) => r.data),
 }
