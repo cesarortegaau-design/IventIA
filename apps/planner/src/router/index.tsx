@@ -11,6 +11,7 @@ import LienzoPage from '../pages/events/lienzo/LienzoPage'
 import PresupuestoPage from '../pages/events/PresupuestoPage'
 import TimelinePage from '../pages/events/TimelinePage'
 import TareasPage from '../pages/events/TareasPage'
+import MapaPage from '../pages/events/MapaPage'
 import ClientsPage from '../pages/clients/ClientsPage'
 import ClientDetailPage from '../pages/clients/ClientDetailPage'
 import SuppliersPage from '../pages/suppliers/SuppliersPage'
@@ -50,7 +51,7 @@ export default function AppRouter() {
         <Route path="tareas" element={<TareasPage />} />
         <Route path="presupuesto" element={<PresupuestoPage />} />
         <Route path="crm" element={<EventDetailPage defaultTab="crm" />} />
-        <Route path="mapa" element={<EventDetailPage defaultTab="mapa" />} />
+        <Route path="mapa" element={<MapaPage />} />
         <Route path="portal" element={<EventDetailPage defaultTab="portal" />} />
         <Route path="moodboard" element={<EventDetailPage defaultTab="moodboard" />} />
         <Route path="mensajes" element={<EventDetailPage defaultTab="mensajes" />} />
