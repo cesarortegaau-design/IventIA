@@ -63,7 +63,7 @@ export default function EventLayout() {
       group: 'EXTRAS',
       items: [
         { key: 'estudio', label: 'Estudio · Arte e IA', icon: <BgColorsOutlined />, badge: 'NEW' },
-        { key: 'mensajes', label: 'Mensajes', icon: <MessageOutlined />, badge: 3 },
+        { key: 'mensajes', label: 'Mensajes', icon: <MessageOutlined /> },
       ],
     },
   ]

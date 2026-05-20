@@ -18,6 +18,8 @@ import SuppliersPage from '../pages/suppliers/SuppliersPage'
 import SupplierDetailPage from '../pages/suppliers/SupplierDetailPage'
 import CrmPage from '../pages/events/CrmPage'
 import EstudioPage from '../pages/events/EstudioPage'
+import PortalPage from '../pages/events/PortalPage'
+import MensajesPage from '../pages/events/MensajesPage'
 import StudioPage from '../pages/studio/StudioPage'
 import SeedPage from '../pages/seed/SeedPage'
 
@@ -54,9 +56,9 @@ export default function AppRouter() {
         <Route path="presupuesto" element={<PresupuestoPage />} />
         <Route path="crm" element={<CrmPage />} />
         <Route path="mapa" element={<MapaPage />} />
-        <Route path="portal" element={<EventDetailPage defaultTab="portal" />} />
+        <Route path="portal" element={<PortalPage />} />
         <Route path="estudio" element={<EstudioPage />} />
-        <Route path="mensajes" element={<EventDetailPage defaultTab="mensajes" />} />
+        <Route path="mensajes" element={<MensajesPage />} />
         <Route path="editar" element={<EventFormPage />} />
       </Route>
 
