@@ -8,7 +8,7 @@ import {
 } from 'react'
 import { useParams, useOutletContext } from 'react-router-dom'
 import {
-  Button, Modal, Form, Input, InputNumber, Select, Switch, App, Typography, Space,
+  Button, Modal, Form, Input, InputNumber, Select, Switch, App, Typography, Space, Checkbox, Popconfirm,
 } from 'antd'
 import {
   CheckOutlined, ShareAltOutlined, UploadOutlined,
@@ -59,6 +59,8 @@ interface Zone {
   sound: string
   supplier: string
   colorOverride?: string
+  taskIds?: string[]
+  shape?: 'rect' | 'circle' | 'text'
 }
 
 interface MapStore {
@@ -186,6 +188,22 @@ export default function MapaPage() {
   const [pendingZone, setPendingZone] = useState<Partial<Zone> | null>(null)
   const [form] = Form.useForm()
 
+  // POI / Texto quick-create
+  const [poiModal, setPoiModal] = useState(false)
+  const [textoModal, setTextoModal] = useState(false)
+  const [clickPoint, setClickPoint] = useState<{ x: number; y: number } | null>(null)
+  const [poiForm] = Form.useForm()
+  const [textoForm] = Form.useForm()
+
+  // Tasks from TareasPage localStorage
+  const [allTasks, setAllTasks] = useState<any[]>(() => {
+    try {
+      const raw = localStorage.getItem(`iventia-tareas-${eventId}`)
+      if (raw) return JSON.parse(raw).tasks ?? []
+    } catch { /* ignore */ }
+    return []
+  })
+
   // Stage offset for pan
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 })
   const [stageScale, setStageScale] = useState(1)
@@ -264,7 +282,9 @@ export default function MapaPage() {
 
   const handleStageMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
     const nativeEvt = e.evt
-    // Middle mouse or Ctrl+drag → pan
+    const isOnStage = e.target === e.target.getStage()
+
+    // Middle mouse or Ctrl+drag → pan always
     if (nativeEvt.button === 1 || (nativeEvt.button === 0 && nativeEvt.ctrlKey)) {
       isPanning.current = true
       panStart.current = {
@@ -274,13 +294,45 @@ export default function MapaPage() {
       return
     }
 
-    if (activeTool === 'zona' && e.target === e.target.getStage()) {
+    // Move tool → pan canvas
+    if (activeTool === 'move' && isOnStage) {
+      isPanning.current = true
+      panStart.current = {
+        x: nativeEvt.clientX, y: nativeEvt.clientY,
+        stageX: stagePos.x, stageY: stagePos.y,
+      }
+      return
+    }
+
+    // Zona tool → start drawing rect
+    if (activeTool === 'zona' && isOnStage) {
       const pt = getStagePoint(e)
       setDrawing(true)
       setDrawState({ startX: pt.x, startY: pt.y, currentX: pt.x, currentY: pt.y })
+      return
     }
 
-    if (activeTool === 'select' && e.target === e.target.getStage()) {
+    // POI tool → store click point and open modal
+    if (activeTool === 'poi' && isOnStage) {
+      const pt = getStagePoint(e)
+      setClickPoint(pt)
+      poiForm.resetFields()
+      poiForm.setFieldsValue({ type: 'BAR' })
+      setPoiModal(true)
+      return
+    }
+
+    // Texto tool → store click point and open modal
+    if (activeTool === 'texto' && isOnStage) {
+      const pt = getStagePoint(e)
+      setClickPoint(pt)
+      textoForm.resetFields()
+      setTextoModal(true)
+      return
+    }
+
+    // Select tool on empty canvas → deselect
+    if (activeTool === 'select' && isOnStage) {
       setSelectedId(null)
     }
   }
@@ -364,6 +416,58 @@ export default function MapaPage() {
     message.success('Zona creada')
   }
 
+  // ── Create POI ───────────────────────────────────────────────────────────────
+  const handleCreatePoi = (vals: any) => {
+    if (!clickPoint) return
+    const newZone: Zone = {
+      id: `poi-${Date.now()}`,
+      type: vals.type as ZoneType,
+      name: vals.name || ZONE_CONFIGS[vals.type as ZoneType].label,
+      x: clickPoint.x - 40,
+      y: clickPoint.y - 40,
+      width: 80,
+      height: 80,
+      capacity: 0,
+      tables: 0,
+      lighting: '',
+      sound: '',
+      supplier: '',
+      shape: 'circle',
+    }
+    update({ zones: [...store.zones, newZone] })
+    setPoiModal(false)
+    setClickPoint(null)
+    setActiveTool('select')
+    setSelectedId(newZone.id)
+    message.success('POI creado')
+  }
+
+  // ── Create text label ─────────────────────────────────────────────────────────
+  const handleCreateTexto = (vals: any) => {
+    if (!clickPoint) return
+    const newZone: Zone = {
+      id: `txt-${Date.now()}`,
+      type: 'OTRO',
+      name: vals.texto || 'Texto',
+      x: clickPoint.x,
+      y: clickPoint.y,
+      width: 160,
+      height: 36,
+      capacity: 0,
+      tables: 0,
+      lighting: '',
+      sound: '',
+      supplier: '',
+      shape: 'text',
+    }
+    update({ zones: [...store.zones, newZone] })
+    setTextoModal(false)
+    setClickPoint(null)
+    setActiveTool('select')
+    setSelectedId(newZone.id)
+    message.success('Etiqueta creada')
+  }
+
   // ── Load template ─────────────────────────────────────────────────────────────
   const loadTemplate = (name: string) => {
     const zones = TEMPLATES[name]
@@ -408,6 +512,96 @@ export default function MapaPage() {
     const color = zone.colorOverride || cfg.color
     const isSelected = selectedId === zone.id
 
+    const commonGroupProps = {
+      key: zone.id,
+      x: zone.x,
+      y: zone.y,
+      draggable: activeTool === 'select',
+      ref: (node: Konva.Group | null) => { if (node) shapeRefs.current[zone.id] = node },
+      onClick: () => { if (activeTool === 'select') setSelectedId(zone.id) },
+      onTap: () => { if (activeTool === 'select') setSelectedId(zone.id) },
+      onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => {
+        updateZone(zone.id, { x: e.target.x(), y: e.target.y() })
+      },
+      onTransformEnd: (e: Konva.KonvaEventObject<Event>) => {
+        const node = e.target
+        const scaleX = node.scaleX()
+        const scaleY = node.scaleY()
+        node.scaleX(1)
+        node.scaleY(1)
+        updateZone(zone.id, {
+          x: node.x(),
+          y: node.y(),
+          width: Math.max(40, zone.width * scaleX),
+          height: Math.max(30, zone.height * scaleY),
+        })
+      },
+    }
+
+    // ── Circle shape (POI marker) ──────────────────────────────────────────────
+    if (zone.shape === 'circle') {
+      const r = Math.min(zone.width, zone.height) / 2
+      return (
+        <Group {...commonGroupProps}>
+          <Circle
+            radius={r}
+            fill={color}
+            opacity={0.85}
+            stroke={isSelected ? '#2563EB' : color}
+            strokeWidth={isSelected ? 2.5 : 0}
+          />
+          <Text
+            text={cfg.icon}
+            fontSize={18}
+            x={-10}
+            y={-20}
+            listening={false}
+          />
+          <Text
+            text={zone.name}
+            fontSize={10}
+            fill="#fff"
+            fontStyle="bold"
+            align="center"
+            width={r * 2}
+            x={-r}
+            y={4}
+            listening={false}
+          />
+        </Group>
+      )
+    }
+
+    // ── Text label shape ───────────────────────────────────────────────────────
+    if (zone.shape === 'text') {
+      return (
+        <Group {...commonGroupProps}>
+          <Rect
+            width={zone.width}
+            height={zone.height}
+            fill={isSelected ? '#EDE9FE' : 'transparent'}
+            stroke={isSelected ? '#7C3AED' : 'transparent'}
+            strokeWidth={1}
+            dash={[4, 3]}
+            cornerRadius={4}
+          />
+          <Text
+            text={zone.name}
+            fontSize={14}
+            fontStyle="bold"
+            fill="#1a1a1a"
+            width={zone.width}
+            height={zone.height}
+            align="center"
+            verticalAlign="middle"
+            listening={false}
+          />
+        </Group>
+      )
+    }
+
+    // ── Default rect shape ─────────────────────────────────────────────────────
+
     // Mesa circles
     const tables: JSX.Element[] = []
     if (layers.mesas && zone.tables > 0) {
@@ -438,32 +632,8 @@ export default function MapaPage() {
     const showPoi = layers.poi && POI_TYPES.includes(zone.type)
 
     return (
-      <Group
-        key={zone.id}
-        x={zone.x}
-        y={zone.y}
-        draggable={activeTool === 'select'}
-        ref={node => { if (node) shapeRefs.current[zone.id] = node }}
-        onClick={() => { if (activeTool === 'select') setSelectedId(zone.id) }}
-        onTap={() => { if (activeTool === 'select') setSelectedId(zone.id) }}
-        onDragEnd={e => {
-          updateZone(zone.id, { x: e.target.x(), y: e.target.y() })
-        }}
-        onTransformEnd={e => {
-          const node = e.target
-          const scaleX = node.scaleX()
-          const scaleY = node.scaleY()
-          node.scaleX(1)
-          node.scaleY(1)
-          updateZone(zone.id, {
-            x: node.x(),
-            y: node.y(),
-            width: Math.max(60, zone.width * scaleX),
-            height: Math.max(40, zone.height * scaleY),
-          })
-        }}
-      >
-        {/* Zone fill rect */}
+      <Group {...commonGroupProps}>
+        {/* Zone fill rect — listening:true so clicks/drags are detected */}
         <Rect
           width={zone.width}
           height={zone.height}
@@ -473,7 +643,6 @@ export default function MapaPage() {
           strokeWidth={isSelected ? 2 : 1.5}
           dash={isSelected ? [6, 3] : undefined}
           cornerRadius={6}
-          listening={false}
         />
 
         {/* Type label small */}
@@ -1022,24 +1191,110 @@ export default function MapaPage() {
               </div>
             </div>
 
+            {propSection(`TAREAS ASIGNADAS${selectedZone.taskIds?.length ? ` · ${selectedZone.taskIds.length}` : ''}`)}
+            <div style={{ padding: '6px 14px 10px', maxHeight: 200, overflowY: 'auto' }}>
+              {allTasks.length === 0 ? (
+                <div style={{ fontSize: 11, color: '#aaa', textAlign: 'center', padding: '8px 0' }}>
+                  Sin tareas en este evento
+                </div>
+              ) : allTasks.map((task: any) => {
+                const assigned = (selectedZone.taskIds ?? []).includes(task.id)
+                const dotColor = task.status === 'LISTA' ? '#059669'
+                  : task.status === 'EN_CURSO' ? '#F97316'
+                  : task.status === 'ESPERANDO_OK' ? '#D97706'
+                  : '#9CA3AF'
+                return (
+                  <div key={task.id} style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 6,
+                    padding: '4px 0', borderBottom: '1px solid #F9F8FF',
+                    cursor: 'pointer',
+                  }} onClick={() => {
+                    const current = selectedZone.taskIds ?? []
+                    const next = assigned
+                      ? current.filter((id: string) => id !== task.id)
+                      : [...current, task.id]
+                    updateZone(selectedZone.id, { taskIds: next })
+                  }}>
+                    <Checkbox checked={assigned} style={{ marginTop: 1, flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 1 }}>
+                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
+                        <span style={{ fontSize: 10, color: '#888', fontWeight: 600 }}>{task.code}</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: '#1a1a1a', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {task.title}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
             {/* Delete zone button */}
             <div style={{ padding: '6px 14px 14px' }}>
-              <Button
-                danger
-                size="small"
-                style={{ width: '100%' }}
-                onClick={() => {
+              <Popconfirm
+                title="¿Eliminar esta zona?"
+                onConfirm={() => {
                   update({ zones: store.zones.filter(z => z.id !== selectedZone.id) })
                   setSelectedId(null)
                   message.success('Zona eliminada')
                 }}
+                okButtonProps={{ danger: true }}
+                okText="Eliminar"
               >
-                Eliminar zona
-              </Button>
+                <Button danger size="small" style={{ width: '100%' }}>
+                  Eliminar zona
+                </Button>
+              </Popconfirm>
             </div>
           </div>
         )}
       </div>
+
+      {/* ── POI modal ── */}
+      <Modal
+        title="Nuevo marcador POI"
+        open={poiModal}
+        onCancel={() => { setPoiModal(false); setClickPoint(null) }}
+        onOk={() => poiForm.submit()}
+        okText="Crear POI"
+        okButtonProps={{ style: { background: '#7C3AED', borderColor: '#7C3AED' } }}
+        destroyOnClose
+        width={360}
+      >
+        <Form form={poiForm} layout="vertical" onFinish={handleCreatePoi}>
+          <Form.Item name="name" label="Nombre">
+            <Input placeholder="Ej: Barra principal, Baños..." autoFocus />
+          </Form.Item>
+          <Form.Item name="type" label="Tipo" rules={[{ required: true }]}>
+            <Select>
+              {POI_TYPES.map(t => (
+                <Select.Option key={t} value={t}>
+                  {ZONE_CONFIGS[t].icon} {ZONE_CONFIGS[t].label}
+                </Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* ── Texto modal ── */}
+      <Modal
+        title="Nueva etiqueta de texto"
+        open={textoModal}
+        onCancel={() => { setTextoModal(false); setClickPoint(null) }}
+        onOk={() => textoForm.submit()}
+        okText="Crear etiqueta"
+        okButtonProps={{ style: { background: '#7C3AED', borderColor: '#7C3AED' } }}
+        destroyOnClose
+        width={360}
+      >
+        <Form form={textoForm} layout="vertical" onFinish={handleCreateTexto}>
+          <Form.Item name="texto" label="Texto" rules={[{ required: true, message: 'Escribe el texto' }]}>
+            <Input placeholder="Ej: Norte, Acceso principal..." autoFocus />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       {/* ── New zone modal ── */}
       <Modal
