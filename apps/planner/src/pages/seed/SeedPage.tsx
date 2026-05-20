@@ -10,7 +10,7 @@ import { Spin, Typography, Input, Button } from 'antd'
 
 const { Text } = Typography
 
-const DEFAULT_EID = '3bc99b38-d059-4d8d-9fdf-346e88811780'
+const DEFAULT_EID = '39982295-e1d6-45c4-955f-24294baeb245'
 
 const TIMELINE = {
   updatedAt: new Date().toISOString(),
@@ -166,11 +166,8 @@ export default function SeedPage() {
   }
 
   useEffect(() => {
-    const id = searchParams.get('id')
-    if (id) {
-      runSeed(id)
-    }
-    // If no ?id= param, show the manual entry form
+    const id = searchParams.get('id') || DEFAULT_EID
+    runSeed(id)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (status === 'loading') {
@@ -193,14 +190,14 @@ export default function SeedPage() {
     )
   }
 
-  // No ?id= param — show form to enter event ID manually
+  // Fallback manual form (only reached if runSeed fails to set status)
   return (
     <div style={{ height:'100vh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', background:'#F8F7FF', gap:16 }}>
       <span style={{ fontSize:48 }}>💍</span>
       <Text style={{ fontSize:18, fontWeight:800, color:'#1a1a1a' }}>Seed: Boda García López</Text>
       <Text style={{ color:'#888', fontSize:13, textAlign:'center', maxWidth:400 }}>
-        Abre el evento en el Planner, copia el ID de la URL<br/>
-        (<code>/eventos/<strong>ID</strong>/lienzo</code>) y pégalo aquí:
+        Opcionalmente pasa un ID diferente:<br/>
+        (<code>/seed?id=<strong>EVENT_ID</strong></code>)
       </Text>
       <div style={{ display:'flex', gap:8, width:420, maxWidth:'90vw' }}>
         <Input
@@ -220,9 +217,6 @@ export default function SeedPage() {
           Cargar
         </Button>
       </div>
-      <Text style={{ color:'#bbb', fontSize:11 }}>
-        También puedes ir directo a <code>/seed?id=EVENT_ID</code>
-      </Text>
     </div>
   )
 }
