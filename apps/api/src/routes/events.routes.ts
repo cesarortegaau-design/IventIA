@@ -11,6 +11,7 @@ import { importStands, listStands, createStand, updateStand, deleteStand } from 
 import { listFloorPlans, getFloorPlanUploadSignature, createFloorPlanRecord, deleteFloorPlan, getFloorPlanContent, uploadFloorPlanFile } from '../controllers/floorPlans.controller'
 import { listEventActivities, createEventActivity, updateEventActivity, deleteEventActivity, bulkReorderActivities, exportActivitiesCsv, importActivitiesCsv } from '../controllers/eventActivities.controller'
 import { updateMatchScore } from '../controllers/tournament.controller'
+import { publishPlannerPortal } from '../controllers/planner-portal.controller'
 import activityDocumentsRouter from './activityDocuments.routes'
 import tournamentRouter from './tournament.routes'
 
@@ -86,6 +87,9 @@ router.patch('/:eventId/activities/:activityId/match', requirePrivilege(PRIVILEG
 router.put('/:eventId/activities/:activityId',    requirePrivilege(PRIVILEGES.EVENT_TIMELINE_EDIT), updateEventActivity)
 router.delete('/:eventId/activities/:activityId', requirePrivilege(PRIVILEGES.EVENT_TIMELINE_EDIT), deleteEventActivity)
 router.use('/:eventId/activities/:activityId/documents', activityDocumentsRouter)
+
+// Planner portal
+router.post('/:id/planner-portal/publish', publishPlannerPortal)
 
 // Tournament module
 router.use('/:eventId/tournament', tournamentRouter)

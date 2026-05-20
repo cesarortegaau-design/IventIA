@@ -34,7 +34,7 @@ export interface EventBranding {
   updatedAt: string
 }
 
-const DEFAULT_BRANDING: EventBranding = {
+export const DEFAULT_BRANDING: EventBranding = {
   primaryColor: '#7C3AED',
   secondaryColor: '#EC4899',
   accentColor: '#F97316',

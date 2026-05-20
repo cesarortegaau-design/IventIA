@@ -79,6 +79,7 @@ model Tenant {
   budgets                   Budget[]
   approvalFlows             ApprovalFlow[]
   approvalRequests          ApprovalRequest[]
+  plannerPortalSnapshots    PlannerPortalSnapshot[]
 
   @@map("tenants")
 }
@@ -169,6 +170,7 @@ model User {
   approvalStepsAsUser      ApprovalFlowStep[]      @relation("ApprovalStepUser")
   approvalRequestsTriggered ApprovalRequest[]      @relation("ApprovalRequestTrigger")
   approvalStepsReviewed    ApprovalRequestStep[]   @relation("ApprovalStepReviewer")
+  plannerPortalPublished   PlannerPortalSnapshot[] @relation("PlannerPortalPublisher")
 
   @@index([tenantId, isActive])
   @@map("users")
@@ -564,6 +566,7 @@ model Event {
   teamRegistrations   TeamEventRegistration[]
   tournamentConfig    TournamentConfig?
   tournamentVenues    TournamentVenue[]
+  plannerPortalSnapshot PlannerPortalSnapshot?
 
   @@unique([tenantId, code])
   @@index([tenantId, status])
@@ -2619,6 +2622,22 @@ model ApprovalRequestStep {
 
   @@index([requestId, order])
   @@map("approval_request_steps")
+}
+
+model PlannerPortalSnapshot {
+  id            String   @id @default(uuid())
+  eventId       String   @unique @map("event_id")
+  tenantId      String   @map("tenant_id") @db.VarChar(50)
+  data          Json
+  publishedById String   @map("published_by_id")
+  publishedAt   DateTime @default(now()) @map("published_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  event         Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  publishedBy   User     @relation("PlannerPortalPublisher", fields: [publishedById], references: [id])
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@map("planner_portal_snapshots")
 }
 
 enum ApprovalObjectType {

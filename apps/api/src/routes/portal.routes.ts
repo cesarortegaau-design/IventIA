@@ -12,6 +12,7 @@ import {
   portalListConversations, portalGetConversation, portalStartConversation,
   portalSendMessage, portalUnreadCount, uploadChatFile,
 } from '../controllers/chat.controller'
+import { getPortalSnapshot } from '../controllers/planner-portal.controller'
 
 const voucherUpload = multer({
   storage: multer.memoryStorage(),
@@ -41,6 +42,8 @@ router.post('/auth/refresh', portalRefresh)
 
 // Protected portal routes
 router.use(authenticatePortal)
+
+router.get('/planner-snapshot/:eventId', getPortalSnapshot)
 
 router.get('/me', portalMe)
 router.patch('/me', portalUpdateMe)

@@ -45,4 +45,6 @@ export const eventsApi = {
     apiClient.put(`/events/${id}/collab-tasks/${taskId}`, data).then((r) => r.data),
   createPortalDirectAccess: (id: string, data: { email: string; password: string; firstName: string; lastName: string }) =>
     apiClient.post(`/events/${id}/portal-codes/direct-access`, data).then((r) => r.data),
+  publishPlannerPortal: (id: string, data: object) =>
+    apiClient.post(`/events/${id}/planner-portal/publish`, { data }).then((r) => r.data),
 }

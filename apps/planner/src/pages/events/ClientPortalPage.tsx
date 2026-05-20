@@ -1,82 +1,45 @@
 /**
  * ClientPortalPage.tsx
  * PUBLIC client portal — accessible at /portal-cliente/:id (no admin auth required)
- * Authentication: token from localStorage iventia-portal-token-{eventId}
- * Session:        sessionStorage portal-session-{eventId} = "true"
- * Event data:     iventia-portal-event-snapshot-{eventId} (saved by PortalPage on save)
- * Config:         iventia-portal-config-{eventId}
+ * Authentication: email + password via portal user JWT
+ * Session:        sessionStorage planner-portal-token-{eventId} = JWT
+ * Data:           fetched from backend PlannerPortalSnapshot
  */
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
-import { Button, Input, Typography, Divider, Avatar } from 'antd'
+import { Button, Input, Typography, Divider, Avatar, Spin } from 'antd'
 import {
   LockOutlined, CalendarOutlined, DollarOutlined, CheckSquareOutlined,
   PictureOutlined, TeamOutlined, LinkOutlined, CheckCircleOutlined,
-  AppstoreOutlined,
+  AppstoreOutlined, UserOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import 'dayjs/locale/es'
 dayjs.locale('es')
-import { loadBranding, type EventBranding } from './EstudioPage'
+import { plannerPortalApi } from '../../api/portalClient'
+import { DEFAULT_BRANDING, type EventBranding } from './EstudioPage'
 
 const { Text } = Typography
 
 // ── Types ──────────────────────────────────────────────────────────────────────
-interface PortalConfig {
-  visibleWidgets: string[]
-  portalMessage: string
-  accessEnabled: boolean
-  updatedAt: string
+interface PortalSnapshot {
+  branding?: EventBranding
+  portalConfig?: { visibleWidgets: string[]; portalMessage?: string; accessEnabled?: boolean }
+  timeline?: any
+  tareas?: any
+  presupuesto?: any
+  lienzo?: any
+  eventSnapshot?: {
+    name: string
+    eventStart: string
+    eventType: string
+    code: string
+    venueLocation: string
+    client: any
+  }
 }
 
-interface EventSnapshot {
-  name: string
-  eventStart: string
-  eventType: string
-  code: string
-  venueLocation: string
-  client: any
-}
-
-// ── localStorage helpers ────────────────────────────────────────────────────────
-function loadConfig(eventId: string): PortalConfig {
-  try {
-    const raw = localStorage.getItem(`iventia-portal-config-${eventId}`)
-    if (raw) return JSON.parse(raw)
-  } catch { /* ignore */ }
-  return { visibleWidgets: ['portada', 'timeline', 'presupuesto'], portalMessage: '', accessEnabled: false, updatedAt: '' }
-}
-
-function loadSnapshot(eventId: string): EventSnapshot | null {
-  try {
-    const raw = localStorage.getItem(`iventia-portal-event-snapshot-${eventId}`)
-    if (raw) return JSON.parse(raw)
-  } catch { /* ignore */ }
-  return null
-}
-
-function checkToken(eventId: string, input: string): boolean {
-  try {
-    const raw = localStorage.getItem(`iventia-portal-token-${eventId}`)
-    if (!raw) return false
-    const { token } = JSON.parse(raw)
-    return token === input.trim()
-  } catch { /* ignore */ }
-  return false
-}
-
-function readLienzoWidgets(eventId: string): any[] {
-  try {
-    const raw = localStorage.getItem(`iventia-lienzo-${eventId}`)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      return Array.isArray(parsed) ? parsed : (parsed.widgets || [])
-    }
-  } catch { /* ignore */ }
-  return []
-}
-
-// ── Section renderers (full-size) ───────────────────────────────────────────────
+// ── Section card ───────────────────────────────────────────────────────────────
 function SectionCard({ title, icon, color, children }: {
   title: string; icon: React.ReactNode; color: string; children: React.ReactNode
 }) {
@@ -97,7 +60,8 @@ function SectionCard({ title, icon, color, children }: {
   )
 }
 
-function SectionPortada({ snapshot, branding }: { snapshot: EventSnapshot; branding: EventBranding }) {
+// ── Section renderers ──────────────────────────────────────────────────────────
+function SectionPortada({ snapshot, branding }: { snapshot: NonNullable<PortalSnapshot['eventSnapshot']>; branding: EventBranding }) {
   const bg = branding.coverStyle === 'gradient'
     ? `linear-gradient(135deg, ${branding.primaryColor} 0%, ${branding.secondaryColor} 100%)`
     : branding.coverStyle === 'dark' ? '#0D0D1A' : branding.primaryColor
@@ -144,17 +108,9 @@ function SectionPortada({ snapshot, branding }: { snapshot: EventSnapshot; brand
   )
 }
 
-function SectionTimeline({ eventId, accentColor }: { eventId: string; accentColor: string }) {
-  let activities: any[] = []
-  try {
-    const raw = localStorage.getItem(`iventia-timeline-${eventId}`)
-    if (raw) {
-      const stored = JSON.parse(raw)
-      activities = Array.isArray(stored) ? stored : (stored.activities || [])
-    }
-  } catch { /* ignore */ }
+function SectionTimeline({ timeline, accentColor }: { timeline: any; accentColor: string }) {
+  const activities: any[] = Array.isArray(timeline) ? timeline : (timeline?.activities || [])
 
-  // Group by phase
   const byPhase: Record<string, any[]> = {}
   activities.forEach((a: any) => {
     const phase = a.phase || 'General'
@@ -193,9 +149,8 @@ function SectionTimeline({ eventId, accentColor }: { eventId: string; accentColo
   )
 }
 
-function SectionTareas({ eventId, accentColor }: { eventId: string; accentColor: string }) {
-  const data = JSON.parse(localStorage.getItem(`iventia-tareas-${eventId}`) || '{"tasks":[]}')
-  const tasks = ((data.tasks || []) as any[]).filter((t: any) => t.clientVisible !== false)
+function SectionTareas({ tareas, accentColor }: { tareas: any; accentColor: string }) {
+  const tasks = ((tareas?.tasks || []) as any[]).filter((t: any) => t.clientVisible !== false)
   const done = tasks.filter((t: any) => t.status === 'DONE').length
 
   return (
@@ -207,9 +162,7 @@ function SectionTareas({ eventId, accentColor }: { eventId: string; accentColor:
           <div style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 16 }}>
             {done} de {tasks.length} completadas
           </div>
-          <div style={{
-            height: 6, background: '#F3F4F6', borderRadius: 6, marginBottom: 20, overflow: 'hidden',
-          }}>
+          <div style={{ height: 6, background: '#F3F4F6', borderRadius: 6, marginBottom: 20, overflow: 'hidden' }}>
             <div style={{
               height: '100%', width: `${tasks.length ? (done / tasks.length) * 100 : 0}%`,
               background: accentColor, borderRadius: 6, transition: 'width 0.3s',
@@ -243,9 +196,8 @@ function SectionTareas({ eventId, accentColor }: { eventId: string; accentColor:
   )
 }
 
-function SectionPresupuesto({ eventId }: { eventId: string }) {
-  const data = JSON.parse(localStorage.getItem(`iventia-presupuesto-${eventId}`) || '{"chapters":[]}')
-  const chapters = (data.chapters || []) as any[]
+function SectionPresupuesto({ presupuesto }: { presupuesto: any }) {
+  const chapters = (presupuesto?.chapters || []) as any[]
   const totalGeneral = chapters.reduce((sum: number, ch: any) =>
     sum + (ch.items || []).reduce((s: number, it: any) => s + (it.total || 0), 0), 0)
 
@@ -279,8 +231,8 @@ function SectionPresupuesto({ eventId }: { eventId: string }) {
   )
 }
 
-function SectionGaleria({ eventId }: { eventId: string }) {
-  const widgets = readLienzoWidgets(eventId)
+function SectionGaleria({ lienzo }: { lienzo: any }) {
+  const widgets: any[] = Array.isArray(lienzo) ? lienzo : (lienzo?.widgets || [])
   const imageWidgets = widgets.filter((w: any) => w.type === 'imagen' && w.config?.src)
   return (
     <SectionCard title="Galería / Moodboard" icon={<PictureOutlined />} color="#EC4899">
@@ -315,8 +267,9 @@ function SectionEquipo() {
   )
 }
 
-function SectionLinks({ eventId }: { eventId: string }) {
-  const linkWidgets = readLienzoWidgets(eventId).filter((w: any) => w.type === 'links')
+function SectionLinks({ lienzo }: { lienzo: any }) {
+  const widgets: any[] = Array.isArray(lienzo) ? lienzo : (lienzo?.widgets || [])
+  const linkWidgets = widgets.filter((w: any) => w.type === 'links')
   const allLinks: any[] = linkWidgets.flatMap((w: any) => w.config?.links || [])
   return (
     <SectionCard title="Recursos y enlaces" icon={<LinkOutlined />} color="#6366F1">
@@ -344,25 +297,40 @@ function SectionLinks({ eventId }: { eventId: string }) {
   )
 }
 
-// ── Login screen ────────────────────────────────────────────────────────────────
+// ── Login screen ───────────────────────────────────────────────────────────────
 function LoginScreen({
-  branding,
-  eventName,
   onLogin,
 }: {
-  branding: EventBranding
-  eventName: string
-  onLogin: (token: string) => boolean
+  onLogin: (email: string, password: string) => Promise<void>
 }) {
-  const [tokenInput, setTokenInput] = useState('')
-  const [error, setError] = useState(false)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  function handleAcceder() {
-    const ok = onLogin(tokenInput)
-    if (!ok) setError(true)
-  }
-
+  const branding = DEFAULT_BRANDING
   const bg = `linear-gradient(135deg, ${branding.primaryColor} 0%, ${branding.secondaryColor} 100%)`
+
+  async function handleAcceder() {
+    if (!email || !password) {
+      setError('Ingresa tu correo y contraseña')
+      return
+    }
+    setLoading(true)
+    setError(null)
+    try {
+      await onLogin(email, password)
+    } catch (err: any) {
+      const status = err?.response?.status
+      if (status === 401) {
+        setError('Credenciales incorrectas. Verifica con tu event designer.')
+      } else {
+        setError('Error al conectar. Intenta de nuevo.')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <div style={{
@@ -376,7 +344,6 @@ function LoginScreen({
         boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
         textAlign: 'center',
       }}>
-        {/* Logo */}
         <div style={{
           width: 56, height: 56, borderRadius: 16, margin: '0 auto 20px',
           background: `linear-gradient(135deg, ${branding.primaryColor}, ${branding.secondaryColor})`,
@@ -388,35 +355,46 @@ function LoginScreen({
         <div style={{ fontSize: 13, fontWeight: 700, color: branding.primaryColor, letterSpacing: '0.1em', marginBottom: 4 }}>
           IventIA PLANNER
         </div>
-        <div style={{ fontSize: 20, fontWeight: 800, color: '#1F2937', marginBottom: 4 }}>
+        <div style={{ fontSize: 20, fontWeight: 800, color: '#1F2937', marginBottom: 28 }}>
           Portal de tu Evento
         </div>
-        {eventName && (
-          <div style={{ fontSize: 14, color: '#6B7280', marginBottom: 28 }}>{eventName}</div>
-        )}
 
         <div style={{ textAlign: 'left', marginBottom: 8 }}>
-          <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Código de acceso</label>
+          <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Correo</label>
         </div>
         <Input
           size="large"
-          prefix={<LockOutlined style={{ color: branding.primaryColor }} />}
-          placeholder="Ingresa tu código de acceso"
-          value={tokenInput}
-          onChange={(e) => { setTokenInput(e.target.value); setError(false) }}
+          prefix={<UserOutlined style={{ color: branding.primaryColor }} />}
+          placeholder="tu@correo.com"
+          value={email}
+          onChange={(e) => { setEmail(e.target.value); setError(null) }}
           onPressEnter={handleAcceder}
           status={error ? 'error' : undefined}
-          style={{ marginBottom: error ? 6 : 16, fontFamily: 'monospace' }}
+          style={{ marginBottom: 12 }}
+        />
+        <div style={{ textAlign: 'left', marginBottom: 8 }}>
+          <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Contraseña</label>
+        </div>
+        <Input.Password
+          size="large"
+          prefix={<LockOutlined style={{ color: branding.primaryColor }} />}
+          placeholder="Tu contraseña de acceso"
+          value={password}
+          onChange={(e) => { setPassword(e.target.value); setError(null) }}
+          onPressEnter={handleAcceder}
+          status={error ? 'error' : undefined}
+          style={{ marginBottom: error ? 6 : 16 }}
         />
         {error && (
           <div style={{ color: '#EF4444', fontSize: 12, marginBottom: 16, textAlign: 'left' }}>
-            Código incorrecto. Verifica con tu event designer.
+            {error}
           </div>
         )}
         <Button
           type="primary"
           size="large"
           block
+          loading={loading}
           onClick={handleAcceder}
           style={{ background: branding.primaryColor, borderColor: branding.primaryColor, fontWeight: 700, height: 46 }}
         >
@@ -435,46 +413,84 @@ function LoginScreen({
 export default function ClientPortalPage() {
   const { id } = useParams<{ id: string }>()
   const eventId = id || ''
+  const sessionKey = `planner-portal-token-${eventId}`
 
-  const [authenticated, setAuthenticated] = useState(false)
-  const branding = loadBranding(eventId)
-  const config = loadConfig(eventId)
-  const snapshot = loadSnapshot(eventId)
+  const [snapshot, setSnapshot] = useState<PortalSnapshot | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [fetchError, setFetchError] = useState<string | null>(null)
+
+  async function fetchSnapshot(token: string) {
+    setLoading(true)
+    setFetchError(null)
+    try {
+      const res = await plannerPortalApi.getSnapshot(eventId, token)
+      setSnapshot(res.data ?? res)
+    } catch (err: any) {
+      setFetchError('No se pudo cargar el portal. Intenta de nuevo.')
+      sessionStorage.removeItem(sessionKey)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   // Check for existing session on mount
   useEffect(() => {
     if (!eventId) return
-    const session = sessionStorage.getItem(`portal-session-${eventId}`)
-    if (session === 'true') setAuthenticated(true)
+    const storedToken = sessionStorage.getItem(sessionKey)
+    if (storedToken) {
+      fetchSnapshot(storedToken)
+    }
   }, [eventId])
 
-  function handleLogin(tokenInput: string): boolean {
-    const ok = checkToken(eventId, tokenInput)
-    if (ok) {
-      sessionStorage.setItem(`portal-session-${eventId}`, 'true')
-      setAuthenticated(true)
-    }
-    return ok
+  async function handleLogin(email: string, password: string) {
+    const res = await plannerPortalApi.login(email, password)
+    const accessToken: string = res.data?.accessToken ?? res.accessToken
+    sessionStorage.setItem(sessionKey, accessToken)
+    await fetchSnapshot(accessToken)
   }
 
-  const eventName = snapshot?.name || 'Portal del Evento'
-  const visible = config.visibleWidgets
-
-  if (!authenticated) {
+  // Not logged in yet
+  if (!snapshot && !loading) {
     return (
-      <LoginScreen
-        branding={branding}
-        eventName={eventName}
-        onLogin={handleLogin}
-      />
+      <>
+        <LoginScreen onLogin={handleLogin} />
+        {fetchError && (
+          <div style={{
+            position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+            background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10,
+            padding: '10px 20px', color: '#B91C1C', fontSize: 13,
+          }}>
+            {fetchError}
+          </div>
+        )}
+      </>
     )
   }
+
+  // Loading spinner
+  if (loading) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: '#F3F4F6',
+      }}>
+        <Spin size="large" />
+      </div>
+    )
+  }
+
+  if (!snapshot) return null
+
+  const branding: EventBranding = { ...DEFAULT_BRANDING, ...(snapshot.branding || {}) }
+  const visible: string[] = snapshot.portalConfig?.visibleWidgets || ['portada', 'timeline', 'presupuesto']
+  const eventSnapshot = snapshot.eventSnapshot
+  const eventName = eventSnapshot?.name || 'Portal del Evento'
 
   return (
     <div style={{ minHeight: '100vh', background: '#F3F4F6' }}>
       {/* Nav bar */}
       <div style={{
-        background: `linear-gradient(135deg, #1E1040, #2D1B69)`,
+        background: 'linear-gradient(135deg, #1E1040, #2D1B69)',
         padding: '0 24px',
         display: 'flex', alignItems: 'center', gap: 12, height: 56,
         position: 'sticky', top: 0, zIndex: 100,
@@ -498,10 +514,10 @@ export default function ClientPortalPage() {
       {/* Content */}
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '32px 24px' }}>
         {/* Portada */}
-        {snapshot && visible.includes('portada') && (
-          <SectionPortada snapshot={snapshot} branding={branding} />
+        {eventSnapshot && visible.includes('portada') && (
+          <SectionPortada snapshot={eventSnapshot} branding={branding} />
         )}
-        {!snapshot && visible.includes('portada') && (
+        {!eventSnapshot && visible.includes('portada') && (
           <div style={{
             background: `linear-gradient(135deg, ${branding.primaryColor}, ${branding.secondaryColor})`,
             borderRadius: 16, padding: 32, color: '#fff', marginBottom: 24,
@@ -515,23 +531,35 @@ export default function ClientPortalPage() {
         )}
 
         {/* Portal message */}
-        {config.portalMessage && (
+        {snapshot.portalConfig?.portalMessage && (
           <div style={{
             background: '#fff', borderRadius: 16, padding: 20,
             boxShadow: '0 4px 20px rgba(0,0,0,0.08)', marginBottom: 24,
             borderLeft: `4px solid ${branding.accentColor}`,
           }}>
-            <Text style={{ fontSize: 14, color: '#374151', lineHeight: 1.6 }}>{config.portalMessage}</Text>
+            <Text style={{ fontSize: 14, color: '#374151', lineHeight: 1.6 }}>
+              {snapshot.portalConfig.portalMessage}
+            </Text>
           </div>
         )}
 
         {/* Sections */}
-        {visible.includes('timeline') && <SectionTimeline eventId={eventId} accentColor={branding.primaryColor} />}
-        {visible.includes('tareas') && <SectionTareas eventId={eventId} accentColor={branding.accentColor} />}
-        {visible.includes('presupuesto') && <SectionPresupuesto eventId={eventId} />}
-        {visible.includes('galeria') && <SectionGaleria eventId={eventId} />}
+        {visible.includes('timeline') && (
+          <SectionTimeline timeline={snapshot.timeline} accentColor={branding.primaryColor} />
+        )}
+        {visible.includes('tareas') && (
+          <SectionTareas tareas={snapshot.tareas} accentColor={branding.accentColor} />
+        )}
+        {visible.includes('presupuesto') && (
+          <SectionPresupuesto presupuesto={snapshot.presupuesto} />
+        )}
+        {visible.includes('galeria') && (
+          <SectionGaleria lienzo={snapshot.lienzo} />
+        )}
         {visible.includes('equipo') && <SectionEquipo />}
-        {visible.includes('links') && <SectionLinks eventId={eventId} />}
+        {visible.includes('links') && (
+          <SectionLinks lienzo={snapshot.lienzo} />
+        )}
 
         {visible.length === 0 && (
           <div style={{ textAlign: 'center', padding: 80, color: '#9CA3AF' }}>
