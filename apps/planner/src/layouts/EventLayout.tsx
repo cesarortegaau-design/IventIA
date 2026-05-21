@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { Outlet, useNavigate, useLocation, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Avatar, Badge, Button, Dropdown, Spin, Tooltip, Typography } from 'antd'
@@ -12,6 +12,34 @@ import { useAuthStore } from '../stores/authStore'
 import { eventsApi } from '../api/events'
 
 const { Text } = Typography
+
+class PageErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null }
+  static getDerivedStateFromError(error: Error) { return { error } }
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('[PageError]', error, info.componentStack)
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 40, fontFamily: 'monospace', overflow: 'auto' }}>
+          <h3 style={{ color: '#DC2626' }}>Error en esta página</h3>
+          <pre style={{ background: '#FEF2F2', padding: 16, borderRadius: 8, whiteSpace: 'pre-wrap', fontSize: 12, maxHeight: 300, overflow: 'auto' }}>
+            {this.state.error.message}{'\n'}{this.state.error.stack}
+          </pre>
+          <button onClick={() => this.setState({ error: null })}
+            style={{ marginTop: 12, padding: '6px 16px', background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13 }}>
+            Reintentar
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 const STATUS_COLORS: Record<string, string> = {
   QUOTED: '#F97316',
@@ -205,7 +233,9 @@ export default function EventLayout() {
 
       {/* Content */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <Outlet context={{ event }} />
+        <PageErrorBoundary>
+          <Outlet context={{ event }} />
+        </PageErrorBoundary>
       </div>
     </div>
   )
