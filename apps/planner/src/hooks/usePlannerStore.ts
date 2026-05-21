@@ -56,14 +56,15 @@ export function usePlannerStore<T extends Record<string, any>>(
 
     const remoteData = remote?.data
     if (remoteData && typeof remoteData === 'object' && Object.keys(remoteData).length > 0) {
-      setStore(remoteData as T)
-      lastSavedJson.current = JSON.stringify(remoteData)
+      const merged = { ...defaultValue, ...remoteData } as T
+      setStore(merged)
+      lastSavedJson.current = JSON.stringify(merged)
     } else if (localStorageKey) {
       try {
         const raw = localStorage.getItem(localStorageKey)
         if (raw) {
-          const parsed = JSON.parse(raw)
-          setStore(parsed as T)
+          const parsed = { ...defaultValue, ...JSON.parse(raw) } as T
+          setStore(parsed)
           lastSavedJson.current = JSON.stringify(parsed)
           eventsApi.savePlannerStore(eventId, storeKey, parsed).catch(() => {})
         }
