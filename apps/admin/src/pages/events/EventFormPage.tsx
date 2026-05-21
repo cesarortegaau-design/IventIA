@@ -260,7 +260,7 @@ export default function EventFormPage() {
                       </Form.Item>
                     </Col>
                     <Col xs={12} md={8}>
-                      <Form.Item name="coordinator" label="Coordinador">
+                      <Form.Item name="coordinatorUserId" label="Coordinador">
                         <Select
                           options={userOptions}
                           showSearch
@@ -273,7 +273,7 @@ export default function EventFormPage() {
                       </Form.Item>
                     </Col>
                     <Col xs={12} md={8}>
-                      <Form.Item name="executive" label="Ejecutivo">
+                      <Form.Item name="executiveUserId" label="Ejecutivo">
                         <Select
                           options={userOptions}
                           showSearch
