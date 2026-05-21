@@ -285,7 +285,7 @@ function MonthView({ monthStart, events, navigate }: { monthStart: Dayjs; events
 // ── Page ───────────────────────────────────────────────────────────────────────
 export default function EventsCalendarPage() {
   const navigate = useNavigate()
-  const [view, setView]       = useState<'week' | 'month' | 'list'>('month')
+  const [view, setView]       = useState<'week' | 'month' | 'list'>('list')
   const [anchor, setAnchor]   = useState(dayjs().startOf('month'))
   const [statusFilter, setStatusFilter] = useState('')
   const [search, setSearch]   = useState('')
