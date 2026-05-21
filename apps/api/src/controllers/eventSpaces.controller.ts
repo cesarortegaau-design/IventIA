@@ -1,9 +1,87 @@
 import { Request, Response, NextFunction } from 'express'
 import { prisma } from '../config/database'
 import { auditService } from '../services/audit.service'
+import { sendGenericNotification, isWhatsAppConfigured } from '../services/whatsapp.service'
 
 const PHASE_LABEL: Record<string, string> = {
   SETUP: 'Montaje', EVENT: 'Evento', TEARDOWN: 'Desmontaje',
+}
+
+const ADMIN_URL = 'https://ivent-ia-admin.vercel.app'
+
+// Fire-and-forget: detects conflicts for the saved space and notifies executives via WhatsApp
+async function notifyConflicts(savedSpaceId: string, eventId: string, tenantId: string) {
+  if (!isWhatsAppConfigured()) return
+  try {
+    const saved = await prisma.eventSpace.findUnique({
+      where: { id: savedSpaceId },
+      include: { resource: { select: { id: true, name: true, code: true } } },
+    })
+    if (!saved) return
+
+    // Find all EventSpaces on the same resource that overlap (excluding itself)
+    const conflicts = await prisma.eventSpace.findMany({
+      where: {
+        id: { not: savedSpaceId },
+        resourceId: saved.resourceId,
+        startTime: { lt: saved.endTime },
+        endTime: { gt: saved.startTime },
+      },
+      include: {
+        event: { select: { id: true, name: true, code: true, executive: true } },
+      },
+    })
+    if (conflicts.length === 0) return
+
+    // Gather current event info
+    const currentEvent = await prisma.event.findFirst({
+      where: { id: eventId, tenantId },
+      select: { id: true, name: true, code: true, executive: true },
+    })
+    if (!currentEvent) return
+
+    // Collect all unique executive user IDs across current + conflicting events
+    const executiveMap = new Map<string, { eventId: string; eventName: string; eventCode: string }>()
+    const addExec = (userId: string | null, ev: { id: string; name: string; code: string }) => {
+      if (userId && !executiveMap.has(userId)) executiveMap.set(userId, ev)
+    }
+    addExec(currentEvent.executive, currentEvent)
+    for (const c of conflicts) addExec(c.event.executive, c.event)
+
+    if (executiveMap.size === 0) return
+
+    // Build conflict summary lines
+    const fmt = (d: Date) => d.toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' })
+    const conflictLines = conflicts.map(c =>
+      `• *${c.event.name}* (#${c.event.code}): ${fmt(c.startTime)} – ${fmt(c.endTime)}`
+    ).join('\n')
+
+    const savedPhase = PHASE_LABEL[saved.phase] ?? saved.phase
+    const savedRange = `${fmt(saved.startTime)} – ${fmt(saved.endTime)}`
+
+    // Lookup phones and send
+    const userIds = Array.from(executiveMap.keys())
+    const users = await prisma.user.findMany({
+      where: { id: { in: userIds }, isActive: true },
+      select: { id: true, phone: true },
+    })
+
+    await Promise.allSettled(users.map(async u => {
+      if (!u.phone) return
+      const ev = executiveMap.get(u.id)!
+      const message =
+        `El espacio *${saved.resource.name}* (${savedPhase}) del evento *${currentEvent.name}* (#${currentEvent.code}) tiene conflicto:\n\n` +
+        conflictLines + `\n\nRango: ${savedRange}`
+      await sendGenericNotification(u.phone, {
+        title: '⚠️ Conflicto de espacio detectado',
+        message,
+        actionUrl: `${ADMIN_URL}/eventos/${ev.eventId}`,
+        actionText: 'Ver evento',
+      })
+    }))
+  } catch (err) {
+    console.error('[notifyConflicts] error:', err)
+  }
 }
 
 export async function listEventSpaces(req: Request, res: Response, next: NextFunction) {
@@ -49,6 +127,9 @@ export async function createEventSpace(req: Request, res: Response, next: NextFu
       notes: notes ?? null,
     }, req?.ip)
 
+    // Fire-and-forget conflict notification
+    notifyConflicts(space.id, eventId, tenantId)
+
     res.status(201).json({ success: true, data: space })
   } catch (err) { next(err) }
 }
@@ -89,6 +170,9 @@ export async function updateEventSpace(req: Request, res: Response, next: NextFu
       endTime,
       notes: notes ?? null,
     }, req?.ip)
+
+    // Fire-and-forget conflict notification
+    notifyConflicts(space.id, eventId, tenantId)
 
     res.json({ success: true, data: space })
   } catch (err) { next(err) }

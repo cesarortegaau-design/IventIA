@@ -7,6 +7,7 @@ import dayjs from 'dayjs'
 import { eventsApi } from '../../api/events'
 import { priceListsApi } from '../../api/priceLists'
 import { clientsApi } from '../../api/clients'
+import { usersApi } from '../../api/users'
 
 const { Title } = Typography
 
@@ -36,6 +37,12 @@ export default function EventFormPage() {
   const { data: clients } = useQuery({
     queryKey: ['clients', { pageSize: 200 }],
     queryFn: () => clientsApi.list({ pageSize: 200, minimal: true }),
+    staleTime: FIVE_MIN,
+  })
+
+  const { data: assignableUsers } = useQuery({
+    queryKey: ['users-assignable'],
+    queryFn: () => usersApi.listAssignable(),
     staleTime: FIVE_MIN,
   })
 
@@ -89,6 +96,11 @@ export default function EventFormPage() {
   const priceListOptions = (priceLists?.data ?? []).map((p: any) => ({
     value: p.id,
     label: p.name,
+  }))
+
+  const userOptions = (assignableUsers ?? []).map((u: any) => ({
+    value: u.id,
+    label: `${u.firstName} ${u.lastName}`,
   }))
 
   return (
@@ -247,12 +259,28 @@ export default function EventFormPage() {
                     </Col>
                     <Col xs={12} md={8}>
                       <Form.Item name="coordinator" label="Coordinador">
-                        <Input />
+                        <Select
+                          options={userOptions}
+                          showSearch
+                          allowClear
+                          filterOption={(input, option) =>
+                            String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                          }
+                          placeholder="Seleccionar coordinador"
+                        />
                       </Form.Item>
                     </Col>
                     <Col xs={12} md={8}>
                       <Form.Item name="executive" label="Ejecutivo">
-                        <Input />
+                        <Select
+                          options={userOptions}
+                          showSearch
+                          allowClear
+                          filterOption={(input, option) =>
+                            String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                          }
+                          placeholder="Seleccionar ejecutivo"
+                        />
                       </Form.Item>
                     </Col>
                   </Row>
