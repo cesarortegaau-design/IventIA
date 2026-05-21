@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express'
 import Anthropic from '@anthropic-ai/sdk'
 import { prisma } from '../config/database'
 import { buildAIContext } from '../services/ai.context.service'
-import { toolSearchEvents, toolCopyEvent, toolCopyEventSpaces, toolCopyEventOrders, toolCheckSpaceAvailability, toolCreateOrder } from '../services/ai.tools.service'
+import { toolSearchEvents, toolCopyEvent, toolCopyEventSpaces, toolCopyEventOrders, toolCheckSpaceAvailability, toolCreateOrder, toolAnalyzeSpaceConflicts } from '../services/ai.tools.service'
 
 const STATUS_COLORS: Record<string, string> = {
   QUOTED: '#3b82f6',
@@ -211,6 +211,17 @@ const AI_TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'analyze_space_conflicts',
+    description: 'Analiza en detalle los conflictos de reservas de espacio de un evento específico. Devuelve para cada espacio: si tiene conflicto, su posición en la lista de espera (determinada por fecha de creación — quien creó primero tiene PREFERENCIA), y los datos de todos los eventos en conflicto. Úsalo cuando el usuario pregunte sobre conflictos, prioridades de reserva o lista de espera de un evento.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        eventId: { type: 'string', description: 'ID del evento a analizar (obtenido con search_events)' },
+      },
+      required: ['eventId'],
+    },
+  },
+  {
     name: 'create_order',
     description: 'Crea una nueva Orden de Servicio (OS) en estado QUOTED para un cliente en un evento. IMPORTANTE: Pide confirmación al usuario ANTES de ejecutar.',
     input_schema: {
@@ -233,6 +244,7 @@ async function executeTool(name: string, input: any, tenantId: string, userId: s
     case 'copy_event_orders': return toolCopyEventOrders(input, tenantId, userId)
     case 'check_space_availability': return toolCheckSpaceAvailability(input, tenantId)
     case 'create_order': return toolCreateOrder(input, tenantId, userId)
+    case 'analyze_space_conflicts': return toolAnalyzeSpaceConflicts(input, tenantId)
     default: throw new Error(`Tool desconocido: ${name}`)
   }
 }
@@ -504,7 +516,52 @@ Cada fase tiene fechas de inicio y fin independientes.
 
 **Atributos importantes:** nombre, código único, cliente principal, sede, aforo esperado, lista de precios asignada, fechas por fase.
 
-**Reservas de espacio (EventSpace):** Asignación explícita de un recurso tipo SPACE a un evento en una fase específica, con rango de tiempo. El sistema detecta conflictos de solapamiento entre reservas del mismo espacio.
+**Reservas de espacio (EventSpace):** Asignación explícita de un recurso tipo SPACE a un evento en una fase específica, con rango de tiempo. Cada reserva registra: recurso, fase (SETUP/EVENT/TEARDOWN), fecha-hora de inicio, fecha-hora de fin, y fecha-hora de creación (createdAt). El sistema detecta conflictos de solapamiento entre reservas del mismo recurso.
+
+## 1B. PROCESO DE RESERVA DE ESPACIOS — REGLAS CRÍTICAS
+
+### Flujo completo de reserva
+
+1. **Creación de la reserva:** El coordinador/ejecutivo va a la pestaña "Espacios" del evento y hace clic en "+ Agregar reserva". Selecciona: recurso (espacio físico tipo SPACE), fase (SETUP/EVENT/TEARDOWN), fecha-hora de inicio y fin, y notas opcionales.
+
+2. **Detección inmediata de conflictos:** Al guardar, el sistema verifica si el mismo recurso tiene otras reservas que se solapan en el tiempo. Si hay solapamiento, se muestra una alerta visual en la columna "Conflictos" de la tabla (ej: "#2/3 · 2 conflictos").
+
+3. **Notificación automática por WhatsApp:** Al crear o modificar una reserva con conflicto, el sistema envía automáticamente un WhatsApp al ejecutivo del evento (y de los eventos en conflicto) con el detalle de las reservas que se solapan.
+
+4. **Confirmación del evento:** Cuando un evento se confirma (status → CONFIRMED), el sistema escanea TODOS sus espacios reservados y envía WhatsApp a los ejecutivos de los eventos en conflicto, avisándoles que el evento fue confirmado y que sus reservas están en disputa.
+
+### Lógica de conflictos y lista de espera
+
+Un **conflicto** ocurre cuando dos o más reservas comparten el mismo recurso y sus rangos de tiempo se solapan (startTime_A < endTime_B AND endTime_A > startTime_B).
+
+**⚠️ REGLA FUNDAMENTAL — PRIORIDAD POR FECHA DE CREACIÓN:**
+La prioridad de cada reserva en un conflicto se determina EXCLUSIVAMENTE por el campo `createdAt` (fecha y hora exacta de creación de la reserva). Este es el criterio más importante del sistema:
+
+- **Posición 1 (PREFERENCIA):** La reserva con el `createdAt` más antiguo tiene derecho preferente sobre el recurso. Es quien reservó primero.
+- **Posición 2, 3, etc. (LISTA DE ESPERA):** Las demás reservas en orden cronológico ascendente de `createdAt`. Si la reserva con preferencia se cancela o modifica, la siguiente en la lista automáticamente toma el lugar.
+
+**Ejemplo de lista de espera:**
+- Reserva A: Salón B, creada el 15-mayo-2026 09:00 → **POSICIÓN 1 (PREFERENCIA)**
+- Reserva B: Salón B, creada el 18-mayo-2026 14:30 → **POSICIÓN 2 (EN ESPERA)**
+- Reserva C: Salón B, creada el 20-mayo-2026 11:00 → **POSICIÓN 3 (EN ESPERA)**
+
+### Indicador visual de conflictos
+
+En la tabla de espacios del evento, la columna "Conflictos" muestra:
+- **"Sin conflictos"** (verde): sin solapamiento
+- **"#X/Y · N conflictos"** (rojo): X = posición en lista de espera de esta reserva dentro del grupo en conflicto, Y = total de reservas en el grupo (incluyendo la propia), N = número de otras reservas que se solapan
+
+El tooltip de hover muestra las reservas en conflicto ordenadas por `createdAt` ascendente, con: evento, fecha-hora inicio, fecha-hora fin y fecha de creación de cada reserva.
+
+### Cómo analizar conflictos
+
+Cuando el usuario pide analizar conflictos de reservas:
+1. Usa `search_events` para obtener el ID del evento
+2. Usa `analyze_space_conflicts` para obtener el análisis completo con posiciones de lista de espera
+3. **SIEMPRE** presenta los conflictos ordenados por `createdAt` ascendente
+4. **SIEMPRE** identifica claramente quién tiene PREFERENCIA (posición 1) vs quién está EN ESPERA
+5. Recomienda acciones: coordinar con el ejecutivo del evento con preferencia, negociar cambio de fechas, o buscar recurso alternativo
+6. Si varios espacios del mismo evento están en conflicto, agrúpalos por recurso para mayor claridad
 
 ## 2. CLIENTES
 
@@ -702,6 +759,7 @@ INSTRUCCIONES DE COMPORTAMIENTO
 5. Si te preguntan sobre un proceso o regla de negocio que no está en los datos (ej: "¿cómo funciona la facturación?"), explícalo basándote en el conocimiento de IventIA documentado arriba
 6. Para estimaciones o proyecciones, indica claramente que son proyecciones y explica los supuestos usados
 7. Cuando detectes anomalías en los datos (márgenes muy bajos, órdenes estancadas, etc.), mencionalo proactivamente
+8. Para análisis de conflictos de reservas de espacio: USA SIEMPRE la herramienta analyze_space_conflicts para obtener datos reales. El criterio de prioridad es SIEMPRE la fecha de creación (createdAt) — quien creó primero tiene preferencia absoluta. Presenta el resultado indicando claramente PREFERENCIA vs EN ESPERA y ordena siempre por createdAt ascendente.
 
 GENERACIÓN DE GRÁFICAS:
 Cuando el usuario pida una gráfica, chart, visualización o análisis visual, incluye al final de tu respuesta un bloque con este formato exacto (NO uses markdown code fences, usa las etiquetas XML directamente):

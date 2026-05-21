@@ -222,6 +222,109 @@ export async function toolCopyEventOrders(
   }
 }
 
+// ── Tool: analyze_space_conflicts ─────────────────────────────────────────────
+export async function toolAnalyzeSpaceConflicts(
+  input: { eventId: string },
+  tenantId: string,
+) {
+  const event = await prisma.event.findFirst({
+    where: { id: input.eventId, tenantId },
+    select: { id: true, name: true, code: true, status: true },
+  })
+  if (!event) throw new Error(`Evento ${input.eventId} no encontrado`)
+
+  // All spaces for this event
+  const spaces = await prisma.eventSpace.findMany({
+    where: { eventId: input.eventId },
+    include: { resource: { select: { id: true, name: true, code: true, type: true } } },
+    orderBy: { createdAt: 'asc' },
+  })
+
+  const result = []
+
+  for (const space of spaces) {
+    // Find all conflicting spaces on the same resource (other events)
+    const conflicting = await prisma.eventSpace.findMany({
+      where: {
+        id: { not: space.id },
+        resourceId: space.resourceId,
+        startTime: { lt: space.endTime },
+        endTime: { gt: space.startTime },
+      },
+      include: {
+        event: { select: { id: true, name: true, code: true, status: true, executive: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    })
+
+    if (conflicting.length === 0) {
+      result.push({
+        spaceId: space.id,
+        resource: space.resource.name,
+        resourceCode: space.resource.code,
+        phase: space.phase,
+        startTime: space.startTime.toISOString(),
+        endTime: space.endTime.toISOString(),
+        createdAt: space.createdAt.toISOString(),
+        hasConflict: false,
+        waitingListPosition: null,
+        conflicts: [],
+      })
+      continue
+    }
+
+    // Determine waiting list position: sort ALL reservations (including this one) by createdAt
+    // Position 1 = first created = highest priority
+    const allForResource = [
+      { id: space.id, createdAt: space.createdAt, eventName: event.name, eventCode: event.code, isCurrent: true },
+      ...conflicting.map(c => ({ id: c.id, createdAt: c.createdAt, eventName: c.event.name, eventCode: c.event.code, isCurrent: false })),
+    ].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+
+    const waitingPosition = allForResource.findIndex(r => r.isCurrent) + 1
+
+    result.push({
+      spaceId: space.id,
+      resource: space.resource.name,
+      resourceCode: space.resource.code,
+      phase: space.phase,
+      startTime: space.startTime.toISOString(),
+      endTime: space.endTime.toISOString(),
+      createdAt: space.createdAt.toISOString(),
+      hasConflict: true,
+      waitingListPosition: waitingPosition,
+      totalInConflict: conflicting.length + 1,
+      priorityStatus: waitingPosition === 1 ? 'PREFERENCIA' : `EN_ESPERA_${waitingPosition}`,
+      conflicts: conflicting.map(c => ({
+        spaceId: c.id,
+        eventName: c.event.name,
+        eventCode: c.event.code,
+        eventStatus: c.event.status,
+        phase: c.phase,
+        startTime: c.startTime.toISOString(),
+        endTime: c.endTime.toISOString(),
+        createdAt: c.createdAt.toISOString(),
+        waitingPosition: allForResource.findIndex(r => r.id === c.id) + 1,
+      })),
+    })
+  }
+
+  const conflictCount = result.filter(r => r.hasConflict).length
+  const priorityCount = result.filter(r => r.waitingListPosition === 1).length
+  const waitingCount = result.filter(r => r.hasConflict && r.waitingListPosition !== 1).length
+
+  return {
+    event: { id: event.id, name: event.name, code: event.code, status: event.status },
+    summary: {
+      totalSpaces: spaces.length,
+      spacesWithConflict: conflictCount,
+      spacesWithPriority: priorityCount,
+      spacesInWaitingList: waitingCount,
+      spacesClean: spaces.length - conflictCount,
+    },
+    spaces: result,
+  }
+}
+
 // ── Tool: check_space_availability ────────────────────────────────────────────
 export async function toolCheckSpaceAvailability(
   input: { resourceId?: string; startDate: string; endDate: string },
