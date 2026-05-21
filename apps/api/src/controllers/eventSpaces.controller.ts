@@ -28,7 +28,7 @@ async function notifyConflicts(savedSpaceId: string, eventId: string, tenantId: 
         endTime: { gt: saved.startTime },
       },
       include: {
-        event: { select: { id: true, name: true, code: true, executiveUserId: true } },
+        event: { select: { id: true, name: true, code: true, executive: true } },
       },
     })
     if (conflicts.length === 0) return
@@ -36,17 +36,18 @@ async function notifyConflicts(savedSpaceId: string, eventId: string, tenantId: 
     // Gather current event info
     const currentEvent = await prisma.event.findFirst({
       where: { id: eventId, tenantId },
-      select: { id: true, name: true, code: true, executiveUserId: true },
+      select: { id: true, name: true, code: true, executive: true },
     })
     if (!currentEvent) return
 
     // Collect all unique executive user IDs across current + conflicting events
+    // executive field stores the user ID (UUID) when set via the admin form selector
     const executiveMap = new Map<string, { eventId: string; eventName: string; eventCode: string }>()
     const addExec = (userId: string | null, ev: { id: string; name: string; code: string }) => {
       if (userId && !executiveMap.has(userId)) executiveMap.set(userId, ev)
     }
-    addExec(currentEvent.executiveUserId, currentEvent)
-    for (const c of conflicts) addExec(c.event.executiveUserId, c.event)
+    addExec(currentEvent.executive, currentEvent)
+    for (const c of conflicts) addExec(c.event.executive, c.event)
 
     if (executiveMap.size === 0) return
 

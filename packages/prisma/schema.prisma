@@ -171,8 +171,6 @@ model User {
   approvalRequestsTriggered ApprovalRequest[]      @relation("ApprovalRequestTrigger")
   approvalStepsReviewed    ApprovalRequestStep[]   @relation("ApprovalStepReviewer")
   plannerPortalPublished   PlannerPortalSnapshot[] @relation("PlannerPortalPublisher")
-  coordinatorEvents        Event[]                 @relation("EventCoordinator")
-  executiveEvents          Event[]                 @relation("EventExecutive")
 
   @@index([tenantId, isActive])
   @@map("users")
@@ -536,8 +534,6 @@ model Event {
   eventCategory       String?            @map("event_category") @db.VarChar(100)
   coordinator         String?            @db.VarChar(200)
   executive           String?            @db.VarChar(200)
-  coordinatorUserId   String?            @map("coordinator_user_id")
-  executiveUserId     String?            @map("executive_user_id")
   portalEnabled       Boolean            @default(false) @map("portal_enabled")
   portalSlug          String?            @unique @map("portal_slug") @db.VarChar(100)
   portalSettings      Json               @default("{}") @map("portal_settings")
@@ -555,8 +551,6 @@ model Event {
   documents           EventDocument[]
   spaces              EventSpace[]
   createdBy           User               @relation("EventCreatedBy", fields: [createdById], references: [id])
-  coordinatorUser     User?              @relation("EventCoordinator", fields: [coordinatorUserId], references: [id])
-  executiveUser       User?              @relation("EventExecutive", fields: [executiveUserId], references: [id])
   priceList           PriceList?         @relation(fields: [priceListId], references: [id])
   primaryClient       Client?            @relation(fields: [primaryClientId], references: [id])
   tenant              Tenant             @relation(fields: [tenantId], references: [id])
