@@ -1,20 +1,20 @@
 /**
  * PortalPage.tsx
- * Portal del cliente — configuración + preview del lienzo del cliente
- * Widget visibility persisted in localStorage: iventia-portal-config-{eventId}
+ * Lienzo del cliente — config panel + live canvas preview
+ * Shows the same lienzo canvas the client will see (read-only widgets)
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useOutletContext } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Button, Switch, Tag, Typography, Divider, App, Tooltip, Avatar,
-  Modal, Form, Input, Space, Badge,
+  Button, Switch, Typography, App, Tooltip, Avatar, Tag,
+  Modal, Form, Input, Space, Badge, Spin,
 } from 'antd'
 import {
-  GlobalOutlined, EyeOutlined, EyeInvisibleOutlined, UserOutlined,
+  GlobalOutlined, EyeOutlined, UserOutlined,
   CopyOutlined, KeyOutlined, CheckCircleOutlined, LockOutlined,
-  AppstoreOutlined, CalendarOutlined, DollarOutlined, CheckSquareOutlined,
-  PictureOutlined, TeamOutlined, LinkOutlined, CloudUploadOutlined,
+  CloudUploadOutlined, MinusOutlined, PlusOutlined,
+  AppstoreOutlined, ExportOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
@@ -22,286 +22,251 @@ import 'dayjs/locale/es'
 dayjs.extend(relativeTime)
 dayjs.locale('es')
 import { eventsApi } from '../../api/events'
-import { loadBranding, brandingKey, type EventBranding } from './EstudioPage'
+import { DEFAULT_BRANDING, type EventBranding } from './EstudioPage'
+import { usePlannerStore } from '../../hooks/usePlannerStore'
 
 const { Text } = Typography
 
 // ── Types ──────────────────────────────────────────────────────────────────────
-interface PortalConfig {
-  visibleWidgets: string[]
-  portalMessage: string
-  accessEnabled: boolean
-  updatedAt: string
+interface Widget {
+  id: string; type: string; x: number; y: number; w: number; h: number
+  config: Record<string, any>
 }
 
-const ALL_WIDGETS = [
-  { key: 'portada',    label: 'Portada del evento',  icon: <AppstoreOutlined />,   desc: 'Nombre, fecha, ubicación y branding' },
-  { key: 'timeline',  label: 'Agenda / Timeline',    icon: <CalendarOutlined />,   desc: 'Actividades y fases del evento' },
-  { key: 'tareas',    label: 'Tareas relevantes',    icon: <CheckSquareOutlined />, desc: 'Tareas marcadas como visibles al cliente' },
-  { key: 'presupuesto', label: 'Resumen de presupuesto', icon: <DollarOutlined />, desc: 'Totales por capítulo sin desglose interno' },
-  { key: 'galeria',   label: 'Galería / Moodboard',  icon: <PictureOutlined />,    desc: 'Imágenes e inspiración del evento' },
-  { key: 'equipo',    label: 'Equipo asignado',       icon: <TeamOutlined />,       desc: 'Contactos y responsables del evento' },
-  { key: 'links',     label: 'Recursos y enlaces',   icon: <LinkOutlined />,       desc: 'Documentos, videos y referencias' },
-]
-
-const DEFAULT_CONFIG: PortalConfig = {
-  visibleWidgets: ['portada', 'timeline', 'presupuesto'],
-  portalMessage: '',
-  accessEnabled: false,
-  updatedAt: '',
-}
-
-// ── Persistence ────────────────────────────────────────────────────────────────
-const configKey = (id: string) => `iventia-portal-config-${id}`
-const snapshotKey = (id: string) => `iventia-portal-event-snapshot-${id}`
-
-function loadConfig(id: string): PortalConfig {
-  try {
-    const raw = localStorage.getItem(configKey(id))
-    if (raw) return { ...DEFAULT_CONFIG, ...JSON.parse(raw) }
-  } catch { /* ignore */ }
-  return { ...DEFAULT_CONFIG }
-}
-
-function saveConfig(id: string, cfg: PortalConfig) {
-  localStorage.setItem(configKey(id), JSON.stringify({ ...cfg, updatedAt: new Date().toISOString() }))
-}
-
-function saveEventSnapshot(id: string, event: any) {
-  if (!event) return
-  const snapshot = {
-    name: event.name,
-    eventStart: event.eventStart,
-    eventType: event.eventType,
-    code: event.code,
-    venueLocation: event.venueLocation,
-    client: event.client,
-  }
-  localStorage.setItem(snapshotKey(id), JSON.stringify(snapshot))
-}
-
-// ── Client preview widgets ─────────────────────────────────────────────────────
-function PreviewPortada({ event, branding }: { event: any; branding: EventBranding }) {
+// ── Inline read-only widget renderers (same as ClientPortalPage) ──────────────
+function PortadaRO({ event, branding }: { event: any; branding: EventBranding }) {
   const bg = branding.coverStyle === 'gradient'
     ? `linear-gradient(135deg, ${branding.primaryColor} 0%, ${branding.secondaryColor} 100%)`
-    : branding.coverStyle === 'dark' ? '#0D0D1A' : branding.primaryColor
-
+    : branding.coverStyle === 'split'
+      ? `linear-gradient(90deg, ${branding.primaryColor} 50%, ${branding.secondaryColor} 50%)`
+      : branding.coverStyle === 'dark' ? '#0D0D1A' : branding.primaryColor
   const textColor = branding.textOnBg || '#ffffff'
-  const muted = textColor === '#ffffff' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.55)'
+  const muted = textColor === '#ffffff' ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.55)'
   const daysUntil = event?.eventStart ? Math.max(0, dayjs(event.eventStart).diff(dayjs(), 'day')) : null
-
   return (
-    <div style={{
-      borderRadius: 14, overflow: 'hidden', background: bg,
-      padding: 24, color: textColor, position: 'relative', marginBottom: 14,
-    }}>
+    <div style={{ width: '100%', height: '100%', borderRadius: 12, overflow: 'hidden', background: bg, padding: 20, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', color: textColor, userSelect: 'none', position: 'relative' }}>
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: branding.accentColor }} />
-      <div style={{ fontSize: 10, fontWeight: 600, color: muted, letterSpacing: '0.08em', marginBottom: 4 }}>
-        {event?.eventType || 'EVENTO'} · {event?.code || '—'}
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: muted, letterSpacing: '0.06em', marginBottom: 6 }}>{event?.eventType || 'EVENTO'} · {event?.code || '—'}</div>
+        <div style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.2, marginBottom: 4 }}>{event?.name || 'Mi evento'}</div>
+        {branding.tagline && <div style={{ fontSize: 12, color: muted, fontStyle: 'italic', marginBottom: 4 }}>"{branding.tagline}"</div>}
+        <div style={{ display: 'flex', gap: 12, fontSize: 12, color: muted }}>
+          {event?.venueLocation && <span>📍 {event.venueLocation}</span>}
+          {event?.eventStart && <span>📅 {dayjs(event.eventStart).format('D MMM YYYY')}</span>}
+        </div>
       </div>
-      <div style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.25, marginBottom: 6 }}>
-        {event?.name || 'Sin nombre'}
-      </div>
-      {branding.tagline && (
-        <div style={{ fontSize: 13, color: muted, marginBottom: 10 }}>{branding.tagline}</div>
-      )}
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-        {event?.eventStart && (
-          <span style={{ fontSize: 12, color: muted }}>
-            📅 {dayjs(event.eventStart).format('D [de] MMMM YYYY')}
-          </span>
-        )}
-        {event?.venueLocation && (
-          <span style={{ fontSize: 12, color: muted }}>📍 {event.venueLocation}</span>
-        )}
-        {daysUntil !== null && (
-          <span style={{
-            fontSize: 11, fontWeight: 700, background: branding.accentColor,
-            color: '#fff', borderRadius: 20, padding: '2px 10px',
-          }}>
-            {daysUntil === 0 ? '¡Hoy!' : `${daysUntil} días`}
-          </span>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function PreviewTimeline({ eventId }: { eventId: string }) {
-  // TimelinePage stores { phases, activities, updatedAt } — extract the activities array
-  let activities: any[] = []
-  try {
-    const raw = localStorage.getItem(`iventia-timeline-${eventId}`)
-    if (raw) {
-      const stored = JSON.parse(raw)
-      activities = Array.isArray(stored) ? stored : (stored.activities || [])
-    }
-  } catch { /* ignore */ }
-  const shown = activities.slice(0, 4)
-  return (
-    <div style={{ background: '#fff', borderRadius: 12, padding: 16, marginBottom: 14, boxShadow: '0 2px 8px rgba(0,0,0,0.07)' }}>
-      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-        <CalendarOutlined style={{ color: '#7C3AED' }} /> Agenda del evento
-      </div>
-      {shown.length === 0 ? (
-        <div style={{ color: '#aaa', fontSize: 12, textAlign: 'center', padding: 8 }}>Sin actividades aún</div>
-      ) : shown.map((a: any) => (
-        <div key={a.id} style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-          <div style={{ width: 3, borderRadius: 3, background: '#7C3AED', flexShrink: 0 }} />
+      {daysUntil !== null && (
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ fontSize: 12, fontWeight: 600 }}>{a.title}</div>
-            <div style={{ fontSize: 11, color: '#888' }}>{a.startTime} {a.phase && `· ${a.phase}`}</div>
+            <div style={{ fontSize: 11, color: muted, marginBottom: 2 }}>FALTAN</div>
+            <div style={{ fontSize: 42, fontWeight: 900, lineHeight: 1 }}>{daysUntil}</div>
+            <div style={{ fontSize: 12, color: muted }}>días</div>
           </div>
-        </div>
-      ))}
-      {activities.length > 4 && (
-        <div style={{ fontSize: 11, color: '#888', textAlign: 'center', marginTop: 4 }}>
-          +{activities.length - 4} más…
         </div>
       )}
     </div>
   )
 }
 
-function PreviewPresupuesto({ eventId }: { eventId: string }) {
-  const data = JSON.parse(localStorage.getItem(`iventia-presupuesto-${eventId}`) || '{"chapters":[]}')
-  const chapters = (data.chapters || []) as any[]
-  const totalGeneral = chapters.reduce((sum: number, ch: any) =>
-    sum + (ch.items || []).reduce((s: number, it: any) => s + (it.total || 0), 0), 0)
+const STATUS_DOT: Record<string, string> = { COMPLETED: '#059669', IN_PROGRESS: '#F97316', PENDING: '#9CA3AF' }
 
+function TareasRO({ tareas }: { tareas: any }) {
+  const tasks = (tareas?.tasks ?? []).filter((t: any) => t.status !== 'LISTA').slice(0, 6)
   return (
-    <div style={{ background: '#fff', borderRadius: 12, padding: 16, marginBottom: 14, boxShadow: '0 2px 8px rgba(0,0,0,0.07)' }}>
-      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-        <DollarOutlined style={{ color: '#0D9488' }} /> Resumen de presupuesto
+    <div style={{ width: '100%', height: '100%', padding: '14px 16px', display: 'flex', flexDirection: 'column', userSelect: 'none' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+        <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#F97316' }} />
+        <Text strong style={{ fontSize: 13 }}>TAREAS</Text>
       </div>
-      {chapters.length === 0 ? (
-        <div style={{ color: '#aaa', fontSize: 12, textAlign: 'center', padding: 8 }}>Sin presupuesto aún</div>
-      ) : (
-        <>
-          {chapters.slice(0, 4).map((ch: any) => {
-            const chTotal = (ch.items || []).reduce((s: number, it: any) => s + (it.total || 0), 0)
-            return (
-              <div key={ch.id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 12 }}>
-                <span style={{ color: '#444' }}>{ch.name}</span>
-                <span style={{ fontWeight: 600 }}>${chTotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
-              </div>
-            )
-          })}
-          <Divider style={{ margin: '8px 0' }} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 13 }}>
-            <span>Total estimado</span>
-            <span style={{ color: '#0D9488' }}>${totalGeneral.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
-
-function PreviewTareas({ eventId }: { eventId: string }) {
-  const data = JSON.parse(localStorage.getItem(`iventia-tareas-${eventId}`) || '{"tasks":[]}')
-  const tasks = ((data.tasks || []) as any[]).filter((t: any) => t.clientVisible !== false)
-  const shown = tasks.slice(0, 4)
-  return (
-    <div style={{ background: '#fff', borderRadius: 12, padding: 16, marginBottom: 14, boxShadow: '0 2px 8px rgba(0,0,0,0.07)' }}>
-      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-        <CheckSquareOutlined style={{ color: '#F97316' }} /> Tareas relevantes
-      </div>
-      {shown.length === 0 ? (
-        <div style={{ color: '#aaa', fontSize: 12, textAlign: 'center', padding: 8 }}>Sin tareas para mostrar</div>
-      ) : shown.map((t: any) => (
-        <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-          <div style={{
-            width: 14, height: 14, borderRadius: 4, border: '1.5px solid #ddd',
-            background: t.status === 'DONE' ? '#0D9488' : 'transparent', flexShrink: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            {t.status === 'DONE' && <CheckCircleOutlined style={{ color: '#fff', fontSize: 9 }} />}
-          </div>
-          <span style={{ fontSize: 12, color: t.status === 'DONE' ? '#aaa' : '#333', textDecoration: t.status === 'DONE' ? 'line-through' : 'none' }}>
-            {t.title}
-          </span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function readLienzoWidgets(eventId: string): any[] {
-  try {
-    const raw = localStorage.getItem(`iventia-lienzo-${eventId}`)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      // LienzoPage stores a raw array of widgets
-      return Array.isArray(parsed) ? parsed : (parsed.widgets || [])
-    }
-  } catch { /* ignore */ }
-  return []
-}
-
-function PreviewGaleria({ eventId }: { eventId: string }) {
-  const widgets = readLienzoWidgets(eventId)
-  const imageWidgets = widgets.filter((w: any) => w.type === 'imagen' && w.config?.src)
-  return (
-    <div style={{ background: '#fff', borderRadius: 12, padding: 16, marginBottom: 14, boxShadow: '0 2px 8px rgba(0,0,0,0.07)' }}>
-      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-        <PictureOutlined style={{ color: '#EC4899' }} /> Galería
-      </div>
-      {imageWidgets.length === 0 ? (
-        <div style={{ color: '#aaa', fontSize: 12, textAlign: 'center', padding: 8 }}>Sin imágenes aún</div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
-          {imageWidgets.slice(0, 6).map((w: any) => (
-            <div key={w.id} style={{ aspectRatio: '1', borderRadius: 8, overflow: 'hidden' }}>
-              <img src={w.config.src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {tasks.length === 0 ? <div style={{ textAlign: 'center', color: '#9CA3AF', fontSize: 12, padding: '20px 0' }}>Sin tareas</div>
+        : tasks.map((t: any) => (
+          <div key={t.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 10px', borderRadius: 8, background: '#FAFAFA', border: '1px solid #F0EBFF' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 500, color: '#1a1a1a' }}>{t.title}</div>
             </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function PreviewEquipo({ event }: { event: any }) {
-  return (
-    <div style={{ background: '#fff', borderRadius: 12, padding: 16, marginBottom: 14, boxShadow: '0 2px 8px rgba(0,0,0,0.07)' }}>
-      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-        <TeamOutlined style={{ color: '#3B82F6' }} /> Equipo asignado
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <Avatar style={{ background: 'linear-gradient(135deg,#7C3AED,#EC4899)', fontSize: 12, fontWeight: 700 }}>
-          E
-        </Avatar>
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 600 }}>Event Designer</div>
-          <div style={{ fontSize: 11, color: '#888' }}>IventIA Planner</div>
-        </div>
+            {t.dueDate && <Tag style={{ background: '#F0F9FF', color: '#2563EB', border: 'none', borderRadius: 20, fontSize: 11, fontWeight: 600 }}>{dayjs(t.dueDate).diff(dayjs(), 'day')}d</Tag>}
+          </div>
+        ))}
       </div>
     </div>
   )
 }
 
-function PreviewLinks({ eventId }: { eventId: string }) {
-  const linkWidgets = readLienzoWidgets(eventId).filter((w: any) => w.type === 'links')
-  const allLinks: any[] = linkWidgets.flatMap((w: any) => w.config?.links || [])
+function ProveedoresRO({ suppliers }: { suppliers: any[] }) {
   return (
-    <div style={{ background: '#fff', borderRadius: 12, padding: 16, marginBottom: 14, boxShadow: '0 2px 8px rgba(0,0,0,0.07)' }}>
-      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-        <LinkOutlined style={{ color: '#6366F1' }} /> Recursos y enlaces
+    <div style={{ width: '100%', height: '100%', padding: '14px 16px', display: 'flex', flexDirection: 'column', userSelect: 'none' }}>
+      <Text strong style={{ fontSize: 13, marginBottom: 12, display: 'block' }}>PROVEEDORES</Text>
+      <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {suppliers.length === 0 ? <div style={{ textAlign: 'center', color: '#9CA3AF', fontSize: 12, padding: '20px 0' }}>Sin proveedores</div>
+        : suppliers.map((s: any) => (
+          <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, background: '#FAFAFA', border: '1px solid #F0EBFF' }}>
+            <Avatar size={28} style={{ background: '#7C3AED', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>{(s.name || '?').slice(0, 2).toUpperCase()}</Avatar>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#1a1a1a' }}>{s.name}</div>
+          </div>
+        ))}
       </div>
-      {allLinks.length === 0 ? (
-        <div style={{ color: '#aaa', fontSize: 12, textAlign: 'center', padding: 8 }}>Sin recursos aún</div>
-      ) : allLinks.slice(0, 4).map((l: any, i: number) => (
-        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-          <LinkOutlined style={{ color: '#6366F1', fontSize: 12 }} />
-          <span style={{ fontSize: 12, color: '#444' }}>{l.title || l.url}</span>
+    </div>
+  )
+}
+
+function TimelineRO({ timeline, event }: { timeline: any; event: any }) {
+  const phases = [...(timeline?.phases || [])].sort((a: any, b: any) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+  const activities = timeline?.activities || []
+  const byPhase: Record<string, any[]> = {}
+  for (const act of activities) { const pid = act.phaseId || '__none__'; byPhase[pid] = byPhase[pid] || []; byPhase[pid].push(act) }
+  const theme = { primary: '#7C3AED', secondary: '#9333EA', light: '#DDD6FE', bg: '#F5F3FF' }
+  return (
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', userSelect: 'none' }}>
+      <div style={{ background: `linear-gradient(135deg, ${theme.primary}, ${theme.secondary})`, padding: '10px 14px', flexShrink: 0 }}>
+        <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 9, letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: 2 }}>{event?.eventType || 'Evento'}</div>
+        <div style={{ color: '#fff', fontSize: 14, fontWeight: 700, fontStyle: 'italic', fontFamily: 'Georgia, serif' }}>{event?.name || '—'}</div>
+      </div>
+      <div style={{ flex: 1, overflow: 'auto', background: theme.bg }}>
+        {activities.length === 0 ? <div style={{ textAlign: 'center', color: '#aaa', fontSize: 12, padding: '24px 0' }}>Sin actividades</div>
+        : phases.slice(0, 4).map((phase: any) => {
+          const acts = (byPhase[phase.id] || []).slice(0, 5)
+          if (!acts.length) return null
+          return (
+            <div key={phase.id}>
+              <div style={{ padding: '5px 12px 2px', fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: phase.color || theme.primary }}>{phase.name}</div>
+              {acts.map((act: any, i: number) => (
+                <div key={act.id || i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderBottom: `1px solid ${theme.light}` }}>
+                  <div style={{ width: 5, height: 5, borderRadius: '50%', background: STATUS_DOT[act.status] || '#9CA3AF', flexShrink: 0 }} />
+                  <span style={{ fontSize: 10, fontWeight: 700, color: phase.color || theme.primary, minWidth: 40, flexShrink: 0 }}>{act.startTime || ''}</span>
+                  <span style={{ fontSize: 11, color: '#2d2d2d', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{act.name}</span>
+                </div>
+              ))}
+            </div>
+          )
+        })}
+      </div>
+      <div style={{ padding: '5px 12px', background: theme.light, flexShrink: 0, fontSize: 10, color: theme.primary }}>{activities.length} actividades · {phases.length} fases</div>
+    </div>
+  )
+}
+
+function PresupuestoRO({ presupuesto }: { presupuesto: any }) {
+  const chapters = presupuesto?.chapters || []
+  const items = (presupuesto?.items || []).filter((i: any) => i.status !== 'CANCELLED')
+  const total = items.reduce((s: number, i: any) => s + (i.quantity || 0) * (i.unitPrice || 0), 0)
+  const fmt = (n: number) => `$${n.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+  return (
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', userSelect: 'none' }}>
+      <div style={{ padding: '10px 14px', borderBottom: '1px solid #F0EBFF', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Text strong style={{ fontSize: 13 }}>Presupuesto</Text>
+        <div style={{ flex: 1 }} />
+        <span style={{ fontSize: 14, fontWeight: 800, color: '#7C3AED' }}>{fmt(total)}</span>
+      </div>
+      <div style={{ flex: 1, overflow: 'auto', padding: '8px 14px' }}>
+        {chapters.map((ch: any) => {
+          const chTotal = items.filter((i: any) => i.chapterId === ch.id).reduce((s: number, i: any) => s + (i.quantity || 0) * (i.unitPrice || 0), 0)
+          return (
+            <div key={ch.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: `1px solid ${ch.color || '#7C3AED'}20` }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: ch.color || '#7C3AED' }}>{ch.name}</span>
+              <span style={{ fontSize: 11, fontWeight: 700 }}>{fmt(chTotal)}</span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function NotaRO({ config }: { config: any }) {
+  return (
+    <div style={{ width: '100%', height: '100%', padding: 16, borderRadius: 12, background: config.color || '#FFF9C4', userSelect: 'none' }}>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: '#555' }}>📝 Nota</div>
+      <div style={{ fontSize: 13, color: '#333', lineHeight: 1.6 }}>{config.text || ''}</div>
+    </div>
+  )
+}
+
+function TextoRO({ config }: { config: any }) {
+  return (
+    <div style={{ width: '100%', height: '100%', padding: 12, display: 'flex', alignItems: 'center' }}>
+      <div style={{ fontSize: config.fontSize || 16, fontWeight: config.bold ? 700 : 400, color: config.color || '#1a1a1a' }}>{config.text || ''}</div>
+    </div>
+  )
+}
+
+function ImagenRO({ config }: { config: any }) {
+  const url = config.imageUrl || config.src
+  if (!url) return <div style={{ width: '100%', height: '100%', background: '#F5F3FF', borderRadius: 12 }} />
+  return <div style={{ width: '100%', height: '100%', borderRadius: 12, overflow: 'hidden' }}><img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>
+}
+
+function LinksRO({ config }: { config: any }) {
+  const url = config.url || ''
+  if (!url) return <div style={{ width: '100%', height: '100%', background: '#F5F3FF', borderRadius: 12 }} />
+  const ytMatch = url.match(/youtube\.com\/watch\?v=([^&\s]+)|youtu\.be\/([^?\s]+)/)
+  const ytId = ytMatch ? (ytMatch[1] || ytMatch[2]) : null
+  if (ytId) return (
+    <div style={{ width: '100%', height: '100%', background: '#000', borderRadius: 12, overflow: 'hidden' }}>
+      <iframe src={`https://www.youtube.com/embed/${ytId}`} style={{ width: '100%', height: '100%', border: 'none' }} allowFullScreen title="YouTube" />
+    </div>
+  )
+  return (
+    <div style={{ width: '100%', height: '100%', padding: 16, background: '#F5F3FF', borderRadius: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ width: 36, height: 36, borderRadius: 8, background: '#7C3AED', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#fff', fontSize: 16 }}>🔗</div>
+      <div style={{ fontSize: 12, color: '#555', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{url}</div>
+    </div>
+  )
+}
+
+function PdfRO({ config }: { config: any }) {
+  if (!config.pdfUrl) return <div style={{ width: '100%', height: '100%', background: '#FEF2F2', borderRadius: 12 }} />
+  return (
+    <div style={{ width: '100%', height: '100%', borderRadius: 12, overflow: 'hidden', border: '1px solid #E5E7EB' }}>
+      <iframe src={config.pdfUrl} style={{ width: '100%', height: '100%', border: 'none' }} title="PDF" />
+    </div>
+  )
+}
+
+function ResumenRO({ tareas, timeline, presupuesto }: { tareas: any; timeline: any; presupuesto: any }) {
+  const tasks = tareas?.tasks || []; const activities = timeline?.activities || []
+  const items = (presupuesto?.items || []).filter((i: any) => i.status !== 'CANCELLED')
+  const total = items.reduce((s: number, i: any) => s + (i.quantity || 0) * (i.unitPrice || 0), 0)
+  const fmt = (n: number) => `$${n.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+  return (
+    <div style={{ width: '100%', height: '100%', padding: '14px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, alignContent: 'start', userSelect: 'none' }}>
+      {[
+        { label: 'Actividades', value: activities.length, color: '#7C3AED' },
+        { label: 'Tareas', value: tasks.length, color: '#F97316' },
+        { label: 'Conceptos', value: items.length, color: '#0D9488' },
+        { label: 'Presupuesto', value: fmt(total), color: '#EC4899' },
+      ].map(k => (
+        <div key={k.label} style={{ background: '#FAFAFA', border: '1px solid #F0EBFF', borderRadius: 8, padding: '8px 10px' }}>
+          <div style={{ fontSize: 10, color: '#888', fontWeight: 600, marginBottom: 4 }}>{k.label}</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: k.color }}>{k.value}</div>
         </div>
       ))}
     </div>
   )
 }
 
-// ── Access modal ────────────────────────────────────────────────────────────────
+// ── Widget dispatcher ─────────────────────────────────────────────────────────
+function PreviewWidget({ widget, event, branding, tareas, timeline, presupuesto, suppliers }: {
+  widget: Widget; event: any; branding: EventBranding
+  tareas: any; timeline: any; presupuesto: any; suppliers: any[]
+}) {
+  switch (widget.type) {
+    case 'portada':     return <PortadaRO event={event} branding={branding} />
+    case 'tareas':      return <TareasRO tareas={tareas} />
+    case 'proveedores': return <ProveedoresRO suppliers={suppliers} />
+    case 'nota':        return <NotaRO config={widget.config} />
+    case 'texto':       return <TextoRO config={widget.config} />
+    case 'imagen':      return <ImagenRO config={widget.config} />
+    case 'pdf':         return <PdfRO config={widget.config} />
+    case 'links':       return <LinksRO config={widget.config} />
+    case 'resumen':     return <ResumenRO tareas={tareas} timeline={timeline} presupuesto={presupuesto} />
+    case 'timeline':    return <TimelineRO timeline={timeline} event={event} />
+    case 'presupuesto': return <PresupuestoRO presupuesto={presupuesto} />
+    default:            return null
+  }
+}
+
+// ── Access Modal ──────────────────────────────────────────────────────────────
 function AccessModal({ open, onClose, event }: { open: boolean; onClose: () => void; event: any }) {
   const { message } = App.useApp()
   const [form] = Form.useForm()
@@ -317,139 +282,63 @@ function AccessModal({ open, onClose, event }: { open: boolean; onClose: () => v
   async function handleGenerate() {
     try {
       const values = await form.validateFields()
-      const eventId = event?.id
-      if (!eventId) return
-      setLoading(true)
-      setApiError(null)
+      if (!event?.id) return
+      setLoading(true); setApiError(null)
       const password = generatePassword()
-      await eventsApi.createPortalDirectAccess(eventId, {
-        email: values.email,
-        password,
-        firstName: values.firstName,
-        lastName: values.lastName,
-      })
-      const url = `${window.location.origin}/portal-cliente/${eventId}`
-      setGenerated({ email: values.email, password, url })
+      await eventsApi.createPortalDirectAccess(event.id, { email: values.email, password, firstName: values.firstName, lastName: values.lastName })
+      setGenerated({ email: values.email, password, url: `${window.location.origin}/portal-cliente/${event.id}` })
     } catch (err: any) {
-      if (err?.errorFields) return // form validation error, already shown
-      setApiError(err?.response?.data?.error?.message || 'Error al crear el acceso. Intenta de nuevo.')
-    } finally {
-      setLoading(false)
-    }
+      if (err?.errorFields) return
+      setApiError(err?.response?.data?.error?.message || 'Error al crear el acceso.')
+    } finally { setLoading(false) }
   }
 
-  async function handleCopy(text: string) {
-    await navigator.clipboard.writeText(text)
-    message.success('Copiado')
-  }
-
-  function handleClose() {
-    setGenerated(null)
-    setApiError(null)
-    form.resetFields()
-    onClose()
-  }
+  async function handleCopy(text: string) { await navigator.clipboard.writeText(text); message.success('Copiado') }
+  function handleClose() { setGenerated(null); setApiError(null); form.resetFields(); onClose() }
 
   return (
-    <Modal
-      open={open}
-      title={<><KeyOutlined style={{ color: '#7C3AED', marginRight: 8 }} />Acceso al portal del cliente</>}
-      onCancel={handleClose}
-      footer={null}
-      width={480}
-    >
+    <Modal open={open} title={<><KeyOutlined style={{ color: '#7C3AED', marginRight: 8 }} />Acceso al lienzo del cliente</>} onCancel={handleClose} footer={null} width={480}>
       {!generated ? (
         <>
           <Text style={{ color: '#666', fontSize: 13, display: 'block', marginBottom: 16 }}>
-            Crea credenciales de acceso para que tu cliente pueda consultar el portal desde cualquier dispositivo.
+            Crea credenciales para que tu cliente vea el lienzo desde cualquier dispositivo.
           </Text>
           <Form form={form} layout="vertical" initialValues={{ email: event?.client?.email || '' }}>
-            <Form.Item
-              name="email"
-              label="Correo del cliente"
-              rules={[{ required: true, type: 'email', message: 'Correo válido requerido' }]}
-            >
+            <Form.Item name="email" label="Correo del cliente" rules={[{ required: true, type: 'email', message: 'Correo válido requerido' }]}>
               <Input prefix={<UserOutlined />} placeholder="cliente@ejemplo.com" />
             </Form.Item>
-            <Form.Item
-              name="firstName"
-              label="Nombre"
-              rules={[{ required: true, message: 'Nombre requerido' }]}
-            >
-              <Input placeholder="Nombre" />
-            </Form.Item>
-            <Form.Item
-              name="lastName"
-              label="Apellido"
-              rules={[{ required: true, message: 'Apellido requerido' }]}
-            >
-              <Input placeholder="Apellido" />
-            </Form.Item>
+            <Form.Item name="firstName" label="Nombre" rules={[{ required: true }]}><Input /></Form.Item>
+            <Form.Item name="lastName" label="Apellido" rules={[{ required: true }]}><Input /></Form.Item>
           </Form>
-          {apiError && (
-            <div style={{ color: '#EF4444', fontSize: 12, marginBottom: 12 }}>{apiError}</div>
-          )}
-          <Button type="primary" block onClick={handleGenerate} loading={loading}
-            style={{ background: '#7C3AED', borderColor: '#7C3AED' }}>
-            Generar acceso
-          </Button>
+          {apiError && <div style={{ color: '#EF4444', fontSize: 12, marginBottom: 12 }}>{apiError}</div>}
+          <Button type="primary" block onClick={handleGenerate} loading={loading} style={{ background: '#7C3AED', borderColor: '#7C3AED' }}>Generar acceso</Button>
         </>
       ) : (
         <>
-          <div style={{
-            background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 10,
-            padding: 16, marginBottom: 16,
-          }}>
-            <div style={{ color: '#16A34A', fontWeight: 700, fontSize: 13, marginBottom: 10 }}>
-              <CheckCircleOutlined style={{ marginRight: 6 }} />Acceso creado
-            </div>
-            <div style={{ marginBottom: 8 }}>
-              <Text style={{ fontSize: 12, color: '#666' }}>URL del portal</Text>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
-                <Text strong style={{ fontSize: 12, wordBreak: 'break-all' }}>{generated.url}</Text>
-                <Tooltip title="Copiar">
-                  <Button size="small" type="text" icon={<CopyOutlined />} onClick={() => handleCopy(generated.url)} />
-                </Tooltip>
+          <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 10, padding: 16, marginBottom: 16 }}>
+            <div style={{ color: '#16A34A', fontWeight: 700, fontSize: 13, marginBottom: 10 }}><CheckCircleOutlined style={{ marginRight: 6 }} />Acceso creado</div>
+            {[
+              { label: 'URL del lienzo', value: generated.url },
+              { label: 'Correo', value: generated.email },
+              { label: 'Contraseña', value: generated.password },
+            ].map(r => (
+              <div key={r.label} style={{ marginBottom: 8 }}>
+                <Text style={{ fontSize: 12, color: '#666' }}>{r.label}</Text>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                  <Text strong style={{ fontSize: 12, wordBreak: 'break-all', fontFamily: r.label === 'Contraseña' ? 'monospace' : 'inherit' }}>{r.value}</Text>
+                  <Tooltip title="Copiar"><Button size="small" type="text" icon={<CopyOutlined />} onClick={() => handleCopy(r.value)} /></Tooltip>
+                </div>
               </div>
-            </div>
-            <div style={{ marginBottom: 8 }}>
-              <Text style={{ fontSize: 12, color: '#666' }}>Correo</Text>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
-                <Text strong style={{ fontSize: 12 }}>{generated.email}</Text>
-                <Tooltip title="Copiar">
-                  <Button size="small" type="text" icon={<CopyOutlined />} onClick={() => handleCopy(generated.email)} />
-                </Tooltip>
-              </div>
-            </div>
-            <div>
-              <Text style={{ fontSize: 12, color: '#666' }}>Contraseña</Text>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
-                <Text strong style={{ fontSize: 13, fontFamily: 'monospace', letterSpacing: 2 }}>
-                  {generated.password}
-                </Text>
-                <Tooltip title="Copiar">
-                  <Button size="small" type="text" icon={<CopyOutlined />} onClick={() => handleCopy(generated.password)} />
-                </Tooltip>
-              </div>
-            </div>
+            ))}
           </div>
-          <div style={{
-            background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8,
-            padding: 10, marginBottom: 16, fontSize: 12, color: '#92400E',
-          }}>
-            <LockOutlined style={{ marginRight: 4 }} />
-            Guarda esta contraseña — no podrás verla de nuevo. Compártela junto con la URL al cliente.
+          <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: 10, marginBottom: 16, fontSize: 12, color: '#92400E' }}>
+            <LockOutlined style={{ marginRight: 4 }} />Guarda esta contraseña — no podrás verla de nuevo.
           </div>
           <Space style={{ width: '100%' }} direction="vertical">
-            <Button block onClick={() => {
-              handleCopy(`Acceso al Portal IventIA\nEvento: ${event?.name}\nURL: ${generated.url}\nCorreo: ${generated.email}\nContraseña: ${generated.password}`)
-            }}>
+            <Button block onClick={() => handleCopy(`Acceso al Lienzo IventIA\nEvento: ${event?.name}\nURL: ${generated.url}\nCorreo: ${generated.email}\nContraseña: ${generated.password}`)}>
               <CopyOutlined /> Copiar todo para compartir
             </Button>
-            <Button type="primary" block onClick={handleClose}
-              style={{ background: '#7C3AED', borderColor: '#7C3AED' }}>
-              Listo
-            </Button>
+            <Button type="primary" block onClick={handleClose} style={{ background: '#7C3AED', borderColor: '#7C3AED' }}>Listo</Button>
           </Space>
         </>
       )}
@@ -470,128 +359,115 @@ export default function PortalPage() {
   })
   const event = ctxEvent || data?.data
 
-  const [config, setConfig] = useState<PortalConfig>(() => loadConfig(id || ''))
   const [accessOpen, setAccessOpen] = useState(false)
   const [publishLoading, setPublishLoading] = useState(false)
-  const branding = loadBranding(id || '')
+  const [accessEnabled, setAccessEnabled] = useState(false)
 
-  useEffect(() => {
-    if (id) setConfig(loadConfig(id))
-  }, [id])
+  // Read planner stores for preview
+  const { store: branding } = usePlannerStore<EventBranding>(id!, 'branding', { ...DEFAULT_BRANDING }, `iventia-branding-${id}`)
+  const { store: tareas } = usePlannerStore<{ tasks: any[] }>(id!, 'tareas', { tasks: [] }, `iventia-tareas-${id}`)
+  const { store: timeline } = usePlannerStore<{ phases: any[]; activities: any[] }>(id!, 'timeline', { phases: [], activities: [] }, `iventia-timeline-${id}`)
+  const { store: presupuesto } = usePlannerStore<{ chapters: any[]; items: any[] }>(id!, 'presupuesto', { chapters: [], items: [] }, `iventia-presupuesto-${id}`)
+  const { store: suppStore } = usePlannerStore<{ suppliers: any[] }>(id!, 'suppliers', { suppliers: [] }, `iventia-event-suppliers-${id}`)
+  const suppliers = Array.isArray(suppStore) ? suppStore : (suppStore.suppliers ?? [])
 
-  function toggleWidget(key: string) {
-    const next = config.visibleWidgets.includes(key)
-      ? config.visibleWidgets.filter((k) => k !== key)
-      : [...config.visibleWidgets, key]
-    const updated = { ...config, visibleWidgets: next }
-    setConfig(updated)
-    saveConfig(id!, updated)
-  }
+  // Read lienzo widgets
+  const { data: lienzoData, isLoading: lienzoLoading } = useQuery({
+    queryKey: ['planner-lienzo', id],
+    queryFn: () => eventsApi.getLienzo(id!),
+    enabled: !!id,
+  })
+  const rawLienzo = lienzoData?.data ?? lienzoData
+  let widgets: Widget[] = []
+  if (Array.isArray(rawLienzo)) widgets = rawLienzo
+  else if (rawLienzo?.widgets && Array.isArray(rawLienzo.widgets)) widgets = rawLienzo.widgets
 
-  function handleSave() {
-    saveConfig(id!, config)
-    saveEventSnapshot(id!, event)
-    message.success('Configuración del portal guardada')
-  }
+  // Canvas state
+  const [zoom, setZoom] = useState(0.55)
+  const [pan, setPan] = useState({ x: 20, y: 10 })
+  const [isPanning, setIsPanning] = useState(false)
+  const panStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 })
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    setIsPanning(true)
+    panStart.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y }
+  }, [pan])
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isPanning) return
+    setPan({ x: panStart.current.panX + (e.clientX - panStart.current.x), y: panStart.current.panY + (e.clientY - panStart.current.y) })
+  }, [isPanning])
+  const handleMouseUp = useCallback(() => setIsPanning(false), [])
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault()
+    setZoom(z => Math.min(2, Math.max(0.2, z + (e.deltaY > 0 ? -0.08 : 0.08))))
+  }, [])
 
   async function handlePublish() {
     if (!id) return
     setPublishLoading(true)
     try {
-      // Read all planner stores from backend (not localStorage)
       const allStores = await eventsApi.getAllPlannerStores(id)
       const stores = allStores.data || allStores || {}
-
-      const branding = stores.branding || null
-      const portalConfig = config  // current local config state
-      const timeline = stores.timeline || null
-      const tareas = stores.tareas || null
-      const presupuesto = stores.presupuesto || null
-      const suppliers = stores.suppliers || null
-
-      // Read lienzo widgets from backend
       let lienzo: any = null
       try {
         const lienzoRes = await eventsApi.getLienzo(id)
         lienzo = lienzoRes.data || lienzoRes || null
-        // Attach suppliers so client portal can render them
-        if (suppliers && lienzo) lienzo.suppliers = Array.isArray(suppliers) ? suppliers : (suppliers.suppliers || [])
-      } catch { /* lienzo may not exist yet */ }
-
+        if (stores.suppliers && lienzo) lienzo.suppliers = Array.isArray(stores.suppliers) ? stores.suppliers : (stores.suppliers.suppliers || [])
+      } catch {}
       const eventSnapshot = event ? {
-        name: event.name,
-        eventStart: event.eventStart,
-        eventType: event.eventType,
-        code: event.code,
-        venueLocation: event.venueLocation,
-        expectedAttendance: event.expectedAttendance,
-        description: event.description,
-        client: event.client,
+        name: event.name, eventStart: event.eventStart, eventType: event.eventType,
+        code: event.code, venueLocation: event.venueLocation,
+        expectedAttendance: event.expectedAttendance, description: event.description, client: event.client,
       } : null
-
       await eventsApi.publishPlannerPortal(id, {
-        branding, portalConfig, timeline, tareas, presupuesto, lienzo, eventSnapshot,
+        branding: stores.branding, portalConfig: { accessEnabled, visibleWidgets: [] },
+        timeline: stores.timeline, tareas: stores.tareas, presupuesto: stores.presupuesto,
+        lienzo, eventSnapshot,
       })
-      message.success('Lienzo publicado — el cliente puede acceder desde cualquier dispositivo')
+      message.success('Lienzo publicado — el cliente puede acceder')
     } catch (err: any) {
       message.error(err?.response?.data?.error?.message || 'Error al publicar')
-    } finally {
-      setPublishLoading(false)
-    }
+    } finally { setPublishLoading(false) }
   }
-
-  const visible = config.visibleWidgets
 
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
-
-      {/* ── Left config panel ── */}
+      {/* Left panel */}
       <div style={{
-        width: 300, flexShrink: 0, background: '#fff',
+        width: 280, flexShrink: 0, background: '#fff',
         borderRight: '1px solid #F0F0F0',
         display: 'flex', flexDirection: 'column',
         boxShadow: '2px 0 8px rgba(0,0,0,0.04)',
       }}>
         {/* Header */}
-        <div style={{ padding: '20px 20px 14px', borderBottom: '1px solid #F5F5F5' }}>
+        <div style={{ padding: '18px 18px 14px', borderBottom: '1px solid #F5F5F5' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
             <div style={{
               width: 32, height: 32, borderRadius: 8,
               background: 'linear-gradient(135deg,#7C3AED,#EC4899)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <GlobalOutlined style={{ color: '#fff', fontSize: 15 }} />
+              <AppstoreOutlined style={{ color: '#fff', fontSize: 15 }} />
             </div>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 14 }}>Portal del cliente</div>
-              <div style={{ fontSize: 11, color: '#888' }}>Configura la vista del cliente</div>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>Lienzo del cliente</div>
+              <div style={{ fontSize: 11, color: '#888' }}>Vista previa y publicación</div>
             </div>
           </div>
         </div>
 
         <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
-
           {/* Client info */}
           {event?.client && (
-            <div style={{
-              background: 'linear-gradient(135deg,#F5F3FF,#FDF4FF)',
-              borderRadius: 10, padding: 12, marginBottom: 16,
-              border: '1px solid #EDE9FE',
-            }}>
-              <div style={{ fontSize: 10, fontWeight: 600, color: '#7C3AED', letterSpacing: '0.06em', marginBottom: 6 }}>
-                CLIENTE
-              </div>
+            <div style={{ background: 'linear-gradient(135deg,#F5F3FF,#FDF4FF)', borderRadius: 10, padding: 12, marginBottom: 16, border: '1px solid #EDE9FE' }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: '#7C3AED', letterSpacing: '0.06em', marginBottom: 6 }}>CLIENTE</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Avatar size={28} style={{ background: '#7C3AED', fontSize: 11, fontWeight: 700 }}>
                   {(event.client.companyName || event.client.firstName || '?')[0]}
                 </Avatar>
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.3 }}>
-                    {event.client.companyName || `${event.client.firstName} ${event.client.lastName}`}
-                  </div>
-                  {event.client.email && (
-                    <div style={{ fontSize: 11, color: '#888' }}>{event.client.email}</div>
-                  )}
+                  <div style={{ fontSize: 12, fontWeight: 600 }}>{event.client.companyName || `${event.client.firstName} ${event.client.lastName}`}</div>
+                  {event.client.email && <div style={{ fontSize: 11, color: '#888' }}>{event.client.email}</div>}
                 </div>
               </div>
             </div>
@@ -599,234 +475,127 @@ export default function PortalPage() {
 
           {/* Access toggle */}
           <div style={{
-            background: config.accessEnabled ? '#ECFDF5' : '#F9FAFB',
-            border: `1px solid ${config.accessEnabled ? '#6EE7B7' : '#E5E7EB'}`,
+            background: accessEnabled ? '#ECFDF5' : '#F9FAFB',
+            border: `1px solid ${accessEnabled ? '#6EE7B7' : '#E5E7EB'}`,
             borderRadius: 10, padding: 12, marginBottom: 16,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <div style={{ fontWeight: 600, fontSize: 13 }}>Acceso al portal</div>
-              <Switch
-                size="small"
-                checked={config.accessEnabled}
-                onChange={(v) => { const u = { ...config, accessEnabled: v }; setConfig(u); saveConfig(id!, u) }}
-                style={{ background: config.accessEnabled ? '#059669' : undefined }}
-              />
+              <div style={{ fontWeight: 600, fontSize: 13 }}>Acceso al lienzo</div>
+              <Switch size="small" checked={accessEnabled} onChange={setAccessEnabled}
+                style={{ background: accessEnabled ? '#059669' : undefined }} />
             </div>
-            {config.accessEnabled ? (
-              <div style={{ fontSize: 12, color: '#059669', marginBottom: 8 }}>
-                <CheckCircleOutlined style={{ marginRight: 4 }} />Portal habilitado
-              </div>
-            ) : (
-              <div style={{ fontSize: 12, color: '#888', marginBottom: 8 }}>
-                El cliente no puede acceder aún
-              </div>
-            )}
-            <Button
-              size="small" block
-              icon={<KeyOutlined />}
-              onClick={() => setAccessOpen(true)}
-              style={{ fontSize: 12 }}
-            >
-              Gestionar acceso
-            </Button>
+            {accessEnabled
+              ? <div style={{ fontSize: 12, color: '#059669', marginBottom: 8 }}><CheckCircleOutlined style={{ marginRight: 4 }} />Lienzo habilitado</div>
+              : <div style={{ fontSize: 12, color: '#888', marginBottom: 8 }}>El cliente no puede acceder aún</div>}
+            <Button size="small" block icon={<KeyOutlined />} onClick={() => setAccessOpen(true)} style={{ fontSize: 12 }}>Gestionar acceso</Button>
           </div>
 
-          {/* Widget visibility */}
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: '#888', letterSpacing: '0.06em', marginBottom: 8 }}>
-              CONTENIDO VISIBLE
-            </div>
-            {ALL_WIDGETS.map((w) => {
-              const isOn = visible.includes(w.key)
-              return (
-                <div
-                  key={w.key}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '10px 12px', borderRadius: 8, marginBottom: 4,
-                    background: isOn ? '#F5F3FF' : '#F9FAFB',
-                    border: `1px solid ${isOn ? '#DDD6FE' : '#F0F0F0'}`,
-                    cursor: 'pointer', transition: 'all 0.15s',
-                  }}
-                  onClick={() => toggleWidget(w.key)}
-                >
-                  <span style={{ color: isOn ? '#7C3AED' : '#BBB', fontSize: 15 }}>{w.icon}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: isOn ? '#374151' : '#9CA3AF' }}>
-                      {w.label}
-                    </div>
-                    <div style={{ fontSize: 10, color: '#9CA3AF', lineHeight: 1.3 }}>{w.desc}</div>
-                  </div>
-                  {isOn
-                    ? <EyeOutlined style={{ color: '#7C3AED', fontSize: 14 }} />
-                    : <EyeInvisibleOutlined style={{ color: '#D1D5DB', fontSize: 14 }} />}
+          {/* Info */}
+          <div style={{ background: '#F0F9FF', border: '1px solid #BAE6FD', borderRadius: 10, padding: 12, marginBottom: 16, fontSize: 12, color: '#0369A1', lineHeight: 1.6 }}>
+            <EyeOutlined style={{ marginRight: 4 }} />
+            El cliente verá el mismo lienzo que ves aquí: todos los widgets posicionados en el canvas.
+            Edita el lienzo desde <b>Lienzo del evento</b>.
+          </div>
+
+          {/* Stats */}
+          <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 12, border: '1px solid #F0F0F0' }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: '#888', letterSpacing: '0.06em', marginBottom: 8 }}>CONTENIDO</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+              {[
+                { label: 'Widgets', value: widgets.length, color: '#7C3AED' },
+                { label: 'Tareas', value: tareas.tasks?.length || 0, color: '#F97316' },
+                { label: 'Actividades', value: timeline.activities?.length || 0, color: '#0D9488' },
+                { label: 'Proveedores', value: suppliers.length, color: '#EC4899' },
+              ].map(s => (
+                <div key={s.label} style={{ textAlign: 'center', padding: '6px 0' }}>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: s.color }}>{s.value}</div>
+                  <div style={{ fontSize: 10, color: '#888' }}>{s.label}</div>
                 </div>
-              )
-            })}
-          </div>
-
-          {/* Branding preview */}
-          <div style={{
-            borderRadius: 10, padding: 10, marginBottom: 16,
-            background: '#F9FAFB', border: '1px solid #F0F0F0',
-          }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: '#888', letterSpacing: '0.06em', marginBottom: 8 }}>
-              BRANDING
-            </div>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              {[branding.primaryColor, branding.secondaryColor, branding.accentColor].map((c, i) => (
-                <div key={i} style={{ width: 22, height: 22, borderRadius: 6, background: c, boxShadow: '0 1px 3px rgba(0,0,0,0.15)' }} />
               ))}
-              <Text style={{ fontSize: 11, color: '#888', marginLeft: 4 }}>
-                {branding.fontStyle} · {branding.coverStyle}
-              </Text>
-            </div>
-            <div style={{ marginTop: 6, fontSize: 11, color: '#888' }}>
-              Edita en{' '}
-              <span style={{ color: '#7C3AED', cursor: 'pointer', fontWeight: 600 }}
-                onClick={() => { /* navigate to estudio */ }}>
-                Estudio
-              </span>
             </div>
           </div>
         </div>
 
-        {/* Save */}
+        {/* Actions */}
         <div style={{ padding: '12px 16px', borderTop: '1px solid #F5F5F5' }}>
-          <Button type="primary" block onClick={handleSave}
-            style={{ background: '#7C3AED', borderColor: '#7C3AED', marginBottom: 8 }}>
-            Guardar configuración
+          <Button type="primary" block icon={<CloudUploadOutlined />} loading={publishLoading}
+            onClick={handlePublish} style={{ background: '#059669', borderColor: '#059669', marginBottom: 8 }}>
+            Publicar lienzo
           </Button>
-          <Button
-            block
-            icon={<CloudUploadOutlined />}
-            loading={publishLoading}
-            onClick={handlePublish}
-            style={{ marginBottom: 8, borderColor: '#0D9488', color: '#0D9488' }}
-          >
-            Publicar portal
+          <Button block icon={<ExportOutlined />} onClick={() => window.open(`/portal-cliente/${id}`, '_blank')}>
+            Abrir como cliente ↗
           </Button>
-          <Button block onClick={() => window.open(`/portal-cliente/${id}`, '_blank')}>
-            Abrir portal del cliente ↗
-          </Button>
-          {config.updatedAt && (
-            <div style={{ textAlign: 'center', fontSize: 10, color: '#BBB', marginTop: 6 }}>
-              Guardado {dayjs(config.updatedAt).fromNow()}
-            </div>
-          )}
         </div>
       </div>
 
-      {/* ── Right preview ── */}
-      <div style={{ flex: 1, overflow: 'auto', background: '#F3F4F6', display: 'flex', flexDirection: 'column' }}>
+      {/* Canvas preview */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* Preview header */}
         <div style={{
-          background: '#fff', borderBottom: '1px solid #E5E7EB',
-          padding: '12px 24px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0,
+          background: 'linear-gradient(135deg, #1E1040, #2D1B69)',
+          padding: '8px 20px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0,
         }}>
-          <Badge dot color={config.accessEnabled ? '#10B981' : '#D1D5DB'}>
-            <div style={{
-              width: 28, height: 28, borderRadius: 8,
-              background: 'linear-gradient(135deg,#7C3AED,#EC4899)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <GlobalOutlined style={{ color: '#fff', fontSize: 13 }} />
-            </div>
+          <Badge dot color={accessEnabled ? '#10B981' : '#6B7280'}>
+            <div style={{ width: 24, height: 24, borderRadius: 6, background: `linear-gradient(135deg, ${branding.primaryColor}, ${branding.secondaryColor})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 900, color: '#fff' }}>I</div>
           </Badge>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 13 }}>Vista previa — Portal del cliente</div>
-            <div style={{ fontSize: 11, color: '#888' }}>
-              {visible.length} sección{visible.length !== 1 ? 'es' : ''} visible{visible.length !== 1 ? 's' : ''} ·{' '}
-              {config.accessEnabled
-                ? <span style={{ color: '#10B981' }}>Portal activo</span>
-                : <span style={{ color: '#9CA3AF' }}>Sin acceso</span>}
-            </div>
-          </div>
+          <span style={{ color: '#C4B5FD', fontSize: 12, fontWeight: 700 }}>Vista previa — Lienzo del cliente</span>
           <div style={{ flex: 1 }} />
-          <Tag style={{ borderRadius: 20, fontSize: 11 }}>
-            {event?.name || '—'}
-          </Tag>
-        </div>
-
-        {/* Portal simulation */}
-        <div style={{ flex: 1, padding: 24, overflow: 'auto' }}>
-          {/* Simulated browser chrome */}
-          <div style={{
-            background: '#fff', borderRadius: 16, overflow: 'hidden',
-            boxShadow: '0 8px 40px rgba(0,0,0,0.12)',
-            maxWidth: 700, margin: '0 auto',
-          }}>
-            {/* Browser bar */}
-            <div style={{
-              background: '#F9FAFB', borderBottom: '1px solid #E5E7EB',
-              padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8,
-            }}>
-              <div style={{ display: 'flex', gap: 5 }}>
-                {['#FF5F57', '#FFBD2E', '#28CA42'].map((c) => (
-                  <div key={c} style={{ width: 10, height: 10, borderRadius: '50%', background: c }} />
-                ))}
-              </div>
-              <div style={{
-                flex: 1, background: '#fff', border: '1px solid #E5E7EB',
-                borderRadius: 6, padding: '4px 12px', fontSize: 11, color: '#888',
-                display: 'flex', alignItems: 'center', gap: 6,
-              }}>
-                <LockOutlined style={{ fontSize: 10 }} />
-                portal.iventia.app/evento/{id?.slice(0, 8)}…
-              </div>
-            </div>
-
-            {/* Portal nav */}
-            <div style={{
-              background: 'linear-gradient(135deg,#1E1040,#2D1B69)',
-              padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 10,
-            }}>
-              <div style={{
-                width: 22, height: 22, borderRadius: 6,
-                background: 'linear-gradient(135deg,#7C3AED,#EC4899)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 10, fontWeight: 800, color: '#fff',
-              }}>P</div>
-              <span style={{ color: '#C4B5FD', fontSize: 11, fontWeight: 700 }}>IventIA · Portal del Cliente</span>
-              <div style={{ flex: 1 }} />
-              <Avatar size={22} style={{ background: '#7C3AED', fontSize: 9 }}>C</Avatar>
-            </div>
-
-            {/* Portal content */}
-            <div style={{ padding: 20, background: '#F8F8FF', minHeight: 400 }}>
-              {!config.accessEnabled && (
-                <div style={{
-                  background: '#FFFBEB', border: '1px solid #FDE68A',
-                  borderRadius: 10, padding: 14, marginBottom: 16, fontSize: 12, color: '#92400E',
-                  display: 'flex', alignItems: 'center', gap: 8,
-                }}>
-                  <LockOutlined />
-                  Portal desactivado — el cliente no puede ver esta vista aún.
-                </div>
-              )}
-
-              {event && visible.includes('portada') && (
-                <PreviewPortada event={event} branding={branding} />
-              )}
-              {id && visible.includes('timeline') && <PreviewTimeline eventId={id} />}
-              {id && visible.includes('tareas') && <PreviewTareas eventId={id} />}
-              {id && visible.includes('presupuesto') && <PreviewPresupuesto eventId={id} />}
-              {id && visible.includes('galeria') && <PreviewGaleria eventId={id} />}
-              {event && visible.includes('equipo') && <PreviewEquipo event={event} />}
-              {id && visible.includes('links') && <PreviewLinks eventId={id} />}
-
-              {visible.length === 0 && (
-                <div style={{ textAlign: 'center', padding: 60, color: '#9CA3AF' }}>
-                  <EyeInvisibleOutlined style={{ fontSize: 32, marginBottom: 10 }} />
-                  <div>Activa al menos una sección para mostrar en el portal</div>
-                </div>
-              )}
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Button size="small" icon={<MinusOutlined />} onClick={() => setZoom(z => Math.max(0.2, z - 0.1))}
+              style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#C4B5FD', width: 24, height: 24, borderRadius: 6, padding: 0 }} />
+            <span style={{ color: '#C4B5FD', fontSize: 11, fontWeight: 600, minWidth: 36, textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
+            <Button size="small" icon={<PlusOutlined />} onClick={() => setZoom(z => Math.min(2, z + 0.1))}
+              style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#C4B5FD', width: 24, height: 24, borderRadius: 6, padding: 0 }} />
           </div>
         </div>
+
+        {/* Canvas */}
+        {lienzoLoading ? (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1E1040' }}>
+            <Spin size="large" />
+          </div>
+        ) : (
+          <div
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            onWheel={handleWheel}
+            style={{
+              flex: 1, overflow: 'hidden', position: 'relative',
+              cursor: isPanning ? 'grabbing' : 'grab',
+              background: 'radial-gradient(circle at 50% 50%, #2D1B69 0%, #1E1040 100%)',
+            }}
+          >
+            {/* Dot grid */}
+            <div style={{
+              position: 'absolute', inset: 0, opacity: 0.12, pointerEvents: 'none',
+              backgroundImage: 'radial-gradient(circle, #C4B5FD 1px, transparent 1px)',
+              backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
+              backgroundPosition: `${pan.x % (24 * zoom)}px ${pan.y % (24 * zoom)}px`,
+            }} />
+            <div style={{ position: 'absolute', transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: '0 0' }}>
+              {widgets.length === 0 ? (
+                <div style={{ position: 'absolute', left: 100, top: 100, color: 'rgba(196,181,253,0.4)', textAlign: 'center' }}>
+                  <AppstoreOutlined style={{ fontSize: 48, display: 'block', marginBottom: 12 }} />
+                  <div style={{ fontSize: 16, fontWeight: 600 }}>Sin widgets en el lienzo</div>
+                  <div style={{ fontSize: 13, marginTop: 4 }}>Agrega widgets en el Lienzo del evento</div>
+                </div>
+              ) : widgets.map(w => (
+                <div key={w.id} onMouseDown={e => e.stopPropagation()} style={{
+                  position: 'absolute', left: w.x, top: w.y, width: w.w, height: w.h,
+                  borderRadius: 12, overflow: 'hidden', background: '#fff',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.15), 0 0 0 1px rgba(255,255,255,0.08)',
+                }}>
+                  <PreviewWidget widget={w} event={event} branding={branding}
+                    tareas={tareas} timeline={timeline} presupuesto={presupuesto} suppliers={suppliers} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Access modal */}
       <AccessModal open={accessOpen} onClose={() => setAccessOpen(false)} event={event} />
     </div>
   )
