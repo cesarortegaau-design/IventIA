@@ -255,7 +255,7 @@ export default function EventDetailPage() {
   const { data: spacesData, refetch: refetchSpaces } = useQuery({
     queryKey: ['event-spaces', id],
     queryFn: () => eventSpacesApi.list(id!),
-    enabled: !!id && (activeTab === 'espacios' || activeTab === 'mapa'),
+    enabled: !!id,
     staleTime: 60_000,
   })
   const spaces: any[] = spacesData?.data ?? []
