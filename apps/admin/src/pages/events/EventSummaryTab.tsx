@@ -22,9 +22,10 @@ interface Props {
   event: any
   auditData: any[]
   onSwitchTab: (tab: string) => void
+  userMap?: Record<string, string>
 }
 
-export default function EventSummaryTab({ event, auditData, onSwitchTab }: Props) {
+export default function EventSummaryTab({ event, auditData, onSwitchTab, userMap = {} }: Props) {
   const ticketSections: any[] = event.ticketEvent?.sections ?? []
   const totalCapacity = ticketSections.reduce((s: number, sec: any) => s + (sec.capacity ?? 0), 0)
   const totalSold = ticketSections.reduce((s: number, sec: any) => s + (sec.sold ?? 0), 0)
@@ -252,6 +253,8 @@ export default function EventSummaryTab({ event, auditData, onSwitchTab }: Props
             { label: 'Tipo', value: event.eventType },
             { label: 'Clase', value: event.eventClass },
             { label: 'Categoría', value: event.eventCategory },
+            { label: 'Coordinador', value: event.coordinator ? (userMap[event.coordinator] ?? event.coordinator) : null },
+            { label: 'Ejecutivo', value: event.executive ? (userMap[event.executive] ?? event.executive) : null },
             { label: 'Venue', value: event.venue ?? event.venueLocation },
             { label: 'Asistentes esperados', value: event.expectedAttendance ? Number(event.expectedAttendance).toLocaleString('es-MX') : null },
           ].filter(item => item.value).map(item => (

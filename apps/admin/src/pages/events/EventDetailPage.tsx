@@ -16,6 +16,7 @@ import {
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { eventsApi } from '../../api/events'
+import { usersApi } from '../../api/users'
 import { portalCodesApi } from '../../api/portalCodes'
 import { eventSpacesApi } from '../../api/eventSpaces'
 import { resourcesApi } from '../../api/resources'
@@ -317,6 +318,17 @@ export default function EventDetailPage() {
     staleTime: 10 * 60_000,
   })
   const allResources: any[] = resourcesData?.data ?? []
+
+  const { data: assignableUsers } = useQuery({
+    queryKey: ['users-assignable'],
+    queryFn: () => usersApi.listAssignable(),
+    staleTime: 10 * 60_000,
+  })
+  const userMap = useMemo(() => {
+    const m: Record<string, string> = {}
+    for (const u of (assignableUsers ?? [])) m[u.id] = `${u.firstName} ${u.lastName}`
+    return m
+  }, [assignableUsers])
 
   const { data: teamClientsData } = useQuery({
     queryKey: ['clients-teams'],
@@ -752,6 +764,7 @@ export default function EventDetailPage() {
             event={event}
             auditData={auditData?.data ?? []}
             onSwitchTab={switchTab}
+            userMap={userMap}
           />
         )}
 
