@@ -498,32 +498,43 @@ export default function PortalPage() {
     if (!id) return
     setPublishLoading(true)
     try {
-      const tryParse = (key: string) => {
-        try {
-          const raw = localStorage.getItem(key)
-          return raw ? JSON.parse(raw) : null
-        } catch { return null }
-      }
-      const branding = tryParse(brandingKey(id))
-      const portalConfig = tryParse(`iventia-portal-config-${id}`)
-      const timeline = tryParse(`iventia-timeline-${id}`)
-      const tareas = tryParse(`iventia-tareas-${id}`)
-      const presupuesto = tryParse(`iventia-presupuesto-${id}`)
-      const lienzo = tryParse(`iventia-lienzo-${id}`)
+      // Read all planner stores from backend (not localStorage)
+      const allStores = await eventsApi.getAllPlannerStores(id)
+      const stores = allStores.data || allStores || {}
+
+      const branding = stores.branding || null
+      const portalConfig = config  // current local config state
+      const timeline = stores.timeline || null
+      const tareas = stores.tareas || null
+      const presupuesto = stores.presupuesto || null
+      const suppliers = stores.suppliers || null
+
+      // Read lienzo widgets from backend
+      let lienzo: any = null
+      try {
+        const lienzoRes = await eventsApi.getLienzo(id)
+        lienzo = lienzoRes.data || lienzoRes || null
+        // Attach suppliers so client portal can render them
+        if (suppliers && lienzo) lienzo.suppliers = Array.isArray(suppliers) ? suppliers : (suppliers.suppliers || [])
+      } catch { /* lienzo may not exist yet */ }
+
       const eventSnapshot = event ? {
         name: event.name,
         eventStart: event.eventStart,
         eventType: event.eventType,
         code: event.code,
         venueLocation: event.venueLocation,
+        expectedAttendance: event.expectedAttendance,
+        description: event.description,
         client: event.client,
       } : null
+
       await eventsApi.publishPlannerPortal(id, {
         branding, portalConfig, timeline, tareas, presupuesto, lienzo, eventSnapshot,
       })
-      message.success('Portal publicado — el cliente puede acceder desde cualquier dispositivo')
+      message.success('Lienzo publicado — el cliente puede acceder desde cualquier dispositivo')
     } catch (err: any) {
-      message.error(err?.response?.data?.error?.message || 'Error al publicar el portal')
+      message.error(err?.response?.data?.error?.message || 'Error al publicar')
     } finally {
       setPublishLoading(false)
     }

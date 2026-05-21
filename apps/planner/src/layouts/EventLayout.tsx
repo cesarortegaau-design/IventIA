@@ -58,7 +58,7 @@ export default function EventLayout() {
       items: [
         { key: 'crm', label: 'CRM · Clientes y proveedores', icon: <TeamOutlined /> },
         { key: 'mapa', label: 'Mapa del evento', icon: <ApartmentOutlined /> },
-        { key: 'portal', label: 'Portal del cliente', icon: <GlobalOutlined />, badge: 'NEW' },
+        { key: 'portal', label: 'Lienzo del cliente', icon: <GlobalOutlined />, badge: 'NEW' },
       ],
     },
     {
