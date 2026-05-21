@@ -37,6 +37,7 @@ async function notifyConflicts(savedSpaceId: string, eventId: string, tenantId: 
       include: {
         event: { select: { id: true, name: true, code: true, executive: true } },
       },
+      orderBy: { startTime: 'asc' },
     })
     console.log(`${tag} resource="${saved.resource.name}" conflicts found: ${conflicts.length}`)
     if (conflicts.length === 0) return
@@ -69,14 +70,16 @@ async function notifyConflicts(savedSpaceId: string, eventId: string, tenantId: 
       return
     }
 
-    // Build conflict summary lines
-    const fmt = (d: Date) => d.toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' })
-    const conflictLines = conflicts.map(c =>
-      `• *${c.event.name}* (#${c.event.code}): ${fmt(c.startTime)} – ${fmt(c.endTime)}`
-    ).join('\n')
-
+    // Build conflict table
+    const fmt      = (d: Date) => d.toLocaleString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
     const savedPhase = PHASE_LABEL[saved.phase] ?? saved.phase
-    const savedRange = `${fmt(saved.startTime)} – ${fmt(saved.endTime)}`
+
+    const conflictRows = conflicts.map((c, i) =>
+      `*${i + 1}. ${c.event.name}* (#${c.event.code})\n` +
+      `   📅 Inicio:  ${fmt(c.startTime)}\n` +
+      `   📅 Fin:     ${fmt(c.endTime)}\n` +
+      `   🕐 Creada:  ${fmt(c.createdAt)}`
+    ).join('\n\n')
 
     // Lookup phones and send
     const userIds = Array.from(executiveMap.keys())
@@ -94,8 +97,12 @@ async function notifyConflicts(savedSpaceId: string, eventId: string, tenantId: 
       }
       const ev = executiveMap.get(u.id)!
       const message =
-        `El espacio *${saved.resource.name}* (${savedPhase}) del evento *${currentEvent.name}* (#${currentEvent.code}) tiene conflicto:\n\n` +
-        conflictLines + `\n\nRango: ${savedRange}`
+        `🏢 *Recurso:* ${saved.resource.name} (${savedPhase})\n` +
+        `📋 *Evento:* ${currentEvent.name} (#${currentEvent.code})\n` +
+        `📅 *Reserva:* ${fmt(saved.startTime)} → ${fmt(saved.endTime)}\n\n` +
+        `*Reservas en conflicto (${conflicts.length}):*\n` +
+        `─────────────────────\n` +
+        conflictRows
       console.log(`${tag} sending WhatsApp to user ${u.id} (${u.phone})`)
       await sendGenericNotification(u.phone, {
         title: '⚠️ Conflicto de espacio detectado',
@@ -339,14 +346,22 @@ export async function checkNotifyConflicts(req: Request, res: Response, next: Ne
       return res.json({ success: true, report })
     }
 
-    const fmt = (d: Date) => d.toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' })
-    const conflictLines = conflicts.map(c =>
-      `• *${c.event.name}* (#${c.event.code}): ${fmt(c.startTime)} – ${fmt(c.endTime)}`
-    ).join('\n')
+    const fmt = (d: Date) => d.toLocaleString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
     const savedPhase = PHASE_LABEL[saved.phase] ?? saved.phase
+    const sortedConflicts = [...conflicts].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+    const conflictRows = sortedConflicts.map((c, i) =>
+      `*${i + 1}. ${c.event.name}* (#${c.event.code})\n` +
+      `   📅 Inicio:  ${fmt(c.startTime)}\n` +
+      `   📅 Fin:     ${fmt(c.endTime)}\n` +
+      `   🕐 Creada:  ${fmt(c.createdAt)}`
+    ).join('\n\n')
     const message =
-      `El espacio *${saved.resource.name}* (${savedPhase}) del evento *${currentEvent.name}* (#${currentEvent.code}) tiene conflicto:\n\n` +
-      conflictLines + `\n\nRango: ${fmt(saved.startTime)} – ${fmt(saved.endTime)}`
+      `🏢 *Recurso:* ${saved.resource.name} (${savedPhase})\n` +
+      `📋 *Evento:* ${currentEvent.name} (#${currentEvent.code})\n` +
+      `📅 *Reserva:* ${fmt(saved.startTime)} → ${fmt(saved.endTime)}\n\n` +
+      `*Reservas en conflicto (${conflicts.length}):*\n` +
+      `─────────────────────\n` +
+      conflictRows
 
     const sendResults = await Promise.allSettled(
       users.filter(u => u.phone).map(async u => {
