@@ -308,18 +308,24 @@ async function userHasPrivilege(tenantId: string, userId: string, privilegeKey: 
 // Fire-and-forget: on event confirmation, scan all its spaces for conflicts
 // and notify executives of conflicting events via WhatsApp
 async function notifyConflictsOnConfirmation(eventId: string, tenantId: string) {
-  if (!isWhatsAppConfigured()) return
+  const tag = `[notifyOnConfirm:${eventId.slice(0, 8)}]`
+  if (!isWhatsAppConfigured()) {
+    console.warn(`${tag} WhatsApp not configured — skipping`)
+    return
+  }
   try {
     const confirmedEvent = await prisma.event.findFirst({
       where: { id: eventId, tenantId },
       select: { id: true, name: true, code: true },
     })
-    if (!confirmedEvent) return
+    if (!confirmedEvent) { console.warn(`${tag} event not found`); return }
+    console.log(`${tag} confirmed event="${confirmedEvent.name}"`)
 
     const spaces = await prisma.eventSpace.findMany({
       where: { eventId },
       include: { resource: { select: { id: true, name: true } } },
     })
+    console.log(`${tag} spaces: ${spaces.length}`)
     if (spaces.length === 0) return
 
     const fmt = (d: Date) => d.toLocaleString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
@@ -339,10 +345,12 @@ async function notifyConflictsOnConfirmation(eventId: string, tenantId: string) 
         include: {
           event: { select: { id: true, name: true, code: true, executive: true } },
         },
-        orderBy: { startTime: 'asc' },
+        orderBy: { createdAt: 'asc' },
       })
+      console.log(`${tag} space="${space.resource.name}" conflicts: ${conflicts.length}`)
 
       for (const c of conflicts) {
+        console.log(`${tag}   conflict event="${c.event.name}" executive="${c.event.executive ?? 'null'}"`)
         if (!c.event.executive) continue
         const existing = executiveMap.get(c.event.executive)
         const spaceRow =
@@ -362,16 +370,21 @@ async function notifyConflictsOnConfirmation(eventId: string, tenantId: string) 
       }
     }
 
-    if (executiveMap.size === 0) return
+    console.log(`${tag} executives to notify: ${executiveMap.size}`)
+    if (executiveMap.size === 0) {
+      console.warn(`${tag} no executives found — check that conflicting events have a user set in the executive field`)
+      return
+    }
 
     const userIds = Array.from(executiveMap.keys())
     const users = await prisma.user.findMany({
       where: { id: { in: userIds }, isActive: true },
       select: { id: true, phone: true },
     })
+    console.log(`${tag} users found: ${users.length} — with phone: ${users.filter(u => u.phone).length}`)
 
     await Promise.allSettled(users.map(async u => {
-      if (!u.phone) return
+      if (!u.phone) { console.warn(`${tag} user ${u.id} has no phone`); return }
       const info = executiveMap.get(u.id)!
       const rows = info.spaceSummaries.join('\n\n')
       const message =
@@ -379,6 +392,7 @@ async function notifyConflictsOnConfirmation(eventId: string, tenantId: string) 
         `─────────────────────\n` +
         rows + `\n─────────────────────\n\n` +
         `Por favor revisa y coordina las reservas afectadas.`
+      console.log(`${tag} sending WhatsApp to ${u.phone}`)
       await sendGenericNotification(u.phone, {
         title: '🔔 Evento confirmado con conflictos',
         message,
@@ -387,7 +401,7 @@ async function notifyConflictsOnConfirmation(eventId: string, tenantId: string) 
       })
     }))
   } catch (err) {
-    console.error('[notifyConflictsOnConfirmation] error:', err)
+    console.error(`${tag} error:`, err)
   }
 }
 
