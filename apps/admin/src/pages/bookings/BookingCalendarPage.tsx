@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tansta
 import { useNavigate } from 'react-router-dom'
 import {
   Select, Button, Input, Typography, Spin, Empty, Tag, Tooltip,
-  Badge, Space, Divider, Modal, Row, Col, Statistic, DatePicker,
+  Badge, Space, Divider, Modal, Row, Col, DatePicker,
   Form, Radio, App,
 } from 'antd'
 import {
@@ -511,7 +511,7 @@ export default function BookingCalendarPage() {
   const [customRange, setCustomRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null)
 
   // ── Filter state ───────────────────────────────────────────────────────────
-  const [resourceType,   setResourceType]   = useState<string | undefined>()
+  const [resourceType,   setResourceType]   = useState<string | undefined>('SPACE')
   const [eventId,        setEventId]        = useState<string | undefined>()
   const [eventStatus,    setEventStatus]    = useState<string | undefined>()
   const [resourceSearch, setResourceSearch] = useState('')
@@ -665,10 +665,10 @@ export default function BookingCalendarPage() {
   }
 
   const clearFilters = () => {
-    setResourceType(undefined); setEventId(undefined); setEventStatus(undefined)
+    setResourceType('SPACE'); setEventId(undefined); setEventStatus(undefined)
     setResourceSearch(''); setSearchInput('')
   }
-  const hasFilters = !!(resourceType || eventId || eventStatus || resourceSearch)
+  const hasFilters = !!(resourceType !== 'SPACE' || eventId || eventStatus || resourceSearch)
 
   const todayIdx = days.findIndex(d => d.isSame(today, 'day'))
   const gridWidth = totalDays * DAY_W
@@ -743,213 +743,208 @@ export default function BookingCalendarPage() {
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────
+  const conflicts = meta.conflictsCount ?? 0
+
   return (
-    <div>
-      {/* ── Page header ──────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-        <Space>
-          <div style={{ background: NAVY, borderRadius: 10, padding: '8px 12px', display: 'flex', alignItems: 'center' }}>
-            <CalendarOutlined style={{ color: '#fff', fontSize: 20 }} />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, height: '100%' }}>
+
+      {/* ── Header ───────────────────────────────────────────────────────── */}
+      <div style={{
+        background: `linear-gradient(135deg, ${NAVY} 0%, #25507a 100%)`,
+        borderRadius: 12, padding: '14px 20px', marginBottom: 10,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        flexWrap: 'wrap', gap: 10,
+        boxShadow: '0 4px 20px rgba(26,58,92,0.18)',
+      }}>
+        {/* Title + date */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ background: 'rgba(255,255,255,0.15)', borderRadius: 8, padding: '8px 10px', display: 'flex' }}>
+            <CalendarOutlined style={{ color: '#fff', fontSize: 18 }} />
           </div>
           <div>
-            <Title level={4} style={{ margin: 0, color: NAVY }}>Calendario de Espacios</Title>
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              {days[0].format('DD MMM')} — {days[days.length - 1].format('DD MMM YYYY')}
-            </Text>
+            <div style={{ color: '#fff', fontWeight: 700, fontSize: 16, lineHeight: 1.2 }}>Calendario de Espacios</div>
+            <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 11, marginTop: 2 }}>
+              {days[0].format('DD MMM YYYY')} — {days[days.length - 1].format('DD MMM YYYY')}
+            </div>
           </div>
-        </Space>
+        </div>
 
-        <Space wrap>
-          {/* Selection mode toggle */}
-          <Button
-            icon={<HighlightOutlined />}
-            type={selectionMode ? 'primary' : 'default'}
-            onClick={toggleSelectionMode}
-            style={selectionMode
-              ? { background: SEL_COLOR, borderColor: SEL_COLOR }
-              : { borderColor: SEL_COLOR, color: SEL_COLOR }
-            }
-          >
-            {selectionMode ? 'Salir de selección' : 'Modo selección'}
-          </Button>
-
-          {/* View selector */}
-          <Space.Compact>
-            {(['day', 'week', 'month', '2months', 'custom'] as const).map(v => (
-              <Button key={v} type={view === v ? 'primary' : 'default'} onClick={() => setView(v)}
-                style={view === v ? { background: NAVY, borderColor: NAVY } : {}} size="small">
-                {v === 'day' ? 'Día' : v === 'week' ? 'Semana' : v === 'month' ? 'Mes' : v === '2months' ? '2 Meses' : 'Personalizado'}
+        {/* Controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {/* Navigation */}
+          {view !== 'custom' ? (
+            <Space.Compact size="small">
+              <Button size="small" icon={<LeftOutlined />} onClick={prev}
+                style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff' }} />
+              <Button size="small" onClick={goToday}
+                style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontWeight: 600 }}>
+                Hoy
               </Button>
-            ))}
-          </Space.Compact>
-
-          {view !== 'custom' && (
-            <Space.Compact>
-              <Button size="small" icon={<LeftOutlined />} onClick={prev} />
-              <Button size="small" onClick={goToday}>Hoy</Button>
-              <Button size="small" icon={<RightOutlined />} onClick={next} />
+              <Button size="small" icon={<RightOutlined />} onClick={next}
+                style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff' }} />
             </Space.Compact>
-          )}
-
-          {view === 'custom' && (
+          ) : (
             <RangePicker size="small" format="DD/MM/YYYY" value={customRange}
               onChange={v => v && setCustomRange([v[0]!, v[1]!])} />
           )}
 
-          <Button size="small" icon={<DownloadOutlined />} onClick={handleExport} disabled={bookings.length === 0}>
-            Exportar CSV
+          {/* View toggle */}
+          <Space.Compact size="small">
+            {(['day', 'week', 'month', '2months', 'custom'] as const).map(v => (
+              <Button key={v} size="small" onClick={() => setView(v)} style={{
+                background: view === v ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.08)',
+                border: '1px solid rgba(255,255,255,0.18)',
+                color: view === v ? '#fff' : 'rgba(255,255,255,0.6)',
+                fontWeight: view === v ? 700 : 400,
+              }}>
+                {v === 'day' ? 'Día' : v === 'week' ? 'Sem' : v === 'month' ? 'Mes' : v === '2months' ? '2M' : 'Custom'}
+              </Button>
+            ))}
+          </Space.Compact>
+
+          {/* Action buttons */}
+          <Button size="small" icon={<HighlightOutlined />} onClick={toggleSelectionMode} style={{
+            background: selectionMode ? SEL_COLOR : 'rgba(255,255,255,0.12)',
+            border: selectionMode ? `1px solid ${SEL_COLOR}` : '1px solid rgba(255,255,255,0.2)',
+            color: '#fff', fontWeight: selectionMode ? 700 : 400,
+          }}>
+            {selectionMode ? 'Salir selección' : 'Selección'}
           </Button>
-        </Space>
+          <Button size="small" icon={<DownloadOutlined />} onClick={handleExport} disabled={bookings.length === 0}
+            style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff' }}>
+            CSV
+          </Button>
+        </div>
       </div>
 
-      {/* ── Selection mode hint ────────────────────────────────────────────── */}
-      {selectionMode && (
-        <div style={{
-          background: '#f5f3ff', border: '1px solid #d9d0f5', borderRadius: 8,
-          padding: '10px 16px', marginBottom: 12,
-          display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: SEL_COLOR,
-        }}>
-          <HighlightOutlined />
-          <span><strong>Modo selección activo.</strong> Haz clic y arrastra sobre las celdas del calendario para sombrear el rango que deseas reservar. Puedes seleccionar varios recursos a la vez arrastrando verticalmente.</span>
-        </div>
-      )}
-
-      {/* ── Stats bar ────────────────────────────────────────────────────── */}
-      <Row gutter={12} style={{ marginBottom: 16 }}>
-        <Col xs={12} sm={6}>
-          <div style={{ background: '#fff', borderRadius: 10, padding: '12px 16px', border: '1px solid #e8f0fe', textAlign: 'center' }}>
-            <Statistic
-              title={<Text style={{ fontSize: 11, color: '#64748b' }}>Recursos totales</Text>}
-              value={totalResources}
-              prefix={<TeamOutlined style={{ color: NAVY }} />}
-              valueStyle={{ color: NAVY, fontSize: 22 }}
-            />
-          </div>
-        </Col>
-        <Col xs={12} sm={6}>
-          <div style={{ background: '#fff', borderRadius: 10, padding: '12px 16px', border: '1px solid #e8f0fe', textAlign: 'center' }}>
-            <Statistic
-              title={<Text style={{ fontSize: 11, color: '#64748b' }}>Total reservas</Text>}
-              value={meta.totalBookings ?? 0}
-              prefix={<UnorderedListOutlined style={{ color: '#6B46C1' }} />}
-              valueStyle={{ color: '#6B46C1', fontSize: 22 }}
-            />
-          </div>
-        </Col>
-        <Col xs={12} sm={6}>
-          <div style={{ background: '#fff', borderRadius: 10, padding: '12px 16px', border: '1px solid #e8f0fe', textAlign: 'center' }}>
-            <Statistic
-              title={<Text style={{ fontSize: 11, color: '#64748b' }}>% Ocupación</Text>}
-              value={occupancyPct}
-              suffix="%"
-              valueStyle={{ color: occupancyPct > 80 ? '#ff4d4f' : '#52c41a', fontSize: 22 }}
-            />
-          </div>
-        </Col>
-        <Col xs={12} sm={6}>
-          <div style={{
-            background: (meta.conflictsCount ?? 0) > 0 ? '#fff2f0' : '#fff',
-            borderRadius: 10, padding: '12px 16px',
-            border: `1px solid ${(meta.conflictsCount ?? 0) > 0 ? '#ffccc7' : '#e8f0fe'}`,
-            textAlign: 'center',
-          }}>
-            <Statistic
-              title={<Text style={{ fontSize: 11, color: '#64748b' }}>Solapamientos</Text>}
-              value={meta.conflictsCount ?? 0}
-              prefix={<AlertOutlined style={{ color: (meta.conflictsCount ?? 0) > 0 ? '#ff4d4f' : '#94a3b8' }} />}
-              valueStyle={{ color: (meta.conflictsCount ?? 0) > 0 ? '#ff4d4f' : '#94a3b8', fontSize: 22 }}
-            />
-          </div>
-        </Col>
-      </Row>
-
-      {/* ── Filters ──────────────────────────────────────────────────────── */}
+      {/* ── Filters + Stats ───────────────────────────────────────────────── */}
       <div style={{
-        background: '#fff', borderRadius: 10, border: '1px solid #e8f0fe',
-        padding: '12px 16px', marginBottom: 16,
-        display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end',
+        background: '#fff', borderRadius: 10,
+        border: '1px solid #e2e8f0', marginBottom: 8,
+        boxShadow: '0 1px 6px rgba(26,58,92,0.06)',
       }}>
-        <div>
-          <Text style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 3 }}>Tipo de recurso</Text>
-          <Select style={{ width: 150 }} allowClear placeholder="Todos" value={resourceType}
-            onChange={v => setResourceType(v)}
+        {/* Filters row */}
+        <div style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', borderBottom: '1px solid #f1f5f9' }}>
+          <Select size="small" style={{ width: 140 }} value={resourceType} onChange={v => setResourceType(v)} allowClear placeholder="Tipo de recurso"
             options={Object.entries(RESOURCE_TYPE_LABEL).map(([v, l]) => ({ value: v, label: l }))} />
-        </div>
-        <div>
-          <Text style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 3 }}>Evento</Text>
-          <Select style={{ width: 220 }} allowClear placeholder="Todos los eventos" value={eventId}
+          <Select size="small" style={{ width: 210 }} allowClear placeholder="Todos los eventos" value={eventId}
             onChange={v => setEventId(v)} showSearch
             filterOption={(input, opt) => String(opt?.label ?? '').toLowerCase().includes(input.toLowerCase())}
             options={events.map((e: any) => ({ value: e.id, label: e.name }))} />
-        </div>
-        <div>
-          <Text style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 3 }}>Estado del evento</Text>
-          <Select style={{ width: 150 }} allowClear placeholder="Todos" value={eventStatus}
+          <Select size="small" style={{ width: 140 }} allowClear placeholder="Estado evento" value={eventStatus}
             onChange={v => setEventStatus(v)}
             options={Object.entries(EVENT_STATUS_LABEL).map(([v, l]) => ({ value: v, label: l }))} />
-        </div>
-        <div>
-          <Text style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 3 }}>Buscar recurso</Text>
-          <Input.Search style={{ width: 180 }} placeholder="Nombre o código…"
+          <Input.Search size="small" style={{ width: 170 }} placeholder="Nombre o código…"
             value={searchInput} onChange={e => setSearchInput(e.target.value)}
             onSearch={v => setResourceSearch(v)} allowClear onClear={() => setResourceSearch('')}
             enterButton={<SearchOutlined />} />
+          {hasFilters && (
+            <Button size="small" icon={<ClearOutlined />} onClick={clearFilters} style={{ color: '#64748b' }}>
+              Limpiar
+            </Button>
+          )}
+          {eventId && (
+            <Button size="small" type="primary" icon={<ShoppingCartOutlined />}
+              style={{ background: NAVY, borderColor: NAVY, marginLeft: 'auto' }}
+              onClick={() => setOrderModalOpen(true)}>
+              Crear Orden
+            </Button>
+          )}
         </div>
-        {hasFilters && <Button icon={<ClearOutlined />} onClick={clearFilters}>Limpiar</Button>}
-        {eventId && (
-          <Button
-            type="primary"
-            icon={<ShoppingCartOutlined />}
-            style={{ background: NAVY, borderColor: NAVY, marginLeft: 'auto' }}
-            onClick={() => setOrderModalOpen(true)}
-          >
-            Crear Orden de Servicio
-          </Button>
-        )}
+
+        {/* Stats + Legend row */}
+        <div style={{ padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 0, flexWrap: 'wrap' }}>
+          {/* Stats chips */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap', flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+              <TeamOutlined style={{ color: NAVY, fontSize: 12 }} />
+              <span style={{ fontSize: 18, fontWeight: 800, color: NAVY, lineHeight: 1 }}>{totalResources}</span>
+              <span style={{ fontSize: 11, color: '#94a3b8' }}>recursos</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+              <UnorderedListOutlined style={{ color: SEL_COLOR, fontSize: 12 }} />
+              <span style={{ fontSize: 18, fontWeight: 800, color: SEL_COLOR, lineHeight: 1 }}>{meta.totalBookings ?? 0}</span>
+              <span style={{ fontSize: 11, color: '#94a3b8' }}>reservas</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+              <span style={{ fontSize: 18, fontWeight: 800, lineHeight: 1, color: occupancyPct > 80 ? '#dc2626' : occupancyPct > 50 ? '#d97706' : '#16a34a' }}>
+                {occupancyPct}%
+              </span>
+              <span style={{ fontSize: 11, color: '#94a3b8' }}>ocupación</span>
+            </div>
+            {conflicts > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#fff2f0', borderRadius: 6, padding: '3px 10px', border: '1px solid #ffccc7' }}>
+                <AlertOutlined style={{ color: '#dc2626', fontSize: 12 }} />
+                <span style={{ fontSize: 15, fontWeight: 800, color: '#dc2626', lineHeight: 1 }}>{conflicts}</span>
+                <span style={{ fontSize: 11, color: '#dc2626' }}>conflicto{conflicts !== 1 ? 's' : ''}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Divider */}
+          <div style={{ width: 1, height: 28, background: '#e2e8f0', margin: '0 16px', flexShrink: 0 }} />
+
+          {/* Legend */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            {Object.entries(PHASE_STYLE).map(([phase, s]) => (
+              <div key={phase} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div style={{ width: 22, height: 9, borderRadius: 3, background: s.background, border: `1.5px ${s.borderStyle} ${s.color}` }} />
+                <span style={{ fontSize: 11, color: '#64748b' }}>{s.label}</span>
+              </div>
+            ))}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <div style={{ width: 22, height: 9, borderRadius: 3, background: '#f6ffed', border: '1.5px solid #52c41a' }} />
+              <span style={{ fontSize: 11, color: '#64748b' }}>Confirmado</span>
+            </div>
+            {selectionMode && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div style={{ width: 22, height: 9, borderRadius: 3, background: 'rgba(107,70,193,0.18)', border: `1.5px solid ${SEL_COLOR}` }} />
+                <span style={{ fontSize: 11, color: SEL_COLOR }}>Selección</span>
+              </div>
+            )}
+            {conflicts > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <WarningOutlined style={{ color: '#dc2626', fontSize: 11 }} />
+                <span style={{ fontSize: 11, color: '#dc2626' }}>Solapamiento</span>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* ── Legend ───────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', gap: 16, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-        {Object.entries(PHASE_STYLE).map(([phase, s]) => (
-          <div key={phase} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 28, height: 12, borderRadius: 3, background: s.background, border: `2px ${s.borderStyle} ${s.color}` }} />
-            <Text style={{ fontSize: 11, color: '#64748b' }}>{s.label}</Text>
-          </div>
-        ))}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{ width: 28, height: 12, borderRadius: 3, background: '#52c41a22', border: '2px solid #52c41a' }} />
-          <Text style={{ fontSize: 11, color: '#64748b' }}>Orden confirmada</Text>
+      {/* ── Selection hint ────────────────────────────────────────────────── */}
+      {selectionMode && (
+        <div style={{
+          background: '#f5f3ff', border: '1px solid #d9d0f5', borderRadius: 8,
+          padding: '8px 14px', marginBottom: 8,
+          display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: SEL_COLOR,
+        }}>
+          <HighlightOutlined />
+          <span><strong>Modo selección:</strong> Clic y arrastra sobre las celdas para seleccionar el rango. Puedes seleccionar varios recursos arrastrando verticalmente.</span>
         </div>
-        {selectionMode && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 28, height: 12, borderRadius: 3, background: 'rgba(107,70,193,0.18)', border: `2px solid ${SEL_COLOR}` }} />
-            <Text style={{ fontSize: 11, color: SEL_COLOR }}>Seleccionado</Text>
-          </div>
-        )}
-        {(meta.conflictsCount ?? 0) > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Badge color="#ff4d4f" />
-            <Text style={{ fontSize: 11, color: '#ff4d4f' }}>Solapamiento detectado</Text>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* ── Calendar grid ────────────────────────────────────────────────── */}
       {isLoading && !data ? (
-        <div style={{ textAlign: 'center', padding: 80 }}><Spin size="large" /></div>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300 }}>
+          <Spin size="large" />
+        </div>
       ) : allDisplayResources.length === 0 ? (
-        <Empty description="No hay recursos para mostrar" style={{ padding: 60 }} />
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
+          <Empty description="No hay recursos para mostrar" />
+        </div>
       ) : (
         <div style={{
-          border: '1px solid #e2e8f0', borderRadius: 12,
+          border: '1px solid #cbd5e1', borderRadius: 12,
           overflow: 'hidden',
-          boxShadow: '0 2px 16px rgba(26,58,92,0.07)',
-          opacity: isFetching ? 0.7 : 1,
+          boxShadow: '0 4px 24px rgba(26,58,92,0.10)',
+          opacity: isFetching ? 0.75 : 1,
           transition: 'opacity 0.2s',
           cursor: selectionMode ? 'crosshair' : 'default',
           userSelect: 'none',
+          flex: 1,
         }}>
-          <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 400px)' }}>
+          <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 310px)' }}>
             <div style={{ minWidth: NAME_W + gridWidth, position: 'relative' }}>
 
               {/* ── Sticky header ── */}
@@ -1036,40 +1031,47 @@ export default function BookingCalendarPage() {
                 const laneCount   = resource.laneCount || 1
                 const rowH        = laneCount * LANE_H
                 const hasBookings = rowBookings.length > 0
+                const rowBg       = rowIdx % 2 === 0 ? '#fff' : '#f8fafc'
+                const conflictRow = resource.hasConflict
 
                 return (
                   <div key={resource.id} style={{
                     display: 'flex',
                     borderBottom: '1px solid #e2e8f0',
                     height: rowH,
-                    background: rowIdx % 2 === 0 ? '#fff' : '#f8fafc',
+                    background: conflictRow ? '#fff8f8' : rowBg,
                     position: 'relative',
                   }}>
                     {/* Sticky resource name */}
                     <div style={{
                       width: NAME_W, minWidth: NAME_W, flexShrink: 0,
                       position: 'sticky', left: 0, zIndex: 10,
-                      background: rowIdx % 2 === 0 ? '#fff' : '#f8fafc',
-                      borderRight: '2px solid #cbd5e1',
-                      padding: '0 12px',
-                      display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2,
+                      background: conflictRow ? '#fff8f8' : rowBg,
+                      borderRight: conflictRow ? '3px solid #ff4d4f' : '2px solid #cbd5e1',
+                      borderLeft: conflictRow ? '3px solid #ff4d4f' : 'none',
+                      padding: '0 10px',
+                      display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 1,
                     }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        {resource.hasConflict && (
-                          <Tooltip title="Este recurso tiene reservas solapadas">
-                            <WarningOutlined style={{ color: '#ff4d4f', fontSize: 13, flexShrink: 0 }} />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        {conflictRow ? (
+                          <Tooltip title="Tiene reservas solapadas">
+                            <WarningOutlined style={{ color: '#ff4d4f', fontSize: 12, flexShrink: 0 }} />
                           </Tooltip>
+                        ) : hasBookings ? (
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', flexShrink: 0, display: 'inline-block' }} />
+                        ) : (
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#d1d5db', flexShrink: 0, display: 'inline-block' }} />
                         )}
-                        {!hasBookings && (
-                          <Tooltip title="Sin reservas en este período">
-                            <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#d1d5db', flexShrink: 0, display: 'inline-block' }} />
-                          </Tooltip>
-                        )}
-                        <Text style={{ fontSize: 12, color: hasBookings ? NAVY : '#94a3b8', fontWeight: hasBookings ? 600 : 400 }} ellipsis title={resource.name}>
+                        <Text style={{
+                          fontSize: 12, fontWeight: hasBookings ? 600 : 400,
+                          color: conflictRow ? '#c0392b' : hasBookings ? NAVY : '#94a3b8',
+                        }} ellipsis title={resource.name}>
                           {resource.name}
                         </Text>
                       </div>
-                      <Text style={{ fontSize: 10, color: '#94a3b8' }}>{resource.code}</Text>
+                      <div style={{ paddingLeft: 11 }}>
+                        <Text style={{ fontSize: 10, color: '#b0b8c8' }}>{resource.code}</Text>
+                      </div>
                     </div>
 
                     {/* Day cells + booking bars */}
