@@ -57,7 +57,8 @@ async function notifyConflicts(savedSpaceId: string, eventId: string, tenantId: 
     // executive field stores the user ID (UUID) when set via the admin form selector
     const executiveMap = new Map<string, { eventId: string; eventName: string; eventCode: string }>()
     const addExec = (userId: string | null, ev: { id: string; name: string; code: string }) => {
-      if (userId && !executiveMap.has(userId)) executiveMap.set(userId, ev)
+      if (userId && !executiveMap.has(userId))
+        executiveMap.set(userId, { eventId: ev.id, eventName: ev.name, eventCode: ev.code })
     }
     addExec(currentEvent.executive, currentEvent)
     for (const c of conflicts) {
