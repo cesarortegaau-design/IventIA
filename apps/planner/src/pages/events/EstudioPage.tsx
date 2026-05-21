@@ -3,7 +3,7 @@
  * Estudio del evento: Moodboard · Arte · Banner · IA Diseñadora (con visión)
  * Branding persiste en localStorage: iventia-branding-{eventId}
  */
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import { useParams, useOutletContext } from 'react-router-dom'
 import { usePlannerStore } from '../../hooks/usePlannerStore'
 import {
@@ -512,17 +512,6 @@ export default function EstudioPage() {
     eventId, 'branding', { ...DEFAULT_BRANDING }, `iventia-branding-${eventId}`,
   )
 
-  // Debug lifecycle — remove once issue is found
-  const [renderCount, setRenderCount] = useState(0)
-  useEffect(() => {
-    setRenderCount(c => c + 1)
-    console.error('[EstudioPage] MOUNTED', { eventId, hasEvent: !!event })
-    return () => console.error('[EstudioPage] UNMOUNTED')
-  }, [])
-  useEffect(() => {
-    console.error('[EstudioPage] render #' + renderCount, { syncStatus, mood: branding?.mood, ready: !!branding })
-  })
-
   const [activeTab, setActiveTab] = useState<'moodboard' | 'plantillas' | 'arte' | 'banner' | 'ia'>('moodboard')
   const [aiLoading, setAiLoading] = useState(false)
   const [aiResult, setAiResult] = useState<string | null>(null)
@@ -669,11 +658,7 @@ ${aiNotes ? `\nContexto adicional: ${aiNotes}` : ''}`,
   )
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#F8F7FF' }}>
-      {/* DEBUG — remove after fix */}
-      <div style={{ background: '#DC2626', color: '#fff', padding: '6px 16px', fontSize: 12, fontWeight: 700, flexShrink: 0, zIndex: 9999 }}>
-        DEBUG: EstudioPage render #{renderCount} | eventId={eventId} | syncStatus={syncStatus} | mood={JSON.stringify(branding?.mood)} | {new Date().toISOString()}
-      </div>
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#F8F7FF' }}>
       {/* Header */}
       <div style={{ background: '#fff', borderBottom: '1px solid #EDE9FE', padding: '14px 24px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 4px rgba(124,58,237,0.06)' }}>
         <div>
