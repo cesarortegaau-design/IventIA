@@ -1,6 +1,6 @@
 -- AddColumn: executive_user_id and coordinator_user_id on events
-ALTER TABLE "events" ADD COLUMN "executive_user_id" UUID;
-ALTER TABLE "events" ADD COLUMN "coordinator_user_id" UUID;
+ALTER TABLE "events" ADD COLUMN IF NOT EXISTS "executive_user_id" TEXT;
+ALTER TABLE "events" ADD COLUMN IF NOT EXISTS "coordinator_user_id" TEXT;
 
 -- AddForeignKey
 ALTER TABLE "events" ADD CONSTRAINT "events_executive_user_id_fkey"
