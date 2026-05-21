@@ -228,11 +228,14 @@ function extractYouTubeId(url: string): string | null {
 
 function LinksWidgetRO({ config }: { config: any }) {
   const url: string = config.url || ''
+  const [iframeError, setIframeError] = useState(false)
+
   if (!url) return (
     <div style={{ width: '100%', height: '100%', padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5F3FF', borderRadius: 12 }}>
       <LinkOutlined style={{ fontSize: 32, color: '#DDD6FE' }} />
     </div>
   )
+
   const ytId = extractYouTubeId(url)
   if (ytId) {
     return (
@@ -247,23 +250,55 @@ function LinksWidgetRO({ config }: { config: any }) {
       </div>
     )
   }
-  let displayUrl = url
-  try { displayUrl = new URL(url).hostname } catch {}
+
+  let hostname = url
+  try { hostname = new URL(url).hostname } catch {}
+  const faviconUrl = `https://www.google.com/s2/favicons?domain=${hostname}&sz=32`
+
+  // Try iframe preview — many sites block with X-Frame-Options, so we fall back to link card
+  if (!iframeError) {
+    return (
+      <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 12, overflow: 'hidden', border: '1px solid #EDE9FE' }}>
+        <iframe
+          src={url}
+          style={{ flex: 1, border: 'none', display: 'block' }}
+          title="Link preview"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+          onError={() => setIframeError(true)}
+          onLoad={(e) => {
+            try {
+              // If the iframe got blocked (blank/error), fall back to card
+              const iframe = e.currentTarget as HTMLIFrameElement
+              if (!iframe.contentDocument && !iframe.contentWindow?.location.href) setIframeError(true)
+            } catch { setIframeError(true) }
+          }}
+        />
+        <a href={url} target="_blank" rel="noreferrer"
+          style={{ padding: '6px 12px', background: '#F5F3FF', borderTop: '1px solid #EDE9FE', display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none', flexShrink: 0 }}>
+          <img src={faviconUrl} alt="" style={{ width: 14, height: 14, borderRadius: 2 }} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+          <span style={{ fontSize: 11, color: '#7C3AED', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{hostname}</span>
+          <EyeOutlined style={{ color: '#7C3AED', fontSize: 11, flexShrink: 0 }} />
+        </a>
+      </div>
+    )
+  }
+
+  // Fallback link card (when iframe is blocked)
   return (
-    <div style={{ width: '100%', height: '100%', padding: 16, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 10, background: '#F5F3FF', borderRadius: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <div style={{ width: 36, height: 36, borderRadius: 8, background: '#7C3AED', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <LinkOutlined style={{ color: '#fff', fontSize: 16 }} />
-        </div>
+    <div style={{ width: '100%', height: '100%', padding: 16, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 12, background: '#F5F3FF', borderRadius: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <img src={faviconUrl} alt="" style={{ width: 28, height: 28, borderRadius: 6, background: '#EDE9FE', padding: 4 }}
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#7C3AED', marginBottom: 2 }}>Enlace</div>
-          <div style={{ fontSize: 12, color: '#555', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayUrl}</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#7C3AED', marginBottom: 2 }}>Enlace externo</div>
+          <div style={{ fontSize: 12, color: '#555', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{hostname}</div>
         </div>
       </div>
-      <Button size="small" type="primary" icon={<EyeOutlined />} href={url} target="_blank" rel="noreferrer"
-        style={{ background: '#7C3AED', borderColor: '#7C3AED', borderRadius: 8, fontSize: 11, alignSelf: 'flex-start' }}>
-        Abrir
-      </Button>
+      <div style={{ fontSize: 11, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', background: '#EDE9FE', borderRadius: 6, padding: '4px 8px' }}>{url}</div>
+      <a href={url} target="_blank" rel="noreferrer"
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#7C3AED', color: '#fff', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, textDecoration: 'none', alignSelf: 'flex-start' }}>
+        <EyeOutlined /> Abrir enlace
+      </a>
     </div>
   )
 }

@@ -40,6 +40,7 @@ export async function publishPlannerPortal(req: Request, res: Response, next: Ne
 
 // GET /api/v1/portal/planner-snapshot/:eventId
 // Portal JWT required (via authenticatePortal middleware on portal.routes)
+// Serves LIVE data from PlannerStore + lienzoData so no re-publish needed.
 export async function getPortalSnapshot(req: Request, res: Response, next: NextFunction) {
   try {
     const { portalUserId } = req.portalUser!
@@ -51,12 +52,47 @@ export async function getPortalSnapshot(req: Request, res: Response, next: NextF
     })
     if (!access) throw new AppError(403, 'FORBIDDEN', 'No tienes acceso a este evento')
 
-    const snapshot = await prisma.plannerPortalSnapshot.findUnique({
-      where: { eventId },
+    // Fetch event data + lienzo in one query
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        id: true, name: true, eventType: true, code: true,
+        venueLocation: true, expectedAttendance: true, description: true,
+        eventStart: true, lienzoData: true,
+        client: { select: { id: true, firstName: true, lastName: true, companyName: true, email: true, phone: true } },
+      },
     })
-    if (!snapshot) throw new AppError(404, 'NOT_FOUND', 'No hay contenido publicado para este evento')
+    if (!event) throw new AppError(404, 'NOT_FOUND', 'Evento no encontrado')
 
-    res.json({ success: true, data: snapshot.data })
+    // Fetch all planner stores for this event
+    const stores = await prisma.plannerStore.findMany({ where: { eventId } })
+    const storeMap: Record<string, any> = {}
+    for (const s of stores) storeMap[s.storeKey] = s.data
+
+    const lienzoRaw = event.lienzoData as any
+    const lienzo = lienzoRaw
+      ? { ...(typeof lienzoRaw === 'object' ? lienzoRaw : {}), suppliers: storeMap.suppliers?.suppliers ?? storeMap.suppliers ?? [] }
+      : null
+
+    const data = {
+      branding: storeMap.branding ?? null,
+      tareas: storeMap.tareas ?? null,
+      timeline: storeMap.timeline ?? null,
+      presupuesto: storeMap.presupuesto ?? null,
+      lienzo,
+      eventSnapshot: {
+        name: event.name,
+        eventStart: event.eventStart,
+        eventType: event.eventType,
+        code: event.code,
+        venueLocation: event.venueLocation,
+        expectedAttendance: event.expectedAttendance,
+        description: event.description,
+        client: event.client,
+      },
+    }
+
+    res.json({ success: true, data })
   } catch (err) {
     next(err)
   }
