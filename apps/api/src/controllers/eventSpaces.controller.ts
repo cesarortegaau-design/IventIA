@@ -11,13 +11,20 @@ const ADMIN_URL = 'https://ivent-ia-admin.vercel.app'
 
 // Fire-and-forget: detects conflicts for the saved space and notifies executives via WhatsApp
 async function notifyConflicts(savedSpaceId: string, eventId: string, tenantId: string) {
-  if (!isWhatsAppConfigured()) return
+  const tag = `[notifyConflicts:${savedSpaceId.slice(0, 8)}]`
+  if (!isWhatsAppConfigured()) {
+    console.warn(`${tag} WhatsApp not configured — skipping`)
+    return
+  }
   try {
     const saved = await prisma.eventSpace.findUnique({
       where: { id: savedSpaceId },
       include: { resource: { select: { id: true, name: true, code: true } } },
     })
-    if (!saved) return
+    if (!saved) {
+      console.warn(`${tag} EventSpace not found`)
+      return
+    }
 
     // Find all EventSpaces on the same resource that overlap (excluding itself)
     const conflicts = await prisma.eventSpace.findMany({
@@ -31,6 +38,7 @@ async function notifyConflicts(savedSpaceId: string, eventId: string, tenantId: 
         event: { select: { id: true, name: true, code: true, executive: true } },
       },
     })
+    console.log(`${tag} resource="${saved.resource.name}" conflicts found: ${conflicts.length}`)
     if (conflicts.length === 0) return
 
     // Gather current event info
@@ -38,7 +46,11 @@ async function notifyConflicts(savedSpaceId: string, eventId: string, tenantId: 
       where: { id: eventId, tenantId },
       select: { id: true, name: true, code: true, executive: true },
     })
-    if (!currentEvent) return
+    if (!currentEvent) {
+      console.warn(`${tag} current event not found (id=${eventId})`)
+      return
+    }
+    console.log(`${tag} currentEvent="${currentEvent.name}" executive="${currentEvent.executive ?? 'null'}"`)
 
     // Collect all unique executive user IDs across current + conflicting events
     // executive field stores the user ID (UUID) when set via the admin form selector
@@ -47,9 +59,15 @@ async function notifyConflicts(savedSpaceId: string, eventId: string, tenantId: 
       if (userId && !executiveMap.has(userId)) executiveMap.set(userId, ev)
     }
     addExec(currentEvent.executive, currentEvent)
-    for (const c of conflicts) addExec(c.event.executive, c.event)
+    for (const c of conflicts) {
+      console.log(`${tag} conflict event="${c.event.name}" executive="${c.event.executive ?? 'null'}"`)
+      addExec(c.event.executive, c.event)
+    }
 
-    if (executiveMap.size === 0) return
+    if (executiveMap.size === 0) {
+      console.warn(`${tag} no executive user IDs found on any involved event — no WhatsApp sent`)
+      return
+    }
 
     // Build conflict summary lines
     const fmt = (d: Date) => d.toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' })
@@ -62,17 +80,23 @@ async function notifyConflicts(savedSpaceId: string, eventId: string, tenantId: 
 
     // Lookup phones and send
     const userIds = Array.from(executiveMap.keys())
+    console.log(`${tag} looking up ${userIds.length} user(s):`, userIds)
     const users = await prisma.user.findMany({
       where: { id: { in: userIds }, isActive: true },
       select: { id: true, phone: true },
     })
+    console.log(`${tag} users found: ${users.length} — with phone: ${users.filter(u => u.phone).length}`)
 
     await Promise.allSettled(users.map(async u => {
-      if (!u.phone) return
+      if (!u.phone) {
+        console.warn(`${tag} user ${u.id} has no phone — skipping`)
+        return
+      }
       const ev = executiveMap.get(u.id)!
       const message =
         `El espacio *${saved.resource.name}* (${savedPhase}) del evento *${currentEvent.name}* (#${currentEvent.code}) tiene conflicto:\n\n` +
         conflictLines + `\n\nRango: ${savedRange}`
+      console.log(`${tag} sending WhatsApp to user ${u.id} (${u.phone})`)
       await sendGenericNotification(u.phone, {
         title: '⚠️ Conflicto de espacio detectado',
         message,
@@ -81,7 +105,7 @@ async function notifyConflicts(savedSpaceId: string, eventId: string, tenantId: 
       })
     }))
   } catch (err) {
-    console.error('[notifyConflicts] error:', err)
+    console.error(`${tag} error:`, err)
   }
 }
 
