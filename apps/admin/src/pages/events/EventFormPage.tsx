@@ -78,6 +78,8 @@ export default function EventFormPage() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['events'] })
       queryClient.invalidateQueries({ queryKey: ['event', data.data.id] })
+      queryClient.invalidateQueries({ queryKey: ['event-header', data.data.id] })
+      queryClient.invalidateQueries({ queryKey: ['planner-event-header', data.data.id] })
       message.success(isEdit ? 'Evento actualizado' : 'Evento creado')
       navigate(`/eventos/${data.data.id}`)
     },
