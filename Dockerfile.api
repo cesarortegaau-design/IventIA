@@ -45,4 +45,4 @@ RUN mkdir -p /app/uploads/resources /app/uploads/chat
 
 EXPOSE 3001
 
-CMD ["sh", "-c", "node_modules/.bin/prisma migrate deploy --schema /app/packages/prisma/schema.prisma 2>&1 && node /app/apps/api/dist/index.js"]
+CMD ["sh", "-c", "node_modules/.bin/prisma migrate resolve --rolled-back 20260521200000_add_executive_coordinator_user_fk --schema /app/packages/prisma/schema.prisma 2>/dev/null || true && node_modules/.bin/prisma migrate deploy --schema /app/packages/prisma/schema.prisma 2>&1 && node /app/apps/api/dist/index.js"]
