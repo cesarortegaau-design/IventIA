@@ -312,7 +312,7 @@ export default function EventDetailPage() {
           endTime: b.endTime ?? '',
           createdAt: b.createdAt ?? '',
         }))
-        items.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+        items.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
         map[space.id] = { count: conflicting.length, ownRank: rankById[space.id] ?? 1, items }
       }
     }
