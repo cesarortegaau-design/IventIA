@@ -5,6 +5,8 @@ import { AppError } from '../middleware/errorHandler'
 import { auditService } from '../services/audit.service'
 import { getUserOrgIds } from '../middleware/departmentScope'
 import { checkApprovalGate } from '../services/approvalGate.service'
+import { sendGenericNotification, isWhatsAppConfigured } from '../services/whatsapp.service'
+import { PRIVILEGES } from '@iventia/shared'
 
 const createEventSchema = z.object({
   name: z.string().min(1).max(300),
@@ -278,15 +280,139 @@ export async function updateEvent(req: Request, res: Response, next: NextFunctio
   }
 }
 
+// Per-status privilege requirements for status transitions
+const STATUS_PRIVILEGE: Record<string, string> = {
+  CONFIRMED:    PRIVILEGES.EVENT_CONFIRM,
+  IN_EXECUTION: PRIVILEGES.EVENT_EXECUTE,
+  CLOSED:       PRIVILEGES.EVENT_CLOSE,
+  CANCELLED:    PRIVILEGES.EVENT_CANCEL,
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  CONFIRMED:    'Confirmar evento',
+  IN_EXECUTION: 'Pasar a ejecución',
+  CLOSED:       'Cerrar evento',
+  CANCELLED:    'Cancelar evento',
+}
+
+async function userHasPrivilege(tenantId: string, userId: string, privilegeKey: string): Promise<boolean> {
+  const user = await prisma.user.findFirst({
+    where: { id: userId, tenantId },
+    select: { role: true, profile: { select: { privileges: { where: { privilegeKey }, select: { id: true } } } } },
+  })
+  if (!user) return false
+  if (user.role === 'ADMIN') return true
+  return (user.profile?.privileges.length ?? 0) > 0
+}
+
+// Fire-and-forget: on event confirmation, scan all its spaces for conflicts
+// and notify executives of conflicting events via WhatsApp
+async function notifyConflictsOnConfirmation(eventId: string, tenantId: string) {
+  if (!isWhatsAppConfigured()) return
+  try {
+    const confirmedEvent = await prisma.event.findFirst({
+      where: { id: eventId, tenantId },
+      select: { id: true, name: true, code: true },
+    })
+    if (!confirmedEvent) return
+
+    const spaces = await prisma.eventSpace.findMany({
+      where: { eventId },
+      include: { resource: { select: { id: true, name: true } } },
+    })
+    if (spaces.length === 0) return
+
+    const fmt = (d: Date) => d.toLocaleString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
+
+    // For each space, find conflicting reservations from OTHER events
+    const executiveMap = new Map<string, { eventId: string; eventName: string; spaceSummaries: string[] }>()
+
+    for (const space of spaces) {
+      const conflicts = await prisma.eventSpace.findMany({
+        where: {
+          id: { not: space.id },
+          resourceId: space.resourceId,
+          startTime: { lt: space.endTime },
+          endTime: { gt: space.startTime },
+          eventId: { not: eventId },
+        },
+        include: {
+          event: { select: { id: true, name: true, code: true, executive: true } },
+        },
+        orderBy: { startTime: 'asc' },
+      })
+
+      for (const c of conflicts) {
+        if (!c.event.executive) continue
+        const existing = executiveMap.get(c.event.executive)
+        const spaceRow =
+          `🏢 *${space.resource.name}* vs *${c.event.name}* (#${c.event.code})\n` +
+          `   📅 Inicio conflicto:  ${fmt(c.startTime)}\n` +
+          `   📅 Fin conflicto:     ${fmt(c.endTime)}\n` +
+          `   🕐 Reserva creada:    ${fmt(c.createdAt)}`
+        if (existing) {
+          existing.spaceSummaries.push(spaceRow)
+        } else {
+          executiveMap.set(c.event.executive, {
+            eventId: c.event.id,
+            eventName: c.event.name,
+            spaceSummaries: [spaceRow],
+          })
+        }
+      }
+    }
+
+    if (executiveMap.size === 0) return
+
+    const userIds = Array.from(executiveMap.keys())
+    const users = await prisma.user.findMany({
+      where: { id: { in: userIds }, isActive: true },
+      select: { id: true, phone: true },
+    })
+
+    await Promise.allSettled(users.map(async u => {
+      if (!u.phone) return
+      const info = executiveMap.get(u.id)!
+      const rows = info.spaceSummaries.join('\n\n')
+      const message =
+        `⚠️ El evento *${confirmedEvent.name}* (#${confirmedEvent.code}) fue *CONFIRMADO* y tiene espacios en conflicto con reservas de tu evento *${info.eventName}*:\n\n` +
+        `─────────────────────\n` +
+        rows + `\n─────────────────────\n\n` +
+        `Por favor revisa y coordina las reservas afectadas.`
+      await sendGenericNotification(u.phone, {
+        title: '🔔 Evento confirmado con conflictos',
+        message,
+        actionUrl: `https://ivent-ia-admin.vercel.app/eventos/${info.eventId}`,
+        actionText: 'Ver evento afectado',
+      })
+    }))
+  } catch (err) {
+    console.error('[notifyConflictsOnConfirmation] error:', err)
+  }
+}
+
 export async function updateEventStatus(req: Request, res: Response, next: NextFunction) {
   try {
     const { status } = z.object({ status: z.string() }).parse(req.body)
+    const tenantId = req.user!.tenantId
+    const userId = req.user!.userId
+
     const event = await prisma.event.findFirst({
-      where: { id: req.params.id, tenantId: req.user!.tenantId },
+      where: { id: req.params.id, tenantId },
     })
     if (!event) throw new AppError(404, 'EVENT_NOT_FOUND', 'Event not found')
 
-    const gate = await checkApprovalGate(req.user!.tenantId, req.user!.userId, 'EVENT', req.params.id, status)
+    // Enforce per-status privilege
+    const requiredPrivilege = STATUS_PRIVILEGE[status]
+    if (requiredPrivilege) {
+      const allowed = await userHasPrivilege(tenantId, userId, requiredPrivilege)
+      if (!allowed) {
+        throw new AppError(403, 'FORBIDDEN',
+          `No tienes el privilegio necesario para "${STATUS_LABEL[status] ?? status}". Contacta a un administrador.`)
+      }
+    }
+
+    const gate = await checkApprovalGate(tenantId, userId, 'EVENT', req.params.id, status)
     if (gate.blocked) throw new AppError(422, 'APPROVAL_REQUIRED', gate.message)
 
     const updated = await prisma.event.update({
@@ -294,10 +420,15 @@ export async function updateEventStatus(req: Request, res: Response, next: NextF
       data: { status: status as any },
     })
 
-    await auditService.log(req.user!.tenantId, req.user!.userId, 'Event', req.params.id, 'UPDATE',
+    await auditService.log(tenantId, userId, 'Event', req.params.id, 'UPDATE',
       { status: event.status },
       { status: updated.status },
       req?.ip)
+
+    // On confirmation, notify executives of conflicting spaces
+    if (status === 'CONFIRMED') {
+      notifyConflictsOnConfirmation(req.params.id, tenantId)
+    }
 
     res.json({ success: true, data: updated })
   } catch (err) {

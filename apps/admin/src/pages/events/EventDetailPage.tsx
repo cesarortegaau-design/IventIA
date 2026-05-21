@@ -41,6 +41,8 @@ import TournamentTab from './TournamentTab'
 import { T } from '../../styles/tokens'
 import ApprovalPanel from '../../components/ApprovalPanel'
 import { approvalFlowsApi } from '../../api/approvalFlows'
+import { useAuthStore } from '../../stores/authStore'
+import { PRIVILEGES } from '@iventia/shared'
 
 const { Text } = Typography
 
@@ -103,6 +105,8 @@ export default function EventDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
+  const hasPrivilege = useAuthStore(s => s.hasPrivilege)
+  const canConfirm = hasPrivilege(PRIVILEGES.EVENT_CONFIRM)
 
   const activeTab = searchParams.get('tab') ?? 'resumen'
   const switchTab = (tab: string) => setSearchParams({ tab }, { replace: true })
@@ -138,6 +142,10 @@ export default function EventDetailPage() {
   const updateStatusMutation = useMutation({
     mutationFn: (status: string) => eventsApi.updateStatus(id!, status),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['event', id] }); message.success('Estado actualizado') },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error?.message ?? 'Error al actualizar el estado'
+      message.error(msg)
+    },
   })
 
   const generateCodesMutation = useMutation({
@@ -701,13 +709,19 @@ export default function EventDetailPage() {
             <button style={BTN_SECONDARY} onClick={() => navigate(`/eventos/${id}/reporte`)}>
               <BarChartOutlined style={{ marginRight: 5 }} />Resumen
             </button>
-            <Select
-              value={event.status}
-              onChange={(v) => updateStatusMutation.mutate(v)}
-              loading={updateStatusMutation.isPending}
-              style={{ width: 160 }}
-              options={Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }))}
-            />
+            <Tooltip title={!canConfirm ? 'No tienes el privilegio "Confirmar evento"' : undefined}>
+              <Select
+                value={event.status}
+                onChange={(v) => updateStatusMutation.mutate(v)}
+                loading={updateStatusMutation.isPending}
+                style={{ width: 160 }}
+                options={Object.entries(STATUS_LABELS).map(([value, label]) => ({
+                  value,
+                  label,
+                  disabled: value === 'CONFIRMED' && !canConfirm,
+                }))}
+              />
+            </Tooltip>
             <button style={BTN_PRIMARY} onClick={() => navigate(`/eventos/${id}/editar`)}>
               Editar
             </button>

@@ -45,7 +45,7 @@ router.post('/', requirePrivilege(PRIVILEGES.EVENT_CREATE), createEvent)
 router.get('/:id', requirePrivilege(PRIVILEGES.EVENT_VIEW), getEvent)
 router.get('/:id/header', requirePrivilege(PRIVILEGES.EVENT_VIEW), getEventHeader)
 router.put('/:id', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), updateEvent)
-router.patch('/:id/status', requirePrivilege(PRIVILEGES.EVENT_CONFIRM), updateEventStatus)
+router.patch('/:id/status', requirePrivilege(PRIVILEGES.EVENT_VIEW), updateEventStatus)
 
 // Nested orders
 router.get('/:id/orders', requirePrivilege(PRIVILEGES.EVENT_VIEW), getEventOrders)
