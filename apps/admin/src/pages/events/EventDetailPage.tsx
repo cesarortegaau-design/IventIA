@@ -285,7 +285,7 @@ export default function EventDetailPage() {
   })
 
   const overlapMap = useMemo(() => {
-    const map: Record<string, { count: number; ownRank: number; items: { label: string; createdAt: string }[] }> = {}
+    const map: Record<string, { count: number; ownRank: number; items: { label: string; startTime: string; endTime: string; createdAt: string }[] }> = {}
     if (!calendarData?.data) return map
     const allBookings: any[] = calendarData.data.bookings ?? []
     const rankById: Record<string, number> = {}
@@ -298,14 +298,14 @@ export default function EventDetailPage() {
         new Date(b.startTime) < spaceEnd && new Date(b.endTime) > spaceStart
       )
       if (conflicting.length > 0) {
-        map[space.id] = {
-          count: conflicting.length,
-          ownRank: rankById[space.id] ?? 1,
-          items: conflicting.map((b: any) => ({
-            label: b.event ? `${b.event.code} – ${b.event.name}` : `OS ${b.order?.orderNumber ?? ''}`,
-            createdAt: b.createdAt ?? '',
-          })),
-        }
+        const items = conflicting.map((b: any) => ({
+          label: b.event ? `${b.event.code} – ${b.event.name}` : `OS ${b.order?.orderNumber ?? ''}`,
+          startTime: b.startTime ?? '',
+          endTime: b.endTime ?? '',
+          createdAt: b.createdAt ?? '',
+        }))
+        items.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+        map[space.id] = { count: conflicting.length, ownRank: rankById[space.id] ?? 1, items }
       }
     }
     return map
@@ -836,14 +836,24 @@ export default function EventDetailPage() {
                     if (!overlap) return <Tag color="green">Sin conflictos</Tag>
                     return (
                       <Tooltip
-                        overlayStyle={{ maxWidth: 360 }}
+                        overlayStyle={{ maxWidth: 420 }}
+                        overlayInnerStyle={{ padding: '12px 14px' }}
                         title={
                           <div>
-                            <div style={{ fontWeight: 500, marginBottom: 8 }}>Solapamiento con:</div>
+                            <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10, borderBottom: '1px solid rgba(255,255,255,0.2)', paddingBottom: 6 }}>
+                              ⚠️ Solapamiento con {overlap.count} reserva{overlap.count > 1 ? 's' : ''}
+                            </div>
                             {overlap.items.map((item, i) => (
-                              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 4 }}>
-                                <span>• {item.label}</span>
-                                <span style={{ opacity: 0.65 }}>{item.createdAt ? dayjs(item.createdAt).format('DD/MM/YY HH:mm') : '—'}</span>
+                              <div key={i} style={{ marginBottom: i < overlap.items.length - 1 ? 10 : 0, padding: '6px 8px', background: 'rgba(255,255,255,0.08)', borderRadius: 6 }}>
+                                <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 4 }}>{item.label}</div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2px 8px', fontSize: 11, opacity: 0.85 }}>
+                                  <span style={{ opacity: 0.6 }}>Inicio</span>
+                                  <span>{item.startTime ? dayjs(item.startTime).format('DD MMM YYYY HH:mm') : '—'}</span>
+                                  <span style={{ opacity: 0.6 }}>Fin</span>
+                                  <span>{item.endTime ? dayjs(item.endTime).format('DD MMM YYYY HH:mm') : '—'}</span>
+                                  <span style={{ opacity: 0.6 }}>Creada</span>
+                                  <span>{item.createdAt ? dayjs(item.createdAt).format('DD MMM YYYY HH:mm') : '—'}</span>
+                                </div>
                               </div>
                             ))}
                           </div>
