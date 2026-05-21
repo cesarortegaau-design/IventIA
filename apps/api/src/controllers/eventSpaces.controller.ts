@@ -230,6 +230,146 @@ export async function deleteEventSpace(req: Request, res: Response, next: NextFu
   } catch (err) { next(err) }
 }
 
+/**
+ * Diagnostic endpoint — runs the full conflict-notification pipeline synchronously
+ * and returns a detailed report WITHOUT sending WhatsApp (dry=true, default) or
+ * actually sending it (dry=false via ?send=true query param).
+ *
+ * GET /api/v1/events/:eventId/spaces/:spaceId/notify-check
+ * GET /api/v1/events/:eventId/spaces/:spaceId/notify-check?send=true
+ */
+export async function checkNotifyConflicts(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { eventId, spaceId } = req.params
+    const tenantId = req.user!.tenantId
+    const doSend = req.query.send === 'true'
+
+    const report: Record<string, unknown> = {
+      spaceId,
+      eventId,
+      tenantId,
+      whatsappConfigured: isWhatsAppConfigured(),
+      send: doSend,
+    }
+
+    const saved = await prisma.eventSpace.findUnique({
+      where: { id: spaceId },
+      include: { resource: { select: { id: true, name: true, code: true } } },
+    })
+    if (!saved) return res.status(404).json({ success: false, error: 'EventSpace not found' })
+    report.resource = saved.resource.name
+    report.phase = saved.phase
+    report.startTime = saved.startTime
+    report.endTime = saved.endTime
+
+    const conflicts = await prisma.eventSpace.findMany({
+      where: {
+        id: { not: spaceId },
+        resourceId: saved.resourceId,
+        startTime: { lt: saved.endTime },
+        endTime: { gt: saved.startTime },
+      },
+      include: {
+        event: { select: { id: true, name: true, code: true, executive: true } },
+      },
+    })
+    report.conflictsFound = conflicts.length
+    report.conflictEvents = conflicts.map(c => ({
+      eventId: c.event.id,
+      name: c.event.name,
+      code: c.event.code,
+      executive: c.event.executive,
+      startTime: c.startTime,
+      endTime: c.endTime,
+    }))
+
+    const currentEvent = await prisma.event.findFirst({
+      where: { id: eventId, tenantId },
+      select: { id: true, name: true, code: true, executive: true },
+    })
+    report.currentEvent = currentEvent
+      ? { name: currentEvent.name, code: currentEvent.code, executive: currentEvent.executive }
+      : null
+
+    if (!currentEvent) {
+      report.outcome = 'ABORT: current event not found'
+      return res.json({ success: true, report })
+    }
+
+    const executiveMap = new Map<string, string>()
+    const addExec = (userId: string | null, label: string) => {
+      if (userId) executiveMap.set(userId, label)
+    }
+    addExec(currentEvent.executive, `current event (${currentEvent.name})`)
+    for (const c of conflicts) addExec(c.event.executive, `conflict event (${c.event.name})`)
+
+    report.executiveCandidates = Array.from(executiveMap.entries()).map(([id, src]) => ({ id, src }))
+
+    if (executiveMap.size === 0) {
+      report.outcome = 'ABORT: no executive user IDs on any involved event (field may contain free text, not UUID)'
+      return res.json({ success: true, report })
+    }
+
+    const userIds = Array.from(executiveMap.keys())
+    const users = await prisma.user.findMany({
+      where: { id: { in: userIds }, isActive: true },
+      select: { id: true, firstName: true, lastName: true, phone: true, isActive: true },
+    })
+    report.usersFound = users.map(u => ({
+      id: u.id,
+      name: `${u.firstName} ${u.lastName}`,
+      phone: u.phone ?? null,
+      isActive: u.isActive,
+    }))
+    report.usersWithPhone = users.filter(u => u.phone).length
+
+    if (users.filter(u => u.phone).length === 0) {
+      report.outcome = 'ABORT: no users found with a phone number'
+      return res.json({ success: true, report })
+    }
+
+    if (!doSend) {
+      report.outcome = 'DRY RUN — would send to: ' + users.filter(u => u.phone).map(u => u.phone).join(', ')
+      return res.json({ success: true, report })
+    }
+
+    // Actually send
+    if (!isWhatsAppConfigured()) {
+      report.outcome = 'ABORT: WhatsApp env vars not configured'
+      return res.json({ success: true, report })
+    }
+
+    const fmt = (d: Date) => d.toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' })
+    const conflictLines = conflicts.map(c =>
+      `• *${c.event.name}* (#${c.event.code}): ${fmt(c.startTime)} – ${fmt(c.endTime)}`
+    ).join('\n')
+    const savedPhase = PHASE_LABEL[saved.phase] ?? saved.phase
+    const message =
+      `El espacio *${saved.resource.name}* (${savedPhase}) del evento *${currentEvent.name}* (#${currentEvent.code}) tiene conflicto:\n\n` +
+      conflictLines + `\n\nRango: ${fmt(saved.startTime)} – ${fmt(saved.endTime)}`
+
+    const sendResults = await Promise.allSettled(
+      users.filter(u => u.phone).map(async u => {
+        await sendGenericNotification(u.phone!, {
+          title: '⚠️ Conflicto de espacio detectado',
+          message,
+          actionUrl: `${ADMIN_URL}/eventos/${eventId}`,
+          actionText: 'Ver evento',
+        })
+        return u.phone
+      })
+    )
+    report.sendResults = sendResults.map((r, i) => ({
+      phone: users.filter(u => u.phone)[i]?.phone,
+      status: r.status,
+      error: r.status === 'rejected' ? String((r as PromiseRejectedResult).reason) : undefined,
+    }))
+    report.outcome = 'SENT'
+
+    res.json({ success: true, report })
+  } catch (err) { next(err) }
+}
+
 export async function getEventSpaceAudit(req: Request, res: Response, next: NextFunction) {
   try {
     const { eventId, spaceId } = req.params

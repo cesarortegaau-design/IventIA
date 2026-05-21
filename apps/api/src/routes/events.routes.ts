@@ -5,7 +5,7 @@ import { requirePrivilege } from '../middleware/authorize'
 import { PRIVILEGES } from '@iventia/shared'
 import { listEvents, getEvent, getEventHeader, createEvent, updateEvent, updateEventStatus, getEventOrders } from '../controllers/events.controller'
 import { createOrder } from '../controllers/orders.controller'
-import { listEventSpaces, createEventSpace, updateEventSpace, deleteEventSpace, getEventSpaceAudit } from '../controllers/eventSpaces.controller'
+import { listEventSpaces, createEventSpace, updateEventSpace, deleteEventSpace, getEventSpaceAudit, checkNotifyConflicts } from '../controllers/eventSpaces.controller'
 import { uploadEventDocument, deleteEventDocument } from '../controllers/documents.controller'
 import { importStands, listStands, createStand, updateStand, deleteStand } from '../controllers/stands.controller'
 import { listFloorPlans, getFloorPlanUploadSignature, createFloorPlanRecord, deleteFloorPlan, getFloorPlanContent, uploadFloorPlanFile } from '../controllers/floorPlans.controller'
@@ -57,6 +57,7 @@ router.post('/:eventId/spaces', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), 
 router.put('/:eventId/spaces/:spaceId', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), updateEventSpace)
 router.delete('/:eventId/spaces/:spaceId', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), deleteEventSpace)
 router.get('/:eventId/spaces/:spaceId/audit', requirePrivilege(PRIVILEGES.EVENT_VIEW), getEventSpaceAudit)
+router.get('/:eventId/spaces/:spaceId/notify-check', requirePrivilege(PRIVILEGES.EVENT_VIEW), checkNotifyConflicts)
 
 // Floor plans
 router.get('/:eventId/floor-plans', requirePrivilege(PRIVILEGES.EVENT_VIEW), listFloorPlans)
