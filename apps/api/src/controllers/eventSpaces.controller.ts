@@ -7,7 +7,7 @@ const PHASE_LABEL: Record<string, string> = {
   SETUP: 'Montaje', EVENT: 'Evento', TEARDOWN: 'Desmontaje',
 }
 
-const ADMIN_URL = 'https://ivent-ia-admin.vercel.app'
+const ADMIN_URL = 'https://ivent-admin.vercel.app'
 
 // Fire-and-forget: detects conflicts for the saved space and notifies executives via WhatsApp
 async function notifyConflicts(savedSpaceId: string, eventId: string, tenantId: string) {

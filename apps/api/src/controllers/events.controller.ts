@@ -396,7 +396,7 @@ async function notifyConflictsOnConfirmation(eventId: string, tenantId: string) 
       await sendGenericNotification(u.phone, {
         title: '🔔 Evento confirmado con conflictos',
         message,
-        actionUrl: `https://ivent-ia-admin.vercel.app/eventos/${info.eventId}`,
+        actionUrl: `https://ivent-admin.vercel.app/eventos/${info.eventId}`,
         actionText: 'Ver evento afectado',
       })
     }))

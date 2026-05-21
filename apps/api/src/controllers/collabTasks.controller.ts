@@ -187,7 +187,7 @@ export async function notifyCollabTask(
     // ── Resolve object label + URL for linked object ──────────────────────
     let objectLabel: string | undefined
     let objectUrl: string | undefined
-    const adminBase = process.env.ADMIN_URL || 'https://ivent-ia-admin.vercel.app'
+    const adminBase = process.env.ADMIN_URL || 'https://ivent-admin.vercel.app'
     const reqStep = task.approvalRequestStep
     if (reqStep?.request?.objectType && reqStep?.request?.objectId) {
       objectLabel = await fetchObjectLabel(reqStep.request.objectType, reqStep.request.objectId)
