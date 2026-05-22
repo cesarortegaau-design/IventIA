@@ -24,6 +24,14 @@ import { DEFAULT_BRANDING, type EventBranding } from './EstudioPage'
 
 const { Text } = Typography
 
+const fontHeadingMap: Record<string, string> = {
+  modern:  "'Plus Jakarta Sans', sans-serif",
+  classic: 'Georgia, serif',
+  elegant: "'Didact Gothic', sans-serif",
+  bold:    "'Montserrat', sans-serif",
+  playful: 'cursive',
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface Widget {
   id: string
@@ -58,13 +66,15 @@ interface PortalSnapshot {
 // ── Read-only widget renderers ────────────────────────────────────────────────
 
 function PortadaWidgetRO({ event, branding }: { event: any; branding: EventBranding }) {
-  const bg = branding.coverStyle === 'gradient'
-    ? `linear-gradient(135deg, ${branding.primaryColor} 0%, ${branding.secondaryColor} 100%)`
-    : branding.coverStyle === 'split'
-      ? `linear-gradient(90deg, ${branding.primaryColor} 50%, ${branding.secondaryColor} 50%)`
-      : branding.coverStyle === 'dark' ? '#0D0D1A' : branding.primaryColor
-  const textColor = branding.textOnBg || '#ffffff'
+  const hasBanner = branding.coverStyle === 'image' && branding.bannerUrl
+  const bg = hasBanner ? undefined
+    : branding.coverStyle === 'gradient' ? `linear-gradient(135deg, ${branding.primaryColor} 0%, ${branding.secondaryColor} 100%)`
+    : branding.coverStyle === 'split'   ? `linear-gradient(90deg, ${branding.primaryColor} 50%, ${branding.secondaryColor} 50%)`
+    : branding.coverStyle === 'dark'    ? '#0D0D1A'
+    : branding.primaryColor
+  const textColor = (hasBanner || branding.coverStyle === 'dark') ? '#ffffff' : (branding.textOnBg || '#ffffff')
   const muted = textColor === '#ffffff' ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.55)'
+  const font = fontHeadingMap[branding.fontStyle] || fontHeadingMap.modern
   const daysUntil = event?.eventStart ? Math.max(0, dayjs(event.eventStart).diff(dayjs(), 'day')) : null
 
   return (
@@ -72,13 +82,18 @@ function PortadaWidgetRO({ event, branding }: { event: any; branding: EventBrand
       width: '100%', height: '100%', borderRadius: 12, overflow: 'hidden',
       background: bg, padding: 20, display: 'flex', flexDirection: 'column',
       justifyContent: 'space-between', color: textColor, userSelect: 'none', position: 'relative',
+      ...(hasBanner ? { backgroundImage: `url(${branding.bannerUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}),
     }}>
+      {/* Dark overlay for banner images */}
+      {hasBanner && (
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.7) 100%)' }} />
+      )}
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: branding.accentColor }} />
-      <div>
+      <div style={{ position: 'relative' }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: muted, letterSpacing: '0.06em', marginBottom: 6 }}>
           {event?.eventType || 'EVENTO'} · {event?.code || '—'}
         </div>
-        <div style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.2, marginBottom: 4 }}>
+        <div style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.2, marginBottom: 4, fontFamily: font }}>
           {event?.name || 'Mi evento'}
         </div>
         {branding.tagline && <div style={{ fontSize: 12, color: muted, fontStyle: 'italic', marginBottom: 4 }}>"{branding.tagline}"</div>}
@@ -88,10 +103,10 @@ function PortadaWidgetRO({ event, branding }: { event: any; branding: EventBrand
         </div>
       </div>
       {daysUntil !== null && (
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', position: 'relative' }}>
           <div>
             <div style={{ fontSize: 11, color: muted, marginBottom: 2 }}>FALTAN</div>
-            <div style={{ fontSize: 52, fontWeight: 900, lineHeight: 1 }}>{daysUntil}</div>
+            <div style={{ fontSize: 52, fontWeight: 900, lineHeight: 1, fontFamily: font }}>{daysUntil}</div>
             <div style={{ fontSize: 13, color: muted }}>días para el evento</div>
           </div>
           {event?.expectedAttendance && (
@@ -391,7 +406,7 @@ function PdfWidgetRO({ config }: { config: any }) {
 // Timeline read-only
 const STATUS_DOT_RO: Record<string, string> = { COMPLETED: '#059669', IN_PROGRESS: '#F97316', PENDING: '#9CA3AF' }
 
-function TimelineWidgetRO({ timeline, event }: { timeline: any; event: any }) {
+function TimelineWidgetRO({ timeline, event, branding }: { timeline: any; event: any; branding: EventBranding }) {
   const localData = { phases: timeline?.phases || [], activities: timeline?.activities || [] }
   const phases = [...localData.phases].sort((a: any, b: any) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
   const activities = localData.activities
@@ -399,44 +414,51 @@ function TimelineWidgetRO({ timeline, event }: { timeline: any; event: any }) {
   for (const act of activities) { const pid = act.phaseId || '__none__'; byPhase[pid] = byPhase[pid] || []; byPhase[pid].push(act) }
   const previewPhases = phases.slice(0, 4)
 
-  const theme = (() => {
-    const themes: Record<string, { primary: string; secondary: string; light: string; bg: string; label: string }> = {
-      'Boda': { primary: '#B5546A', secondary: '#C9728A', light: '#F7D6E0', bg: '#FEF8F9', label: 'Wedding Day' },
-      'Corporativo': { primary: '#3730A3', secondary: '#4F46E5', light: '#C7D2FE', bg: '#F0F4FF', label: 'Agenda' },
-    }
-    return themes[event?.eventType || ''] ?? { primary: '#7C3AED', secondary: '#9333EA', light: '#DDD6FE', bg: '#F5F3FF', label: 'Timeline' }
-  })()
+  const primary   = branding.primaryColor
+  const secondary = branding.secondaryColor
+  const hasBanner = branding.coverStyle === 'image' && branding.bannerUrl
+  const font      = fontHeadingMap[branding.fontStyle] || fontHeadingMap.modern
+  // Light tint of primary for dividers / background
+  const lightBg   = branding.bgColor || '#F5F3FF'
 
   return (
     <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', userSelect: 'none' }}>
+      {/* Header */}
       <div style={{
-        background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.secondary} 100%)`,
         padding: '12px 16px', flexShrink: 0, position: 'relative', overflow: 'hidden',
+        ...(hasBanner
+          ? { backgroundImage: `url(${branding.bannerUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+          : { background: `linear-gradient(135deg, ${primary} 0%, ${secondary} 100%)` }),
       }}>
-        <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 9, letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: 3 }}>
-          {event?.eventType || 'Evento'} · {event?.code || ''}
-        </div>
-        <div style={{ color: '#fff', fontSize: 15, fontStyle: 'italic', fontFamily: 'Georgia, serif', fontWeight: 700, lineHeight: 1.15 }}>
-          {event?.name || '—'}
-        </div>
-        <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', marginTop: 4 }}>
-          {theme.label}
+        {hasBanner && (
+          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.65) 100%)' }} />
+        )}
+        <div style={{ position: 'relative' }}>
+          <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 9, letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: 3 }}>
+            {event?.eventType || 'Evento'} · {event?.code || ''}
+          </div>
+          <div style={{ color: '#fff', fontSize: 15, fontWeight: 700, lineHeight: 1.15, fontFamily: font }}>
+            {event?.name || '—'}
+          </div>
+          <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', marginTop: 4 }}>
+            {branding.tagline || 'Timeline'}
+          </div>
         </div>
       </div>
-      <div style={{ flex: 1, overflow: 'auto', background: theme.bg }}>
+      <div style={{ flex: 1, overflow: 'auto', background: lightBg }}>
         {activities.length === 0 ? (
           <div style={{ textAlign: 'center', color: '#aaa', fontSize: 12, padding: '24px 0' }}>Sin actividades</div>
         ) : previewPhases.map((phase: any) => {
           const phaseActs = (byPhase[phase.id] || []).slice(0, 5)
           if (!phaseActs.length) return null
-          const phaseColor = phase.color || theme.primary
+          const phaseColor = phase.color || primary
           return (
             <div key={phase.id}>
               <div style={{ padding: '6px 14px 2px', fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: phaseColor, borderTop: `1px solid ${phaseColor}22` }}>
                 {phase.name}
               </div>
               {phaseActs.map((act: any, i: number) => (
-                <div key={act.id || i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderBottom: `1px solid ${theme.light}` }}>
+                <div key={act.id || i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderBottom: `1px solid ${phaseColor}22` }}>
                   <div style={{ width: 6, height: 6, borderRadius: '50%', background: STATUS_DOT_RO[act.status] || '#9CA3AF', flexShrink: 0 }} />
                   <div style={{ width: 16, height: 1.5, background: phaseColor, opacity: 0.3, flexShrink: 0 }} />
                   <span style={{ fontSize: 10, fontWeight: 700, color: phaseColor, minWidth: 44, whiteSpace: 'nowrap', flexShrink: 0 }}>{act.startTime || ''}</span>
@@ -447,7 +469,7 @@ function TimelineWidgetRO({ timeline, event }: { timeline: any; event: any }) {
           )
         })}
       </div>
-      <div style={{ padding: '7px 14px', background: theme.light, flexShrink: 0, fontSize: 10, color: theme.primary, opacity: 0.8 }}>
+      <div style={{ padding: '7px 14px', background: `${primary}18`, flexShrink: 0, fontSize: 10, color: primary, opacity: 0.9 }}>
         {activities.length} actividades · {phases.length} fases
       </div>
     </div>
@@ -683,7 +705,7 @@ function WidgetRendererRO({ widget, snapshot, branding, eventId, token, onSnapsh
     case 'pdf':         return <PdfWidgetRO config={widget.config} />
     case 'links':       return <LinksWidgetRO config={widget.config} />
     case 'resumen':     return <ResumenWidgetRO event={event} tareas={snapshot.tareas} timeline={snapshot.timeline} presupuesto={snapshot.presupuesto} />
-    case 'timeline':    return <TimelineWidgetRO timeline={snapshot.timeline} event={event} />
+    case 'timeline':    return <TimelineWidgetRO timeline={snapshot.timeline} event={event} branding={branding} />
     case 'presupuesto': return <PresupuestoWidgetRO presupuesto={snapshot.presupuesto} event={event} />
     case 'contrato':    return (
       <ContratoWidgetRO
