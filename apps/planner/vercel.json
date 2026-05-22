@@ -1,4 +1,7 @@
 {
   "ignoreCommand": "git diff HEAD^ HEAD --name-only 2>/dev/null | grep -qE '^apps/planner/|^packages/shared/|^packages/prisma/' && exit 1; exit 0",
+  "framework": "vite",
+  "buildCommand": "pnpm run build",
+  "outputDirectory": "dist",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }
