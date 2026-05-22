@@ -191,6 +191,12 @@ export default function EventDetailPage() {
     onError: () => message.error('Error al guardar la reserva'),
   })
 
+  const cancelSpaceMutation = useMutation({
+    mutationFn: (spaceId: string) => eventSpacesApi.cancel(id!, spaceId),
+    onSuccess: () => { refetchSpaces(); message.success('Reserva cancelada') },
+    onError: (err: any) => message.error(err?.response?.data?.error ?? 'Error al cancelar'),
+  })
+
   const deleteSpaceMutation = useMutation({
     mutationFn: (spaceId: string) => eventSpacesApi.remove(id!, spaceId),
     onSuccess: () => { refetchSpaces(); message.success('Reserva eliminada') },
@@ -806,6 +812,7 @@ export default function EventDetailPage() {
               size="small"
               pagination={false}
               scroll={{ x: 'max-content' }}
+              rowClassName={(r: any) => r.status === 'CANCELLED' ? 'row-cancelled' : ''}
               columns={[
                 {
                   title: 'Recurso / Espacio',
@@ -837,6 +844,12 @@ export default function EventDetailPage() {
                   },
                 },
                 { title: 'Creación', dataIndex: 'createdAt', render: (v: string) => v ? <span style={{ fontSize: 12, color: '#64748b' }}>{dayjs(v).format('DD/MM/YY HH:mm')}</span> : '—' },
+                {
+                  title: 'Estatus', dataIndex: 'status',
+                  render: (v: string) => v === 'CANCELLED'
+                    ? <Tag color="red">Cancelada</Tag>
+                    : <Tag color="green">Activa</Tag>,
+                },
                 {
                   title: 'Notas', dataIndex: 'notes',
                   render: (v: string) => v
@@ -885,7 +898,16 @@ export default function EventDetailPage() {
                   render: (_: any, r: any) => (
                     <Space>
                       <Tooltip title="Auditoría"><Button size="small" icon={<AuditOutlined />} onClick={() => setAuditSpace(r)} /></Tooltip>
-                      <Button size="small" icon={<EditOutlined />} onClick={() => openSpaceModal(r)} />
+                      {r.status !== 'CANCELLED' && (
+                        <Button size="small" icon={<EditOutlined />} onClick={() => openSpaceModal(r)} />
+                      )}
+                      {r.status !== 'CANCELLED' && (
+                        <Popconfirm title="¿Cancelar esta reserva?" description="La reserva seguirá visible en el calendario pero no generará conflictos." onConfirm={() => cancelSpaceMutation.mutate(r.id)} okText="Cancelar reserva" okButtonProps={{ danger: true }} cancelText="No">
+                          <Tooltip title="Cancelar reserva">
+                            <Button size="small" icon={<StopOutlined />} loading={cancelSpaceMutation.isPending} style={{ color: '#fa8c16', borderColor: '#fa8c16' }} />
+                          </Tooltip>
+                        </Popconfirm>
+                      )}
                       <Popconfirm title="¿Eliminar esta reserva?" onConfirm={() => deleteSpaceMutation.mutate(r.id)} okText="Sí" cancelText="No">
                         <Button size="small" danger icon={<DeleteOutlined />} loading={deleteSpaceMutation.isPending} />
                       </Popconfirm>

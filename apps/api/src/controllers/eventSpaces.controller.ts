@@ -26,11 +26,12 @@ async function notifyConflicts(savedSpaceId: string, eventId: string, tenantId: 
       return
     }
 
-    // Find all EventSpaces on the same resource that overlap (excluding itself)
+    // Find all ACTIVE EventSpaces on the same resource that overlap (excluding itself)
     const conflicts = await prisma.eventSpace.findMany({
       where: {
         id: { not: savedSpaceId },
         resourceId: saved.resourceId,
+        status: 'ACTIVE',
         startTime: { lt: saved.endTime },
         endTime: { gt: saved.startTime },
       },
@@ -274,6 +275,7 @@ export async function checkNotifyConflicts(req: Request, res: Response, next: Ne
       where: {
         id: { not: spaceId },
         resourceId: saved.resourceId,
+        status: 'ACTIVE',
         startTime: { lt: saved.endTime },
         endTime: { gt: saved.startTime },
       },
@@ -383,6 +385,37 @@ export async function checkNotifyConflicts(req: Request, res: Response, next: Ne
     report.outcome = 'SENT'
 
     res.json({ success: true, report })
+  } catch (err) { next(err) }
+}
+
+export async function cancelEventSpace(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { eventId, spaceId } = req.params
+    const tenantId = req.user!.tenantId
+    const userId = req.user!.userId
+
+    const existing = await prisma.eventSpace.findFirst({
+      where: { id: spaceId, eventId, event: { tenantId } },
+      include: { resource: { select: { id: true, name: true } } },
+    })
+    if (!existing) return res.status(404).json({ success: false, error: 'EventSpace not found' })
+    if (existing.status === 'CANCELLED') return res.status(400).json({ success: false, error: 'EventSpace already cancelled' })
+
+    const space = await prisma.eventSpace.update({
+      where: { id: spaceId },
+      data: { status: 'CANCELLED' },
+      include: { resource: { select: { id: true, code: true, name: true, type: true } } },
+    })
+
+    await auditService.log(tenantId, userId, 'EventSpace', spaceId, 'CANCEL', {
+      resourceName: existing.resource.name,
+      phase: PHASE_LABEL[existing.phase] ?? existing.phase,
+      startTime: existing.startTime.toISOString(),
+      endTime: existing.endTime.toISOString(),
+      status: 'ACTIVE',
+    }, { status: 'CANCELLED' }, req?.ip)
+
+    res.json({ success: true, data: space })
   } catch (err) { next(err) }
 }
 

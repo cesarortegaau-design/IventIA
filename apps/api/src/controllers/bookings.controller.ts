@@ -71,6 +71,9 @@ export async function getBookingCalendar(req: Request, res: Response, next: Next
       orderBy: { createdAt: 'asc' },
     })
 
+    // Separate active vs cancelled for conflict calculation
+    const activeEventSpaces = eventSpaces.filter(es => es.status !== 'CANCELLED')
+
     // ── 2. Orders with line items (secondary source) ─────────────────────────
     // Only include orders for events NOT already covered by EventSpaces,
     // OR orders that have explicit startDate/endDate that fall in range.
@@ -134,6 +137,7 @@ export async function getBookingCalendar(req: Request, res: Response, next: Next
       lane: number
       overlapRank: number
       overlapCount: number
+      cancelled?: boolean
       notes?: string | null
       event?: any
       order?: any
@@ -143,7 +147,7 @@ export async function getBookingCalendar(req: Request, res: Response, next: Next
 
     const rawBookings: Omit<Booking, 'lane' | 'overlapRank' | 'overlapCount'>[] = []
 
-    // From EventSpaces
+    // From EventSpaces (all — ACTIVE and CANCELLED both appear in calendar)
     for (const es of eventSpaces) {
       if (!resourceIds.has(es.resource.id)) continue
       // Count and sum orders for this event that reference this resource
@@ -160,6 +164,7 @@ export async function getBookingCalendar(req: Request, res: Response, next: Next
         endTime:    es.endTime,
         createdAt:  es.createdAt,
         notes:      es.notes,
+        cancelled:  es.status === 'CANCELLED',
         event: {
           id:     es.event.id,
           code:   es.event.code,
@@ -172,8 +177,8 @@ export async function getBookingCalendar(req: Request, res: Response, next: Next
       })
     }
 
-    // From Orders (only for resources not already covered by EventSpaces for that event)
-    const eventSpaceKeys = new Set(eventSpaces.map(es => `${es.eventId}-${es.resourceId}`))
+    // From Orders (only for resources not already covered by ACTIVE EventSpaces for that event)
+    const eventSpaceKeys = new Set(activeEventSpaces.map(es => `${es.eventId}-${es.resourceId}`))
 
     for (const o of orders) {
       for (const li of o.lineItems) {
@@ -219,17 +224,26 @@ export async function getBookingCalendar(req: Request, res: Response, next: Next
     const allOverlapCounts: Record<string, number> = {}
 
     for (const [rId, bList] of bookingsByResource.entries()) {
-      // Visual lanes (unchanged rendering logic)
+      // Only ACTIVE bookings participate in lane/conflict calculation
+      const activeBList = bList.filter(b => !b.cancelled)
+
       const { lanes, laneCount } = assignLanes(
-        bList.map(b => ({ id: b.id, startTime: b.startTime, endTime: b.endTime }))
+        activeBList.map(b => ({ id: b.id, startTime: b.startTime, endTime: b.endTime }))
       )
-      Object.assign(allLanes, lanes)
+      // Cancelled bookings go in lane 0 (they show but don't affect lane count)
+      for (const b of bList) {
+        allLanes[b.id] = b.cancelled ? 0 : (lanes[b.id] ?? 0)
+      }
       laneCountByResource[rId] = laneCount
 
-      // Waitlist rank: for each booking, find all bookings it overlaps with
-      // (including itself), sort by createdAt, assign 1-based position.
+      // Waitlist rank: only among ACTIVE bookings
       for (const b of bList) {
-        const overlapping = bList
+        if (b.cancelled) {
+          allOverlapRanks[b.id]  = 0
+          allOverlapCounts[b.id] = 0
+          continue
+        }
+        const overlapping = activeBList
           .filter(other => b.startTime < other.endTime && other.startTime < b.endTime)
           .sort((x, y) => x.createdAt.getTime() - y.createdAt.getTime())
 

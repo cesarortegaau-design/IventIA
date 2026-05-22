@@ -113,6 +113,12 @@ function BookingDetailModal({
     >
       {isSpace ? (
         <div>
+          {booking.cancelled && (
+            <div style={{ background: '#fff1f0', border: '1px solid #ffccc7', borderRadius: 8, padding: '8px 14px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ color: '#cf1322', fontWeight: 700, fontSize: 13 }}>⊘ Reserva cancelada</span>
+              <span style={{ color: '#cf1322', fontSize: 12 }}>— no genera conflictos</span>
+            </div>
+          )}
           <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
             <Col span={12}>
               <div style={{ background: '#f8fafc', borderRadius: 8, padding: 12 }}>
@@ -284,7 +290,9 @@ function BookingTooltip({ b, resourceName }: { b: any; resourceName: string }) {
     <div style={{ minWidth: 220, maxWidth: 300, fontSize: 12 }}>
       {isSpace ? (
         <>
-          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4, color: '#fff' }}>📅 {b.event?.name}</div>
+          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4, color: b.cancelled ? '#ff7875' : '#fff' }}>
+            {b.cancelled ? '⊘' : '📅'} {b.event?.name}{b.cancelled ? ' (Cancelada)' : ''}
+          </div>
           <Divider style={{ margin: '4px 0', borderColor: 'rgba(255,255,255,0.2)' }} />
           <div style={{ display: 'grid', gridTemplateColumns: '76px 1fr', gap: '3px 6px', color: 'rgba(255,255,255,0.9)' }}>
             <span style={{ opacity: 0.65 }}>Recurso</span>   <span>{resourceName}</span>
@@ -691,11 +699,12 @@ export default function BookingCalendarPage() {
 
     const isSpace   = b.type === 'EVENT_SPACE'
     const phase     = b.phase ? PHASE_STYLE[b.phase] : null
-    const isConfirmed = isSpace && b.event?.status === 'CONFIRMED'
-    const background  = isConfirmed ? '#f6ffed' : (isSpace ? (phase?.background ?? '#e6f4ff') : `${ORDER_STATUS_COLOR[b.order?.status] ?? '#1677ff'}22`)
-    const borderColor = isConfirmed ? '#52c41a' : (isSpace ? (phase?.color ?? '#1677ff')      : (ORDER_STATUS_COLOR[b.order?.status] ?? '#1677ff'))
-    const borderStyle = phase?.borderStyle ?? 'solid'
-    const textColor   = isConfirmed ? '#389e0d' : (isSpace ? (phase?.color ?? '#1677ff')      : (ORDER_STATUS_COLOR[b.order?.status] ?? '#1677ff'))
+    const isCancelled = isSpace && b.cancelled
+    const isConfirmed = isSpace && !isCancelled && b.event?.status === 'CONFIRMED'
+    const background  = isCancelled ? '#fff1f0' : (isConfirmed ? '#f6ffed' : (isSpace ? (phase?.background ?? '#e6f4ff') : `${ORDER_STATUS_COLOR[b.order?.status] ?? '#1677ff'}22`))
+    const borderColor = isCancelled ? '#ff4d4f' : (isConfirmed ? '#52c41a' : (isSpace ? (phase?.color ?? '#1677ff')      : (ORDER_STATUS_COLOR[b.order?.status] ?? '#1677ff')))
+    const borderStyle = isCancelled ? 'dashed'  : (phase?.borderStyle ?? 'solid')
+    const textColor   = isCancelled ? '#cf1322' : (isConfirmed ? '#389e0d' : (isSpace ? (phase?.color ?? '#1677ff')      : (ORDER_STATUS_COLOR[b.order?.status] ?? '#1677ff')))
     const label       = isSpace
       ? (b.event?.name ?? '—')
       : `${b.order?.client?.companyName ?? `${b.order?.client?.firstName ?? ''} ${b.order?.client?.lastName ?? ''}`.trim()} · ${b.order?.orderNumber}`
@@ -895,6 +904,10 @@ export default function BookingCalendarPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <div style={{ width: 22, height: 9, borderRadius: 3, background: '#f6ffed', border: '1.5px solid #52c41a' }} />
               <span style={{ fontSize: 11, color: '#64748b' }}>Confirmado</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <div style={{ width: 22, height: 9, borderRadius: 3, background: '#fff1f0', border: '1.5px dashed #ff4d4f' }} />
+              <span style={{ fontSize: 11, color: '#64748b' }}>Cancelado</span>
             </div>
             {selectionMode && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>

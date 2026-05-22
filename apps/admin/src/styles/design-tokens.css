@@ -16,3 +16,6 @@
 .iv-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-feature-settings: 'tnum'; }
 .iv-num { font-variant-numeric: tabular-nums; }
 .iv-uppercase-label { font-size: 11px; color: var(--iv-text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+
+/* Cancelled EventSpace row in Ant Design Table */
+.row-cancelled td { background: #fff1f0 !important; opacity: 0.75; }
