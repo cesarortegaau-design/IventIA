@@ -6,7 +6,7 @@ import {
   ArrowLeftOutlined, AppstoreOutlined, CalendarOutlined, CheckSquareOutlined,
   DollarOutlined, TeamOutlined, ApartmentOutlined, GlobalOutlined,
   BgColorsOutlined, MessageOutlined, LogoutOutlined, SettingOutlined,
-  FileTextOutlined,
+  FileTextOutlined, SendOutlined,
 } from '@ant-design/icons'
 import { useAuthStore } from '../stores/authStore'
 import { eventsApi } from '../api/events'
@@ -93,6 +93,7 @@ export default function EventLayout() {
       group: 'EXTRAS',
       items: [
         { key: 'estudio', label: 'Estudio · Arte e IA', icon: <BgColorsOutlined />, badge: 'NEW' },
+        { key: 'invitaciones', label: 'Invitaciones', icon: <SendOutlined />, badge: 'NEW' },
         { key: 'mensajes', label: 'Mensajes', icon: <MessageOutlined /> },
       ],
     },

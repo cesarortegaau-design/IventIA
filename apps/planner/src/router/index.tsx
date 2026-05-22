@@ -22,6 +22,7 @@ import PortalPage from '../pages/events/PortalPage'
 import ClientPortalPage from '../pages/events/ClientPortalPage'
 import MensajesPage from '../pages/events/MensajesPage'
 import ContratosPage from '../pages/events/ContratosPage'
+import InvitacionesPage from '../pages/events/InvitacionesPage'
 import StudioPage from '../pages/studio/StudioPage'
 import SeedPage from '../pages/seed/SeedPage'
 
@@ -61,6 +62,7 @@ export default function AppRouter() {
         <Route path="mapa" element={<MapaPage />} />
         <Route path="portal" element={<PortalPage />} />
         <Route path="estudio" element={<EstudioPage />} />
+        <Route path="invitaciones" element={<InvitacionesPage />} />
         <Route path="mensajes" element={<MensajesPage />} />
         <Route path="contratos" element={<ContratosPage />} />
         <Route path="editar" element={<EventFormPage />} />
