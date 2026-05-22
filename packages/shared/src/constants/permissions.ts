@@ -4,6 +4,14 @@
 // Status-specific actions use the status as suffix
 
 export const PRIVILEGES = {
+  // ── Reservas de Evento (EventSpaces) ────────────────────────────────────────
+  EVENT_SPACE_VIEW:            'event_space.view',
+  EVENT_SPACE_CREATE:          'event_space.create',
+  EVENT_SPACE_EDIT:            'event_space.edit',
+  EVENT_SPACE_CANCEL:          'event_space.cancel',
+  EVENT_SPACE_DELETE:          'event_space.delete',
+  EVENT_SPACE_KEEP_CREATED_AT: 'event_space.keep_created_at',
+
   // ── Events ──────────────────────────────────────────────────────────────────
   EVENT_VIEW: 'event.view',
   EVENT_CREATE: 'event.create',
@@ -175,6 +183,17 @@ export type PrivilegeKey = typeof PRIVILEGES[keyof typeof PRIVILEGES]
 
 // ── Human-readable labels (Spanish) ──────────────────────────────────────────
 export const PRIVILEGE_GROUPS: { label: string; privileges: { key: PrivilegeKey; label: string }[] }[] = [
+  {
+    label: 'Reservas de Evento',
+    privileges: [
+      { key: PRIVILEGES.EVENT_SPACE_VIEW,            label: 'Consultar reservas de espacio' },
+      { key: PRIVILEGES.EVENT_SPACE_CREATE,          label: 'Crear reservas de espacio' },
+      { key: PRIVILEGES.EVENT_SPACE_EDIT,            label: 'Editar reservas de espacio' },
+      { key: PRIVILEGES.EVENT_SPACE_CANCEL,          label: 'Cancelar reserva' },
+      { key: PRIVILEGES.EVENT_SPACE_DELETE,          label: 'Eliminar reservas de espacio' },
+      { key: PRIVILEGES.EVENT_SPACE_KEEP_CREATED_AT, label: 'Mantener fecha de creación original' },
+    ],
+  },
   {
     label: 'Eventos',
     privileges: [

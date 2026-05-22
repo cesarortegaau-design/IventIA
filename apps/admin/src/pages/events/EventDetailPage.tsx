@@ -132,6 +132,11 @@ export default function EventDetailPage() {
   const [selectedFlowId, setSelectedFlowId] = useState<string>('')
   const [triggering, setTriggering] = useState(false)
 
+  // ── createdAt confirmation modal (when editing space dates) ───────────────
+  const [createdAtConfirm, setCreatedAtConfirm] = useState<{
+    payload: any; spaceId: string; originalCreatedAt: string;
+  } | null>(null)
+
   // ── Mutations ─────────────────────────────────────────────────────────────
   const deleteDocMutation = useMutation({
     mutationFn: (docId: string) => eventsApi.deleteDocument(id!, docId),
@@ -169,27 +174,45 @@ export default function EventDetailPage() {
   })
 
   const saveSpaceMutation = useMutation({
-    mutationFn: (values: any) => {
-      const payload = {
-        resourceId: values.resourceId,
-        phase: values.phase,
-        startTime: values.startTime.toISOString(),
-        endTime: values.endTime.toISOString(),
-        notes: values.notes ?? null,
-      }
-      return editingSpace
-        ? eventSpacesApi.update(id!, editingSpace.id, payload)
-        : eventSpacesApi.create(id!, payload)
-    },
+    mutationFn: ({ payload, spaceId, keepCreatedAt }: { payload: any; spaceId?: string; keepCreatedAt?: boolean }) =>
+      spaceId
+        ? eventSpacesApi.update(id!, spaceId, payload, keepCreatedAt)
+        : eventSpacesApi.create(id!, payload),
     onSuccess: () => {
       refetchSpaces()
       setSpaceModalOpen(false)
       spaceForm.resetFields()
       setEditingSpace(null)
+      setCreatedAtConfirm(null)
       message.success(editingSpace ? 'Reserva actualizada' : 'Reserva creada')
     },
     onError: () => message.error('Error al guardar la reserva'),
   })
+
+  // Called by both the form submit and the createdAt confirmation modal
+  function submitSpace(values: any, keepCreatedAt?: boolean) {
+    const payload = {
+      resourceId: values.resourceId,
+      phase: values.phase,
+      startTime: values.startTime.toISOString(),
+      endTime: values.endTime.toISOString(),
+      notes: values.notes ?? null,
+    }
+    if (!editingSpace) {
+      saveSpaceMutation.mutate({ payload })
+      return
+    }
+    const datesChanged =
+      values.startTime.toISOString() !== dayjs(editingSpace.startTime).toISOString() ||
+      values.endTime.toISOString()   !== dayjs(editingSpace.endTime).toISOString()
+
+    if (datesChanged && keepCreatedAt === undefined) {
+      // Pause and ask user
+      setCreatedAtConfirm({ payload, spaceId: editingSpace.id, originalCreatedAt: editingSpace.createdAt })
+      return
+    }
+    saveSpaceMutation.mutate({ payload, spaceId: editingSpace.id, keepCreatedAt: !!keepCreatedAt })
+  }
 
   const cancelSpaceMutation = useMutation({
     mutationFn: (spaceId: string) => eventSpacesApi.cancel(id!, spaceId),
@@ -797,14 +820,16 @@ export default function EventDetailPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
               <Button
                 icon={<ShoppingCartOutlined />}
-                disabled={spaces.length === 0}
+                disabled={spaces.filter((s: any) => s.status !== 'CANCELLED').length === 0}
                 onClick={() => setOrderFromSpacesOpen(true)}
               >
                 Crear Orden desde Reservas
               </Button>
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => openSpaceModal()}>
-                Agregar reserva
-              </Button>
+              {hasPrivilege(PRIVILEGES.EVENT_SPACE_CREATE) && (
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => openSpaceModal()}>
+                  Agregar reserva
+                </Button>
+              )}
             </div>
             <Table
               dataSource={spaces}
@@ -898,19 +923,21 @@ export default function EventDetailPage() {
                   render: (_: any, r: any) => (
                     <Space>
                       <Tooltip title="Auditoría"><Button size="small" icon={<AuditOutlined />} onClick={() => setAuditSpace(r)} /></Tooltip>
-                      {r.status !== 'CANCELLED' && (
+                      {r.status !== 'CANCELLED' && hasPrivilege(PRIVILEGES.EVENT_SPACE_EDIT) && (
                         <Button size="small" icon={<EditOutlined />} onClick={() => openSpaceModal(r)} />
                       )}
-                      {r.status !== 'CANCELLED' && (
+                      {r.status !== 'CANCELLED' && hasPrivilege(PRIVILEGES.EVENT_SPACE_CANCEL) && (
                         <Popconfirm title="¿Cancelar esta reserva?" description="La reserva seguirá visible en el calendario pero no generará conflictos." onConfirm={() => cancelSpaceMutation.mutate(r.id)} okText="Cancelar reserva" okButtonProps={{ danger: true }} cancelText="No">
                           <Tooltip title="Cancelar reserva">
                             <Button size="small" icon={<StopOutlined />} loading={cancelSpaceMutation.isPending} style={{ color: '#fa8c16', borderColor: '#fa8c16' }} />
                           </Tooltip>
                         </Popconfirm>
                       )}
-                      <Popconfirm title="¿Eliminar esta reserva?" onConfirm={() => deleteSpaceMutation.mutate(r.id)} okText="Sí" cancelText="No">
-                        <Button size="small" danger icon={<DeleteOutlined />} loading={deleteSpaceMutation.isPending} />
-                      </Popconfirm>
+                      {hasPrivilege(PRIVILEGES.EVENT_SPACE_DELETE) && (
+                        <Popconfirm title="¿Eliminar esta reserva?" onConfirm={() => deleteSpaceMutation.mutate(r.id)} okText="Sí" cancelText="No">
+                          <Button size="small" danger icon={<DeleteOutlined />} loading={deleteSpaceMutation.isPending} />
+                        </Popconfirm>
+                      )}
                     </Space>
                   ),
                 },
@@ -1377,7 +1404,7 @@ export default function EventDetailPage() {
         title={editingSpace ? 'Editar reserva de espacio' : 'Agregar reserva de espacio'}
         open={spaceModalOpen}
         onCancel={() => { setSpaceModalOpen(false); setEditingSpace(null); spaceForm.resetFields() }}
-        onOk={() => spaceForm.validateFields().then(saveSpaceMutation.mutate)}
+        onOk={() => spaceForm.validateFields().then(vals => submitSpace(vals))}
         confirmLoading={saveSpaceMutation.isPending}
         okText="Guardar"
         width={520}
@@ -1408,6 +1435,60 @@ export default function EventDetailPage() {
             <Input.TextArea rows={2} placeholder="Observaciones sobre el uso del espacio" />
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* createdAt confirmation modal — shown when editing space dates */}
+      <Modal
+        open={!!createdAtConfirm}
+        onCancel={() => setCreatedAtConfirm(null)}
+        title="Cambio de fechas en reserva"
+        footer={null}
+        width={480}
+      >
+        {createdAtConfirm && (
+          <div style={{ paddingTop: 8 }}>
+            <Alert
+              type="warning"
+              showIcon
+              message="La fecha de cálculo para conflictos cambiará"
+              description={
+                <div style={{ fontSize: 13 }}>
+                  <p style={{ margin: '6px 0' }}>
+                    Al cambiar las fechas, la <strong>fecha de creación</strong> (usada para el orden en lista de espera) se actualizará a <strong>ahora</strong>, sustituyendo a la original:
+                  </p>
+                  <div style={{ background: '#f8fafc', borderRadius: 6, padding: '6px 10px', fontSize: 12, color: '#64748b' }}>
+                    Original: {dayjs(createdAtConfirm.originalCreatedAt).format('DD MMM YYYY HH:mm')}
+                  </div>
+                </div>
+              }
+              style={{ marginBottom: 16 }}
+            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <Button
+                type="primary"
+                block
+                loading={saveSpaceMutation.isPending}
+                onClick={() => submitSpace(spaceForm.getFieldsValue(), false)}
+              >
+                Confirmar — usar fecha actual para conflictos
+              </Button>
+              <Tooltip title={!hasPrivilege(PRIVILEGES.EVENT_SPACE_KEEP_CREATED_AT) ? 'No tienes el privilegio "Mantener fecha de creación original"' : ''}>
+                <Button
+                  block
+                  disabled={!hasPrivilege(PRIVILEGES.EVENT_SPACE_KEEP_CREATED_AT)}
+                  loading={saveSpaceMutation.isPending}
+                  onClick={() => submitSpace(spaceForm.getFieldsValue(), true)}
+                  icon={<span style={{ marginRight: 4 }}>🔒</span>}
+                >
+                  Mantener la fecha de creación original
+                </Button>
+              </Tooltip>
+              <Button block onClick={() => setCreatedAtConfirm(null)}>
+                Volver a editar
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* Generate codes modal */}

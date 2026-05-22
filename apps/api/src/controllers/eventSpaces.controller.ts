@@ -172,8 +172,9 @@ export async function updateEventSpace(req: Request, res: Response, next: NextFu
   try {
     const { eventId, spaceId } = req.params
     const tenantId = req.user!.tenantId
-    const userId = req.user!.userId
-    const { resourceId, phase, startTime, endTime, notes } = req.body
+    const userId   = req.user!.userId
+    const role     = req.user!.role
+    const { resourceId, phase, startTime, endTime, notes, keepCreatedAt } = req.body
 
     const existing = await prisma.eventSpace.findFirst({
       where: { id: spaceId, eventId, event: { tenantId } },
@@ -181,28 +182,57 @@ export async function updateEventSpace(req: Request, res: Response, next: NextFu
     })
     if (!existing) return res.status(404).json({ success: false, error: 'EventSpace not found' })
 
+    // Detect if start or end time changed
+    const datesChanged =
+      new Date(startTime).getTime() !== existing.startTime.getTime() ||
+      new Date(endTime).getTime()   !== existing.endTime.getTime()
+
+    // If keepCreatedAt requested, verify the user has the privilege (admins always pass)
+    if (keepCreatedAt && role !== 'ADMIN') {
+      const userWithPriv = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { profile: { select: { privileges: { where: { privilegeKey: 'event_space.keep_created_at' }, select: { id: true } } } } },
+      })
+      if (!userWithPriv?.profile?.privileges.length) {
+        return res.status(403).json({ success: false, error: 'No tienes permiso para mantener la fecha de creación original' })
+      }
+    }
+
+    // If dates changed and keepCreatedAt is falsy → reset createdAt to now
+    const newCreatedAt = datesChanged && !keepCreatedAt ? new Date() : existing.createdAt
+
     const space = await prisma.eventSpace.update({
       where: { id: spaceId },
-      data: { resourceId, phase, startTime: new Date(startTime), endTime: new Date(endTime), notes },
+      data: {
+        resourceId,
+        phase,
+        startTime:  new Date(startTime),
+        endTime:    new Date(endTime),
+        notes,
+        createdAt:  newCreatedAt,
+      },
       include: {
         resource: { select: { id: true, code: true, name: true, type: true } },
       },
     })
 
     await auditService.log(tenantId, userId, 'EventSpace', spaceId, 'UPDATE', {
-      resourceId: existing.resourceId,
+      resourceId:   existing.resourceId,
       resourceName: existing.resource.name,
-      phase: PHASE_LABEL[existing.phase] ?? existing.phase,
-      startTime: existing.startTime.toISOString(),
-      endTime: existing.endTime.toISOString(),
-      notes: existing.notes,
+      phase:        PHASE_LABEL[existing.phase] ?? existing.phase,
+      startTime:    existing.startTime.toISOString(),
+      endTime:      existing.endTime.toISOString(),
+      createdAt:    existing.createdAt.toISOString(),
+      notes:        existing.notes,
     }, {
       resourceId,
-      resourceName: space.resource.name,
-      phase: PHASE_LABEL[phase] ?? phase,
+      resourceName:      space.resource.name,
+      phase:             PHASE_LABEL[phase] ?? phase,
       startTime,
       endTime,
-      notes: notes ?? null,
+      createdAt:         newCreatedAt.toISOString(),
+      keepCreatedAt:     !!keepCreatedAt,
+      notes:             notes ?? null,
     }, req?.ip)
 
     // Fire-and-forget conflict notification

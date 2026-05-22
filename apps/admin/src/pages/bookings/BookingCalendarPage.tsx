@@ -1,10 +1,10 @@
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
   Select, Button, Input, Typography, Spin, Empty, Tag, Tooltip,
   Badge, Space, Divider, Modal, Row, Col, DatePicker,
-  Form, Radio, App,
+  Form, Radio, App, Alert,
 } from 'antd'
 import {
   LeftOutlined, RightOutlined, CalendarOutlined,
@@ -22,6 +22,8 @@ import { eventSpacesApi } from '../../api/eventSpaces'
 import { clientsApi } from '../../api/clients'
 import { exportToCsv } from '../../utils/exportCsv'
 import CreateOrderFromSpacesModal from '../../components/CreateOrderFromSpacesModal'
+import { useAuthStore } from '../../stores/authStore'
+import { PRIVILEGES } from '@iventia/shared'
 
 dayjs.extend(isoWeek)
 
@@ -512,6 +514,8 @@ export default function BookingCalendarPage() {
   const navigate    = useNavigate()
   const qc          = useQueryClient()
   const today       = dayjs()
+  const { message } = App.useApp()
+  const hasPrivilege = useAuthStore(s => s.hasPrivilege)
 
   // ── View / navigation state ────────────────────────────────────────────────
   const [view, setView]             = useState<'day' | 'week' | 'month' | '2months' | 'custom'>('month')
@@ -540,12 +544,68 @@ export default function BookingCalendarPage() {
   const [dragEnd,       setDragEnd]       = useState<{ resIdx: number; dayIdx: number } | null>(null)
   const [createModalOpen, setCreateModalOpen] = useState(false)
 
-  // Global mouseup to stop drag even when released outside the grid
+  // ── Bar drag state (move / resize booking) ─────────────────────────────────
+  // Refs hold live drag info so global handlers don't need re-registration
+  const barDragRef      = useRef<{ booking: any; type: 'move' | 'resize-start' | 'resize-end'; startClientX: number } | null>(null)
+  const barDragDeltaRef = useRef(0)
+  const [barDragState, setBarDragState] = useState<{ bookingId: string; type: string; delta: number } | null>(null)
+  const [dragConfirm, setDragConfirm]   = useState<{ booking: any; newStartTime: string; newEndTime: string } | null>(null)
+
+  // Global mouseup/mousemove — handles BOTH selection drag and bar drag
   useEffect(() => {
-    const stop = () => setIsDragging(false)
-    window.addEventListener('mouseup', stop)
-    return () => window.removeEventListener('mouseup', stop)
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!barDragRef.current) return
+      const delta = Math.round((e.clientX - barDragRef.current.startClientX) / DAY_W)
+      barDragDeltaRef.current = delta
+      setBarDragState(s => s ? { ...s, delta } : null)
+    }
+    const handleMouseUp = (e: MouseEvent) => {
+      setIsDragging(false)
+      const drag = barDragRef.current
+      if (!drag) return
+      const delta = barDragDeltaRef.current
+      barDragRef.current      = null
+      barDragDeltaRef.current = 0
+      setBarDragState(null)
+      if (delta === 0) return   // no actual movement — treat as click
+
+      const b      = drag.booking
+      const origSt = dayjs(b.startTime)
+      const origEt = dayjs(b.endTime)
+      let newSt = origSt
+      let newEt = origEt
+
+      if (drag.type === 'move') {
+        newSt = origSt.add(delta, 'day')
+        newEt = origEt.add(delta, 'day')
+      } else if (drag.type === 'resize-end') {
+        newEt = origEt.add(delta, 'day')
+        if (newEt.isBefore(origSt.add(1, 'day'))) newEt = origSt.add(1, 'day')
+      } else if (drag.type === 'resize-start') {
+        newSt = origSt.add(delta, 'day')
+        if (newSt.isAfter(origEt.subtract(1, 'day'))) newSt = origEt.subtract(1, 'day')
+      }
+      setDragConfirm({ booking: b, newStartTime: newSt.toISOString(), newEndTime: newEt.toISOString() })
+    }
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
   }, [])
+
+  // Apply grabbing cursor on body while dragging a bar
+  useEffect(() => {
+    if (barDragState) {
+      document.body.style.cursor = 'grabbing'
+      document.body.style.userSelect = 'none'
+    } else {
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    return () => { document.body.style.cursor = ''; document.body.style.userSelect = '' }
+  }, [!!barDragState])
 
   // Computed selection rectangle (resource index range × day index range)
   const selection = useMemo(() => {
@@ -586,6 +646,21 @@ export default function BookingCalendarPage() {
 
   const dateFrom = days[0].format('YYYY-MM-DD')
   const dateTo   = days[days.length - 1].format('YYYY-MM-DD')
+
+  // ── Mutations ──────────────────────────────────────────────────────────────
+  const updateSpaceMutation = useMutation({
+    mutationFn: ({ eventId, spaceId, data, keepCreatedAt }: { eventId: string; spaceId: string; data: any; keepCreatedAt: boolean }) =>
+      eventSpacesApi.update(eventId, spaceId, data, keepCreatedAt),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['booking-calendar'] })
+      setDragConfirm(null)
+      message.success('Reserva actualizada')
+    },
+    onError: (err: any) => {
+      message.error(err?.response?.data?.error ?? 'Error al actualizar la reserva')
+      setDragConfirm(null)
+    },
+  })
 
   // ── Queries ────────────────────────────────────────────────────────────────
   const { data: eventsData } = useQuery({
@@ -682,9 +757,9 @@ export default function BookingCalendarPage() {
   const gridWidth = totalDays * DAY_W
 
   // ── Bar geometry ───────────────────────────────────────────────────────────
-  function getBarStyle(b: any) {
-    const start = dayjs(b.startTime)
-    const end   = dayjs(b.endTime)
+  function getBarGeometry(startTime: string, endTime: string) {
+    const start = dayjs(startTime)
+    const end   = dayjs(endTime)
     const first = days[0]
     const last  = days[days.length - 1]
 
@@ -696,6 +771,31 @@ export default function BookingCalendarPage() {
 
     const left  = Math.max(0, startIdx) * DAY_W + 2
     const width = Math.max(DAY_W - 4, (endIdx - Math.max(0, startIdx) + 1) * DAY_W - 4)
+    return { left, width }
+  }
+
+  function getBarStyle(b: any, dragDelta = 0, dragType: string | null = null) {
+    // Compute effective times considering drag
+    let effectiveStart = b.startTime as string
+    let effectiveEnd   = b.endTime   as string
+    if (dragDelta !== 0 && dragType) {
+      const st = dayjs(b.startTime)
+      const et = dayjs(b.endTime)
+      if (dragType === 'move') {
+        effectiveStart = st.add(dragDelta, 'day').toISOString()
+        effectiveEnd   = et.add(dragDelta, 'day').toISOString()
+      } else if (dragType === 'resize-end') {
+        let net = et.add(dragDelta, 'day')
+        if (net.isBefore(st.add(1, 'day'))) net = st.add(1, 'day')
+        effectiveEnd = net.toISOString()
+      } else if (dragType === 'resize-start') {
+        let nst = st.add(dragDelta, 'day')
+        if (nst.isAfter(et.subtract(1, 'day'))) nst = et.subtract(1, 'day')
+        effectiveStart = nst.toISOString()
+      }
+    }
+
+    const { left, width } = getBarGeometry(effectiveStart, effectiveEnd)
 
     const isSpace   = b.type === 'EVENT_SPACE'
     const phase     = b.phase ? PHASE_STYLE[b.phase] : null
@@ -1137,10 +1237,24 @@ export default function BookingCalendarPage() {
 
                       {/* Booking bars */}
                       {rowBookings.map((b: any) => {
-                        const { left, width, background, borderColor, borderStyle, textColor, label } = getBarStyle(b)
+                        const isDraggedBar  = barDragState?.bookingId === b.id
+                        const dragDelta     = isDraggedBar ? barDragState!.delta : 0
+                        const dragType      = isDraggedBar ? barDragState!.type  : null
+                        const { left, width, background, borderColor, borderStyle, textColor, label } = getBarStyle(b, dragDelta, dragType)
                         const top    = b.lane * LANE_H + 5
                         const height = LANE_H - 10
-                        const isFirstPosition = b.overlapCount > 1 && b.overlapRank === 1
+
+                        // Only EVENT_SPACE non-cancelled bars can be dragged if user has edit privilege
+                        const canDragBar = !selectionMode && b.type === 'EVENT_SPACE' && !b.cancelled
+                          && hasPrivilege(PRIVILEGES.EVENT_SPACE_EDIT)
+
+                        const startBarDrag = (e: React.MouseEvent, type: 'move' | 'resize-start' | 'resize-end') => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          barDragRef.current      = { booking: b, type, startClientX: e.clientX }
+                          barDragDeltaRef.current = 0
+                          setBarDragState({ bookingId: b.id, type, delta: 0 })
+                        }
 
                         const barDiv = (
                           <div
@@ -1153,18 +1267,27 @@ export default function BookingCalendarPage() {
                               display: 'flex',
                               alignItems: 'center',
                               paddingLeft: 8, paddingRight: 6,
-                              cursor: selectionMode ? 'crosshair' : 'pointer',
+                              cursor: isDraggedBar ? 'grabbing' : (canDragBar ? 'grab' : (selectionMode ? 'crosshair' : 'pointer')),
                               overflow: 'hidden',
-                              zIndex: 4,
-                              transition: 'filter 0.15s',
+                              zIndex: isDraggedBar ? 100 : 4,
+                              transition: isDraggedBar ? 'none' : 'filter 0.15s',
                               pointerEvents: selectionMode ? 'none' : 'auto',
-                              opacity: selectionMode ? 0.5 : 1,
-                              boxShadow: 'none',
+                              opacity: isDraggedBar ? 0.82 : (selectionMode ? 0.5 : 1),
+                              boxShadow: isDraggedBar ? '0 4px 20px rgba(0,0,0,0.18)' : 'none',
+                              userSelect: 'none',
                             }}
-                            onMouseEnter={e => { if (!selectionMode) (e.currentTarget.style.filter = 'brightness(0.93)') }}
+                            onMouseEnter={e => { if (!selectionMode && !isDraggedBar) (e.currentTarget.style.filter = 'brightness(0.93)') }}
                             onMouseLeave={e => { if (!selectionMode) (e.currentTarget.style.filter = '') }}
-                            onClick={() => openDetailModal(b, resource.name)}
+                            onMouseDown={canDragBar ? e => { if (e.button !== 0) return; startBarDrag(e, 'move') } : undefined}
+                            onClick={e => { if (barDragDeltaRef.current !== 0) return; openDetailModal(b, resource.name) }}
                           >
+                            {/* Left resize handle */}
+                            {canDragBar && (
+                              <div
+                                style={{ position: 'absolute', left: 0, top: 0, width: 7, height: '100%', cursor: 'ew-resize', zIndex: 5, borderRadius: '4px 0 0 4px' }}
+                                onMouseDown={e => { e.stopPropagation(); startBarDrag(e, 'resize-start') }}
+                              />
+                            )}
                             <Text style={{
                               fontSize: 11, fontWeight: 600, color: textColor,
                               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1,
@@ -1190,6 +1313,13 @@ export default function BookingCalendarPage() {
                                 {b.overlapRank === 1 ? '#1' : `#${b.overlapRank}`}/{b.overlapCount}
                               </span>
                             )}
+                            {/* Right resize handle */}
+                            {canDragBar && (
+                              <div
+                                style={{ position: 'absolute', right: 0, top: 0, width: 7, height: '100%', cursor: 'ew-resize', zIndex: 5, borderRadius: '0 4px 4px 0' }}
+                                onMouseDown={e => { e.stopPropagation(); startBarDrag(e, 'resize-end') }}
+                              />
+                            )}
                           </div>
                         )
 
@@ -1206,7 +1336,7 @@ export default function BookingCalendarPage() {
                           </div>
                         ) : (
                           <Tooltip key={b.id}
-                            title={<BookingTooltip b={{ ...b, laneCount: resource.laneCount }} resourceName={resource.name} />}
+                            title={isDraggedBar ? null : <BookingTooltip b={{ ...b, laneCount: resource.laneCount }} resourceName={resource.name} />}
                             color={NAVY}
                             overlayInnerStyle={{ padding: '10px 12px' }}
                             overlayStyle={{ maxWidth: 320 }}
@@ -1312,6 +1442,77 @@ export default function BookingCalendarPage() {
           eventName={events.find((e: any) => e.id === eventId)?.name}
         />
       )}
+
+      {/* ── Drag createdAt confirmation modal ────────────────────────────── */}
+      <Modal
+        open={!!dragConfirm}
+        onCancel={() => setDragConfirm(null)}
+        title="Cambio de fechas en reserva"
+        footer={null}
+        width={480}
+        destroyOnClose
+      >
+        {dragConfirm && (
+          <div style={{ paddingTop: 8 }}>
+            <Alert
+              type="warning"
+              showIcon
+              message="La fecha de cálculo para conflictos cambiará"
+              description={
+                <div style={{ fontSize: 13 }}>
+                  <p style={{ margin: '6px 0' }}>
+                    Al cambiar las fechas, la <strong>fecha de creación</strong> (usada para la lista de espera) se actualizará a <strong>ahora</strong>, sustituyendo a la original:
+                  </p>
+                  <div style={{ background: '#f8fafc', borderRadius: 6, padding: '6px 10px', fontSize: 12, color: '#64748b', marginBottom: 4 }}>
+                    Original: {dayjs(dragConfirm.booking.createdAt).format('DD MMM YYYY HH:mm')}
+                  </div>
+                  <div style={{ background: '#f8fafc', borderRadius: 6, padding: '6px 10px', fontSize: 12, color: '#64748b' }}>
+                    Nuevas fechas: {dayjs(dragConfirm.newStartTime).format('DD MMM YYYY HH:mm')} → {dayjs(dragConfirm.newEndTime).format('DD MMM YYYY HH:mm')}
+                  </div>
+                </div>
+              }
+              style={{ marginBottom: 16 }}
+            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <Button
+                type="primary"
+                block
+                loading={updateSpaceMutation.isPending}
+                onClick={() => {
+                  const b = dragConfirm.booking
+                  updateSpaceMutation.mutate({
+                    eventId: b.event.id, spaceId: b.id,
+                    data: { resourceId: b.resourceId, phase: b.phase, startTime: dragConfirm.newStartTime, endTime: dragConfirm.newEndTime, notes: b.notes },
+                    keepCreatedAt: false,
+                  })
+                }}
+              >
+                Confirmar — usar fecha actual para conflictos
+              </Button>
+              <Tooltip title={!hasPrivilege(PRIVILEGES.EVENT_SPACE_KEEP_CREATED_AT) ? 'No tienes el privilegio "Mantener fecha de creación original"' : ''}>
+                <Button
+                  block
+                  disabled={!hasPrivilege(PRIVILEGES.EVENT_SPACE_KEEP_CREATED_AT)}
+                  loading={updateSpaceMutation.isPending}
+                  onClick={() => {
+                    const b = dragConfirm.booking
+                    updateSpaceMutation.mutate({
+                      eventId: b.event.id, spaceId: b.id,
+                      data: { resourceId: b.resourceId, phase: b.phase, startTime: dragConfirm.newStartTime, endTime: dragConfirm.newEndTime, notes: b.notes },
+                      keepCreatedAt: true,
+                    })
+                  }}
+                >
+                  🔒 Mantener la fecha de creación original
+                </Button>
+              </Tooltip>
+              <Button block onClick={() => setDragConfirm(null)}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }

@@ -52,13 +52,13 @@ router.get('/:id/orders', requirePrivilege(PRIVILEGES.EVENT_VIEW), getEventOrder
 router.post('/:eventId/orders', requirePrivilege(PRIVILEGES.ORDER_CREATE), createOrder)
 
 // Nested event spaces (bookings)
-router.get('/:eventId/spaces', requirePrivilege(PRIVILEGES.EVENT_VIEW), listEventSpaces)
-router.post('/:eventId/spaces', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), createEventSpace)
-router.put('/:eventId/spaces/:spaceId', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), updateEventSpace)
-router.delete('/:eventId/spaces/:spaceId', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), deleteEventSpace)
-router.patch('/:eventId/spaces/:spaceId/cancel', requirePrivilege(PRIVILEGES.EVENT_EDIT_QUOTED), cancelEventSpace)
-router.get('/:eventId/spaces/:spaceId/audit', requirePrivilege(PRIVILEGES.EVENT_VIEW), getEventSpaceAudit)
-router.get('/:eventId/spaces/:spaceId/notify-check', requirePrivilege(PRIVILEGES.EVENT_VIEW), checkNotifyConflicts)
+router.get('/:eventId/spaces', requirePrivilege(PRIVILEGES.EVENT_SPACE_VIEW), listEventSpaces)
+router.post('/:eventId/spaces', requirePrivilege(PRIVILEGES.EVENT_SPACE_CREATE), createEventSpace)
+router.put('/:eventId/spaces/:spaceId', requirePrivilege(PRIVILEGES.EVENT_SPACE_EDIT), updateEventSpace)
+router.delete('/:eventId/spaces/:spaceId', requirePrivilege(PRIVILEGES.EVENT_SPACE_DELETE), deleteEventSpace)
+router.patch('/:eventId/spaces/:spaceId/cancel', requirePrivilege(PRIVILEGES.EVENT_SPACE_CANCEL), cancelEventSpace)
+router.get('/:eventId/spaces/:spaceId/audit', requirePrivilege(PRIVILEGES.EVENT_SPACE_VIEW), getEventSpaceAudit)
+router.get('/:eventId/spaces/:spaceId/notify-check', requirePrivilege(PRIVILEGES.EVENT_SPACE_VIEW), checkNotifyConflicts)
 
 // Floor plans
 router.get('/:eventId/floor-plans', requirePrivilege(PRIVILEGES.EVENT_VIEW), listFloorPlans)
