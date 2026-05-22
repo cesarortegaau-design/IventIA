@@ -40,7 +40,10 @@ interface Widget {
   config: Record<string, any>
 }
 
-type Tool = 'select' | 'pan' | 'widget' | 'nota' | 'texto' | 'imagen'
+type Tool = 'select' | 'pan' | 'widget' | 'nota' | 'texto' | 'imagen' | 'draw'
+
+interface StrokePoint { x: number; y: number }
+interface Stroke { id: string; points: StrokePoint[]; color: string; width: number }
 
 // ── Initial widgets ────────────────────────────────────────────────────────────
 const makeDefaultWidgets = (): Widget[] => [
@@ -2653,6 +2656,25 @@ const WIDGET_MENU: { type: WidgetType; label: string; icon: React.ReactNode; def
   { type: 'contrato',   label: 'Contrato y pagos',   icon: <AuditOutlined />,      defaultSize: [380, 400] },
 ]
 
+// ── Drawing helpers ────────────────────────────────────────────────────────────
+function smoothPath(pts: StrokePoint[]): string {
+  if (pts.length < 2) return ''
+  if (pts.length === 2) return `M ${pts[0].x} ${pts[0].y} L ${pts[1].x} ${pts[1].y}`
+  let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)]
+    const p1 = pts[i]
+    const p2 = pts[i + 1]
+    const p3 = pts[Math.min(pts.length - 1, i + 2)]
+    const cp1x = p1.x + (p2.x - p0.x) / 6
+    const cp1y = p1.y + (p2.y - p0.y) / 6
+    const cp2x = p2.x - (p3.x - p1.x) / 6
+    const cp2y = p2.y - (p3.y - p1.y) / 6
+    d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)} ${cp2x.toFixed(1)} ${cp2y.toFixed(1)} ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`
+  }
+  return d
+}
+
 // ── Persistence helpers ────────────────────────────────────────────────────────
 function lienzoKey(eventId: string) { return `iventia-lienzo-${eventId}` }
 
@@ -2694,6 +2716,14 @@ export default function LienzoPage() {
   const [lastSync, setLastSync] = useState('')
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Draw tool state
+  const [strokes, setStrokes] = useState<Stroke[]>([])
+  const [activeStroke, setActiveStroke] = useState<StrokePoint[] | null>(null)
+  const [drawColor, setDrawColor] = useState('#1a1a1a')
+  const [drawWidth, setDrawWidth] = useState(2.5)
+  const drawingRef = useRef(false)
+  const activeStrokeRef = useRef<StrokePoint[]>([])
+
   // Fetch lienzo from backend
   const { data: lienzoRemote, isLoading: lienzoLoading } = useQuery({
     queryKey: ['planner-lienzo', id],
@@ -2705,36 +2735,48 @@ export default function LienzoPage() {
   // Initialize widgets from backend (with localStorage migration fallback)
   useEffect(() => {
     if (lienzoLoading || !id) return
-    const remoteWidgets = lienzoRemote?.data
-    if (Array.isArray(remoteWidgets) && remoteWidgets.length > 0) {
-      setWidgets(loadWidgets(id, remoteWidgets))
+    const remoteData = lienzoRemote?.data
+    if (remoteData) {
+      if (Array.isArray(remoteData) && remoteData.length > 0) {
+        // Old format: flat widget array
+        setWidgets(loadWidgets(id, remoteData))
+        setStrokes([])
+      } else if (remoteData?.widgets && Array.isArray(remoteData.widgets)) {
+        // New format: { widgets, strokes }
+        setWidgets(loadWidgets(id, remoteData.widgets))
+        setStrokes(remoteData.strokes ?? [])
+      } else {
+        const local = loadWidgets(id)
+        setWidgets(local)
+        if (local.length > 0) {
+          eventsApi.saveLienzo(id, serializeWidgets(local), []).catch(() => {})
+        }
+      }
     } else {
-      // Migrate from localStorage if available
       const local = loadWidgets(id)
       setWidgets(local)
       if (local.length > 0) {
-        // Persist migrated data to backend immediately
-        eventsApi.saveLienzo(id, serializeWidgets(local)).catch(() => {})
+        eventsApi.saveLienzo(id, serializeWidgets(local), []).catch(() => {})
       }
     }
     setLienzoReady(true)
   }, [lienzoLoading, id, lienzoRemote])
 
-  // Debounced API save on every widgets change (after initial load)
+  // Debounced API save on every widgets/strokes change (after initial load)
   useEffect(() => {
     if (!id || !lienzoReady) return
     setSyncStatus('saving')
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
       const serializable = serializeWidgets(widgets)
-      eventsApi.saveLienzo(id, serializable)
+      eventsApi.saveLienzo(id, serializable, strokes)
         .then(() => {
           setSyncStatus('saved')
           setLastSync(dayjs().format('HH:mm'))
         })
         .catch(() => setSyncStatus('idle'))
     }, 1200)
-  }, [id, lienzoReady, widgets])
+  }, [id, lienzoReady, widgets, strokes])
 
   // Drag state
   const dragging = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number } | null>(null)
@@ -2779,7 +2821,23 @@ export default function LienzoPage() {
     dragging.current = { id: widgetId, startX: e.clientX, startY: e.clientY, origX: w.x, origY: w.y }
   }
 
+  const getCanvasPoint = (e: React.MouseEvent): StrokePoint => {
+    const rect = canvasRef.current!.getBoundingClientRect()
+    const scale = zoom / 100
+    return {
+      x: (e.clientX - rect.left - pan.x) / scale,
+      y: (e.clientY - rect.top - pan.y) / scale,
+    }
+  }
+
   const onCanvasMouseDown = (e: React.MouseEvent) => {
+    if (tool === 'draw') {
+      drawingRef.current = true
+      const pt = getCanvasPoint(e)
+      activeStrokeRef.current = [pt]
+      setActiveStroke([pt])
+      return
+    }
     if (tool === 'pan') {
       isPanning.current = true
       panStart.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y }
@@ -2789,6 +2847,15 @@ export default function LienzoPage() {
   }
 
   const onMouseMove = (e: React.MouseEvent) => {
+    if (tool === 'draw' && drawingRef.current) {
+      const pt = getCanvasPoint(e)
+      activeStrokeRef.current = [...activeStrokeRef.current, pt]
+      // Update display every 3 points for performance
+      if (activeStrokeRef.current.length % 3 === 0) {
+        setActiveStroke([...activeStrokeRef.current])
+      }
+      return
+    }
     if (dragging.current && tool === 'select') {
       const scale = zoom / 100
       const dx = (e.clientX - dragging.current.startX) / scale
@@ -2806,6 +2873,22 @@ export default function LienzoPage() {
   }
 
   const onMouseUp = () => {
+    if (tool === 'draw' && drawingRef.current) {
+      drawingRef.current = false
+      const pts = activeStrokeRef.current
+      if (pts.length >= 2) {
+        const newStroke: Stroke = {
+          id: `stroke-${Date.now()}`,
+          points: pts,
+          color: drawColor,
+          width: drawWidth,
+        }
+        setStrokes(prev => [...prev, newStroke])
+      }
+      activeStrokeRef.current = []
+      setActiveStroke(null)
+      return
+    }
     dragging.current = null
     isPanning.current = false
   }
@@ -2818,6 +2901,7 @@ export default function LienzoPage() {
   const TOOLS: { key: Tool; label: string; icon: React.ReactNode; shortcut: string }[] = [
     { key: 'select', label: 'Seleccionar', icon: <SelectOutlined />, shortcut: 'V' },
     { key: 'pan', label: 'Mover lienzo', icon: <DragOutlined />, shortcut: 'H' },
+    { key: 'draw', label: 'Pincel', icon: <EditOutlined />, shortcut: 'B' },
     { key: 'widget', label: 'Widget', icon: <AppstoreAddOutlined />, shortcut: 'R' },
     { key: 'nota', label: 'Nota', icon: <FileTextOutlined />, shortcut: 'N' },
     { key: 'texto', label: 'Texto', icon: <FontSizeOutlined />, shortcut: 'T' },
@@ -2866,6 +2950,78 @@ export default function LienzoPage() {
           </Tooltip>
         ))}
 
+        {/* Draw tool options — shown when pincel is active */}
+        {tool === 'draw' && (
+          <>
+            <div style={{ width: 1, height: 24, background: '#EDE9FE', margin: '0 4px' }} />
+            {/* Color swatches */}
+            {[
+              { color: '#1a1a1a', label: 'Tinta' },
+              { color: '#7C3AED', label: 'Violeta' },
+              { color: '#B5546A', label: 'Rosa' },
+              { color: '#B7791F', label: 'Dorado' },
+              { color: '#0D9488', label: 'Teal' },
+              { color: '#ffffff', label: 'Blanco' },
+            ].map(({ color, label }) => (
+              <Tooltip key={color} title={label}>
+                <div
+                  onClick={() => setDrawColor(color)}
+                  style={{
+                    width: 20, height: 20, borderRadius: '50%', background: color, cursor: 'pointer', flexShrink: 0,
+                    border: drawColor === color ? '2.5px solid #7C3AED' : '2px solid #E5E7EB',
+                    boxShadow: drawColor === color ? '0 0 0 2px #EDE9FE' : undefined,
+                    transition: 'all 0.12s',
+                  }}
+                />
+              </Tooltip>
+            ))}
+            <div style={{ width: 1, height: 24, background: '#EDE9FE', margin: '0 4px' }} />
+            {/* Width options */}
+            {[
+              { w: 1.5, label: 'Fino' },
+              { w: 2.5, label: 'Medio' },
+              { w: 5, label: 'Grueso' },
+            ].map(({ w, label }) => (
+              <Tooltip key={w} title={label}>
+                <div
+                  onClick={() => setDrawWidth(w)}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    width: 32, height: 32, borderRadius: 8, cursor: 'pointer',
+                    background: drawWidth === w ? '#F5F3FF' : 'transparent',
+                    border: drawWidth === w ? '1.5px solid #7C3AED' : '1.5px solid transparent',
+                  }}
+                >
+                  <div style={{ height: w, width: 16, background: '#7C3AED', borderRadius: 2 }} />
+                </div>
+              </Tooltip>
+            ))}
+            <div style={{ width: 1, height: 24, background: '#EDE9FE', margin: '0 4px' }} />
+            {/* Undo last stroke */}
+            <Tooltip title="Deshacer último trazo (Z)">
+              <Button
+                type="text" size="small"
+                onClick={() => setStrokes(prev => prev.slice(0, -1))}
+                disabled={strokes.length === 0}
+                style={{ borderRadius: 8, height: 32, padding: '0 8px', fontSize: 11, color: '#888' }}
+              >
+                ↩ Deshacer
+              </Button>
+            </Tooltip>
+            {strokes.length > 0 && (
+              <Tooltip title="Borrar todos los trazos">
+                <Button
+                  type="text" size="small"
+                  onClick={() => setStrokes([])}
+                  style={{ borderRadius: 8, height: 32, padding: '0 8px', fontSize: 11, color: '#EF4444' }}
+                >
+                  🗑 Limpiar
+                </Button>
+              </Tooltip>
+            )}
+          </>
+        )}
+
         <div style={{ flex: 1 }} />
 
         {selectedId && (
@@ -2911,7 +3067,7 @@ export default function LienzoPage() {
           ref={canvasRef}
           style={{
             flex: 1, overflow: 'hidden', position: 'relative',
-            cursor: tool === 'pan' ? 'grab' : tool === 'select' ? 'default' : 'crosshair',
+            cursor: tool === 'pan' ? 'grab' : tool === 'draw' ? 'crosshair' : tool === 'select' ? 'default' : 'crosshair',
           }}
           onMouseDown={onCanvasMouseDown}
           onMouseMove={onMouseMove}
@@ -2990,6 +3146,49 @@ export default function LienzoPage() {
               )
             })}
           </div>
+
+          {/* SVG draw overlay — same coordinate space as widgets */}
+          <svg
+            style={{
+              position: 'absolute', top: 0, left: 0,
+              width: '100%', height: '100%',
+              overflow: 'visible',
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom / 100})`,
+              transformOrigin: '0 0',
+              pointerEvents: 'none',
+            }}
+          >
+            <defs>
+              <filter id="ink-glow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="0.6" result="blur" />
+                <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+              </filter>
+            </defs>
+            {strokes.map(s => (
+              <path
+                key={s.id}
+                d={smoothPath(s.points)}
+                fill="none"
+                stroke={s.color}
+                strokeWidth={s.width}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                filter="url(#ink-glow)"
+                opacity={0.9}
+              />
+            ))}
+            {activeStroke && activeStroke.length >= 2 && (
+              <path
+                d={smoothPath(activeStroke)}
+                fill="none"
+                stroke={drawColor}
+                strokeWidth={drawWidth}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                opacity={0.85}
+              />
+            )}
+          </svg>
         </div>
 
         {/* Properties panel */}

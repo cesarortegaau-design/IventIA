@@ -21,7 +21,7 @@ export async function saveLienzo(req: Request, res: Response, next: NextFunction
   try {
     const { id: eventId } = req.params
     const { tenantId } = req.user!
-    const { widgets } = req.body
+    const { widgets, strokes } = req.body
     if (!Array.isArray(widgets)) {
       throw new AppError(400, 'VALIDATION_ERROR', 'widgets must be an array')
     }
@@ -29,7 +29,7 @@ export async function saveLienzo(req: Request, res: Response, next: NextFunction
     if (!event) throw new AppError(404, 'NOT_FOUND', 'Evento no encontrado')
     await prisma.event.update({
       where: { id: eventId },
-      data: { lienzoData: widgets as any },
+      data: { lienzoData: { widgets, strokes: strokes ?? [] } as any },
     })
     res.json({ success: true })
   } catch (err) { next(err) }
