@@ -216,7 +216,8 @@ export async function getBookingCalendar(req: Request, res: Response, next: Next
       bookingsByResource.get(b.resourceId)!.push(b)
     }
 
-    const laneCountByResource: Record<string, number> = {}
+    const laneCountByResource:       Record<string, number> = {}
+    const activeLaneCountByResource: Record<string, number> = {}
     const allLanes: Record<string, number> = {}
     // overlapRank: 1-based position within the set of bookings that overlap with
     // this booking on the same resource, sorted chronologically by createdAt.
@@ -224,17 +225,21 @@ export async function getBookingCalendar(req: Request, res: Response, next: Next
     const allOverlapCounts: Record<string, number> = {}
 
     for (const [rId, bList] of bookingsByResource.entries()) {
-      // Only ACTIVE bookings participate in lane/conflict calculation
-      const activeBList = bList.filter(b => !b.cancelled)
-
+      // ALL bookings (active + cancelled) get visual lanes so nothing overlaps
       const { lanes, laneCount } = assignLanes(
-        activeBList.map(b => ({ id: b.id, startTime: b.startTime, endTime: b.endTime }))
+        bList.map(b => ({ id: b.id, startTime: b.startTime, endTime: b.endTime }))
       )
-      // Cancelled bookings go in lane 0 (they show but don't affect lane count)
       for (const b of bList) {
-        allLanes[b.id] = b.cancelled ? 0 : (lanes[b.id] ?? 0)
+        allLanes[b.id] = lanes[b.id] ?? 0
       }
       laneCountByResource[rId] = laneCount
+
+      // Conflict detection uses only ACTIVE bookings
+      const activeBList = bList.filter(b => !b.cancelled)
+      const { laneCount: activeLaneCount } = assignLanes(
+        activeBList.map(b => ({ id: b.id, startTime: b.startTime, endTime: b.endTime }))
+      )
+      activeLaneCountByResource[rId] = activeLaneCount
 
       // Waitlist rank: only among ACTIVE bookings
       for (const b of bList) {
@@ -266,7 +271,7 @@ export async function getBookingCalendar(req: Request, res: Response, next: Next
     const enrichedResources = resources.map(r => ({
       ...r,
       laneCount:   laneCountByResource[r.id] ?? 0,
-      hasConflict: (laneCountByResource[r.id] ?? 0) > 1,
+      hasConflict: (activeLaneCountByResource[r.id] ?? 0) > 1,
     }))
 
     const conflictsCount = enrichedResources.filter(r => r.hasConflict).length
