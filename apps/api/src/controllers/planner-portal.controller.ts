@@ -58,7 +58,7 @@ export async function getPortalSnapshot(req: Request, res: Response, next: NextF
       select: {
         id: true, name: true, eventType: true, code: true,
         venueLocation: true, expectedAttendance: true, description: true,
-        eventStart: true, lienzoData: true,
+        eventStart: true,
         primaryClient: { select: { id: true, firstName: true, lastName: true, companyName: true, email: true, phone: true } },
       },
     })
@@ -69,13 +69,14 @@ export async function getPortalSnapshot(req: Request, res: Response, next: NextF
     const storeMap: Record<string, any> = {}
     for (const s of stores) storeMap[s.storeKey] = s.data
 
-    const lienzoRaw = event.lienzoData as any
-    // lienzoData is stored as a flat widget array; handle both array and {widgets:[]} shapes
-    const lienzoWidgets = Array.isArray(lienzoRaw)
-      ? lienzoRaw
-      : (lienzoRaw?.widgets ?? null)
-    const lienzo = lienzoRaw
-      ? { widgets: lienzoWidgets, suppliers: storeMap.suppliers?.suppliers ?? storeMap.suppliers ?? [] }
+    // Serve lienzo-cliente PlannerStore (created in the admin lienzo "cliente" tab)
+    const lienzoClienteStore = storeMap['lienzo-cliente']
+    const lienzo = lienzoClienteStore
+      ? {
+          widgets: lienzoClienteStore.widgets ?? [],
+          strokes:  lienzoClienteStore.strokes  ?? [],
+          suppliers: storeMap.suppliers?.suppliers ?? storeMap.suppliers ?? [],
+        }
       : null
 
     const data = {
@@ -98,6 +99,32 @@ export async function getPortalSnapshot(req: Request, res: Response, next: NextF
     }
 
     res.json({ success: true, data })
+  } catch (err) {
+    next(err)
+  }
+}
+
+// PUT /api/v1/portal/planner-lienzo/:eventId
+// Portal JWT required. Allows portal users to save changes to their lienzo-cliente.
+export async function savePortalLienzo(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { portalUserId } = req.portalUser!
+    const { eventId } = req.params
+    const { widgets, strokes } = req.body
+
+    // Verify access
+    const access = await prisma.portalUserEvent.findUnique({
+      where: { portalUserId_eventId: { portalUserId, eventId } },
+    })
+    if (!access) throw new AppError(403, 'FORBIDDEN', 'No tienes acceso a este evento')
+
+    await prisma.plannerStore.upsert({
+      where: { eventId_storeKey: { eventId, storeKey: 'lienzo-cliente' } },
+      create: { eventId, storeKey: 'lienzo-cliente', data: { widgets: widgets ?? [], strokes: strokes ?? [] } },
+      update: { data: { widgets: widgets ?? [], strokes: strokes ?? [] } },
+    })
+
+    res.json({ success: true })
   } catch (err) {
     next(err)
   }

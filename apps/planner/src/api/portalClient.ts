@@ -29,4 +29,7 @@ export const plannerPortalApi = {
 
   signContract: (eventId: string, signatureData: string, token: string) =>
     portalPublicClient.post(`/planner-contract/${eventId}/sign`, { signatureData }, authHeader(token)).then((r) => r.data),
+
+  saveLienzo: (eventId: string, widgets: any[], strokes: any[], token: string) =>
+    portalPublicClient.put(`/planner-lienzo/${eventId}`, { widgets, strokes }, authHeader(token)).then((r) => r.data),
 }

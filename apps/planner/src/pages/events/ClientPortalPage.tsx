@@ -1098,6 +1098,14 @@ export default function ClientPortalPage() {
   const [addWidgetType, setAddWidgetType] = useState<'imagen' | 'links'>('imagen')
   const [addWidgetUrl, setAddWidgetUrl] = useState('')
 
+  // Lienzo save state
+  const [lienzoSyncStatus, setLienzoSyncStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const lienzoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const widgetsRef = useRef<Widget[]>([])
+  widgetsRef.current = widgets
+  const lienzoStrokesRef = useRef(lienzoStrokes)
+  lienzoStrokesRef.current = lienzoStrokes
+
   async function fetchSnapshot(accessToken: string) {
     setLoading(true); setFetchError(null)
     try {
@@ -1165,6 +1173,29 @@ export default function ClientPortalPage() {
     setSnapshot(prev => prev ? { ...prev, ...patch } : prev)
   }
 
+  function serializeWidget(w: Widget) {
+    return {
+      ...w,
+      config: {
+        ...w.config,
+        imageUrl: w.config.imageUrl?.startsWith('blob:') ? null : w.config.imageUrl,
+        pdfUrl:   w.config.pdfUrl?.startsWith('blob:')   ? null : w.config.pdfUrl,
+        pdfName:  w.config.pdfUrl?.startsWith('blob:')   ? null : w.config.pdfName,
+      },
+    }
+  }
+
+  function debouncedSaveLienzo() {
+    if (!token || !eventId) return
+    setLienzoSyncStatus('saving')
+    if (lienzoSaveTimer.current) clearTimeout(lienzoSaveTimer.current)
+    lienzoSaveTimer.current = setTimeout(() => {
+      plannerPortalApi.saveLienzo(eventId, widgetsRef.current.map(serializeWidget), lienzoStrokesRef.current, token)
+        .then(() => setLienzoSyncStatus('saved'))
+        .catch(() => setLienzoSyncStatus('idle'))
+    }, 1200)
+  }
+
   // Initialize widgets + strokes from snapshot
   useEffect(() => {
     if (!snapshot) return
@@ -1190,6 +1221,18 @@ export default function ClientPortalPage() {
     const strokes: Array<{ id: string; points: Array<{x:number;y:number}>; color: string; width: number }> =
       Array.isArray(rawLienzo) ? [] : (rawLienzo?.strokes ?? [])
     setLienzoStrokes(strokes)
+  }, [snapshot])
+
+  // Auto-save lienzo when widgets or strokes change (only after snapshot is loaded)
+  const lienzoLoaded = useRef(false)
+  useEffect(() => {
+    if (!authed || !snapshot || !lienzoLoaded.current) return
+    debouncedSaveLienzo()
+  }, [widgets, lienzoStrokes])
+
+  // Mark loaded after first snapshot initialization
+  useEffect(() => {
+    if (snapshot) lienzoLoaded.current = true
   }, [snapshot])
 
   // Pan handlers
@@ -1418,11 +1461,14 @@ export default function ClientPortalPage() {
       {/* Footer */}
       <div style={{
         background: '#1E1040', padding: '6px 20px', flexShrink: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         borderTop: '1px solid rgba(255,255,255,0.07)',
       }}>
         <span style={{ fontSize: 10, color: 'rgba(196,181,253,0.4)' }}>
           Powered by IventIA Planner · {widgets.length} widgets
+        </span>
+        <span style={{ fontSize: 10, color: 'rgba(196,181,253,0.4)' }}>
+          {lienzoSyncStatus === 'saving' ? '● Guardando...' : lienzoSyncStatus === 'saved' ? '● Sincronizado' : ''}
         </span>
       </div>
     </div>

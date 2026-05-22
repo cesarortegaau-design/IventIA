@@ -2875,11 +2875,17 @@ function serializeWidgets(widgets: Widget[]) {
   }))
 }
 
-// ── Main page ───────────────────────────────────────────────────────────────────
-export default function LienzoPage() {
-  const { id } = useParams<{ id: string }>()
-  const { event } = useOutletContext<{ event: any }>()
+// ── Main canvas (shared by all 3 tabs) ─────────────────────────────────────────
+function LienzoCanvas({ eventId: id, event, storeKey }: { eventId: string; event: any; storeKey?: string }) {
+  const isStoreMode = !!storeKey
   const queryClient = useQueryClient()
+
+  // Store-mode canvas: uses usePlannerStore (disabled when in lienzo mode)
+  const plannerStore = usePlannerStore<{ widgets: any[]; strokes: any[] }>(
+    isStoreMode ? (id ?? '') : '',
+    storeKey ?? 'lienzo-cliente',
+    { widgets: [], strokes: [] },
+  )
 
   const [widgets, setWidgets] = useState<Widget[]>(makeDefaultWidgets)
   const [lienzoReady, setLienzoReady] = useState(false)
@@ -2905,56 +2911,62 @@ export default function LienzoPage() {
   const { data: lienzoRemote, isLoading: lienzoLoading } = useQuery({
     queryKey: ['planner-lienzo', id],
     queryFn: () => eventsApi.getLienzo(id!),
-    enabled: !!id,
+    enabled: !isStoreMode && !!id,
     staleTime: Infinity,
   })
 
-  // Initialize widgets from backend (with localStorage migration fallback)
+  // Initialize widgets + strokes (once) from either usePlannerStore or lienzo API
   useEffect(() => {
-    if (lienzoLoading || !id) return
-    const remoteData = lienzoRemote?.data
-    if (remoteData) {
-      if (Array.isArray(remoteData) && remoteData.length > 0) {
-        // Old format: flat widget array
-        setWidgets(loadWidgets(id, remoteData))
-        setStrokes([])
-      } else if (remoteData?.widgets && Array.isArray(remoteData.widgets)) {
-        // New format: { widgets, strokes }
-        setWidgets(loadWidgets(id, remoteData.widgets))
-        setStrokes(remoteData.strokes ?? [])
+    if (lienzoReady) return
+    if (isStoreMode) {
+      if (!plannerStore.ready || !id) return
+      const data = plannerStore.store
+      setWidgets(data.widgets?.length ? loadWidgets(id, data.widgets) : [])
+      setStrokes(data.strokes ?? [])
+      setLienzoReady(true)
+    } else {
+      if (lienzoLoading || !id) return
+      const remoteData = lienzoRemote?.data
+      if (remoteData) {
+        if (Array.isArray(remoteData) && remoteData.length > 0) {
+          setWidgets(loadWidgets(id, remoteData))
+          setStrokes([])
+        } else if (remoteData?.widgets && Array.isArray(remoteData.widgets)) {
+          setWidgets(loadWidgets(id, remoteData.widgets))
+          setStrokes(remoteData.strokes ?? [])
+        } else {
+          const local = loadWidgets(id)
+          setWidgets(local)
+          if (local.length > 0) eventsApi.saveLienzo(id, serializeWidgets(local), []).catch(() => {})
+        }
       } else {
         const local = loadWidgets(id)
         setWidgets(local)
-        if (local.length > 0) {
-          eventsApi.saveLienzo(id, serializeWidgets(local), []).catch(() => {})
-        }
+        if (local.length > 0) eventsApi.saveLienzo(id, serializeWidgets(local), []).catch(() => {})
       }
-    } else {
-      const local = loadWidgets(id)
-      setWidgets(local)
-      if (local.length > 0) {
-        eventsApi.saveLienzo(id, serializeWidgets(local), []).catch(() => {})
-      }
+      setLienzoReady(true)
     }
-    setLienzoReady(true)
-  }, [lienzoLoading, id, lienzoRemote])
+  }, [isStoreMode, lienzoReady, lienzoLoading, id, lienzoRemote, plannerStore.ready, plannerStore.store])
 
-  // Debounced API save on every widgets/strokes change (after initial load)
+  // Debounced save on widgets/strokes change (after initial load)
   useEffect(() => {
     if (!id || !lienzoReady) return
-    setSyncStatus('saving')
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => {
-      const serializable = serializeWidgets(widgets)
-      eventsApi.saveLienzo(id, serializable, strokes)
-        .then(() => {
-          setSyncStatus('saved')
-          setLastSync(dayjs().format('HH:mm'))
-          // Keep React Query cache in sync so remount doesn't revert to stale data
-          queryClient.setQueryData(['planner-lienzo', id], { data: { widgets: serializable, strokes } })
-        })
-        .catch(() => setSyncStatus('idle'))
-    }, 1200)
+    if (isStoreMode) {
+      plannerStore.update({ widgets: serializeWidgets(widgets) as any, strokes })
+    } else {
+      setSyncStatus('saving')
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+      saveTimer.current = setTimeout(() => {
+        const serializable = serializeWidgets(widgets)
+        eventsApi.saveLienzo(id, serializable, strokes)
+          .then(() => {
+            setSyncStatus('saved')
+            setLastSync(dayjs().format('HH:mm'))
+            queryClient.setQueryData(['planner-lienzo', id], { data: { widgets: serializable, strokes } })
+          })
+          .catch(() => setSyncStatus('idle'))
+      }, 1200)
+    }
   }, [id, lienzoReady, widgets, strokes])
 
   // Drag state
@@ -3089,7 +3101,8 @@ export default function LienzoPage() {
     { key: 'imagen', label: 'Imagen', icon: <PictureOutlined />, shortcut: 'I' },
   ]
 
-  if (lienzoLoading) {
+  const canvasIsLoading = isStoreMode ? !plannerStore.ready : lienzoLoading
+  if (canvasIsLoading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
         <Spin size="large" tip="Cargando lienzo..." />
@@ -3407,24 +3420,30 @@ export default function LienzoPage() {
         <Text style={{ fontSize: 12, color: '#888' }}>
           {widgets.length} widgets
         </Text>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {syncStatus === 'saving' ? (
-            <>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#F59E0B', display: 'inline-block' }} />
-              <Text style={{ fontSize: 12, color: '#888' }}>Guardando...</Text>
-            </>
-          ) : syncStatus === 'saved' && lastSync ? (
-            <>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#059669', display: 'inline-block' }} />
-              <Text style={{ fontSize: 12, color: '#888' }}>Sincronizado · {lastSync}</Text>
-            </>
-          ) : (
-            <>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#D1D5DB', display: 'inline-block' }} />
-              <Text style={{ fontSize: 12, color: '#aaa' }}>Sin cambios</Text>
-            </>
-          )}
-        </div>
+        {(() => {
+          const effectiveSync = isStoreMode ? plannerStore.syncStatus : syncStatus
+          return (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {effectiveSync === 'saving' ? (
+                <>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#F59E0B', display: 'inline-block' }} />
+                  <Text style={{ fontSize: 12, color: '#888' }}>Guardando...</Text>
+                </>
+              ) : effectiveSync === 'saved' ? (
+                <>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#059669', display: 'inline-block' }} />
+                  <Text style={{ fontSize: 12, color: '#888' }}>Sincronizado{!isStoreMode && lastSync ? ` · ${lastSync}` : ''}</Text>
+                </>
+              ) : (
+                <>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#D1D5DB', display: 'inline-block' }} />
+                  <Text style={{ fontSize: 12, color: '#aaa' }}>Sin cambios</Text>
+                </>
+              )}
+            </div>
+          )
+        })()}
+
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Button type="text" size="small" icon={<MinusOutlined />}
             onClick={() => setZoom((z) => Math.max(25, z - 10))}
@@ -3434,6 +3453,61 @@ export default function LienzoPage() {
             onClick={() => setZoom((z) => Math.min(200, z + 10))}
             style={{ width: 24, height: 24, padding: 0 }} />
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Outer page with tabs ────────────────────────────────────────────────────────
+export default function LienzoPage() {
+  const { id = '' } = useParams<{ id: string }>()
+  const { event } = useOutletContext<{ event: any }>()
+  const [activeTab, setActiveTab] = useState<string>('evento')
+
+  const tabs = [
+    { key: 'evento',   label: 'Lienzo del evento' },
+    { key: 'cliente',  label: 'Lienzo del cliente' },
+    { key: 'invitado', label: 'Lienzo del invitado' },
+  ]
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Tab bar */}
+      <div style={{
+        background: '#fff', borderBottom: '1px solid var(--pl-border)',
+        padding: '0 16px', flexShrink: 0,
+        boxShadow: '0 1px 4px rgba(124,58,237,0.04)',
+      }}>
+        <div style={{ display: 'flex', gap: 0 }}>
+          {tabs.map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              style={{
+                padding: '10px 20px', border: 'none', background: 'none', cursor: 'pointer',
+                fontSize: 13, fontWeight: activeTab === tab.key ? 600 : 400,
+                color: activeTab === tab.key ? 'var(--pl-primary)' : '#666',
+                borderBottom: activeTab === tab.key ? '2px solid var(--pl-primary)' : '2px solid transparent',
+                transition: 'all 0.15s',
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Canvas — remount on tab change via key prop */}
+      <div style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
+        {activeTab === 'evento' && (
+          <LienzoCanvas key="evento" eventId={id} event={event} />
+        )}
+        {activeTab === 'cliente' && (
+          <LienzoCanvas key="cliente" eventId={id} event={event} storeKey="lienzo-cliente" />
+        )}
+        {activeTab === 'invitado' && (
+          <LienzoCanvas key="invitado" eventId={id} event={event} storeKey="lienzo-invitado" />
+        )}
       </div>
     </div>
   )

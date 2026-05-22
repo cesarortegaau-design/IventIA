@@ -12,7 +12,7 @@ import {
   portalListConversations, portalGetConversation, portalStartConversation,
   portalSendMessage, portalUnreadCount, uploadChatFile,
 } from '../controllers/chat.controller'
-import { getPortalSnapshot } from '../controllers/planner-portal.controller'
+import { getPortalSnapshot, savePortalLienzo } from '../controllers/planner-portal.controller'
 import { addClientTask, createPlannerPaymentCheckout, verifyPlannerPayment, authorizeQuote, signContract } from '../controllers/planner-client.controller'
 
 const voucherUpload = multer({
@@ -45,6 +45,7 @@ router.post('/auth/refresh', portalRefresh)
 router.use(authenticatePortal)
 
 router.get('/planner-snapshot/:eventId', getPortalSnapshot)
+router.put('/planner-lienzo/:eventId', savePortalLienzo)
 router.patch('/planner-tareas/:eventId', addClientTask)
 router.post('/planner-payments/:eventId/checkout', createPlannerPaymentCheckout)
 router.post('/planner-payments/:eventId/verify', verifyPlannerPayment)
