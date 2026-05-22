@@ -1,5 +1,5 @@
 {
-  "ignoreCommand": "git diff HEAD^ HEAD --quiet -- apps/planner/ packages/shared/ packages/prisma/",
+  "ignoreCommand": "git diff HEAD^ HEAD --quiet -- apps/planner/ packages/shared/ packages/prisma/ 2>/dev/null && exit 0 || exit 1",
   "rewrites": [
     {
       "source": "/(.*)",
