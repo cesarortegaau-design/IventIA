@@ -14,7 +14,8 @@ import {
   GlobalOutlined, EyeOutlined, UserOutlined,
   CopyOutlined, KeyOutlined, CheckCircleOutlined, LockOutlined,
   CloudUploadOutlined, MinusOutlined, PlusOutlined,
-  AppstoreOutlined, ExportOutlined,
+  AppstoreOutlined, ExportOutlined, AuditOutlined,
+  ClockCircleOutlined, ExclamationCircleOutlined, FilePdfOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
@@ -245,10 +246,104 @@ function ResumenRO({ tareas, timeline, presupuesto }: { tareas: any; timeline: a
   )
 }
 
+function ContratoRO({ contrato }: { contrato: any }) {
+  const CONTRATO_STATUS_CFG: Record<string, { label: string; color: string; bg: string; border: string }> = {
+    BORRADOR:   { label: 'Borrador',   color: '#6B7280', bg: '#F3F4F6', border: '#D1D5DB' },
+    COTIZACION: { label: 'Cotización', color: '#D97706', bg: '#FFFBEB', border: '#FDE68A' },
+    CONTRATO:   { label: 'Contrato',   color: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE' },
+    FIRMADO:    { label: 'Firmado',    color: '#059669', bg: '#ECFDF5', border: '#6EE7B7' },
+    CANCELADO:  { label: 'Cancelado',  color: '#DC2626', bg: '#FEF2F2', border: '#FECDD3' },
+  }
+  const fmtC = (n: number) => `$${n.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const statusCfg = CONTRATO_STATUS_CFG[contrato?.status] || CONTRATO_STATUS_CFG['BORRADOR']
+  const hasContract = !!contrato?.contractNumber
+  const clientName = contrato?.client?.personType === 'MORAL'
+    ? contrato?.client?.companyName
+    : `${contrato?.client?.firstName || ''} ${contrato?.client?.lastName || ''}`.trim()
+  const payments = (contrato?.payments || []).map((p: any) => {
+    if (p.status === 'PENDIENTE' && new Date(p.dueDate) < new Date()) return { ...p, status: 'VENCIDO' }
+    return p
+  })
+  const paidTotal = (contrato?.payments || [])
+    .filter((p: any) => p.status === 'PAGADO')
+    .reduce((s: number, p: any) => s + (p.paidAmount || p.amount), 0)
+
+  if (!hasContract) {
+    return (
+      <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#F5F3FF', userSelect: 'none' }}>
+        <AuditOutlined style={{ fontSize: 28, color: '#A78BFA' }} />
+        <div style={{ fontSize: 12, color: '#7C3AED', fontWeight: 600 }}>Sin contrato disponible</div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', userSelect: 'none' }}>
+      {/* Header */}
+      <div style={{ background: 'linear-gradient(135deg, #7C3AED, #4F46E5)', padding: '10px 14px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: 9, letterSpacing: '0.25em', textTransform: 'uppercase', marginBottom: 2 }}>CONTRATO</div>
+          <div style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>{contrato.contractNumber}</div>
+        </div>
+        <div style={{ background: statusCfg.bg, color: statusCfg.color, borderRadius: 10, padding: '2px 8px', fontSize: 10, fontWeight: 700 }}>
+          {statusCfg.label}
+        </div>
+      </div>
+
+      <div style={{ flex: 1, overflow: 'auto', padding: '10px 14px' }}>
+        {/* Client + total */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+          <div style={{ background: '#F9FAFB', border: '1px solid #EDE9FE', borderRadius: 8, padding: '8px 10px' }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.1em', marginBottom: 3 }}>CLIENTE</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#1F2937', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{clientName || '—'}</div>
+          </div>
+          <div style={{ background: '#F9FAFB', border: '1px solid #EDE9FE', borderRadius: 8, padding: '8px 10px' }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.1em', marginBottom: 3 }}>TOTAL</div>
+            <div style={{ fontSize: 14, fontWeight: 800, color: '#7C3AED' }}>{fmtC(contrato.totalAmount || 0)}</div>
+            {paidTotal > 0 && <div style={{ fontSize: 10, color: '#059669', fontWeight: 600 }}>Pagado: {fmtC(paidTotal)}</div>}
+          </div>
+        </div>
+
+        {/* Payments */}
+        {payments.length > 0 ? (
+          <div>
+            <div style={{ fontSize: 9, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.1em', marginBottom: 6 }}>CALENDARIO DE PAGOS</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {payments.map((p: any) => {
+                const isPaid = p.status === 'PAGADO'
+                const isOverdue = p.status === 'VENCIDO'
+                const color = isPaid ? '#059669' : isOverdue ? '#DC2626' : '#D97706'
+                const bg = isPaid ? '#F0FDF4' : isOverdue ? '#FEF2F2' : '#FFFBEB'
+                const border = isPaid ? '#BBF7D0' : isOverdue ? '#FECDD3' : '#FDE68A'
+                return (
+                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, background: bg, border: `1px solid ${border}` }}>
+                    <div style={{ color, fontSize: 13, flexShrink: 0 }}>
+                      {isPaid ? <CheckCircleOutlined /> : isOverdue ? <ExclamationCircleOutlined /> : <ClockCircleOutlined />}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: '#1F2937' }}>{p.label}</div>
+                      <div style={{ fontSize: 10, color: '#6B7280' }}>
+                        {new Date(p.dueDate).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })} · {p.percentage}%
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color, flexShrink: 0 }}>{fmtC(p.amount)}</div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ) : (
+          <div style={{ textAlign: 'center', color: '#aaa', fontSize: 11, padding: '14px 0' }}>Sin calendario de pagos</div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Widget dispatcher ─────────────────────────────────────────────────────────
-function PreviewWidget({ widget, event, branding, tareas, timeline, presupuesto, suppliers }: {
+function PreviewWidget({ widget, event, branding, tareas, timeline, presupuesto, suppliers, contrato }: {
   widget: Widget; event: any; branding: EventBranding
-  tareas: any; timeline: any; presupuesto: any; suppliers: any[]
+  tareas: any; timeline: any; presupuesto: any; suppliers: any[]; contrato: any
 }) {
   switch (widget.type) {
     case 'portada':     return <PortadaRO event={event} branding={branding} />
@@ -262,6 +357,7 @@ function PreviewWidget({ widget, event, branding, tareas, timeline, presupuesto,
     case 'resumen':     return <ResumenRO tareas={tareas} timeline={timeline} presupuesto={presupuesto} />
     case 'timeline':    return <TimelineRO timeline={timeline} event={event} />
     case 'presupuesto': return <PresupuestoRO presupuesto={presupuesto} />
+    case 'contrato':    return <ContratoRO contrato={contrato} />
     default:            return null
   }
 }
@@ -370,6 +466,7 @@ export default function PortalPage() {
   const { store: presupuesto } = usePlannerStore<{ chapters: any[]; items: any[] }>(id!, 'presupuesto', { chapters: [], items: [] }, `iventia-presupuesto-${id}`)
   const { store: suppStore } = usePlannerStore<{ suppliers: any[] }>(id!, 'suppliers', { suppliers: [] }, `iventia-event-suppliers-${id}`)
   const suppliers = Array.isArray(suppStore) ? suppStore : (suppStore.suppliers ?? [])
+  const { store: contrato } = usePlannerStore<any>(id!, 'contrato', { contractNumber: '', status: 'BORRADOR', client: {}, items: [], payments: [], totalAmount: 0 }, `iventia-contrato-${id}`)
 
   // Read lienzo widgets
   const { data: lienzoData, isLoading: lienzoLoading } = useQuery({
@@ -588,7 +685,7 @@ export default function PortalPage() {
                   boxShadow: '0 4px 20px rgba(0,0,0,0.15), 0 0 0 1px rgba(255,255,255,0.08)',
                 }}>
                   <PreviewWidget widget={w} event={event} branding={branding}
-                    tareas={tareas} timeline={timeline} presupuesto={presupuesto} suppliers={suppliers} />
+                    tareas={tareas} timeline={timeline} presupuesto={presupuesto} suppliers={suppliers} contrato={contrato} />
                 </div>
               ))}
             </div>

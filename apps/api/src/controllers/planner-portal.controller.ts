@@ -79,6 +79,7 @@ export async function getPortalSnapshot(req: Request, res: Response, next: NextF
       tareas: storeMap.tareas ?? null,
       timeline: storeMap.timeline ?? null,
       presupuesto: storeMap.presupuesto ?? null,
+      contrato: storeMap.contrato ?? null,
       lienzo,
       eventSnapshot: {
         name: event.name,

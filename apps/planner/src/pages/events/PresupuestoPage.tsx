@@ -6,13 +6,15 @@
 import { useState, useMemo, useRef } from 'react'
 import { useParams, useOutletContext } from 'react-router-dom'
 import { usePlannerStore } from '../../hooks/usePlannerStore'
+import { DEFAULT_BRANDING, type EventBranding } from './EstudioPage'
 import {
   Button, Modal, Form, Input, InputNumber, Select, Space,
-  Popconfirm, App, Typography, Divider,
+  Popconfirm, App, Typography, Divider, Dropdown,
 } from 'antd'
+import type { MenuProps } from 'antd'
 import {
   PlusOutlined, EditOutlined, DeleteOutlined,
-  FileExcelOutlined, UploadOutlined,
+  FileExcelOutlined, UploadOutlined, FilePdfOutlined, PrinterOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
@@ -123,60 +125,305 @@ function PLPreview({ qty, price, cost }: { qty: number; price: number; cost: num
   )
 }
 
-// ── Excel export ──────────────────────────────────────────────────────────────
+// ── Excel export (styled) ─────────────────────────────────────────────────────
 async function exportToExcel(store: BudgetStore, eventName: string) {
   const ExcelJS = await import('exceljs')
   const wb = new ExcelJS.Workbook()
+  wb.creator = 'IventIA Planner'
   const ws = wb.addWorksheet('Presupuesto')
-  ws.columns = [
-    { header: 'Capítulo',      key: 'chapter',    width: 26 },
-    { header: 'Código',        key: 'code',        width: 10 },
-    { header: 'Concepto',      key: 'concept',     width: 34 },
-    { header: 'Proveedor',     key: 'provider',    width: 22 },
-    { header: 'Cant.',         key: 'quantity',    width: 8  },
-    { header: 'Unidad',        key: 'unit',        width: 8  },
-    { header: 'P. Unit.',      key: 'unitPrice',   width: 14 },
-    { header: 'Costo Unit.',   key: 'unitCost',    width: 14 },
-    { header: 'Total Ingreso', key: 'total',       width: 16 },
-    { header: 'Total Costo',   key: 'totalCost',   width: 14 },
-    { header: 'Utilidad',      key: 'profit',      width: 14 },
-    { header: 'Margen %',      key: 'margin',      width: 10 },
-    { header: 'Estado',        key: 'status',      width: 14 },
-    { header: 'Notas',         key: 'notes',       width: 30 },
-  ]
-  ws.getRow(1).font = { bold: true }
 
-  for (const item of store.items) {
-    const ch        = store.chapters.find(c => c.id === item.chapterId)
-    const ingreso   = item.quantity * item.unitPrice
-    const costo     = item.quantity * (item.unitCost ?? 0)
-    const utilidad  = ingreso - costo
-    const margin    = ingreso > 0 ? Math.round(utilidad / ingreso * 100) : 0
-    ws.addRow({
-      chapter:   ch?.name ?? '',
-      code:      item.code,
-      concept:   item.concept,
-      provider:  item.provider ?? '',
-      quantity:  item.quantity,
-      unit:      item.unit,
-      unitPrice: item.unitPrice,
-      unitCost:  item.unitCost ?? 0,
-      total:     ingreso,
-      totalCost: costo,
-      profit:    utilidad,
-      margin:    `${margin}%`,
-      status:    STATUS_CFG[item.status]?.label ?? item.status,
-      notes:     item.notes ?? '',
-    })
+  ws.columns = [
+    { header: 'Capítulo',      key: 'chapter',   width: 26 },
+    { header: 'Código',        key: 'code',       width: 10 },
+    { header: 'Concepto',      key: 'concept',    width: 34 },
+    { header: 'Proveedor',     key: 'provider',   width: 22 },
+    { header: 'Cant.',         key: 'quantity',   width: 8  },
+    { header: 'Unidad',        key: 'unit',       width: 8  },
+    { header: 'P. Unit.',      key: 'unitPrice',  width: 14 },
+    { header: 'Costo Unit.',   key: 'unitCost',   width: 14 },
+    { header: 'Total Ingreso', key: 'total',      width: 16 },
+    { header: 'Total Costo',   key: 'totalCost',  width: 14 },
+    { header: 'Utilidad',      key: 'profit',     width: 14 },
+    { header: 'Margen %',      key: 'margin',     width: 10 },
+    { header: 'Estado',        key: 'status',     width: 14 },
+    { header: 'Notas',         key: 'notes',      width: 30 },
+  ]
+
+  // Styled header row
+  const hdr = ws.getRow(1)
+  hdr.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 }
+  hdr.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF7C3AED' } }
+  hdr.alignment = { vertical: 'middle', horizontal: 'center' }
+  hdr.height = 22
+
+  const chapters = [...store.chapters].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+  let ingTotal = 0, costTotal = 0
+
+  for (const chapter of chapters) {
+    const items = store.items.filter(i => i.chapterId === chapter.id)
+    if (!items.length) continue
+
+    // Chapter header
+    const chArgb = 'FF' + chapter.color.replace('#', '')
+    const chRow = ws.addRow({ chapter: `  ${chapter.name}` })
+    chRow.font = { bold: true, color: { argb: chArgb }, size: 11 }
+    chRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F3FF' } }
+    chRow.height = 20
+    ws.mergeCells(`A${chRow.number}:N${chRow.number}`)
+    chRow.getCell(1).border = { left: { style: 'thick', color: { argb: chArgb } } }
+
+    for (const item of items) {
+      const ingreso  = item.quantity * item.unitPrice
+      const costo    = item.quantity * (item.unitCost ?? 0)
+      const utilidad = ingreso - costo
+      const margin   = ingreso > 0 ? utilidad / ingreso : 0
+      if (item.status !== 'CANCELLED') { ingTotal += ingreso; costTotal += costo }
+
+      const row = ws.addRow({
+        chapter:   '',
+        code:      item.code,
+        concept:   item.concept,
+        provider:  item.provider ?? '',
+        quantity:  item.quantity,
+        unit:      item.unit,
+        unitPrice: item.unitPrice,
+        unitCost:  item.unitCost ?? 0,
+        total:     ingreso,
+        totalCost: costo,
+        profit:    utilidad,
+        margin,
+        status:    STATUS_CFG[item.status]?.label ?? item.status,
+        notes:     item.notes ?? '',
+      })
+      ;([7, 8, 9, 10, 11] as number[]).forEach(c => { row.getCell(c).numFmt = '"$"#,##0' })
+      row.getCell(12).numFmt = '0%'
+      if (item.status === 'CANCELLED') {
+        row.font = { color: { argb: 'FF9CA3AF' }, italic: true }
+      }
+      row.getCell(1).border = { left: { style: 'thin', color: { argb: 'FFEDE9FE' } } }
+    }
+
+    // Chapter subtotal
+    const chTotal = store.items.filter(i => i.chapterId === chapter.id && i.status !== 'CANCELLED')
+      .reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+    const chCost = store.items.filter(i => i.chapterId === chapter.id && i.status !== 'CANCELLED')
+      .reduce((s, i) => s + i.quantity * (i.unitCost ?? 0), 0)
+    const chUtil = chTotal - chCost
+    const chMgn = chTotal > 0 ? chUtil / chTotal : 0
+    const subRow = ws.addRow({ chapter: `Total ${chapter.name}`, total: chTotal, totalCost: chCost, profit: chUtil, margin: chMgn })
+    subRow.font = { bold: true, color: { argb: chArgb }, italic: true }
+    subRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFAF8FF' } }
+    ;([9, 10, 11] as number[]).forEach(c => { subRow.getCell(c).numFmt = '"$"#,##0' })
+    subRow.getCell(12).numFmt = '0%'
   }
+
+  // Grand total row
+  const utilTotal = ingTotal - costTotal
+  const mgnTotal  = ingTotal > 0 ? utilTotal / ingTotal : 0
+  const totRow = ws.addRow({ chapter: 'TOTAL EVENTO', total: ingTotal, totalCost: costTotal, profit: utilTotal, margin: mgnTotal })
+  totRow.font = { bold: true, size: 12, color: { argb: 'FF7C3AED' } }
+  totRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEDE9FE' } }
+  totRow.height = 22
+  ;([9, 10, 11] as number[]).forEach(c => { totRow.getCell(c).numFmt = '"$"#,##0' })
+  totRow.getCell(12).numFmt = '0%'
 
   const buf = await wb.xlsx.writeBuffer()
   const url = URL.createObjectURL(new Blob([buf]))
   const a = document.createElement('a')
-  a.href = url
-  a.download = `presupuesto-${eventName || 'evento'}.xlsx`
-  a.click()
+  a.href = url; a.download = `presupuesto-${eventName || 'evento'}.xlsx`; a.click()
   URL.revokeObjectURL(url)
+}
+
+// ── PDF helpers ────────────────────────────────────────────────────────────────
+function openHtml(html: string) {
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+  const url  = URL.createObjectURL(blob)
+  const w    = window.open(url, '_blank')
+  if (w) w.onload = () => URL.revokeObjectURL(url)
+  else setTimeout(() => URL.revokeObjectURL(url), 60_000)
+}
+
+function generatePresupuestoPdf(store: BudgetStore, event: any, mode: 'org' | 'cliente', branding: EventBranding = DEFAULT_BRANDING) {
+  const primary   = branding.primaryColor   || '#7C3AED'
+  const secondary = branding.secondaryColor || '#4F46E5'
+  const isOrg     = mode === 'org'
+  const eventName = event?.name || 'Evento'
+  const eventType = event?.eventType || 'Evento'
+  const eventCode = event?.code || ''
+  const eventDate = event?.eventStart
+    ? new Date(event.eventStart).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
+    : ''
+  const genDate   = new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
+
+  const chapters  = [...store.chapters].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+  const active    = store.items.filter(i => i.status !== 'CANCELLED')
+  const ingTotal  = active.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+  const costTotal = active.reduce((s, i) => s + i.quantity * (i.unitCost ?? 0), 0)
+  const utilTotal = ingTotal - costTotal
+  const margenPct = ingTotal > 0 ? Math.round(utilTotal / ingTotal * 100) : 0
+  const confirmed = active.filter(i => i.status === 'CONFIRMED').reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+
+  const fmtM = (n: number) => `$${n.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+
+  const kpiCards = isOrg
+    ? [
+        { label: 'INGRESO TOTAL',   value: fmtM(ingTotal),  color: primary },
+        { label: 'COSTO TOTAL',     value: fmtM(costTotal), color: '#DC2626' },
+        { label: 'UTILIDAD',        value: fmtM(utilTotal), color: margenPct >= 20 ? '#059669' : margenPct >= 10 ? '#D97706' : '#DC2626' },
+        { label: 'MARGEN',          value: `${margenPct}%`, color: margenPct >= 20 ? '#059669' : margenPct >= 10 ? '#D97706' : '#DC2626' },
+        { label: 'CAPÍTULOS',       value: chapters.length, color: '#0D9488' },
+        { label: 'ITEMS',           value: store.items.length, color: '#6B7280' },
+      ]
+    : [
+        { label: 'TOTAL COTIZADO',  value: fmtM(ingTotal),              color: primary },
+        { label: 'CONFIRMADO',      value: fmtM(confirmed),             color: '#059669' },
+        { label: 'POR CONFIRMAR',   value: fmtM(ingTotal - confirmed),  color: '#D97706' },
+        { label: 'CAPÍTULOS',       value: chapters.length,             color: '#0D9488' },
+      ]
+
+  const kpiHtml = kpiCards.map(k => `
+    <div class="kpi">
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-value" style="color:${k.color}">${k.value}</div>
+    </div>`).join('')
+
+  const chapterRows = chapters.map(ch => {
+    const chItems   = store.items.filter(i => i.chapterId === ch.id)
+    const chActive  = chItems.filter(i => i.status !== 'CANCELLED')
+    const chIng     = chActive.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+    const chCost    = chActive.reduce((s, i) => s + i.quantity * (i.unitCost ?? 0), 0)
+    const chUtil    = chIng - chCost
+    const chMgn     = chIng > 0 ? Math.round(chUtil / chIng * 100) : 0
+
+    const itemRows = chItems.map(item => {
+      const ing2  = item.quantity * item.unitPrice
+      const cost2 = item.quantity * (item.unitCost ?? 0)
+      const util2 = ing2 - cost2
+      const mgn2  = ing2 > 0 ? Math.round(util2 / ing2 * 100) : 0
+      const sColor = item.status === 'CONFIRMED' ? '#059669' : item.status === 'PENDING' ? '#D97706' : '#9CA3AF'
+      const sLabel = item.status === 'CONFIRMED' ? 'Conf.' : item.status === 'PENDING' ? 'Pend.' : 'Cancel.'
+      const cancelled = item.status === 'CANCELLED'
+
+      return isOrg
+        ? `<tr class="${cancelled ? 'cancelled' : ''}">
+            <td class="td-concept">${item.concept}${item.code ? `<br><span class="code">${item.code}</span>` : ''}</td>
+            <td class="td-prov">${item.provider || '—'}</td>
+            <td class="td-num">${item.quantity.toLocaleString('es-MX')} ${item.unit}</td>
+            <td class="td-num">${fmtM(item.unitPrice)}</td>
+            <td class="td-num">${(item.unitCost ?? 0) > 0 ? fmtM(item.unitCost) : '—'}</td>
+            <td class="td-num bold">${fmtM(ing2)}</td>
+            <td class="td-num bold" style="color:${util2 >= 0 ? '#059669' : '#DC2626'}">${fmtM(util2)} <span class="pct">${mgn2}%</span></td>
+            <td class="td-status" style="color:${sColor}">${sLabel}</td>
+           </tr>`
+        : `<tr class="${cancelled ? 'cancelled' : ''}">
+            <td class="td-concept">${item.concept}${item.notes ? `<br><span class="note">${item.notes}</span>` : ''}</td>
+            <td class="td-prov">${item.provider || '—'}</td>
+            <td class="td-num">${item.quantity.toLocaleString('es-MX')} ${item.unit}</td>
+            <td class="td-num">${fmtM(item.unitPrice)}</td>
+            <td class="td-num bold">${fmtM(ing2)}</td>
+            <td class="td-status" style="color:${sColor}">${item.status === 'CONFIRMED' ? 'Confirmado' : 'Por confirmar'}</td>
+           </tr>`
+    }).join('')
+
+    const chHeaderCells = isOrg
+      ? `<td colspan="5" style="padding:8px 12px;font-weight:700;font-size:12px;color:${ch.color}">${ch.name}</td>
+         <td class="td-num bold" style="color:${primary}">${fmtM(chIng)}</td>
+         <td class="td-num bold" style="color:${chUtil >= 0 ? '#059669' : '#DC2626'}">${fmtM(chUtil)} <span class="pct">${chMgn}%</span></td>
+         <td></td>`
+      : `<td colspan="4" style="padding:8px 12px;font-weight:700;font-size:12px;color:${ch.color}">${ch.name}</td>
+         <td class="td-num bold" style="color:#1a1a1a">${fmtM(chIng)}</td>
+         <td></td>`
+
+    return `
+      <tr class="ch-header" style="border-left:4px solid ${ch.color}">${chHeaderCells}</tr>
+      ${itemRows}
+      <tr class="ch-spacer"><td colspan="${isOrg ? 8 : 6}"></td></tr>`
+  }).join('')
+
+  const theadOrg = `<tr>
+    <th>CONCEPTO</th><th>PROVEEDOR</th><th class="r">CANT./U.</th>
+    <th class="r">P.UNIT.</th><th class="r">COSTO U.</th>
+    <th class="r">TOTAL INGRESO</th><th class="r">UTILIDAD</th><th style="text-align:center">ESTADO</th>
+  </tr>`
+  const theadCliente = `<tr>
+    <th>CONCEPTO</th><th>PROVEEDOR</th><th class="r">CANTIDAD</th>
+    <th class="r">P. UNIT.</th><th class="r">TOTAL</th><th style="text-align:center">ESTADO</th>
+  </tr>`
+
+  const tfootOrg = `
+    <tr style="background:${primary}18;border-top:2px solid ${primary}">
+      <td colspan="5" style="padding:10px 14px;font-weight:800;font-size:13px;color:${primary}">TOTAL EVENTO</td>
+      <td class="td-num bold" style="color:${primary};font-size:14px">${fmtM(ingTotal)}</td>
+      <td class="td-num bold" style="color:${utilTotal >= 0 ? '#059669' : '#DC2626'};font-size:14px">${fmtM(utilTotal)} <span class="pct">${margenPct}%</span></td>
+      <td></td>
+    </tr>`
+  const tfootCliente = `
+    <tr style="background:${primary}18;border-top:2px solid ${primary}">
+      <td colspan="4" style="padding:10px 14px;font-weight:800;font-size:13px;color:${primary}">TOTAL</td>
+      <td class="td-num bold" style="color:${primary};font-size:14px">${fmtM(ingTotal)}</td>
+      <td></td>
+    </tr>`
+
+  const html = `<!DOCTYPE html><html lang="es">
+<head><meta charset="utf-8">
+<title>${isOrg ? 'Presupuesto P&L' : 'Cotización'} — ${eventName}</title>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+@page{size:${isOrg ? 'A4 landscape' : 'A4 portrait'};margin:14mm 16mm}
+html,body{font-family:'Jost',Arial,sans-serif;font-size:11px;color:#1a1a1a;background:#fff}
+.header{background:linear-gradient(135deg,${primary},${secondary});color:#fff;padding:26px 32px;margin-bottom:18px;border-radius:8px;display:flex;justify-content:space-between;align-items:flex-end}
+.header h1{font-size:22px;font-weight:800;margin-bottom:4px}
+.header .sub{font-size:11px;opacity:.75;letter-spacing:.06em}
+${isOrg ? '<span class="badge-internal" style="display:inline-block;background:#FEF9C3;color:#854D0E;border:1px solid #FDE68A;font-size:10px;font-weight:700;padding:2px 10px;border-radius:20px;letter-spacing:.06em;margin-top:6px">USO INTERNO — CONFIDENCIAL</span>' : ''}
+.kpi-row{display:flex;gap:10px;margin-bottom:18px}
+.kpi{flex:1;background:#F5F3FF;border:1px solid #DDD6FE;border-radius:8px;padding:10px 14px}
+.kpi-label{font-size:9px;font-weight:700;color:#888;letter-spacing:.12em;margin-bottom:4px}
+.kpi-value{font-size:18px;font-weight:800}
+table{width:100%;border-collapse:collapse;margin-bottom:0}
+th{background:#F5F3FF;font-size:9px;font-weight:700;letter-spacing:.1em;color:#888;padding:7px 8px;text-align:left}
+th.r{text-align:right}
+.ch-header{background:#FAFAFA}
+tr td{padding:6px 8px;border-bottom:1px solid #F5F3FF;font-size:11px;vertical-align:middle}
+tr.cancelled td{opacity:.45;text-decoration:line-through}
+.ch-spacer td{height:8px}
+.td-concept{max-width:${isOrg ? '200px' : '240px'}}
+.td-prov{color:#666;max-width:120px;font-size:10px}
+.td-num{text-align:right;padding-right:10px;white-space:nowrap}
+.td-status{text-align:center;font-weight:600;font-size:10px;white-space:nowrap}
+.bold{font-weight:700}
+.code{font-size:9px;color:#aaa}
+.pct{font-size:9px;font-weight:400;opacity:.8}
+.note{font-size:10px;color:#aaa;font-style:italic}
+.footer{margin-top:16px;text-align:center;font-size:9px;color:#aaa;border-top:1px solid #EDE9FE;padding-top:10px}
+.print-btn{position:fixed;bottom:20px;right:20px;background:${primary};color:#fff;border:none;padding:9px 20px;border-radius:24px;font-size:12px;cursor:pointer;font-family:'Jost',sans-serif}
+@media print{.print-btn{display:none}}
+</style></head>
+<body>
+<div class="header">
+  <div>
+    <div class="sub">${eventType}${eventCode ? ' · ' + eventCode : ''}${eventDate ? ' · ' + eventDate : ''}</div>
+    <h1>${eventName}</h1>
+    ${isOrg ? '<span class="badge-internal">USO INTERNO — CONFIDENCIAL</span>' : ''}
+  </div>
+  <div style="text-align:right;font-size:11px;opacity:.85">
+    <div>${isOrg ? 'Presupuesto P&L' : 'Cotización'}</div>
+    <div style="font-size:9px;margin-top:4px">Generado: ${genDate}</div>
+    <div style="font-size:9px;margin-top:2px">IventIA Planner</div>
+  </div>
+</div>
+<div class="kpi-row">${kpiHtml}</div>
+<table>
+<thead>${isOrg ? theadOrg : theadCliente}</thead>
+<tbody>${chapterRows}</tbody>
+<tfoot>${isOrg ? tfootOrg : tfootCliente}</tfoot>
+</table>
+<div class="footer">IventIA Planner &nbsp;·&nbsp; ${isOrg ? 'Documento confidencial — uso exclusivo del organizador' : 'Los precios están expresados en MXN e incluyen los servicios descritos.'}</div>
+<button class="print-btn" onclick="window.print()">⎙ Guardar PDF</button>
+<script>setTimeout(()=>window.print(),800)</script>
+</body></html>`
+
+  openHtml(html)
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -190,6 +437,9 @@ export default function PresupuestoPage() {
     eventId, 'presupuesto',
     { chapters: [], items: [], updatedAt: '' },
     `iventia-presupuesto-${eventId}`,
+  )
+  const { store: branding } = usePlannerStore<EventBranding>(
+    eventId, 'branding', { ...DEFAULT_BRANDING }, `iventia-branding-${eventId}`,
   )
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
 
@@ -461,6 +711,29 @@ export default function PresupuestoPage() {
             >
               Exportar Excel
             </Button>
+            <Dropdown
+              disabled={store.items.length === 0}
+              menu={{
+                items: [
+                  {
+                    key: 'org',
+                    icon: <PrinterOutlined />,
+                    label: 'PDF interno (P&L)',
+                    onClick: () => generatePresupuestoPdf(store, event, 'org', branding),
+                  },
+                  {
+                    key: 'cliente',
+                    icon: <FilePdfOutlined />,
+                    label: 'PDF cotización cliente',
+                    onClick: () => generatePresupuestoPdf(store, event, 'cliente', branding),
+                  },
+                ] satisfies MenuProps['items'],
+              }}
+            >
+              <Button icon={<FilePdfOutlined />} disabled={store.items.length === 0}>
+                PDF ▾
+              </Button>
+            </Dropdown>
             <Button
               type="primary" icon={<PlusOutlined />}
               onClick={openNewChapter}

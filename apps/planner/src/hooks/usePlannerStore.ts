@@ -18,6 +18,7 @@ interface UsePlannerStoreReturn<T> {
   store: T
   setStore: React.Dispatch<React.SetStateAction<T>>
   update: (patch: Partial<T>) => void
+  saveNow: () => Promise<void>
   syncStatus: SyncStatus
   ready: boolean
 }
@@ -114,5 +115,18 @@ export function usePlannerStore<T extends Record<string, any>>(
     setStore(prev => ({ ...prev, ...patch }))
   }, [])
 
-  return { store, setStore, update, syncStatus, ready }
+  const saveNow = useCallback(async () => {
+    if (!eventId) return
+    if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null }
+    const current = storeRef.current
+    setSyncStatus('saving')
+    try {
+      await eventsApi.savePlannerStore(eventId, storeKey, current)
+      setSyncStatus('saved')
+      lastSavedJson.current = JSON.stringify(current)
+      queryClient.setQueryData(qk.current, { data: current })
+    } catch { setSyncStatus('idle') }
+  }, [eventId, storeKey, queryClient])
+
+  return { store, setStore, update, saveNow, syncStatus, ready }
 }

@@ -14,6 +14,7 @@ import {
   UploadOutlined, SearchOutlined, DeleteOutlined, FilePdfOutlined,
   EyeOutlined, BarChartOutlined, CalendarOutlined, DollarOutlined,
   PrinterOutlined, LinkOutlined, YoutubeOutlined, EditOutlined,
+  AuditOutlined, ClockCircleOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { eventsApi } from '../../../api/events'
@@ -27,7 +28,7 @@ import type { EventBranding } from '../EstudioPage'
 const { Text, Title } = Typography
 
 // ── Types ──────────────────────────────────────────────────────────────────────
-type WidgetType = 'portada' | 'tareas' | 'proveedores' | 'nota' | 'texto' | 'imagen' | 'pdf' | 'resumen' | 'timeline' | 'links' | 'presupuesto'
+type WidgetType = 'portada' | 'tareas' | 'proveedores' | 'nota' | 'texto' | 'imagen' | 'pdf' | 'resumen' | 'timeline' | 'links' | 'presupuesto' | 'contrato'
 
 interface Widget {
   id: string
@@ -2090,6 +2091,7 @@ function WidgetRenderer({
     case 'resumen':      return <ResumenWidget eventId={eventId || event?.id || ''} />
     case 'timeline':    return <TimelineWidget eventId={eventId || event?.id || ''} event={event} />
     case 'presupuesto': return <PresupuestoWidget eventId={eventId || event?.id || ''} event={event} />
+    case 'contrato':    return <ContratoWidget eventId={eventId || event?.id || ''} event={event} />
     default:            return null
   }
 }
@@ -2107,6 +2109,7 @@ function PropertiesPanel({
   const WIDGET_LABELS: Record<WidgetType, string> = {
     portada: 'Portada', tareas: 'Tareas', proveedores: 'Proveedores',
     nota: 'Nota', texto: 'Texto', imagen: 'Imagen', pdf: 'PDF', resumen: 'Resumen del evento', timeline: 'Timeline del evento', links: 'Enlace / Video', presupuesto: 'Presupuesto P&L',
+    contrato: 'Contrato y pagos',
   }
 
   return (
@@ -2320,6 +2323,320 @@ function PdfWidget({
   )
 }
 
+// ── Contrato Widget ────────────────────────────────────────────────────────────
+type ContratoStatus = 'BORRADOR' | 'COTIZACION' | 'CONTRATO' | 'FIRMADO' | 'CANCELADO'
+const CONTRATO_STATUS_CFG: Record<ContratoStatus, { label: string; color: string; bg: string }> = {
+  BORRADOR:   { label: 'Borrador',   color: '#6B7280', bg: '#F3F4F6' },
+  COTIZACION: { label: 'Cotización', color: '#D97706', bg: '#FFFBEB' },
+  CONTRATO:   { label: 'Contrato',   color: '#7C3AED', bg: '#F5F3FF' },
+  FIRMADO:    { label: 'Firmado',    color: '#059669', bg: '#ECFDF5' },
+  CANCELADO:  { label: 'Cancelado',  color: '#DC2626', bg: '#FEF2F2' },
+}
+const fmtContrato = (n: number) =>
+  `$${n.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+function generateContratoPdfFromWidget(store: any, branding: any, event: any, type: 'cotizacion' | 'contrato') {
+  const c = store
+  const b = branding
+  const ev = event
+  const isCotizacion = type === 'cotizacion'
+  const title = isCotizacion ? 'COTIZACIÓN' : 'CONTRATO DE SERVICIOS'
+  const STATUS_CFG_LOCAL: Record<string, { label: string; color: string; bg: string }> = {
+    BORRADOR:   { label: 'Borrador',   color: '#6B7280', bg: '#F3F4F6' },
+    COTIZACION: { label: 'Cotización', color: '#D97706', bg: '#FFFBEB' },
+    CONTRATO:   { label: 'Contrato',   color: '#7C3AED', bg: '#F5F3FF' },
+    FIRMADO:    { label: 'Firmado',    color: '#059669', bg: '#ECFDF5' },
+    CANCELADO:  { label: 'Cancelado',  color: '#DC2626', bg: '#FEF2F2' },
+  }
+  const statusCfg = STATUS_CFG_LOCAL[c.status] || STATUS_CFG_LOCAL['BORRADOR']
+  const grouped: Record<string, any[]> = {}
+  for (const item of (c.items || [])) {
+    const key = item.chapterName || 'General'
+    if (!grouped[key]) grouped[key] = []
+    grouped[key].push(item)
+  }
+  const paidTotal = (c.payments || [])
+    .filter((p: any) => p.status === 'PAGADO')
+    .reduce((s: number, p: any) => s + (p.paidAmount || p.amount), 0)
+  const pendingTotal = (c.totalAmount || 0) - paidTotal
+  const primaryColor = b?.primaryColor || '#7C3AED'
+  const secondaryColor = b?.secondaryColor || '#EC4899'
+  const bannerUrl = b?.bannerUrl || ''
+  const tagline = b?.tagline || ''
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>${title} — ${ev?.name || 'Evento'}</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Inter', sans-serif; color: #1F2937; font-size: 11px; line-height: 1.5; }
+@page { size: letter; margin: 0; }
+.header { position: relative; height: 140px;
+  background: ${bannerUrl ? `url(${bannerUrl}) center/cover` : `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`};
+  display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.header-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.4); }
+.header-content { position: relative; z-index: 1; text-align: center; color: #fff; }
+.header-content h1 { font-size: 26px; font-weight: 800; letter-spacing: 2px; margin-bottom: 4px; }
+.header-content p { font-size: 13px; opacity: 0.9; }
+.body { padding: 28px 40px; }
+.meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+.meta-box { background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px; padding: 12px 14px; }
+.meta-box h3 { font-size: 9px; font-weight: 700; color: ${primaryColor}; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+.meta-box p { font-size: 11px; line-height: 1.6; color: #374151; }
+.section-title { font-size: 12px; font-weight: 700; color: ${primaryColor}; border-bottom: 2px solid ${primaryColor}; padding-bottom: 4px; margin: 20px 0 10px; }
+table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+th { background: ${primaryColor}; color: #fff; padding: 7px 10px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; text-align: left; }
+td { padding: 6px 10px; border-bottom: 1px solid #E5E7EB; font-size: 10.5px; }
+tr:nth-child(even) td { background: #F9FAFB; }
+.chapter-header td { background: ${primaryColor}10; font-weight: 700; color: ${primaryColor}; font-size: 10px; border-bottom: 2px solid ${primaryColor}30; }
+.totals-box { background: linear-gradient(135deg, ${primaryColor}, ${secondaryColor}); color: #fff; border-radius: 10px; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; margin: 14px 0; }
+.totals-box .label { font-size: 11px; font-weight: 500; opacity: 0.9; }
+.totals-box .value { font-size: 20px; font-weight: 800; }
+.payment-status { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 9px; font-weight: 600; }
+.status-PAGADO { background: #ECFDF5; color: #059669; }
+.status-PENDIENTE { background: #FFFBEB; color: #D97706; }
+.status-VENCIDO { background: #FEF2F2; color: #DC2626; }
+.badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 10px; font-weight: 700; margin-left: 8px; }
+.signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 40px; padding-top: 16px; }
+.sig-line { border-top: 1px solid #1F2937; padding-top: 8px; text-align: center; }
+.sig-line .name { font-size: 11px; font-weight: 600; }
+.sig-line .role { font-size: 9px; color: #6B7280; }
+.footer { text-align: center; padding: 14px; font-size: 9px; color: #9CA3AF; border-top: 1px solid #E5E7EB; margin-top: 24px; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="header-overlay"></div>
+  <div class="header-content">
+    <h1>${title}</h1>
+    <p>${ev?.name || 'Evento'}${tagline ? ` · ${tagline}` : ''}</p>
+  </div>
+</div>
+<div class="body">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+    <div>
+      <span style="font-size:13px;font-weight:700;color:${primaryColor};">${c.contractNumber || 'Sin número'}</span>
+      <span class="badge" style="background:${statusCfg.bg};color:${statusCfg.color};">${statusCfg.label}</span>
+    </div>
+    <div style="text-align:right;font-size:10px;color:#6B7280;">
+      Fecha: ${new Date().toLocaleDateString('es-MX')}<br>
+      ${ev?.eventStart ? `Evento: ${new Date(ev.eventStart).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}` : ''}
+    </div>
+  </div>
+  <div class="meta-grid">
+    <div class="meta-box"><h3>Organizador</h3><p style="font-weight:600;">IventIA Planner</p><p>${ev?.venueLocation || ''}</p></div>
+    <div class="meta-box"><h3>Cliente</h3>
+      <p style="font-weight:600;">${c.client?.personType === 'MORAL' ? (c.client?.companyName || '') : `${c.client?.firstName || ''} ${c.client?.lastName || ''}`}</p>
+      ${c.client?.rfc ? `<p>RFC: ${c.client.rfc}</p>` : ''}
+      ${c.client?.email ? `<p>${c.client.email}${c.client?.phone ? ` · ${c.client.phone}` : ''}</p>` : ''}
+    </div>
+  </div>
+  ${(c.items || []).length > 0 ? `
+  <div class="section-title">Conceptos y servicios</div>
+  <table><thead><tr>
+    <th style="width:42%">Concepto</th><th style="width:12%;text-align:center">Cantidad</th>
+    <th style="width:10%;text-align:center">Unidad</th><th style="width:18%;text-align:right">Precio unit.</th><th style="width:18%;text-align:right">Subtotal</th>
+  </tr></thead><tbody>
+  ${Object.entries(grouped).map(([chapter, items]) => `
+    <tr class="chapter-header"><td colspan="5">${chapter}</td></tr>
+    ${(items as any[]).map(i => `<tr>
+      <td>${i.concept}</td><td style="text-align:center">${i.quantity}</td><td style="text-align:center">${i.unit}</td>
+      <td style="text-align:right">$${(i.unitPrice || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+      <td style="text-align:right">$${((i.quantity || 0) * (i.unitPrice || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+    </tr>`).join('')}
+  `).join('')}
+  </tbody></table>` : ''}
+  <div class="totals-box">
+    <div><div class="label">TOTAL ${c.currency || 'MXN'}</div><div class="value">${fmtContrato(c.totalAmount || 0)}</div></div>
+    ${!isCotizacion ? `<div style="text-align:right;"><div class="label">Pagado: ${fmtContrato(paidTotal)}</div><div class="label">Pendiente: ${fmtContrato(pendingTotal)}</div></div>` : ''}
+  </div>
+  ${!isCotizacion && (c.payments || []).length ? `
+  <div class="section-title">Calendario de pagos</div>
+  <table><thead><tr>
+    <th>Concepto</th><th style="text-align:center">%</th><th style="text-align:center">Fecha límite</th><th style="text-align:right">Monto</th><th style="text-align:center">Estado</th>
+  </tr></thead><tbody>
+  ${(c.payments || []).map((p: any) => `<tr>
+    <td>${p.label}</td><td style="text-align:center">${p.percentage}%</td>
+    <td style="text-align:center">${new Date(p.dueDate).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+    <td style="text-align:right">${fmtContrato(p.amount)}</td>
+    <td style="text-align:center"><span class="payment-status status-${p.status}">${p.status}</span></td>
+  </tr>`).join('')}
+  </tbody></table>` : ''}
+  ${c.terms ? `<div class="section-title">Términos y condiciones</div><div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;padding:14px;font-size:10px;line-height:1.7;color:#4B5563;">${c.terms.replace(/\n/g, '<br>')}</div>` : ''}
+  ${!isCotizacion ? `
+  <div class="signatures">
+    <div class="sig-line"><div class="name">${c.client?.personType === 'MORAL' ? (c.client?.companyName || '') : `${c.client?.firstName || ''} ${c.client?.lastName || ''}`}</div><div class="role">Cliente</div></div>
+    <div class="sig-line"><div class="name">${c.authorizedBy || 'Organizador'}</div><div class="role">Organizador · IventIA Planner</div></div>
+  </div>` : ''}
+  <div class="footer">Documento generado por IventIA Planner · ${new Date().toLocaleDateString('es-MX')}${c.contractNumber ? ` · ${c.contractNumber}` : ''}</div>
+</div>
+<script>setTimeout(()=>window.print(),600)</script>
+</body></html>`
+  const blob = new Blob([html], { type: 'text/html' })
+  const url = URL.createObjectURL(blob)
+  const w = window.open(url, '_blank')
+  if (w) w.onload = () => URL.revokeObjectURL(url)
+}
+
+function ContratoWidget({ eventId, event }: { eventId: string; event: any }) {
+  const navigate = useNavigate()
+  const { store } = usePlannerStore<any>(eventId, 'contrato', {
+    contractNumber: '', status: 'BORRADOR', client: {}, items: [], payments: [], totalAmount: 0, currency: 'MXN',
+  }, `iventia-contrato-${eventId}`)
+  const { store: branding } = usePlannerStore<any>(eventId, 'branding', { primaryColor: '#7C3AED', secondaryColor: '#EC4899' }, `iventia-branding-${eventId}`)
+
+  const hasContract = !!store.contractNumber
+  const statusCfg = CONTRATO_STATUS_CFG[(store.status as ContratoStatus)] || CONTRATO_STATUS_CFG['BORRADOR']
+
+  const paymentsWithOverdue = (store.payments || []).map((p: any) => {
+    if (p.status === 'PENDIENTE' && new Date(p.dueDate) < new Date()) {
+      return { ...p, status: 'VENCIDO' }
+    }
+    return p
+  })
+
+  const paidTotal = (store.payments || [])
+    .filter((p: any) => p.status === 'PAGADO')
+    .reduce((s: number, p: any) => s + (p.paidAmount || p.amount), 0)
+
+  const clientName = store.client?.personType === 'MORAL'
+    ? store.client?.companyName
+    : `${store.client?.firstName || ''} ${store.client?.lastName || ''}`.trim()
+
+  if (!hasContract) {
+    return (
+      <div style={{
+        width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', gap: 12,
+        background: 'linear-gradient(135deg, #F5F3FF, #FDF4FF)', userSelect: 'none', borderRadius: 12,
+      }}>
+        <div style={{
+          width: 52, height: 52, borderRadius: 14, background: 'linear-gradient(135deg, #7C3AED, #EC4899)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 22,
+        }}>
+          <AuditOutlined />
+        </div>
+        <Text style={{ fontSize: 13, fontWeight: 700, color: '#1F2937' }}>Sin contrato</Text>
+        <Text style={{ fontSize: 11, color: '#6B7280', textAlign: 'center', maxWidth: 220 }}>
+          Crea un contrato con el calendario de pagos desde la sección Contratos
+        </Text>
+        <Button size="small" type="primary" icon={<AuditOutlined />}
+          onMouseDown={e => e.stopPropagation()}
+          onClick={e => { e.stopPropagation(); navigate('contratos') }}
+          style={{ borderRadius: 8, background: '#7C3AED', borderColor: '#7C3AED' }}>
+          Ir a Contratos
+        </Button>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', userSelect: 'none' }}>
+      {/* Header */}
+      <div style={{
+        background: 'linear-gradient(135deg, #7C3AED 0%, #4F46E5 100%)',
+        padding: '10px 14px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <div>
+          <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 9, letterSpacing: '0.25em', textTransform: 'uppercase', marginBottom: 2 }}>
+            CONTRATO
+          </div>
+          <div style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>{store.contractNumber}</div>
+        </div>
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          <div style={{
+            background: statusCfg.bg, color: statusCfg.color,
+            borderRadius: 10, padding: '2px 8px', fontSize: 10, fontWeight: 700,
+          }}>
+            {statusCfg.label}
+          </div>
+          <Button size="small" icon={<FilePdfOutlined />}
+            onMouseDown={e => e.stopPropagation()}
+            onClick={e => { e.stopPropagation(); generateContratoPdfFromWidget(store, branding, event, store.status === 'BORRADOR' ? 'cotizacion' : 'contrato') }}
+            style={{ background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)', color: '#fff', borderRadius: 8, height: 26, fontSize: 11 }}>
+            PDF
+          </Button>
+        </div>
+      </div>
+
+      <div style={{ flex: 1, overflow: 'auto', padding: '10px 14px' }}>
+        {/* Client + totals */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+          <div style={{ background: '#F9FAFB', border: '1px solid #EDE9FE', borderRadius: 8, padding: '8px 10px' }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.1em', marginBottom: 4 }}>CLIENTE</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#1F2937', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {clientName || 'Sin cliente'}
+            </div>
+            {store.client?.email && (
+              <div style={{ fontSize: 10, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {store.client.email}
+              </div>
+            )}
+          </div>
+          <div style={{ background: '#F9FAFB', border: '1px solid #EDE9FE', borderRadius: 8, padding: '8px 10px' }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.1em', marginBottom: 4 }}>TOTAL</div>
+            <div style={{ fontSize: 14, fontWeight: 800, color: '#7C3AED' }}>{fmtContrato(store.totalAmount || 0)}</div>
+            {paidTotal > 0 && (
+              <div style={{ fontSize: 10, color: '#059669', fontWeight: 600 }}>
+                Pagado: {fmtContrato(paidTotal)}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Payment schedule */}
+        {paymentsWithOverdue.length > 0 ? (
+          <div>
+            <div style={{ fontSize: 9, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.1em', marginBottom: 6 }}>CALENDARIO DE PAGOS</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {paymentsWithOverdue.map((p: any) => {
+                const isPaid = p.status === 'PAGADO'
+                const isOverdue = p.status === 'VENCIDO'
+                const color = isPaid ? '#059669' : isOverdue ? '#DC2626' : '#D97706'
+                const bg = isPaid ? '#F0FDF4' : isOverdue ? '#FEF2F2' : '#FFFBEB'
+                const border = isPaid ? '#BBF7D0' : isOverdue ? '#FECDD3' : '#FDE68A'
+                return (
+                  <div key={p.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px',
+                    borderRadius: 8, background: bg, border: `1px solid ${border}`,
+                  }}>
+                    <div style={{ color, fontSize: 14, flexShrink: 0 }}>
+                      {isPaid ? <CheckCircleOutlined /> : isOverdue ? <ExclamationCircleOutlined /> : <ClockCircleOutlined />}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: '#1F2937' }}>{p.label}</div>
+                      <div style={{ fontSize: 10, color: '#6B7280' }}>
+                        {new Date(p.dueDate).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })} · {p.percentage}%
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color, flexShrink: 0 }}>{fmtContrato(p.amount)}</div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ) : (
+          <div style={{ textAlign: 'center', color: '#aaa', fontSize: 11, padding: '16px 0' }}>
+            Sin calendario de pagos
+          </div>
+        )}
+      </div>
+
+      {/* Footer action */}
+      <div style={{ padding: '8px 14px', borderTop: '1px solid #F0EBFF', flexShrink: 0 }}>
+        <Button size="small" block icon={<AuditOutlined />}
+          onMouseDown={e => e.stopPropagation()}
+          onClick={e => { e.stopPropagation(); navigate('contratos') }}
+          style={{ borderRadius: 8, fontSize: 11 }}>
+          Abrir contrato completo
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 // ── Widget add menu ──────────────────────────────────────────────────────────────
 const WIDGET_MENU: { type: WidgetType; label: string; icon: React.ReactNode; defaultSize: [number, number] }[] = [
   { type: 'portada', label: 'Portada del evento', icon: <AppstoreAddOutlined />, defaultSize: [420, 200] },
@@ -2333,6 +2650,7 @@ const WIDGET_MENU: { type: WidgetType; label: string; icon: React.ReactNode; def
   { type: 'timeline',  label: 'Timeline del evento',  icon: <CalendarOutlined />,  defaultSize: [380, 560] },
   { type: 'links',     label: 'Enlace / Video',        icon: <LinkOutlined />,       defaultSize: [400, 260] },
   { type: 'presupuesto', label: 'Presupuesto P&L',    icon: <DollarOutlined />,     defaultSize: [380, 560] },
+  { type: 'contrato',   label: 'Contrato y pagos',   icon: <AuditOutlined />,      defaultSize: [380, 400] },
 ]
 
 // ── Persistence helpers ────────────────────────────────────────────────────────

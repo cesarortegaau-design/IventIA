@@ -8,12 +8,13 @@
 import { useState, useMemo, useRef } from 'react'
 import { useParams, useOutletContext } from 'react-router-dom'
 import { usePlannerStore } from '../../hooks/usePlannerStore'
+import { DEFAULT_BRANDING, type EventBranding } from './EstudioPage'
 import {
   Button, Modal, Form, Input, Select, Space, Popconfirm, App, Typography, DatePicker, TimePicker,
 } from 'antd'
 import {
   PlusOutlined, EditOutlined, DeleteOutlined,
-  FileExcelOutlined, UploadOutlined, CloseOutlined,
+  FileExcelOutlined, UploadOutlined, CloseOutlined, FilePdfOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
@@ -115,41 +116,225 @@ function actToDraft(act: TimelineActivity): ActivityDraft {
   }
 }
 
+// ── Excel export (styled) ─────────────────────────────────────────────────────
 async function exportToExcel(store: TimelineStore, eventName: string) {
   const ExcelJS = await import('exceljs')
   const wb = new ExcelJS.Workbook()
+  wb.creator = 'IventIA Planner'
   const ws = wb.addWorksheet('Timeline')
+
   ws.columns = [
-    { header: 'Fase',         key: 'phase',       width: 18 },
-    { header: 'Actividad',    key: 'name',        width: 34 },
-    { header: 'Responsable',  key: 'responsible', width: 22 },
-    { header: 'Inicio',       key: 'startTime',   width: 10 },
-    { header: 'Fin',          key: 'endTime',     width: 10 },
-    { header: 'Duración',     key: 'duration',    width: 12 },
-    { header: 'Estado',       key: 'status',      width: 14 },
-    { header: 'Notas',        key: 'notes',       width: 30 },
+    { header: 'Fase',        key: 'phase',       width: 18 },
+    { header: 'Actividad',   key: 'name',        width: 38 },
+    { header: 'Responsable', key: 'responsible', width: 22 },
+    { header: 'Inicio',      key: 'startTime',   width: 10 },
+    { header: 'Fin',         key: 'endTime',     width: 10 },
+    { header: 'Duración',    key: 'duration',    width: 12 },
+    { header: 'Estado',      key: 'status',      width: 16 },
+    { header: 'Notas',       key: 'notes',       width: 34 },
   ]
-  ws.getRow(1).font = { bold: true }
-  for (const act of store.activities) {
-    const ph = store.phases.find(p => p.id === act.phaseId)
-    ws.addRow({
-      phase:       ph?.name ?? '',
-      name:        act.name,
-      responsible: act.responsible || '',
-      startTime:   act.startTime || '',
-      endTime:     act.endTime || '',
-      duration:    calcDuration(act.startTime, act.endTime),
-      status:      STATUS_CFG[act.status]?.label ?? act.status,
-      notes:       act.notes ?? '',
-    })
+
+  // Styled header
+  const hdr = ws.getRow(1)
+  hdr.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 }
+  hdr.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF7C3AED' } }
+  hdr.alignment = { vertical: 'middle', horizontal: 'center' }
+  hdr.height = 22
+
+  const phases = [...store.phases].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+
+  for (const phase of phases) {
+    const activities = store.activities.filter(a => a.phaseId === phase.id)
+    if (!activities.length) continue
+
+    // Phase header row
+    const phArgb = 'FF' + phase.color.replace('#', '')
+    const phRow = ws.addRow({ phase: `  ${phase.name}` })
+    phRow.font = { bold: true, color: { argb: phArgb }, size: 11 }
+    phRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F3FF' } }
+    phRow.height = 20
+    ws.mergeCells(`A${phRow.number}:H${phRow.number}`)
+    phRow.getCell(1).border = { left: { style: 'thick', color: { argb: phArgb } } }
+
+    for (const act of activities) {
+      const sCfg = STATUS_CFG[act.status]
+      const row  = ws.addRow({
+        phase:       '',
+        name:        act.name,
+        responsible: act.responsible || '',
+        startTime:   act.startTime || '',
+        endTime:     act.endTime || '',
+        duration:    calcDuration(act.startTime, act.endTime),
+        status:      sCfg?.label ?? act.status,
+        notes:       act.notes ?? '',
+      })
+      const statusArgb = act.status === 'COMPLETED'
+        ? 'FF059669' : act.status === 'IN_PROGRESS'
+        ? 'FFD97706' : 'FF6B7280'
+      row.getCell(7).font = { color: { argb: statusArgb }, bold: true }
+      row.getCell(1).border = { left: { style: 'thin', color: { argb: 'FFEDE9FE' } } }
+    }
+
+    // Phase count
+    const countRow = ws.addRow({ phase: `${activities.length} actividades`, name: '' })
+    countRow.font = { italic: true, color: { argb: 'FF9CA3AF' }, size: 10 }
+    ws.mergeCells(`A${countRow.number}:H${countRow.number}`)
   }
+
+  // Summary row
+  const totRow = ws.addRow({ phase: `TOTAL: ${store.activities.length} actividades · ${phases.length} fases` })
+  totRow.font = { bold: true, size: 11, color: { argb: 'FF7C3AED' } }
+  totRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEDE9FE' } }
+  totRow.height = 20
+  ws.mergeCells(`A${totRow.number}:H${totRow.number}`)
+
   const buf = await wb.xlsx.writeBuffer()
   const url = URL.createObjectURL(new Blob([buf]))
   const a = document.createElement('a')
-  a.href = url
-  a.download = `timeline-${eventName || 'evento'}.xlsx`
-  a.click()
+  a.href = url; a.download = `timeline-${eventName || 'evento'}.xlsx`; a.click()
   URL.revokeObjectURL(url)
+}
+
+// ── PDF generator ─────────────────────────────────────────────────────────────
+function openHtml(html: string) {
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+  const url  = URL.createObjectURL(blob)
+  const w    = window.open(url, '_blank')
+  if (w) w.onload = () => URL.revokeObjectURL(url)
+  else setTimeout(() => URL.revokeObjectURL(url), 60_000)
+}
+
+function generateTimelinePdf(store: TimelineStore, event: any, branding: EventBranding = DEFAULT_BRANDING) {
+  const primary   = branding.primaryColor   || '#7C3AED'
+  const secondary = branding.secondaryColor || '#059669'
+  const eventName = event?.name || 'Evento'
+  const eventType = event?.eventType || ''
+  const eventCode = event?.code || ''
+  const eventDate = event?.eventStart
+    ? new Date(event.eventStart).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
+    : ''
+  const genDate   = new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
+
+  const phases     = [...store.phases].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+  const total      = store.activities.length
+  const completed  = store.activities.filter(a => a.status === 'COMPLETED').length
+  const inProgress = store.activities.filter(a => a.status === 'IN_PROGRESS').length
+  const pending    = store.activities.filter(a => a.status === 'PENDING').length
+  const pct        = total > 0 ? Math.round(completed / total * 100) : 0
+
+  const kpiHtml = [
+    { label: 'TOTAL',       value: total,      color: primary },
+    { label: 'COMPLETADAS', value: completed,  color: '#059669' },
+    { label: 'EN PROGRESO', value: inProgress, color: '#D97706' },
+    { label: 'PENDIENTES',  value: pending,    color: '#6B7280' },
+    { label: 'AVANCE',      value: `${pct}%`,  color: pct >= 80 ? '#059669' : pct >= 40 ? '#D97706' : '#DC2626' },
+  ].map(k => `
+    <div class="kpi">
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-value" style="color:${k.color}">${k.value}</div>
+    </div>`).join('')
+
+  const phaseRows = phases.map(phase => {
+    const acts = store.activities.filter(a => a.phaseId === phase.id)
+    if (!acts.length) return ''
+
+    const sortedActs = [...acts].sort((a, b) => {
+      if (a.startTime && b.startTime) return a.startTime.localeCompare(b.startTime)
+      return 0
+    })
+
+    const actRows = sortedActs.map(act => {
+      const sCfg   = STATUS_CFG[act.status]
+      const dur    = calcDuration(act.startTime, act.endTime)
+      const dot    = `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${sCfg?.dot || '#9CA3AF'};margin-right:5px;vertical-align:middle"></span>`
+      return `<tr>
+        <td>${act.startTime || '—'}</td>
+        <td>${act.endTime || '—'}</td>
+        <td class="td-dur">${dur}</td>
+        <td class="td-act">${act.name}</td>
+        <td class="td-resp">${act.responsible || '—'}</td>
+        <td class="td-status" style="color:${sCfg?.color || '#6B7280'}">${dot}${sCfg?.label || act.status}</td>
+        <td class="td-notes">${act.notes || ''}</td>
+      </tr>`
+    }).join('')
+
+    const phCompleted  = acts.filter(a => a.status === 'COMPLETED').length
+    const phTotal      = acts.length
+    const phPct        = phTotal > 0 ? Math.round(phCompleted / phTotal * 100) : 0
+
+    return `
+      <tr class="ph-header" style="border-left:4px solid ${phase.color}">
+        <td colspan="7">
+          <span style="color:${phase.color};font-weight:700;font-size:12px">${phase.name}</span>
+          ${phase.date ? `<span style="margin-left:10px;font-size:10px;color:#888">${new Date(phase.date).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })}</span>` : ''}
+          <span style="float:right;font-size:10px;color:#888">${phCompleted}/${phTotal} · ${phPct}%</span>
+        </td>
+      </tr>
+      ${actRows}
+      <tr class="ph-spacer"><td colspan="7"></td></tr>`
+  }).join('')
+
+  const progressBar = `
+    <div style="background:#EDE9FE;border-radius:6px;height:10px;margin-bottom:18px;overflow:hidden">
+      <div style="background:linear-gradient(90deg,${primary},${secondary});height:100%;width:${pct}%;border-radius:6px;transition:width .3s"></div>
+    </div>`
+
+  const html = `<!DOCTYPE html><html lang="es">
+<head><meta charset="utf-8">
+<title>Timeline — ${eventName}</title>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+@page{size:A4 portrait;margin:14mm 16mm}
+html,body{font-family:'Jost',Arial,sans-serif;font-size:11px;color:#1a1a1a;background:#fff}
+.header{background:linear-gradient(135deg,${primary},${secondary});color:#fff;padding:24px 28px;margin-bottom:16px;border-radius:8px;display:flex;justify-content:space-between;align-items:flex-end}
+.header h1{font-size:22px;font-weight:800;margin-bottom:4px}
+.header .sub{font-size:11px;opacity:.75;letter-spacing:.06em}
+.kpi-row{display:flex;gap:10px;margin-bottom:14px}
+.kpi{flex:1;background:#F5F3FF;border:1px solid #DDD6FE;border-radius:8px;padding:8px 12px}
+.kpi-label{font-size:9px;font-weight:700;color:#888;letter-spacing:.12em;margin-bottom:3px}
+.kpi-value{font-size:18px;font-weight:800}
+table{width:100%;border-collapse:collapse}
+th{background:#F5F3FF;font-size:9px;font-weight:700;letter-spacing:.1em;color:#888;padding:6px 8px;text-align:left}
+.ph-header td{padding:7px 12px;background:#FAFAFA;font-size:10px}
+tr td{padding:5px 8px;border-bottom:1px solid #F5F3FF;font-size:10.5px;vertical-align:top}
+.ph-spacer td{height:6px}
+.td-act{max-width:180px;font-weight:500}
+.td-resp{color:#666;max-width:110px;font-size:10px}
+.td-dur{color:${primary};font-weight:600;text-align:center;white-space:nowrap}
+.td-status{font-weight:600;font-size:10px;white-space:nowrap}
+.td-notes{color:#888;font-size:10px;max-width:120px}
+.footer{margin-top:14px;text-align:center;font-size:9px;color:#aaa;border-top:1px solid #EDE9FE;padding-top:8px}
+.print-btn{position:fixed;bottom:20px;right:20px;background:${primary};color:#fff;border:none;padding:9px 20px;border-radius:24px;font-size:12px;cursor:pointer;font-family:'Jost',sans-serif}
+@media print{.print-btn{display:none}}
+</style></head>
+<body>
+<div class="header">
+  <div>
+    <div class="sub">${eventType}${eventCode ? ' · ' + eventCode : ''}${eventDate ? ' · ' + eventDate : ''}</div>
+    <h1>${eventName}</h1>
+  </div>
+  <div style="text-align:right;font-size:11px;opacity:.85">
+    <div>Timeline del evento</div>
+    <div style="font-size:9px;margin-top:4px">Generado: ${genDate}</div>
+    <div style="font-size:9px;margin-top:2px">IventIA Planner</div>
+  </div>
+</div>
+<div class="kpi-row">${kpiHtml}</div>
+${progressBar}
+<table>
+<thead><tr>
+  <th>INICIO</th><th>FIN</th><th style="text-align:center">DUR.</th>
+  <th>ACTIVIDAD</th><th>RESPONSABLE</th><th>ESTADO</th><th>NOTAS</th>
+</tr></thead>
+<tbody>${phaseRows}</tbody>
+</table>
+<div class="footer">IventIA Planner &nbsp;·&nbsp; Timeline generado el ${genDate}</div>
+<button class="print-btn" onclick="window.print()">⎙ Guardar PDF</button>
+<script>setTimeout(()=>window.print(),800)</script>
+</body></html>`
+
+  openHtml(html)
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -163,6 +348,9 @@ export default function TimelinePage() {
     eventId, 'timeline',
     { phases: [], activities: [], updatedAt: '' },
     `iventia-timeline-${eventId}`,
+  )
+  const { store: branding } = usePlannerStore<EventBranding>(
+    eventId, 'branding', { ...DEFAULT_BRANDING }, `iventia-branding-${eventId}`,
   )
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
 
@@ -640,6 +828,13 @@ export default function TimelinePage() {
               disabled={store.activities.length === 0}
             >
               Exportar Excel
+            </Button>
+            <Button
+              icon={<FilePdfOutlined />}
+              onClick={() => generateTimelinePdf(store, event, branding)}
+              disabled={store.activities.length === 0}
+            >
+              PDF
             </Button>
             <Button
               type="primary" icon={<PlusOutlined />}

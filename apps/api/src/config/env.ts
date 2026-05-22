@@ -25,6 +25,7 @@ const envSchema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   STRIPE_SUCCESS_URL: z.string().default('http://localhost:5174/orders'),
   STRIPE_CANCEL_URL: z.string().default('http://localhost:5174/orders'),
+  STRIPE_PLANNER_URL: z.string().default('http://localhost:5175'),
   TICKETS_APP_URL: z.string().default('http://localhost:5175'),
   IFLAG_URL: z.string().default('http://localhost:5175'),
   API_BASE_URL: z.string().default('http://localhost:3001'),

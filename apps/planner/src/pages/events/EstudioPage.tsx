@@ -508,7 +508,7 @@ export default function EstudioPage() {
   const { event } = useOutletContext<{ event: any }>()
   const { message } = App.useApp()
 
-  const { store: branding, update: updateBranding, syncStatus } = usePlannerStore<EventBranding>(
+  const { store: branding, update: updateBranding, saveNow, syncStatus } = usePlannerStore<EventBranding>(
     eventId, 'branding', { ...DEFAULT_BRANDING }, `iventia-branding-${eventId}`,
   )
 
@@ -532,9 +532,10 @@ export default function EstudioPage() {
     setSaved(false)
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    await saveNow()
     setSaved(true)
-    message.success('Estilo del evento guardado')
+    message.success('Estilo guardado y aplicado al Lienzo, PDFs y Portal')
     setTimeout(() => setSaved(false), 2500)
   }
 

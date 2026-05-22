@@ -13,6 +13,7 @@ import {
   portalSendMessage, portalUnreadCount, uploadChatFile,
 } from '../controllers/chat.controller'
 import { getPortalSnapshot } from '../controllers/planner-portal.controller'
+import { addClientTask, createPlannerPaymentCheckout, verifyPlannerPayment } from '../controllers/planner-client.controller'
 
 const voucherUpload = multer({
   storage: multer.memoryStorage(),
@@ -44,6 +45,9 @@ router.post('/auth/refresh', portalRefresh)
 router.use(authenticatePortal)
 
 router.get('/planner-snapshot/:eventId', getPortalSnapshot)
+router.patch('/planner-tareas/:eventId', addClientTask)
+router.post('/planner-payments/:eventId/checkout', createPlannerPaymentCheckout)
+router.post('/planner-payments/:eventId/verify', verifyPlannerPayment)
 
 router.get('/me', portalMe)
 router.patch('/me', portalUpdateMe)

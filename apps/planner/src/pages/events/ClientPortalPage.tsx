@@ -6,13 +6,15 @@
  */
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
-import { Button, Input, Typography, Avatar, Spin, Tag, Tooltip, App } from 'antd'
+import { Button, Input, Typography, Avatar, Spin, Tag, Modal, DatePicker, Form, App, message as antdMessage } from 'antd'
 import {
   LockOutlined, UserOutlined, CheckCircleOutlined,
   CalendarOutlined, DollarOutlined, BarChartOutlined,
   PictureOutlined, LinkOutlined, FileTextOutlined,
   PrinterOutlined, YoutubeOutlined, EyeOutlined,
-  MinusOutlined, PlusOutlined,
+  MinusOutlined, PlusOutlined, PlusCircleOutlined,
+  EditOutlined, AuditOutlined, ClockCircleOutlined,
+  ExclamationCircleOutlined, CreditCardOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import 'dayjs/locale/es'
@@ -39,6 +41,7 @@ interface PortalSnapshot {
   timeline?: any
   tareas?: any
   presupuesto?: any
+  contrato?: any
   lienzo?: any
   eventSnapshot?: {
     name: string
@@ -110,15 +113,56 @@ const STATUS_COLORS: Record<string, string> = {
   POR_HACER: '#6B7280', EN_CURSO: '#2563EB', ESPERANDO_OK: '#F97316', LISTA: '#059669',
 }
 
-function TareasWidgetRO({ tareas }: { tareas: any }) {
+// ── Interactive tasks widget ──────────────────────────────────────────────────
+function TareasWidgetRO({
+  tareas, eventId, token, onTasksChange,
+}: {
+  tareas: any
+  eventId: string
+  token: string
+  onTasksChange: (tasks: any[]) => void
+}) {
   const allTasks = tareas?.tasks ?? []
-  const visible = allTasks.filter((t: any) => t.clientVisible !== false && t.status !== 'LISTA').slice(0, 6)
+  const visible = allTasks.filter((t: any) => t.clientVisible !== false && t.status !== 'LISTA')
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editingTask, setEditingTask] = useState<any>(null)
+  const [saving, setSaving] = useState(false)
+  const [form] = Form.useForm()
+
+  function openCreate() { setEditingTask(null); form.resetFields(); setModalOpen(true) }
+  function openEdit(task: any) { setEditingTask(task); form.setFieldsValue({ title: task.title, notes: task.notes, dueDate: task.dueDate ? dayjs(task.dueDate) : undefined }); setModalOpen(true) }
+
+  async function handleSave() {
+    const values = await form.validateFields()
+    setSaving(true)
+    try {
+      const payload: any = {
+        title: values.title,
+        notes: values.notes,
+        dueDate: values.dueDate ? values.dueDate.toISOString() : undefined,
+      }
+      if (editingTask) payload.id = editingTask.id
+      const res = await plannerPortalApi.addTask(eventId, payload, token)
+      onTasksChange(res.data ?? [])
+      setModalOpen(false)
+    } catch (err: any) {
+      antdMessage.error(err?.response?.data?.message || 'Error al guardar tarea')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <div style={{ width: '100%', height: '100%', padding: '14px 16px', display: 'flex', flexDirection: 'column', userSelect: 'none' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
         <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#F97316' }} />
         <Text strong style={{ fontSize: 13 }}>TAREAS DEL EVENTO</Text>
+        <div style={{ flex: 1 }} />
+        <Button
+          type="link" icon={<PlusCircleOutlined />} size="small"
+          onClick={openCreate}
+          style={{ color: '#7C3AED', padding: 0, fontSize: 13 }}
+        >Nueva</Button>
       </div>
       <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
         {visible.length === 0 ? (
@@ -141,10 +185,40 @@ function TareasWidgetRO({ tareas }: { tareas: any }) {
                   border: 'none', borderRadius: 20, fontSize: 11, fontWeight: 600,
                 }}>{daysUntil}d</Tag>
               )}
+              {task.clientCreated && (
+                <Button
+                  type="text" icon={<EditOutlined />} size="small"
+                  onClick={() => openEdit(task)}
+                  style={{ color: '#7C3AED', padding: '0 4px', height: 20, fontSize: 11 }}
+                />
+              )}
             </div>
           )
         })}
       </div>
+
+      <Modal
+        open={modalOpen}
+        title={editingTask ? 'Editar tarea' : 'Nueva tarea'}
+        onCancel={() => setModalOpen(false)}
+        onOk={handleSave}
+        okText="Guardar"
+        cancelText="Cancelar"
+        confirmLoading={saving}
+        destroyOnClose
+      >
+        <Form form={form} layout="vertical" style={{ marginTop: 8 }}>
+          <Form.Item name="title" label="Título" rules={[{ required: true, message: 'Ingresa un título' }]}>
+            <Input placeholder="Describe la tarea..." />
+          </Form.Item>
+          <Form.Item name="notes" label="Notas (opcional)">
+            <Input.TextArea rows={3} placeholder="Detalles adicionales..." />
+          </Form.Item>
+          <Form.Item name="dueDate" label="Fecha límite (opcional)">
+            <DatePicker style={{ width: '100%' }} placeholder="Selecciona fecha" format="DD/MM/YYYY" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   )
 }
@@ -226,9 +300,9 @@ function extractYouTubeId(url: string): string | null {
   return null
 }
 
+// ── Links widget: YouTube → embed, everything else → link card (no iframe attempt) ──
 function LinksWidgetRO({ config }: { config: any }) {
   const url: string = config.url || ''
-  const [iframeError, setIframeError] = useState(false)
 
   if (!url) return (
     <div style={{ width: '100%', height: '100%', padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5F3FF', borderRadius: 12 }}>
@@ -236,6 +310,7 @@ function LinksWidgetRO({ config }: { config: any }) {
     </div>
   )
 
+  // YouTube: embed directly
   const ytId = extractYouTubeId(url)
   if (ytId) {
     return (
@@ -251,39 +326,11 @@ function LinksWidgetRO({ config }: { config: any }) {
     )
   }
 
+  // All other URLs → link card (most sites block iframes via X-Frame-Options)
   let hostname = url
   try { hostname = new URL(url).hostname } catch {}
   const faviconUrl = `https://www.google.com/s2/favicons?domain=${hostname}&sz=32`
 
-  // Try iframe preview — many sites block with X-Frame-Options, so we fall back to link card
-  if (!iframeError) {
-    return (
-      <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 12, overflow: 'hidden', border: '1px solid #EDE9FE' }}>
-        <iframe
-          src={url}
-          style={{ flex: 1, border: 'none', display: 'block' }}
-          title="Link preview"
-          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-          onError={() => setIframeError(true)}
-          onLoad={(e) => {
-            try {
-              // If the iframe got blocked (blank/error), fall back to card
-              const iframe = e.currentTarget as HTMLIFrameElement
-              if (!iframe.contentDocument && !iframe.contentWindow?.location.href) setIframeError(true)
-            } catch { setIframeError(true) }
-          }}
-        />
-        <a href={url} target="_blank" rel="noreferrer"
-          style={{ padding: '6px 12px', background: '#F5F3FF', borderTop: '1px solid #EDE9FE', display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none', flexShrink: 0 }}>
-          <img src={faviconUrl} alt="" style={{ width: 14, height: 14, borderRadius: 2 }} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
-          <span style={{ fontSize: 11, color: '#7C3AED', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{hostname}</span>
-          <EyeOutlined style={{ color: '#7C3AED', fontSize: 11, flexShrink: 0 }} />
-        </a>
-      </div>
-    )
-  }
-
-  // Fallback link card (when iframe is blocked)
   return (
     <div style={{ width: '100%', height: '100%', padding: 16, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 12, background: '#F5F3FF', borderRadius: 12 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -322,7 +369,6 @@ function PdfWidgetRO({ config }: { config: any }) {
 }
 
 // Timeline read-only
-const PHASE_COLORS_RO: Record<string, string> = { SETUP: '#F97316', EVENT: '#7C3AED', TEARDOWN: '#0D9488', GENERAL: '#6B7280' }
 const STATUS_DOT_RO: Record<string, string> = { COMPLETED: '#059669', IN_PROGRESS: '#F97316', PENDING: '#9CA3AF' }
 
 function TimelineWidgetRO({ timeline, event }: { timeline: any; event: any }) {
@@ -457,14 +503,157 @@ function ResumenWidgetRO({ event, tareas, timeline, presupuesto }: { event: any;
   )
 }
 
+// ── Contract widget with Stripe payment ───────────────────────────────────────
+const CONTRATO_STATUS_CFG: Record<string, { color: string; bg: string; label: string }> = {
+  BORRADOR:   { color: '#6B7280', bg: '#F3F4F6', label: 'Borrador' },
+  COTIZACION: { color: '#2563EB', bg: '#EFF6FF', label: 'Cotización' },
+  CONTRATO:   { color: '#7C3AED', bg: '#F5F3FF', label: 'Contrato' },
+  FIRMADO:    { color: '#059669', bg: '#ECFDF5', label: 'Firmado' },
+  CANCELADO:  { color: '#DC2626', bg: '#FEF2F2', label: 'Cancelado' },
+}
+const PAY_STATUS_CFG: Record<string, { color: string; bg: string; label: string; icon: string }> = {
+  PENDIENTE: { color: '#D97706', bg: '#FFF7ED', label: 'Pendiente', icon: '⏳' },
+  PAGADO:    { color: '#059669', bg: '#ECFDF5', label: 'Pagado',    icon: '✅' },
+  VENCIDO:   { color: '#DC2626', bg: '#FEF2F2', label: 'Vencido',   icon: '❌' },
+}
+
+function ContratoWidgetRO({
+  contrato, eventId, token, onContratoChange,
+}: {
+  contrato: any
+  eventId: string
+  token: string
+  onContratoChange: (updated: any) => void
+}) {
+  const [paying, setPayingId] = useState<string | null>(null)
+
+  const fmt = (n: number) => `$${Number(n).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+
+  if (!contrato?.contractNumber) {
+    return (
+      <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24, background: '#F9F7FF', borderRadius: 12 }}>
+        <AuditOutlined style={{ fontSize: 32, color: '#DDD6FE' }} />
+        <Text style={{ fontSize: 12, color: '#9CA3AF', textAlign: 'center' }}>El contrato de tu evento aún no está disponible.</Text>
+      </div>
+    )
+  }
+
+  const statusCfg = CONTRATO_STATUS_CFG[contrato.contractStatus] ?? CONTRATO_STATUS_CFG.CONTRATO
+  const payments: any[] = contrato.scheduledPayments ?? []
+  const totalPaid = payments.filter((p: any) => p.status === 'PAGADO').reduce((s: number, p: any) => s + (p.amount ?? 0), 0)
+  const totalDue = contrato.total ?? 0
+
+  async function handlePay(payment: any) {
+    setPayingId(payment.id)
+    try {
+      const res = await plannerPortalApi.createPaymentCheckout(eventId, payment.id, token)
+      const url = res.data?.url
+      if (url) window.location.href = url
+    } catch (err: any) {
+      antdMessage.error(err?.response?.data?.message || 'Error al iniciar el pago')
+    } finally {
+      setPayingId(null)
+    }
+  }
+
+  return (
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', userSelect: 'none' }}>
+      {/* Header */}
+      <div style={{
+        background: 'linear-gradient(135deg, #4C1D95 0%, #7C3AED 100%)',
+        padding: '12px 14px', flexShrink: 0,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+          <AuditOutlined style={{ color: '#C4B5FD', fontSize: 14 }} />
+          <span style={{ color: '#fff', fontWeight: 700, fontSize: 12 }}>CONTRATO</span>
+          <div style={{ flex: 1 }} />
+          <span style={{ background: statusCfg.bg, color: statusCfg.color, borderRadius: 20, padding: '2px 8px', fontSize: 10, fontWeight: 700 }}>
+            {statusCfg.label}
+          </span>
+        </div>
+        <div style={{ color: '#E9D5FF', fontSize: 11, fontWeight: 600 }}>{contrato.contractNumber}</div>
+        <div style={{ display: 'flex', gap: 16, marginTop: 8 }}>
+          <div>
+            <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 9, letterSpacing: '0.08em' }}>TOTAL</div>
+            <div style={{ color: '#fff', fontWeight: 800, fontSize: 15 }}>{fmt(totalDue)}</div>
+          </div>
+          <div>
+            <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 9, letterSpacing: '0.08em' }}>PAGADO</div>
+            <div style={{ color: '#6EE7B7', fontWeight: 800, fontSize: 15 }}>{fmt(totalPaid)}</div>
+          </div>
+          {totalDue > 0 && (
+            <div style={{ flex: 1 }}>
+              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 9, letterSpacing: '0.08em', marginBottom: 4 }}>AVANCE</div>
+              <div style={{ background: 'rgba(255,255,255,0.15)', borderRadius: 4, height: 6, overflow: 'hidden' }}>
+                <div style={{ width: `${Math.min(100, (totalPaid / totalDue) * 100)}%`, height: '100%', background: '#6EE7B7', borderRadius: 4 }} />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Payments list */}
+      <div style={{ flex: 1, overflow: 'auto', padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {payments.length === 0 ? (
+          <div style={{ textAlign: 'center', color: '#9CA3AF', fontSize: 12, padding: '20px 0' }}>Sin pagos programados</div>
+        ) : payments.map((p: any) => {
+          const cfg = PAY_STATUS_CFG[p.status] ?? PAY_STATUS_CFG.PENDIENTE
+          const isPending = p.status === 'PENDIENTE'
+          return (
+            <div key={p.id} style={{
+              display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
+              borderRadius: 8, background: cfg.bg, border: `1px solid ${cfg.color}22`,
+            }}>
+              <span style={{ fontSize: 14 }}>{cfg.icon}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#1a1a1a' }}>{p.label || `Pago`}</div>
+                <div style={{ fontSize: 11, color: '#888' }}>
+                  {p.dueDate ? dayjs(p.dueDate).format('D MMM YYYY') : ''}
+                  {p.percentage ? ` · ${p.percentage}%` : ''}
+                </div>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: cfg.color }}>{fmt(p.amount ?? 0)}</div>
+                {p.paidAt && <div style={{ fontSize: 10, color: '#888' }}>{dayjs(p.paidAt).format('D MMM')}</div>}
+              </div>
+              {isPending && (
+                <Button
+                  type="primary" size="small" icon={<CreditCardOutlined />}
+                  loading={paying === p.id}
+                  onClick={() => handlePay(p)}
+                  style={{ background: '#7C3AED', borderColor: '#7C3AED', fontSize: 11, height: 28, paddingInline: 8 }}
+                >
+                  Pagar
+                </Button>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Read-only widget dispatcher ───────────────────────────────────────────────
-function WidgetRendererRO({ widget, snapshot, branding }: {
-  widget: Widget; snapshot: PortalSnapshot; branding: EventBranding
+function WidgetRendererRO({ widget, snapshot, branding, eventId, token, onSnapshotChange }: {
+  widget: Widget
+  snapshot: PortalSnapshot
+  branding: EventBranding
+  eventId: string
+  token: string
+  onSnapshotChange: (patch: Partial<PortalSnapshot>) => void
 }) {
   const event = snapshot.eventSnapshot
   switch (widget.type) {
     case 'portada':     return <PortadaWidgetRO event={event} branding={branding} />
-    case 'tareas':      return <TareasWidgetRO tareas={snapshot.tareas} />
+    case 'tareas':      return (
+      <TareasWidgetRO
+        tareas={snapshot.tareas}
+        eventId={eventId}
+        token={token}
+        onTasksChange={(tasks) => onSnapshotChange({ tareas: { ...(snapshot.tareas ?? {}), tasks } })}
+      />
+    )
     case 'proveedores': return <ProveedoresWidgetRO suppliers={
       Array.isArray(snapshot.lienzo?.suppliers) ? snapshot.lienzo.suppliers : []
     } />
@@ -476,6 +665,14 @@ function WidgetRendererRO({ widget, snapshot, branding }: {
     case 'resumen':     return <ResumenWidgetRO event={event} tareas={snapshot.tareas} timeline={snapshot.timeline} presupuesto={snapshot.presupuesto} />
     case 'timeline':    return <TimelineWidgetRO timeline={snapshot.timeline} event={event} />
     case 'presupuesto': return <PresupuestoWidgetRO presupuesto={snapshot.presupuesto} event={event} />
+    case 'contrato':    return (
+      <ContratoWidgetRO
+        contrato={snapshot.contrato}
+        eventId={eventId}
+        token={token}
+        onContratoChange={(updated) => onSnapshotChange({ contrato: updated })}
+      />
+    )
     default:            return null
   }
 }
@@ -563,6 +760,7 @@ export default function ClientPortalPage() {
   const sessionKey = `planner-portal-token-${eventId}`
 
   const [snapshot, setSnapshot] = useState<PortalSnapshot | null>(null)
+  const [token, setToken] = useState<string>('')
   const [loading, setLoading] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [authed, setAuthed] = useState(false)
@@ -574,11 +772,12 @@ export default function ClientPortalPage() {
   const panStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 })
   const canvasRef = useRef<HTMLDivElement>(null)
 
-  async function fetchSnapshot(token: string) {
+  async function fetchSnapshot(accessToken: string) {
     setLoading(true); setFetchError(null)
     try {
-      const res = await plannerPortalApi.getSnapshot(eventId, token)
+      const res = await plannerPortalApi.getSnapshot(eventId, accessToken)
       setSnapshot(res.data ?? res)
+      setToken(accessToken)
       setAuthed(true)
     } catch (err: any) {
       const status = err?.response?.status
@@ -590,10 +789,43 @@ export default function ClientPortalPage() {
     } finally { setLoading(false) }
   }
 
+  // On mount: check for stored token and also handle Stripe redirect params
   useEffect(() => {
     if (!eventId) return
     const storedToken = sessionStorage.getItem(sessionKey)
-    if (storedToken) fetchSnapshot(storedToken)
+    if (!storedToken) return
+
+    const params = new URLSearchParams(window.location.search)
+    const paymentSuccess = params.get('payment_success')
+    const sessionId = params.get('session_id')
+    const paymentId = params.get('payment_id')
+
+    if (paymentSuccess === '1' && sessionId && paymentId) {
+      // Clear URL params first
+      window.history.replaceState({}, '', window.location.pathname)
+      // Load snapshot then verify payment
+      setLoading(true)
+      plannerPortalApi.getSnapshot(eventId, storedToken)
+        .then(async (res) => {
+          const snap = res.data ?? res
+          setSnapshot(snap)
+          setToken(storedToken)
+          setAuthed(true)
+          // Verify payment with backend
+          try {
+            const vRes = await plannerPortalApi.verifyPayment(eventId, sessionId, paymentId, storedToken)
+            const updated = vRes.data?.contrato
+            if (updated) setSnapshot(prev => prev ? { ...prev, contrato: updated } : prev)
+            antdMessage.success('¡Pago confirmado exitosamente!')
+          } catch {
+            antdMessage.warning('Pago procesado. Si no ves el cambio, recarga la página.')
+          }
+        })
+        .catch(() => { sessionStorage.removeItem(sessionKey); setAuthed(false) })
+        .finally(() => setLoading(false))
+    } else {
+      fetchSnapshot(storedToken)
+    }
   }, [eventId])
 
   async function handleLogin(email: string, password: string) {
@@ -603,9 +835,13 @@ export default function ClientPortalPage() {
     await fetchSnapshot(accessToken)
   }
 
+  function handleSnapshotChange(patch: Partial<PortalSnapshot>) {
+    setSnapshot(prev => prev ? { ...prev, ...patch } : prev)
+  }
+
   // Pan handlers
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (e.button === 1 || e.button === 0) { // allow left click drag on background
+    if (e.button === 1 || e.button === 0) {
       setIsPanning(true)
       panStart.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y }
     }
@@ -626,7 +862,6 @@ export default function ClientPortalPage() {
     setZoom(z => Math.min(3, Math.max(0.25, z + delta)))
   }, [])
 
-  // Loading
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F3F4F6' }}>
@@ -635,11 +870,8 @@ export default function ClientPortalPage() {
     )
   }
 
-  // Errors
   if (authed && fetchError) return <ErrorScreen message={fetchError} onRetry={() => { setFetchError(null); setAuthed(false) }} />
   if (!authed && fetchError) return <ErrorScreen message={fetchError} onRetry={() => setFetchError(null)} />
-
-  // Not logged in
   if (!snapshot) return <LoginScreen onLogin={handleLogin} />
 
   const branding: EventBranding = { ...DEFAULT_BRANDING, ...(snapshot.branding || {}) }
@@ -654,7 +886,7 @@ export default function ClientPortalPage() {
     widgets = rawLienzo.widgets
   }
 
-  // If no widgets in lienzo, create a default layout from available data
+  // Auto-layout if no widgets defined
   if (widgets.length === 0) {
     const auto: Widget[] = []
     let y = 20
@@ -668,6 +900,9 @@ export default function ClientPortalPage() {
     }
     if (snapshot.presupuesto) {
       auto.push({ id: 'auto-presupuesto', type: 'presupuesto', x: 424, y: y + 320, w: 340, h: 300, config: {} })
+    }
+    if (snapshot.contrato) {
+      auto.push({ id: 'auto-contrato', type: 'contrato', x: 24, y: y + 420, w: 380, h: 380, config: {} })
     }
     widgets = auto
   }
@@ -713,9 +948,7 @@ export default function ClientPortalPage() {
         style={{
           flex: 1, overflow: 'hidden', position: 'relative',
           cursor: isPanning ? 'grabbing' : 'grab',
-          background: `
-            radial-gradient(circle at 50% 50%, #2D1B69 0%, #1E1040 100%)
-          `,
+          background: 'radial-gradient(circle at 50% 50%, #2D1B69 0%, #1E1040 100%)',
         }}
       >
         {/* Dot grid */}
@@ -735,7 +968,7 @@ export default function ClientPortalPage() {
           {widgets.map(w => (
             <div
               key={w.id}
-              onMouseDown={e => e.stopPropagation()} // prevent pan when clicking widgets
+              onMouseDown={e => e.stopPropagation()}
               style={{
                 position: 'absolute',
                 left: w.x, top: w.y, width: w.w, height: w.h,
@@ -744,7 +977,14 @@ export default function ClientPortalPage() {
                 boxShadow: '0 4px 20px rgba(0,0,0,0.15), 0 0 0 1px rgba(255,255,255,0.08)',
               }}
             >
-              <WidgetRendererRO widget={w} snapshot={snapshot} branding={branding} />
+              <WidgetRendererRO
+                widget={w}
+                snapshot={snapshot}
+                branding={branding}
+                eventId={eventId}
+                token={token}
+                onSnapshotChange={handleSnapshotChange}
+              />
             </div>
           ))}
         </div>
