@@ -247,7 +247,7 @@ export default function TareasPage() {
     )
     const newStore = { ...store, tasks: updatedTasks, updatedAt: new Date().toISOString() }
     update(newStore)
-    saveNow(newStore).catch(() => {})
+    saveNow(newStore).catch(() => { message.error('Error al guardar — revisa tu conexión') })
     setDirty(false)
     message.success('Tarea actualizada')
   }
@@ -258,7 +258,7 @@ export default function TareasPage() {
     const updatedTasks = store.tasks.filter(t => t.id !== selectedTask.id)
     const newStore = { ...store, tasks: updatedTasks, updatedAt: new Date().toISOString() }
     update(newStore)
-    saveNow(newStore).catch(() => {})
+    saveNow(newStore).catch(() => { message.error('Error al guardar — revisa tu conexión') })
     closePanel()
     message.success('Tarea eliminada')
   }
@@ -304,7 +304,7 @@ export default function TareasPage() {
     const newStore = { ...store, counter: next, tasks: newTasks, updatedAt: new Date().toISOString() }
     update(newStore)
     // Pass data explicitly so saveNow doesn't depend on React re-render timing
-    saveNow(newStore).catch(() => {})
+    saveNow(newStore).catch(() => { message.error('Error al guardar — revisa tu conexión') })
     message.success('Tarea agregada')
     setCreateModal({ open: false })
   }

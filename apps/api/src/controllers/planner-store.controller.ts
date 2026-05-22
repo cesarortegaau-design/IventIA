@@ -5,6 +5,8 @@ import { AppError } from '../middleware/errorHandler'
 const VALID_KEYS = [
   'presupuesto', 'timeline', 'tareas', 'branding',
   'mapa', 'crm', 'mensajes', 'suppliers', 'contrato',
+  'lienzo-cliente', 'lienzo-invitado',
+  'invitacion-diseno', 'invitacion-invitados',
 ]
 
 /** GET /events/:id/planner-store/:key */
