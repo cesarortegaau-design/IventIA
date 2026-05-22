@@ -240,19 +240,14 @@ export default function TareasPage() {
   // ── Save from panel ────────────────────────────────────────────────────────
   const handleSavePanel = () => {
     if (!selectedTask || !draft) return
-    update({
-      tasks: store.tasks.map(t =>
-        t.id === selectedTask.id
-          ? {
-              ...t,
-              ...draft,
-              dueDate:       draft.dueDate || undefined,
-              clientVisible: draft.assigneeType === 'client',
-            }
-          : t
-      ),
-    })
-    setTimeout(() => saveNow().catch(() => {}), 0)
+    const updatedTasks = store.tasks.map(t =>
+      t.id === selectedTask.id
+        ? { ...t, ...draft, dueDate: draft.dueDate || undefined, clientVisible: draft.assigneeType === 'client' }
+        : t
+    )
+    const newStore = { ...store, tasks: updatedTasks, updatedAt: new Date().toISOString() }
+    update(newStore)
+    saveNow(newStore).catch(() => {})
     setDirty(false)
     message.success('Tarea actualizada')
   }
@@ -260,8 +255,10 @@ export default function TareasPage() {
   // ── Delete from panel ──────────────────────────────────────────────────────
   const handleDeletePanel = () => {
     if (!selectedTask) return
-    update({ tasks: store.tasks.filter(t => t.id !== selectedTask.id) })
-    setTimeout(() => saveNow().catch(() => {}), 0)
+    const updatedTasks = store.tasks.filter(t => t.id !== selectedTask.id)
+    const newStore = { ...store, tasks: updatedTasks, updatedAt: new Date().toISOString() }
+    update(newStore)
+    saveNow(newStore).catch(() => {})
     closePanel()
     message.success('Tarea eliminada')
   }
@@ -304,9 +301,10 @@ export default function TareasPage() {
       status:           vals.status || 'POR_HACER',
       notes:            vals.notes,
     }]
-    update({ counter: next, tasks: newTasks })
-    // Flush immediately — don't rely on debounce in case user navigates away
-    setTimeout(() => saveNow().catch(() => {}), 0)
+    const newStore = { ...store, counter: next, tasks: newTasks, updatedAt: new Date().toISOString() }
+    update(newStore)
+    // Pass data explicitly so saveNow doesn't depend on React re-render timing
+    saveNow(newStore).catch(() => {})
     message.success('Tarea agregada')
     setCreateModal({ open: false })
   }
