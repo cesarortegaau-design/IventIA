@@ -70,8 +70,12 @@ export async function getPortalSnapshot(req: Request, res: Response, next: NextF
     for (const s of stores) storeMap[s.storeKey] = s.data
 
     const lienzoRaw = event.lienzoData as any
+    // lienzoData is stored as a flat widget array; handle both array and {widgets:[]} shapes
+    const lienzoWidgets = Array.isArray(lienzoRaw)
+      ? lienzoRaw
+      : (lienzoRaw?.widgets ?? null)
     const lienzo = lienzoRaw
-      ? { ...(typeof lienzoRaw === 'object' ? lienzoRaw : {}), suppliers: storeMap.suppliers?.suppliers ?? storeMap.suppliers ?? [] }
+      ? { widgets: lienzoWidgets, suppliers: storeMap.suppliers?.suppliers ?? storeMap.suppliers ?? [] }
       : null
 
     const data = {

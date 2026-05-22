@@ -300,7 +300,12 @@ function extractYouTubeId(url: string): string | null {
   return null
 }
 
-// ── Links widget: YouTube → embed, everything else → link card (no iframe attempt) ──
+function extractTikTokId(url: string): string | null {
+  const m = url.match(/tiktok\.com\/@[^/]+\/video\/(\d+)/)
+  return m ? m[1] : null
+}
+
+// ── Links widget: YouTube/TikTok → embed, everything else → link card ──
 function LinksWidgetRO({ config }: { config: any }) {
   const url: string = config.url || ''
 
@@ -310,7 +315,7 @@ function LinksWidgetRO({ config }: { config: any }) {
     </div>
   )
 
-  // YouTube: embed directly
+  // YouTube
   const ytId = extractYouTubeId(url)
   if (ytId) {
     return (
@@ -326,7 +331,22 @@ function LinksWidgetRO({ config }: { config: any }) {
     )
   }
 
-  // All other URLs → link card (most sites block iframes via X-Frame-Options)
+  // TikTok
+  const ttId = extractTikTokId(url)
+  if (ttId) {
+    return (
+      <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', background: '#000', borderRadius: 12, overflow: 'hidden' }}>
+        <iframe src={`https://www.tiktok.com/embed/v2/${ttId}`}
+          style={{ flex: 1, border: 'none', display: 'block' }}
+          allowFullScreen title="TikTok video" />
+        <div style={{ padding: '5px 10px', background: '#fff', borderTop: '1px solid #EDE9FE', display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: '#888', flexShrink: 0 }}>
+          🎵 TikTok
+        </div>
+      </div>
+    )
+  }
+
+  // Generic link card
   let hostname = url
   try { hostname = new URL(url).hostname } catch {}
   const faviconUrl = `https://www.google.com/s2/favicons?domain=${hostname}&sz=32`
