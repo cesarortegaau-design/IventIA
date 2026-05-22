@@ -2696,21 +2696,92 @@ const WIDGET_MENU: { type: WidgetType; label: string; icon: React.ReactNode; def
 ]
 
 // ── Drawing helpers ────────────────────────────────────────────────────────────
-function smoothPath(pts: StrokePoint[]): string {
-  if (pts.length < 2) return ''
-  if (pts.length === 2) return `M ${pts[0].x} ${pts[0].y} L ${pts[1].x} ${pts[1].y}`
-  let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`
-  for (let i = 0; i < pts.length - 1; i++) {
-    const p0 = pts[Math.max(0, i - 1)]
-    const p1 = pts[i]
-    const p2 = pts[i + 1]
-    const p3 = pts[Math.min(pts.length - 1, i + 2)]
-    const cp1x = p1.x + (p2.x - p0.x) / 6
-    const cp1y = p1.y + (p2.y - p0.y) / 6
-    const cp2x = p2.x - (p3.x - p1.x) / 6
-    const cp2y = p2.y - (p3.y - p1.y) / 6
-    d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)} ${cp2x.toFixed(1)} ${cp2y.toFixed(1)} ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`
+// Compute per-point pressure widths: velocity-based + taper at start/end
+function calcPressure(pts: StrokePoint[], baseWidth: number): number[] {
+  const n = pts.length
+  const minW = Math.max(0.4, baseWidth * 0.06)
+  const maxW = baseWidth
+  if (n === 0) return []
+  if (n === 1) return [minW]
+
+  // Raw velocities (distance between consecutive points)
+  const vel: number[] = [0]
+  for (let i = 1; i < n; i++) {
+    const dx = pts[i].x - pts[i - 1].x
+    const dy = pts[i].y - pts[i - 1].y
+    vel.push(Math.sqrt(dx * dx + dy * dy))
   }
+
+  // Smooth velocities with a small window
+  const smoothV = vel.map((_, i) => {
+    const w = 4
+    const slice = vel.slice(Math.max(0, i - w), Math.min(n, i + w + 1))
+    return slice.reduce((s, v) => s + v, 0) / slice.length
+  })
+  const maxV = Math.max(...smoothV, 1)
+
+  const widths: number[] = []
+  for (let i = 0; i < n; i++) {
+    // Velocity: fast=thin, slow=thick (capped so very slow doesn't exceed maxW)
+    const vNorm = Math.min(smoothV[i] / maxV, 1)
+    const velW = minW + (maxW - minW) * Math.pow(1 - vNorm * 0.75, 1.4)
+
+    // Taper at start (first 18%) and end (last 12%)
+    const t = i / Math.max(1, n - 1)
+    const startT = t < 0.18 ? Math.pow(t / 0.18, 0.6) : 1
+    const endT   = t > 0.88 ? Math.pow((1 - t) / 0.12, 0.5) : 1
+
+    widths.push(velW * startT * endT)
+  }
+  return widths
+}
+
+// Build a filled ribbon SVG path — the "magic pencil" shape
+function buildMagicRibbon(pts: StrokePoint[], baseWidth: number): string {
+  if (pts.length < 2) return ''
+
+  const widths = calcPressure(pts, baseWidth)
+  const left: StrokePoint[] = []
+  const right: StrokePoint[] = []
+
+  for (let i = 0; i < pts.length; i++) {
+    const prev = pts[Math.max(0, i - 1)]
+    const next = pts[Math.min(pts.length - 1, i + 1)]
+    const dx = next.x - prev.x
+    const dy = next.y - prev.y
+    const len = Math.sqrt(dx * dx + dy * dy) || 1
+    const nx = -dy / len
+    const ny =  dx / len
+    const hw = widths[i] / 2
+    left.push({ x: pts[i].x + nx * hw, y: pts[i].y + ny * hw })
+    right.push({ x: pts[i].x - nx * hw, y: pts[i].y - ny * hw })
+  }
+
+  // Catmull-Rom helper for smooth outline
+  const cr = (ps: StrokePoint[]) => {
+    let d = `M ${ps[0].x.toFixed(1)} ${ps[0].y.toFixed(1)}`
+    for (let i = 0; i < ps.length - 1; i++) {
+      const p0 = ps[Math.max(0, i - 1)]
+      const p1 = ps[i]
+      const p2 = ps[i + 1]
+      const p3 = ps[Math.min(ps.length - 1, i + 2)]
+      const cx1 = p1.x + (p2.x - p0.x) / 6
+      const cy1 = p1.y + (p2.y - p0.y) / 6
+      const cx2 = p2.x - (p3.x - p1.x) / 6
+      const cy2 = p2.y - (p3.y - p1.y) / 6
+      d += ` C ${cx1.toFixed(1)} ${cy1.toFixed(1)} ${cx2.toFixed(1)} ${cy2.toFixed(1)} ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`
+    }
+    return d
+  }
+
+  const last = pts[pts.length - 1]
+  const first = pts[0]
+
+  // Left side forward → taper tip at end → right side backward → taper tip at start → close
+  let d = cr(left)
+  d += ` L ${last.x.toFixed(1)} ${last.y.toFixed(1)}`
+  d += ' ' + cr([...right].reverse()).replace(/^M/, 'L')
+  d += ` L ${first.x.toFixed(1)} ${first.y.toFixed(1)} Z`
   return d
 }
 
@@ -2759,7 +2830,7 @@ export default function LienzoPage() {
   const [strokes, setStrokes] = useState<Stroke[]>([])
   const [activeStroke, setActiveStroke] = useState<StrokePoint[] | null>(null)
   const [drawColor, setDrawColor] = useState('#1a1a1a')
-  const [drawWidth, setDrawWidth] = useState(2.5)
+  const [drawWidth, setDrawWidth] = useState(14)
   const drawingRef = useRef(false)
   const activeStrokeRef = useRef<StrokePoint[]>([])
 
@@ -3017,9 +3088,9 @@ export default function LienzoPage() {
             <div style={{ width: 1, height: 24, background: '#EDE9FE', margin: '0 4px' }} />
             {/* Width options */}
             {[
-              { w: 1.5, label: 'Fino' },
-              { w: 2.5, label: 'Medio' },
-              { w: 5, label: 'Grueso' },
+              { w: 6,  label: 'Fino' },
+              { w: 14, label: 'Medio' },
+              { w: 28, label: 'Grueso' },
             ].map(({ w, label }) => (
               <Tooltip key={w} title={label}>
                 <div
@@ -3206,25 +3277,19 @@ export default function LienzoPage() {
             {strokes.map(s => (
               <path
                 key={s.id}
-                d={smoothPath(s.points)}
-                fill="none"
-                stroke={s.color}
-                strokeWidth={s.width}
-                strokeLinecap="round"
-                strokeLinejoin="round"
+                d={buildMagicRibbon(s.points, s.width)}
+                fill={s.color}
+                stroke="none"
                 filter="url(#ink-glow)"
-                opacity={0.9}
+                opacity={0.92}
               />
             ))}
             {activeStroke && activeStroke.length >= 2 && (
               <path
-                d={smoothPath(activeStroke)}
-                fill="none"
-                stroke={drawColor}
-                strokeWidth={drawWidth}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                opacity={0.85}
+                d={buildMagicRibbon(activeStroke, drawWidth)}
+                fill={drawColor}
+                stroke="none"
+                opacity={0.88}
               />
             )}
           </svg>
