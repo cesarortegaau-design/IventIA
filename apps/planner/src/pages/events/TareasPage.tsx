@@ -154,7 +154,7 @@ export default function TareasPage() {
   useOutletContext<{ event: any }>()
   const { message } = App.useApp()
 
-  const { store, update, syncStatus, ready } = usePlannerStore<TasksStore>(
+  const { store, update, saveNow, syncStatus, ready } = usePlannerStore<TasksStore>(
     eventId, 'tareas',
     { tasks: [], counter: 0, updatedAt: '' },
     `iventia-tareas-${eventId}`,
@@ -252,6 +252,7 @@ export default function TareasPage() {
           : t
       ),
     })
+    setTimeout(() => saveNow().catch(() => {}), 0)
     setDirty(false)
     message.success('Tarea actualizada')
   }
@@ -260,6 +261,7 @@ export default function TareasPage() {
   const handleDeletePanel = () => {
     if (!selectedTask) return
     update({ tasks: store.tasks.filter(t => t.id !== selectedTask.id) })
+    setTimeout(() => saveNow().catch(() => {}), 0)
     closePanel()
     message.success('Tarea eliminada')
   }
@@ -288,23 +290,23 @@ export default function TareasPage() {
         ? `${selectedUser.firstName[0]}${selectedUser.lastName[0]}`.toUpperCase()
         : ''
 
-    update({
-      counter: next,
-      tasks: [...store.tasks, {
-        id:               `task-${Date.now()}`,
-        code:             `T-${prefix}`,
-        title:            vals.title,
-        category:         vals.category || 'General',
-        dueDate:          dueDateStr,
-        assigneeType:     createAssigneeType,
-        assignee:         initials,
-        assignedUserId:   isClient ? undefined : vals.assignedUserId,
-        assignedUserName: isClient ? undefined : selectedUser ? `${selectedUser.firstName} ${selectedUser.lastName}` : undefined,
-        clientVisible:    isClient,
-        status:           vals.status || 'POR_HACER',
-        notes:            vals.notes,
-      }],
-    })
+    const newTasks = [...store.tasks, {
+      id:               `task-${Date.now()}`,
+      code:             `T-${prefix}`,
+      title:            vals.title,
+      category:         vals.category || 'General',
+      dueDate:          dueDateStr,
+      assigneeType:     createAssigneeType,
+      assignee:         initials,
+      assignedUserId:   isClient ? undefined : vals.assignedUserId,
+      assignedUserName: isClient ? undefined : selectedUser ? `${selectedUser.firstName} ${selectedUser.lastName}` : undefined,
+      clientVisible:    isClient,
+      status:           vals.status || 'POR_HACER',
+      notes:            vals.notes,
+    }]
+    update({ counter: next, tasks: newTasks })
+    // Flush immediately — don't rely on debounce in case user navigates away
+    setTimeout(() => saveNow().catch(() => {}), 0)
     message.success('Tarea agregada')
     setCreateModal({ open: false })
   }
