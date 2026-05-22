@@ -533,10 +533,14 @@ export default function EstudioPage() {
   }
 
   const handleSave = async () => {
-    await saveNow()
-    setSaved(true)
-    message.success('Estilo guardado y aplicado al Lienzo, PDFs y Portal')
-    setTimeout(() => setSaved(false), 2500)
+    try {
+      await saveNow()
+      setSaved(true)
+      message.success('Estilo guardado — aplica al Lienzo, PDFs y Portal del cliente')
+      setTimeout(() => setSaved(false), 2500)
+    } catch {
+      message.error('Error al guardar el estudio — verifica tu conexión e intenta de nuevo')
+    }
   }
 
   const toggleMood = (m: string) => {

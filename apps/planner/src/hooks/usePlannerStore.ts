@@ -125,7 +125,10 @@ export function usePlannerStore<T extends Record<string, any>>(
       setSyncStatus('saved')
       lastSavedJson.current = JSON.stringify(current)
       queryClient.setQueryData(qk.current, { data: current })
-    } catch { setSyncStatus('idle') }
+    } catch (err) {
+      setSyncStatus('idle')
+      throw err
+    }
   }, [eventId, storeKey, queryClient])
 
   return { store, setStore, update, saveNow, syncStatus, ready }

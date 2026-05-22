@@ -910,32 +910,41 @@ export default function ClientPortalPage() {
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#1E1040', overflow: 'hidden' }}>
       {/* Top nav */}
-      <div style={{
-        background: 'linear-gradient(135deg, #1E1040, #2D1B69)',
-        padding: '0 20px', display: 'flex', alignItems: 'center', gap: 12, height: 52,
-        boxShadow: '0 2px 12px rgba(0,0,0,0.2)', flexShrink: 0, zIndex: 100,
-      }}>
-        <div style={{
-          width: 28, height: 28, borderRadius: 8,
-          background: `linear-gradient(135deg, ${branding.primaryColor}, ${branding.secondaryColor})`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 13, fontWeight: 900, color: '#fff',
-        }}>I</div>
-        <span style={{ color: '#C4B5FD', fontSize: 13, fontWeight: 700 }}>IventIA · Lienzo del Cliente</span>
-        <div style={{ flex: 1 }} />
-        <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12 }}>{eventName}</span>
+      {(() => {
+        const hdrBg = `linear-gradient(135deg, ${branding.primaryColor}, ${branding.secondaryColor})`
+        const hdrText = branding.textOnBg || '#ffffff'
+        const hdrMuted = hdrText === '#ffffff' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.55)'
+        const btnBg = hdrText === '#ffffff' ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)'
+        return (
+          <div style={{
+            background: hdrBg,
+            padding: '0 20px', display: 'flex', alignItems: 'center', gap: 12, height: 52,
+            boxShadow: '0 2px 12px rgba(0,0,0,0.2)', flexShrink: 0, zIndex: 100,
+          }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: 8,
+              background: hdrText === '#ffffff' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 13, fontWeight: 900, color: hdrText,
+              border: `1px solid ${hdrText === '#ffffff' ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.2)'}`,
+            }}>I</div>
+            <span style={{ color: hdrText, fontSize: 13, fontWeight: 700 }}>IventIA · Lienzo del Cliente</span>
+            <div style={{ flex: 1 }} />
+            <span style={{ color: hdrMuted, fontSize: 12 }}>{eventName}</span>
 
-        {/* Zoom controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 16 }}>
-          <Button size="small" icon={<MinusOutlined />} onClick={() => setZoom(z => Math.max(0.25, z - 0.15))}
-            style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#C4B5FD', width: 28, height: 28, borderRadius: 8 }} />
-          <span style={{ color: '#C4B5FD', fontSize: 11, fontWeight: 600, minWidth: 36, textAlign: 'center' }}>
-            {Math.round(zoom * 100)}%
-          </span>
-          <Button size="small" icon={<PlusOutlined />} onClick={() => setZoom(z => Math.min(3, z + 0.15))}
-            style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#C4B5FD', width: 28, height: 28, borderRadius: 8 }} />
-        </div>
-      </div>
+            {/* Zoom controls */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 16 }}>
+              <Button size="small" icon={<MinusOutlined />} onClick={() => setZoom(z => Math.max(0.25, z - 0.15))}
+                style={{ background: btnBg, border: 'none', color: hdrText, width: 28, height: 28, borderRadius: 8 }} />
+              <span style={{ color: hdrText, fontSize: 11, fontWeight: 600, minWidth: 36, textAlign: 'center' }}>
+                {Math.round(zoom * 100)}%
+              </span>
+              <Button size="small" icon={<PlusOutlined />} onClick={() => setZoom(z => Math.min(3, z + 0.15))}
+                style={{ background: btnBg, border: 'none', color: hdrText, width: 28, height: 28, borderRadius: 8 }} />
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Canvas area */}
       <div
