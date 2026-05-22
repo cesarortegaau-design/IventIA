@@ -59,7 +59,7 @@ export async function getPortalSnapshot(req: Request, res: Response, next: NextF
         id: true, name: true, eventType: true, code: true,
         venueLocation: true, expectedAttendance: true, description: true,
         eventStart: true, lienzoData: true,
-        client: { select: { id: true, firstName: true, lastName: true, companyName: true, email: true, phone: true } },
+        primaryClient: { select: { id: true, firstName: true, lastName: true, companyName: true, email: true, phone: true } },
       },
     })
     if (!event) throw new AppError(404, 'NOT_FOUND', 'Evento no encontrado')
@@ -93,7 +93,7 @@ export async function getPortalSnapshot(req: Request, res: Response, next: NextF
         venueLocation: event.venueLocation,
         expectedAttendance: event.expectedAttendance,
         description: event.description,
-        client: event.client,
+        client: event.primaryClient,
       },
     }
 
