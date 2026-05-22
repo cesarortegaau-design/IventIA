@@ -27,6 +27,15 @@ import type { EventBranding } from '../EstudioPage'
 
 const { Text, Title } = Typography
 
+// ── Font map (mirrors EstudioPage) ────────────────────────────────────────────
+const fontHeadingMap: Record<string, string> = {
+  modern:  "'Plus Jakarta Sans', sans-serif",
+  classic: 'Georgia, serif',
+  elegant: "'Didact Gothic', sans-serif",
+  bold:    "'Montserrat', sans-serif",
+  playful: 'cursive',
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 type WidgetType = 'portada' | 'tareas' | 'proveedores' | 'nota' | 'texto' | 'imagen' | 'pdf' | 'resumen' | 'timeline' | 'links' | 'presupuesto' | 'contrato'
 
@@ -63,15 +72,20 @@ function PortadaWidget({ event, eventId }: { event: any; eventId: string }) {
     eventId, 'branding', { ...DEFAULT_BRANDING }, `iventia-branding-${eventId}`,
   )
 
-  const bg = branding.coverStyle === 'gradient'
-    ? `linear-gradient(135deg, ${branding.primaryColor} 0%, ${branding.secondaryColor} 100%)`
-    : branding.coverStyle === 'split'
-      ? `linear-gradient(90deg, ${branding.primaryColor} 50%, ${branding.secondaryColor} 50%)`
-      : branding.coverStyle === 'dark'
-        ? '#0D0D1A'
-        : branding.primaryColor
+  const hasBanner = branding.coverStyle === 'image' && !!branding.bannerUrl
+  const font = fontHeadingMap[branding.fontStyle] || fontHeadingMap.modern
 
-  const textColor = branding.textOnBg || '#ffffff'
+  const bg = hasBanner
+    ? undefined
+    : branding.coverStyle === 'gradient'
+      ? `linear-gradient(135deg, ${branding.primaryColor} 0%, ${branding.secondaryColor} 100%)`
+      : branding.coverStyle === 'split'
+        ? `linear-gradient(90deg, ${branding.primaryColor} 50%, ${branding.secondaryColor} 50%)`
+        : branding.coverStyle === 'dark'
+          ? '#0D0D1A'
+          : branding.primaryColor
+
+  const textColor = (hasBanner || branding.coverStyle === 'dark') ? '#ffffff' : (branding.textOnBg || '#ffffff')
   const muted = textColor === '#ffffff' ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.55)'
 
   const daysUntil = event?.eventStart
@@ -84,7 +98,16 @@ function PortadaWidget({ event, eventId }: { event: any; eventId: string }) {
       background: bg,
       padding: 20, display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
       color: textColor, userSelect: 'none', position: 'relative',
+      ...(hasBanner ? {
+        backgroundImage: `url(${branding.bannerUrl})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      } : {}),
     }}>
+      {/* Dark overlay for banner */}
+      {hasBanner && (
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.7) 100%)' }} />
+      )}
       {/* Accent top bar */}
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: branding.accentColor }} />
       {/* Edit button */}
@@ -107,11 +130,11 @@ function PortadaWidget({ event, eventId }: { event: any; eventId: string }) {
           setEditOpen(true)
         }}
       />
-      <div>
+      <div style={{ position: 'relative' }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: muted, letterSpacing: '0.06em', marginBottom: 6 }}>
           {event?.eventType || 'EVENTO'} · {event?.code || '—'}
         </div>
-        <div style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.2, marginBottom: 4 }}>
+        <div style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.2, marginBottom: 4, fontFamily: font }}>
           {event?.name || 'Sin nombre'}
         </div>
         {branding.tagline && (
@@ -123,10 +146,10 @@ function PortadaWidget({ event, eventId }: { event: any; eventId: string }) {
         </div>
       </div>
       {daysUntil !== null && (
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', position: 'relative' }}>
           <div>
             <div style={{ fontSize: 11, color: muted, marginBottom: 2 }}>FALTAN</div>
-            <div style={{ fontSize: 52, fontWeight: 900, lineHeight: 1 }}>{daysUntil}</div>
+            <div style={{ fontSize: 52, fontWeight: 900, lineHeight: 1, fontFamily: font }}>{daysUntil}</div>
             <div style={{ fontSize: 13, color: muted }}>días para el evento</div>
           </div>
           <div style={{ textAlign: 'right', color: muted }}>
@@ -998,8 +1021,11 @@ const ACT_ICONS: Record<string, string> = {
   MEETING: '●', CATERING: '◑', CEREMONY: '✦', ROUND: '▲', default: '◆',
 }
 
-function generateTimelinePdf(event: any, localData: { phases: any[]; activities: any[] }) {
+function generateTimelinePdf(event: any, localData: { phases: any[]; activities: any[] }, branding?: EventBranding) {
   const theme = getEventTheme(event?.eventType)
+  // Override theme colors with branding if provided
+  if (branding?.primaryColor) theme.primary = branding.primaryColor
+  if (branding?.secondaryColor) theme.secondary = branding.secondaryColor
 
   const phases = [...(localData.phases || [])].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
   const activities = localData.activities || []
@@ -1072,7 +1098,9 @@ function generateTimelinePdf(event: any, localData: { phases: any[]; activities:
 
   /* ── Header ── */
   .header{
-    background:${theme.primary};
+    background:${branding?.coverStyle === 'image' && branding?.bannerUrl
+      ? `url(${branding.bannerUrl}) center/cover`
+      : `linear-gradient(135deg, ${theme.primary} 0%, ${theme.secondary} 100%)`};
     padding:48px 64px 40px;
     text-align:center;
     color:#fff;
@@ -1081,8 +1109,9 @@ function generateTimelinePdf(event: any, localData: { phases: any[]; activities:
   }
   .header::before{
     content:'';position:absolute;inset:0;
-    background:radial-gradient(ellipse at 30% 0%,rgba(255,255,255,0.12) 0%,transparent 60%),
-               radial-gradient(ellipse at 70% 100%,rgba(0,0,0,0.12) 0%,transparent 60%);
+    background:${branding?.coverStyle === 'image' && branding?.bannerUrl
+      ? 'rgba(0,0,0,0.5)'
+      : 'radial-gradient(ellipse at 30% 0%,rgba(255,255,255,0.12) 0%,transparent 60%), radial-gradient(ellipse at 70% 100%,rgba(0,0,0,0.12) 0%,transparent 60%)'};
   }
   .header-eyebrow{
     font-size:11px;letter-spacing:.35em;text-transform:uppercase;
@@ -1212,6 +1241,9 @@ function TimelineWidget({ eventId, event }: { eventId: string; event: any }) {
   const { store: localData } = usePlannerStore<{ phases: any[]; activities: any[] }>(
     eventId, 'timeline', { phases: [], activities: [] }, `iventia-timeline-${eventId}`,
   )
+  const { store: branding } = usePlannerStore<EventBranding>(
+    eventId, 'branding', { ...DEFAULT_BRANDING }, `iventia-branding-${eventId}`,
+  )
 
   const theme = getEventTheme(event?.eventType)
 
@@ -1232,7 +1264,7 @@ function TimelineWidget({ eventId, event }: { eventId: string; event: any }) {
 
   const handlePdf = (e: React.MouseEvent) => {
     e.stopPropagation()
-    generateTimelinePdf(event, localData)
+    generateTimelinePdf(event, localData, branding)
   }
 
   return (
@@ -1579,7 +1611,9 @@ function openHtmlBlob(html: string) {
 }
 
 // PDF Organizador — precios + costos + utilidad
-function generatePresupuestoOrgPdf(event: any, store: LienzoBudgetStore) {
+function generatePresupuestoOrgPdf(event: any, store: LienzoBudgetStore, branding?: EventBranding) {
+  const pdfPrimary = branding?.primaryColor ?? '#7C3AED'
+  const pdfSecondary = branding?.secondaryColor ?? '#4F46E5'
   const fmtDate = (iso?: string) => iso
     ? new Date(iso).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
     : ''
@@ -1638,7 +1672,7 @@ function generatePresupuestoOrgPdf(event: any, store: LienzoBudgetStore) {
 *{margin:0;padding:0;box-sizing:border-box}
 @page{size:A4 landscape;margin:14mm 16mm}
 html,body{font-family:'Jost',Arial,sans-serif;font-size:11px;color:#1a1a1a;background:#fff}
-.header{background:linear-gradient(135deg,#7C3AED,#4F46E5);color:#fff;padding:28px 32px;margin-bottom:18px;border-radius:8px;display:flex;justify-content:space-between;align-items:flex-end}
+.header{background:${branding?.coverStyle === 'image' && branding?.bannerUrl ? `url(${branding.bannerUrl}) center/cover` : `linear-gradient(135deg,${pdfPrimary},${pdfSecondary})`};color:#fff;padding:28px 32px;margin-bottom:18px;border-radius:8px;display:flex;justify-content:space-between;align-items:flex-end;position:relative;overflow:hidden}
 .header h1{font-size:22px;font-weight:800;margin-bottom:4px}
 .header .sub{font-size:11px;opacity:.75;letter-spacing:.06em}
 .kpi-row{display:flex;gap:12px;margin-bottom:18px}
@@ -1712,7 +1746,9 @@ th.r{text-align:right}
 }
 
 // PDF Cliente — solo precios al cliente, sin costos ni márgenes
-function generatePresupuestoClientePdf(event: any, store: LienzoBudgetStore) {
+function generatePresupuestoClientePdf(event: any, store: LienzoBudgetStore, branding?: EventBranding) {
+  const pdfPrimary = branding?.primaryColor ?? '#7C3AED'
+  const pdfSecondary = branding?.secondaryColor ?? '#4F46E5'
   const fmtDate = (iso?: string) => iso
     ? new Date(iso).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
     : ''
@@ -1760,7 +1796,7 @@ function generatePresupuestoClientePdf(event: any, store: LienzoBudgetStore) {
 *{margin:0;padding:0;box-sizing:border-box}
 @page{size:A4 portrait;margin:16mm 18mm}
 html,body{font-family:'Jost',Arial,sans-serif;font-size:11px;color:#1a1a1a;background:#fff}
-.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;padding-bottom:20px;border-bottom:2px solid #7C3AED}
+.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;padding-bottom:20px;border-bottom:2px solid ${pdfPrimary}}
 .header-left h1{font-family:'Cormorant Garamond',Georgia,serif;font-size:28px;font-style:italic;font-weight:600;color:#1a1a1a;margin-bottom:4px}
 .header-left .sub{font-size:11px;color:#888;letter-spacing:.04em}
 .header-right{text-align:right}
@@ -1769,7 +1805,7 @@ html,body{font-family:'Jost',Arial,sans-serif;font-size:11px;color:#1a1a1a;backg
 .kpi-row{display:flex;gap:10px;margin-bottom:22px}
 .kpi{flex:1;background:#F5F3FF;border:1px solid #DDD6FE;border-radius:6px;padding:10px 14px}
 .kpi-label{font-size:9px;font-weight:700;color:#888;letter-spacing:.12em;margin-bottom:4px}
-.kpi-value{font-size:18px;font-weight:800;color:#7C3AED}
+.kpi-value{font-size:18px;font-weight:800;color:${pdfPrimary}}
 table{width:100%;border-collapse:collapse}
 th{background:#F5F3FF;font-size:9px;font-weight:700;letter-spacing:.1em;color:#888;padding:8px 10px;text-align:left}
 th.r{text-align:right}
@@ -1782,15 +1818,15 @@ th.r{text-align:right}
 .td-status{text-align:center;font-weight:600;font-size:10px;white-space:nowrap}
 .bold{font-weight:700}
 .note{font-size:10px;color:#aaa;font-style:italic}
-.total-section{margin-top:24px;border-top:2px solid #7C3AED;padding-top:16px;display:flex;justify-content:flex-end}
+.total-section{margin-top:24px;border-top:2px solid ${pdfPrimary};padding-top:16px;display:flex;justify-content:flex-end}
 .total-box{min-width:280px}
 .total-row{display:flex;justify-content:space-between;padding:4px 0;font-size:12px}
 .total-row.main{border-top:1px solid #DDD6FE;padding-top:10px;margin-top:6px}
-.total-row.main .l{font-weight:700;font-size:14px;color:#7C3AED}
-.total-row.main .r2{font-weight:800;font-size:20px;color:#7C3AED}
+.total-row.main .l{font-weight:700;font-size:14px;color:${pdfPrimary}}
+.total-row.main .r2{font-weight:800;font-size:20px;color:${pdfPrimary}}
 .footer{margin-top:28px;display:flex;justify-content:space-between;align-items:flex-end;font-size:9px;color:#aaa;border-top:1px solid #EDE9FE;padding-top:10px}
 .sig-box{border-top:1px solid #ccc;min-width:200px;padding-top:6px;text-align:center;font-size:10px;color:#888}
-.print-btn{position:fixed;bottom:20px;right:20px;background:#7C3AED;color:#fff;border:none;padding:9px 20px;border-radius:24px;font-size:12px;cursor:pointer;box-shadow:0 4px 14px rgba(124,58,237,.35);font-family:'Jost',Arial,sans-serif}
+.print-btn{position:fixed;bottom:20px;right:20px;background:${pdfPrimary};color:#fff;border:none;padding:9px 20px;border-radius:24px;font-size:12px;cursor:pointer;box-shadow:0 4px 14px rgba(124,58,237,.35);font-family:'Jost',Arial,sans-serif}
 @media print{.print-btn{display:none}}
 </style></head>
 <body>
@@ -1850,6 +1886,9 @@ th.r{text-align:right}
 function PresupuestoWidget({ eventId, event }: { eventId: string; event: any }) {
   const { store } = usePlannerStore<LienzoBudgetStore>(
     eventId, 'presupuesto', { chapters: [], items: [] }, `iventia-presupuesto-${eventId}`,
+  )
+  const { store: branding } = usePlannerStore<EventBranding>(
+    eventId, 'branding', { ...DEFAULT_BRANDING }, `iventia-branding-${eventId}`,
   )
   const [pdfMenuOpen, setPdfMenuOpen] = useState(false)
 
@@ -2001,7 +2040,7 @@ function PresupuestoWidget({ eventId, event }: { eventId: string; event: any }) 
       >
         <div onMouseDown={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '8px 0' }}>
           <div
-            onClick={() => { generatePresupuestoOrgPdf(event, store); setPdfMenuOpen(false) }}
+            onClick={() => { generatePresupuestoOrgPdf(event, store, branding); setPdfMenuOpen(false) }}
             style={{
               background: '#F5F3FF', border: '1px solid #DDD6FE', borderRadius: 10,
               padding: '16px 18px', cursor: 'pointer', transition: 'border-color 0.15s',
@@ -2023,7 +2062,7 @@ function PresupuestoWidget({ eventId, event }: { eventId: string; event: any }) 
           </div>
 
           <div
-            onClick={() => { generatePresupuestoClientePdf(event, store); setPdfMenuOpen(false) }}
+            onClick={() => { generatePresupuestoClientePdf(event, store, branding); setPdfMenuOpen(false) }}
             style={{
               background: '#ECFDF5', border: '1px solid #BBF7D0', borderRadius: 10,
               padding: '16px 18px', cursor: 'pointer', transition: 'border-color 0.15s',

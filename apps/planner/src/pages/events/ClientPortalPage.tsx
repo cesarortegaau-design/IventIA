@@ -545,6 +545,93 @@ function ResumenWidgetRO({ event, tareas, timeline, presupuesto }: { event: any;
   )
 }
 
+// ── Signature Pad ─────────────────────────────────────────────────────────────
+function SignaturePad({ onSign, onCancel, primaryColor, loading }: {
+  onSign: (dataUrl: string) => void
+  onCancel: () => void
+  primaryColor: string
+  loading?: boolean
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const drawing = useRef(false)
+  const [isEmpty, setIsEmpty] = useState(true)
+
+  function getPos(e: React.MouseEvent | React.TouchEvent, canvas: HTMLCanvasElement) {
+    const rect = canvas.getBoundingClientRect()
+    const src = 'touches' in e ? (e as React.TouchEvent).touches[0] : (e as React.MouseEvent)
+    return { x: src.clientX - rect.left, y: src.clientY - rect.top }
+  }
+
+  function startDraw(e: React.MouseEvent | React.TouchEvent) {
+    const canvas = canvasRef.current!
+    const ctx = canvas.getContext('2d')!
+    const pos = getPos(e, canvas)
+    ctx.beginPath()
+    ctx.moveTo(pos.x, pos.y)
+    drawing.current = true
+    setIsEmpty(false)
+    e.preventDefault()
+  }
+
+  function draw(e: React.MouseEvent | React.TouchEvent) {
+    if (!drawing.current) return
+    const canvas = canvasRef.current!
+    const ctx = canvas.getContext('2d')!
+    const pos = getPos(e, canvas)
+    ctx.lineTo(pos.x, pos.y)
+    ctx.strokeStyle = '#1a1a1a'
+    ctx.lineWidth = 2
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    ctx.stroke()
+    e.preventDefault()
+  }
+
+  function stopDraw() { drawing.current = false }
+
+  function clearPad() {
+    const canvas = canvasRef.current!
+    const ctx = canvas.getContext('2d')!
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    setIsEmpty(true)
+  }
+
+  function handleSign() {
+    if (isEmpty) return
+    const canvas = canvasRef.current!
+    onSign(canvas.toDataURL('image/png'))
+  }
+
+  return (
+    <div style={{ padding: '16px 0' }}>
+      <div style={{ fontSize: 12, color: '#555', marginBottom: 8 }}>
+        Firma en el recuadro de abajo con el dedo o el mouse:
+      </div>
+      <canvas
+        ref={canvasRef}
+        width={400} height={160}
+        style={{
+          border: `2px solid ${primaryColor}44`, borderRadius: 8,
+          background: '#FAFAFA', cursor: 'crosshair', display: 'block',
+          width: '100%', touchAction: 'none',
+        }}
+        onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
+        onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw}
+      />
+      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+        <Button size="small" onClick={clearPad} style={{ borderRadius: 8 }}>Limpiar</Button>
+        <div style={{ flex: 1 }} />
+        <Button size="small" onClick={onCancel} style={{ borderRadius: 8 }}>Cancelar</Button>
+        <Button
+          type="primary" size="small" disabled={isEmpty} loading={loading}
+          onClick={handleSign}
+          style={{ background: primaryColor, borderColor: primaryColor, borderRadius: 8 }}
+        >Firmar contrato</Button>
+      </div>
+    </div>
+  )
+}
+
 // ── Contract widget with Stripe payment ───────────────────────────────────────
 const CONTRATO_STATUS_CFG: Record<string, { color: string; bg: string; label: string }> = {
   BORRADOR:   { color: '#6B7280', bg: '#F3F4F6', label: 'Borrador' },
@@ -560,16 +647,45 @@ const PAY_STATUS_CFG: Record<string, { color: string; bg: string; label: string;
 }
 
 function ContratoWidgetRO({
-  contrato, eventId, token, onContratoChange,
+  contrato, eventId, token, onContratoChange, branding,
 }: {
   contrato: any
   eventId: string
   token: string
   onContratoChange: (updated: any) => void
+  branding: EventBranding
 }) {
   const [paying, setPayingId] = useState<string | null>(null)
+  const [authorizing, setAuthorizing] = useState(false)
+  const [showSignPad, setShowSignPad] = useState(false)
+  const [signingLoading, setSigningLoading] = useState(false)
 
   const fmt = (n: number) => `$${Number(n).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+
+  async function handleAuthorizeQuote() {
+    setAuthorizing(true)
+    try {
+      const res = await plannerPortalApi.authorizeQuote(eventId, token)
+      const updated = res.data?.contrato
+      if (updated) onContratoChange(updated)
+      antdMessage.success('Cotización autorizada. Ahora puedes firmar el contrato.')
+    } catch (err: any) {
+      antdMessage.error(err?.response?.data?.message || 'Error al autorizar')
+    } finally { setAuthorizing(false) }
+  }
+
+  async function handleSign(signatureData: string) {
+    setSigningLoading(true)
+    try {
+      const res = await plannerPortalApi.signContract(eventId, signatureData, token)
+      const updated = res.data?.contrato
+      if (updated) onContratoChange(updated)
+      setShowSignPad(false)
+      antdMessage.success('¡Contrato firmado exitosamente!')
+    } catch (err: any) {
+      antdMessage.error(err?.response?.data?.message || 'Error al firmar')
+    } finally { setSigningLoading(false) }
+  }
 
   if (!contrato?.contractNumber) {
     return (
@@ -672,6 +788,54 @@ function ContratoWidgetRO({
           )
         })}
       </div>
+
+      {/* Authorization / Signature actions */}
+      {contrato.contractStatus === 'COTIZACION' && (
+        <div style={{ padding: '10px 14px', borderTop: '1px solid #F0EBFF', flexShrink: 0, background: '#FFFBEB' }}>
+          <div style={{ fontSize: 11, color: '#92400E', marginBottom: 8, fontWeight: 600 }}>
+            📋 Cotización pendiente de autorización
+          </div>
+          <Button type="primary" size="small" block loading={authorizing}
+            onClick={handleAuthorizeQuote}
+            style={{ background: '#D97706', borderColor: '#D97706', borderRadius: 8, fontWeight: 600 }}>
+            ✓ Autorizar cotización
+          </Button>
+        </div>
+      )}
+      {contrato.contractStatus === 'CONTRATO' && !showSignPad && (
+        <div style={{ padding: '10px 14px', borderTop: '1px solid #F0EBFF', flexShrink: 0, background: '#F0FDF4' }}>
+          <div style={{ fontSize: 11, color: '#065F46', marginBottom: 8, fontWeight: 600 }}>
+            ✅ Cotización autorizada — Contrato listo para firmar
+          </div>
+          <Button type="primary" size="small" block
+            onClick={() => setShowSignPad(true)}
+            style={{ background: '#059669', borderColor: '#059669', borderRadius: 8, fontWeight: 600 }}>
+            ✍️ Firmar contrato
+          </Button>
+        </div>
+      )}
+      {contrato.contractStatus === 'CONTRATO' && showSignPad && (
+        <div style={{ padding: '10px 14px', borderTop: '1px solid #F0EBFF', flexShrink: 0 }}>
+          <SignaturePad
+            primaryColor={branding.primaryColor}
+            onSign={handleSign}
+            onCancel={() => setShowSignPad(false)}
+            loading={signingLoading}
+          />
+        </div>
+      )}
+      {contrato.contractStatus === 'FIRMADO' && (
+        <div style={{ padding: '10px 14px', borderTop: '1px solid #BBF7D0', flexShrink: 0, background: '#ECFDF5', textAlign: 'center' }}>
+          <div style={{ fontSize: 12, color: '#059669', fontWeight: 700 }}>
+            ✅ Contrato firmado
+          </div>
+          {contrato.clientSignedAt && (
+            <div style={{ fontSize: 10, color: '#888', marginTop: 2 }}>
+              {dayjs(contrato.clientSignedAt).format('D MMM YYYY HH:mm')}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -713,6 +877,7 @@ function WidgetRendererRO({ widget, snapshot, branding, eventId, token, onSnapsh
         eventId={eventId}
         token={token}
         onContratoChange={(updated) => onSnapshotChange({ contrato: updated })}
+        branding={branding}
       />
     )
     default:            return null
@@ -795,6 +960,25 @@ function ErrorScreen({ message, onRetry }: { message: string; onRetry: () => voi
   )
 }
 
+// ── Smooth path helper (mirrors LienzoPage) ───────────────────────────────────
+function smoothPath(pts: Array<{x:number;y:number}>): string {
+  if (pts.length < 2) return ''
+  if (pts.length === 2) return `M ${pts[0].x} ${pts[0].y} L ${pts[1].x} ${pts[1].y}`
+  let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)]
+    const p1 = pts[i]
+    const p2 = pts[i + 1]
+    const p3 = pts[Math.min(pts.length - 1, i + 2)]
+    const cp1x = p1.x + (p2.x - p0.x) / 6
+    const cp1y = p1.y + (p2.y - p0.y) / 6
+    const cp2x = p2.x - (p3.x - p1.x) / 6
+    const cp2y = p2.y - (p3.y - p1.y) / 6
+    d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)} ${cp2x.toFixed(1)} ${cp2y.toFixed(1)} ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`
+  }
+  return d
+}
+
 // ── Main Canvas ──────────────────────────────────────────────────────────────
 export default function ClientPortalPage() {
   const { id } = useParams<{ id: string }>()
@@ -813,6 +997,15 @@ export default function ClientPortalPage() {
   const [isPanning, setIsPanning] = useState(false)
   const panStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 })
   const canvasRef = useRef<HTMLDivElement>(null)
+
+  // Widgets state (mutable so client can add their own)
+  const [widgets, setWidgets] = useState<Widget[]>([])
+  const [lienzoStrokes, setLienzoStrokes] = useState<Array<{ id: string; points: Array<{x:number;y:number}>; color: string; width: number }>>([])
+
+  // Add-widget modal state
+  const [addWidgetOpen, setAddWidgetOpen] = useState(false)
+  const [addWidgetType, setAddWidgetType] = useState<'imagen' | 'links'>('imagen')
+  const [addWidgetUrl, setAddWidgetUrl] = useState('')
 
   async function fetchSnapshot(accessToken: string) {
     setLoading(true); setFetchError(null)
@@ -881,6 +1074,33 @@ export default function ClientPortalPage() {
     setSnapshot(prev => prev ? { ...prev, ...patch } : prev)
   }
 
+  // Initialize widgets + strokes from snapshot
+  useEffect(() => {
+    if (!snapshot) return
+    const rawLienzo = snapshot.lienzo
+    let ws: Widget[] = []
+    if (Array.isArray(rawLienzo)) {
+      ws = rawLienzo
+    } else if (rawLienzo?.widgets && Array.isArray(rawLienzo.widgets)) {
+      ws = rawLienzo.widgets
+    }
+    if (ws.length === 0) {
+      const auto: Widget[] = []
+      let y = 20
+      auto.push({ id: 'auto-portada', type: 'portada', x: 24, y, w: 500, h: 200, config: {} })
+      y += 224
+      if (snapshot.timeline) auto.push({ id: 'auto-timeline', type: 'timeline', x: 24, y, w: 380, h: 400, config: {} })
+      if (snapshot.tareas) auto.push({ id: 'auto-tareas', type: 'tareas', x: 424, y, w: 340, h: 300, config: {} })
+      if (snapshot.presupuesto) auto.push({ id: 'auto-presupuesto', type: 'presupuesto', x: 424, y: y + 320, w: 340, h: 300, config: {} })
+      if (snapshot.contrato) auto.push({ id: 'auto-contrato', type: 'contrato', x: 24, y: y + 420, w: 380, h: 380, config: {} })
+      ws = auto
+    }
+    setWidgets(ws)
+    const strokes: Array<{ id: string; points: Array<{x:number;y:number}>; color: string; width: number }> =
+      Array.isArray(rawLienzo) ? [] : (rawLienzo?.strokes ?? [])
+    setLienzoStrokes(strokes)
+  }, [snapshot])
+
   // Pan handlers
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button === 1 || e.button === 0) {
@@ -918,36 +1138,6 @@ export default function ClientPortalPage() {
 
   const branding: EventBranding = { ...DEFAULT_BRANDING, ...(snapshot.branding || {}) }
   const eventName = snapshot.eventSnapshot?.name || 'Lienzo del Evento'
-
-  // Parse widgets from snapshot
-  const rawLienzo = snapshot.lienzo
-  let widgets: Widget[] = []
-  if (Array.isArray(rawLienzo)) {
-    widgets = rawLienzo
-  } else if (rawLienzo?.widgets && Array.isArray(rawLienzo.widgets)) {
-    widgets = rawLienzo.widgets
-  }
-
-  // Auto-layout if no widgets defined
-  if (widgets.length === 0) {
-    const auto: Widget[] = []
-    let y = 20
-    auto.push({ id: 'auto-portada', type: 'portada', x: 24, y, w: 500, h: 200, config: {} })
-    y += 224
-    if (snapshot.timeline) {
-      auto.push({ id: 'auto-timeline', type: 'timeline', x: 24, y, w: 380, h: 400, config: {} })
-    }
-    if (snapshot.tareas) {
-      auto.push({ id: 'auto-tareas', type: 'tareas', x: 424, y, w: 340, h: 300, config: {} })
-    }
-    if (snapshot.presupuesto) {
-      auto.push({ id: 'auto-presupuesto', type: 'presupuesto', x: 424, y: y + 320, w: 340, h: 300, config: {} })
-    }
-    if (snapshot.contrato) {
-      auto.push({ id: 'auto-contrato', type: 'contrato', x: 24, y: y + 420, w: 380, h: 380, config: {} })
-    }
-    widgets = auto
-  }
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#1E1040', overflow: 'hidden' }}>
@@ -1038,7 +1228,88 @@ export default function ClientPortalPage() {
               />
             </div>
           ))}
+
+          {/* SVG stroke overlay */}
+          {lienzoStrokes.length > 0 && (
+            <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', overflow: 'visible', pointerEvents: 'none' }}>
+              <defs>
+                <filter id="cp-ink-glow">
+                  <feGaussianBlur in="SourceGraphic" stdDeviation="0.6" result="blur" />
+                  <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+                </filter>
+              </defs>
+              {lienzoStrokes.map(s => (
+                <path key={s.id} d={smoothPath(s.points)} fill="none" stroke={s.color}
+                  strokeWidth={s.width} strokeLinecap="round" strokeLinejoin="round"
+                  filter="url(#cp-ink-glow)" opacity={0.9} />
+              ))}
+            </svg>
+          )}
         </div>
+
+        {/* Floating add-widget button */}
+        <div style={{
+          position: 'absolute', bottom: 16, right: 16, zIndex: 50,
+          display: 'flex', gap: 8, flexDirection: 'column', alignItems: 'flex-end',
+        }}>
+          <Button
+            type="primary" shape="circle" size="large"
+            icon={<PlusCircleOutlined />}
+            onClick={() => setAddWidgetOpen(true)}
+            style={{ background: branding.primaryColor, borderColor: branding.primaryColor,
+              width: 48, height: 48, fontSize: 20,
+              boxShadow: '0 4px 14px rgba(0,0,0,0.25)' }}
+          />
+        </div>
+
+        {/* Add-widget modal */}
+        <Modal
+          open={addWidgetOpen}
+          title="Agregar al lienzo"
+          onCancel={() => { setAddWidgetOpen(false); setAddWidgetUrl('') }}
+          footer={null}
+          width={380}
+        >
+          <div style={{ padding: '8px 0' }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+              <Button type={addWidgetType === 'imagen' ? 'primary' : 'default'}
+                icon={<PictureOutlined />}
+                onClick={() => setAddWidgetType('imagen')}
+                style={addWidgetType === 'imagen' ? { background: branding.primaryColor, borderColor: branding.primaryColor } : {}}
+              >Imagen</Button>
+              <Button type={addWidgetType === 'links' ? 'primary' : 'default'}
+                icon={<LinkOutlined />}
+                onClick={() => setAddWidgetType('links')}
+                style={addWidgetType === 'links' ? { background: branding.primaryColor, borderColor: branding.primaryColor } : {}}
+              >Enlace</Button>
+            </div>
+            <Input
+              placeholder={addWidgetType === 'imagen' ? 'https://url-de-imagen.jpg' : 'https://sitio-web.com'}
+              value={addWidgetUrl}
+              onChange={e => setAddWidgetUrl(e.target.value)}
+              style={{ marginBottom: 12 }}
+            />
+            <Button type="primary" block
+              disabled={!addWidgetUrl.trim()}
+              onClick={() => {
+                const url = addWidgetUrl.trim()
+                const newWidget: Widget = {
+                  id: `client-${Date.now()}`,
+                  type: addWidgetType,
+                  x: 200 + Math.random() * 100,
+                  y: 200 + Math.random() * 100,
+                  w: addWidgetType === 'imagen' ? 300 : 360,
+                  h: addWidgetType === 'imagen' ? 220 : 240,
+                  config: addWidgetType === 'imagen' ? { imageUrl: url } : { url },
+                }
+                setWidgets(prev => [...prev, newWidget])
+                setAddWidgetOpen(false)
+                setAddWidgetUrl('')
+              }}
+              style={{ background: branding.primaryColor, borderColor: branding.primaryColor }}
+            >Agregar al lienzo</Button>
+          </div>
+        </Modal>
       </div>
 
       {/* Footer */}

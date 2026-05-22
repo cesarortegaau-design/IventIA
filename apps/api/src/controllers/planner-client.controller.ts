@@ -132,6 +132,62 @@ export async function createPlannerPaymentCheckout(req: Request, res: Response, 
   }
 }
 
+// ── POST /portal/planner-contract/:eventId/authorize ─────────────────────────
+// Client authorizes a quote (COTIZACION) → becomes CONTRATO
+export async function authorizeQuote(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { portalUserId } = req.portalUser!
+    const { eventId } = req.params
+    await verifyEventAccess(portalUserId, eventId)
+
+    const contrato = await readStore(eventId, 'contrato')
+    if (!contrato) throw new AppError(404, 'NOT_FOUND', 'Contrato no encontrado')
+    if (contrato.contractStatus !== 'COTIZACION') {
+      throw new AppError(400, 'INVALID_STATUS', 'Solo se puede autorizar una cotización')
+    }
+
+    const updated = {
+      ...contrato,
+      contractStatus: 'CONTRATO',
+      clientAuthorizedAt: new Date().toISOString(),
+      clientAuthorizedBy: portalUserId,
+    }
+    await writeStore(eventId, 'contrato', updated)
+    res.json({ success: true, data: { contrato: updated } })
+  } catch (err) { next(err) }
+}
+
+// ── POST /portal/planner-contract/:eventId/sign ───────────────────────────────
+// Client signs the contract (CONTRATO) → becomes FIRMADO
+// Body: { signatureData: string (base64 PNG) }
+export async function signContract(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { portalUserId } = req.portalUser!
+    const { eventId } = req.params
+    await verifyEventAccess(portalUserId, eventId)
+
+    const { signatureData } = z.object({
+      signatureData: z.string().min(1),
+    }).parse(req.body)
+
+    const contrato = await readStore(eventId, 'contrato')
+    if (!contrato) throw new AppError(404, 'NOT_FOUND', 'Contrato no encontrado')
+    if (contrato.contractStatus !== 'CONTRATO') {
+      throw new AppError(400, 'INVALID_STATUS', 'Solo se puede firmar un contrato autorizado')
+    }
+
+    const updated = {
+      ...contrato,
+      contractStatus: 'FIRMADO',
+      clientSignedAt: new Date().toISOString(),
+      clientSignedBy: portalUserId,
+      clientSignature: signatureData,
+    }
+    await writeStore(eventId, 'contrato', updated)
+    res.json({ success: true, data: { contrato: updated } })
+  } catch (err) { next(err) }
+}
+
 // ── POST /portal/planner-payments/:eventId/verify ────────────────────────────
 export async function verifyPlannerPayment(req: Request, res: Response, next: NextFunction) {
   try {

@@ -23,4 +23,10 @@ export const plannerPortalApi = {
 
   verifyPayment: (eventId: string, sessionId: string, paymentId: string, token: string) =>
     portalPublicClient.post(`/planner-payments/${eventId}/verify`, { sessionId, paymentId }, authHeader(token)).then((r) => r.data),
+
+  authorizeQuote: (eventId: string, token: string) =>
+    portalPublicClient.post(`/planner-contract/${eventId}/authorize`, {}, authHeader(token)).then((r) => r.data),
+
+  signContract: (eventId: string, signatureData: string, token: string) =>
+    portalPublicClient.post(`/planner-contract/${eventId}/sign`, { signatureData }, authHeader(token)).then((r) => r.data),
 }
