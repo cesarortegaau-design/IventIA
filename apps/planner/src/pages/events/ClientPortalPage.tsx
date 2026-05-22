@@ -138,7 +138,12 @@ function TareasWidgetRO({
   onTasksChange: (tasks: any[]) => void
 }) {
   const allTasks = tareas?.tasks ?? []
-  const visible = allTasks.filter((t: any) => t.clientVisible !== false && t.status !== 'LISTA')
+  const visible = allTasks.filter((t: any) => {
+    if (t.status === 'LISTA') return false
+    if (t.clientCreated) return true                     // client's own tasks always visible
+    if (t.assigneeType === 'internal') return false      // internal tasks never visible
+    return t.clientVisible !== false                     // backward compat: old tasks visible by default
+  })
   const [modalOpen, setModalOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<any>(null)
   const [saving, setSaving] = useState(false)

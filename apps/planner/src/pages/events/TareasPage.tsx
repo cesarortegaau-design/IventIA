@@ -5,13 +5,15 @@
  */
 import { useState, useMemo, useRef } from 'react'
 import { useParams, useOutletContext } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { usePlannerStore } from '../../hooks/usePlannerStore'
 import {
-  Button, Modal, Form, Input, Select, DatePicker, App, Typography, Space, Popconfirm, Tooltip,
+  Button, Modal, Form, Input, Select, DatePicker, App, Typography, Space, Popconfirm, Tooltip, Radio,
 } from 'antd'
 import {
-  PlusOutlined, CalendarOutlined, DeleteOutlined, CloseOutlined,
+  PlusOutlined, CalendarOutlined, DeleteOutlined, CloseOutlined, TeamOutlined, UserOutlined,
 } from '@ant-design/icons'
+import { eventsApi } from '../../api/events'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import isSameOrBefore from 'dayjs/plugin/isSameOrBefore'
@@ -23,8 +25,9 @@ dayjs.locale('es')
 const { Text } = Typography
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type TaskStatus = 'POR_HACER' | 'EN_CURSO' | 'ESPERANDO_OK' | 'LISTA'
-type ViewMode   = 'kanban' | 'lista'
+type TaskStatus    = 'POR_HACER' | 'EN_CURSO' | 'ESPERANDO_OK' | 'LISTA'
+type AssigneeType  = 'client' | 'internal'
+type ViewMode      = 'kanban' | 'lista'
 
 interface Task {
   id: string
@@ -32,7 +35,11 @@ interface Task {
   title: string
   category: string
   dueDate?: string
-  assignee: string
+  assigneeType?: AssigneeType    // 'client' | 'internal' (undefined = backward compat = internal)
+  assignee: string               // initials for internal / 'CLI' for client
+  assignedUserId?: string        // user ID when internal
+  assignedUserName?: string      // full name when internal
+  clientVisible?: boolean        // true when assigneeType === 'client'
   status: TaskStatus
   notes?: string
 }
@@ -120,18 +127,24 @@ interface TaskDraft {
   category: string
   status: TaskStatus
   dueDate: string
+  assigneeType: AssigneeType
   assignee: string
+  assignedUserId?: string
+  assignedUserName?: string
   notes: string
 }
 
 function taskToDraft(t: Task): TaskDraft {
   return {
-    title:    t.title,
-    category: t.category,
-    status:   t.status,
-    dueDate:  t.dueDate ?? '',
-    assignee: t.assignee,
-    notes:    t.notes ?? '',
+    title:            t.title,
+    category:         t.category,
+    status:           t.status,
+    dueDate:          t.dueDate ?? '',
+    assigneeType:     t.assigneeType ?? 'internal',
+    assignee:         t.assignee,
+    assignedUserId:   t.assignedUserId,
+    assignedUserName: t.assignedUserName,
+    notes:            t.notes ?? '',
   }
 }
 
@@ -150,6 +163,14 @@ export default function TareasPage() {
   const [myTasks, setMyTasks] = useState(false)
   const [myInitials] = useState('YO')
 
+  // Users (internal assignment)
+  const { data: usersData } = useQuery({
+    queryKey: ['assignable-users'],
+    queryFn: () => eventsApi.getAssignableUsers(),
+    staleTime: 5 * 60 * 1000,
+  })
+  const users: { id: string; firstName: string; lastName: string; email: string }[] = usersData?.data ?? []
+
   // Right panel (edit)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [draft, setDraft] = useState<TaskDraft | null>(null)
@@ -157,6 +178,7 @@ export default function TareasPage() {
 
   // Create modal (new task only)
   const [createModal, setCreateModal] = useState<{ open: boolean; defaultStatus?: TaskStatus }>({ open: false })
+  const [createAssigneeType, setCreateAssigneeType] = useState<AssigneeType>('internal')
   const [form] = Form.useForm()
 
   // Drag
@@ -188,7 +210,30 @@ export default function TareasPage() {
   }
 
   const patchDraft = (patch: Partial<TaskDraft>) => {
-    setDraft(d => d ? { ...d, ...patch } : d)
+    setDraft(d => {
+      if (!d) return d
+      const next = { ...d, ...patch }
+      if (patch.assigneeType === 'client') {
+        next.assignedUserId = undefined
+        next.assignedUserName = undefined
+        next.assignee = 'CLI'
+      }
+      if (patch.assigneeType === 'internal') {
+        next.assignee = ''
+      }
+      return next
+    })
+    setDirty(true)
+  }
+
+  const patchDraftUser = (userId: string) => {
+    const u = users.find(u => u.id === userId)
+    setDraft(d => d ? {
+      ...d,
+      assignedUserId:   userId,
+      assignedUserName: u ? `${u.firstName} ${u.lastName}` : '',
+      assignee:         u ? `${u.firstName[0]}${u.lastName[0]}`.toUpperCase() : '',
+    } : d)
     setDirty(true)
   }
 
@@ -198,7 +243,12 @@ export default function TareasPage() {
     update({
       tasks: store.tasks.map(t =>
         t.id === selectedTask.id
-          ? { ...t, ...draft, dueDate: draft.dueDate || undefined }
+          ? {
+              ...t,
+              ...draft,
+              dueDate:       draft.dueDate || undefined,
+              clientVisible: draft.assigneeType === 'client',
+            }
           : t
       ),
     })
@@ -217,7 +267,8 @@ export default function TareasPage() {
   // ── Create new task ────────────────────────────────────────────────────────
   const openNew = (defaultStatus: TaskStatus = 'POR_HACER') => {
     form.resetFields()
-    form.setFieldsValue({ status: defaultStatus, category: 'General', assignee: '' })
+    form.setFieldsValue({ status: defaultStatus, category: 'General' })
+    setCreateAssigneeType('internal')
     setCreateModal({ open: true, defaultStatus })
   }
 
@@ -228,17 +279,30 @@ export default function TareasPage() {
     const prefix = colIdx >= 0
       ? String((colIdx + 1) * 100 + store.tasks.filter(t => t.status === vals.status).length + 1)
       : String(next)
+
+    const isClient = createAssigneeType === 'client'
+    const selectedUser = isClient ? null : users.find(u => u.id === vals.assignedUserId)
+    const initials = isClient
+      ? 'CLI'
+      : selectedUser
+        ? `${selectedUser.firstName[0]}${selectedUser.lastName[0]}`.toUpperCase()
+        : ''
+
     update({
       counter: next,
       tasks: [...store.tasks, {
-        id:       `task-${Date.now()}`,
-        code:     `T-${prefix}`,
-        title:    vals.title,
-        category: vals.category || 'General',
-        dueDate:  dueDateStr,
-        assignee: vals.assignee || '',
-        status:   vals.status || 'POR_HACER',
-        notes:    vals.notes,
+        id:               `task-${Date.now()}`,
+        code:             `T-${prefix}`,
+        title:            vals.title,
+        category:         vals.category || 'General',
+        dueDate:          dueDateStr,
+        assigneeType:     createAssigneeType,
+        assignee:         initials,
+        assignedUserId:   isClient ? undefined : vals.assignedUserId,
+        assignedUserName: isClient ? undefined : selectedUser ? `${selectedUser.firstName} ${selectedUser.lastName}` : undefined,
+        clientVisible:    isClient,
+        status:           vals.status || 'POR_HACER',
+        notes:            vals.notes,
       }],
     })
     message.success('Tarea agregada')
@@ -337,16 +401,28 @@ export default function TareasPage() {
                 ))}
               </Select>
             </Tooltip>
-            {task.assignee && (
-              <div style={{
-                width: 26, height: 26, borderRadius: '50%',
-                background: avatarColor(task.assignee),
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 10, fontWeight: 700, color: '#fff', flexShrink: 0,
-              }}>
-                {task.assignee.slice(0, 2).toUpperCase()}
-              </div>
-            )}
+            {task.assigneeType === 'client' ? (
+              <Tooltip title="Asignado al cliente — visible en portal">
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 3, padding: '2px 7px',
+                  borderRadius: 20, background: '#EDE9FE', border: '1px solid #C4B5FD',
+                  fontSize: 10, fontWeight: 700, color: '#7C3AED', flexShrink: 0,
+                }}>
+                  <TeamOutlined style={{ fontSize: 9 }} /> Cliente
+                </div>
+              </Tooltip>
+            ) : task.assignee ? (
+              <Tooltip title={task.assignedUserName || task.assignee}>
+                <div style={{
+                  width: 26, height: 26, borderRadius: '50%',
+                  background: avatarColor(task.assignee),
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 10, fontWeight: 700, color: '#fff', flexShrink: 0,
+                }}>
+                  {task.assignee.slice(0, 2).toUpperCase()}
+                </div>
+              </Tooltip>
+            ) : null}
           </div>
         </div>
       </div>
@@ -459,16 +535,21 @@ export default function TareasPage() {
               )}
             </div>
             <div>
-              {task.assignee && (
+              {task.assigneeType === 'client' ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <TeamOutlined style={{ color: '#7C3AED', fontSize: 13 }} />
+                  <Text style={{ fontSize: 12, color: '#7C3AED', fontWeight: 600 }}>Cliente</Text>
+                </div>
+              ) : task.assignee ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <div style={{
                     width: 24, height: 24, borderRadius: '50%', background: avatarColor(task.assignee),
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: 9, fontWeight: 700, color: '#fff',
                   }}>{task.assignee.slice(0, 2).toUpperCase()}</div>
-                  <Text style={{ fontSize: 12, color: '#555' }}>{task.assignee}</Text>
+                  <Text style={{ fontSize: 12, color: '#555' }}>{task.assignedUserName || task.assignee}</Text>
                 </div>
-              )}
+              ) : null}
             </div>
             <span style={{
               display: 'inline-flex', alignItems: 'center', gap: 5,
@@ -589,25 +670,45 @@ export default function TareasPage() {
             />
           </div>
           <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 4 }}>Asignado (iniciales)</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {draft.assignee && (
-                <div style={{
-                  width: 32, height: 32, borderRadius: '50%', background: avatarColor(draft.assignee),
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 11, fontWeight: 700, color: '#fff', flexShrink: 0,
-                }}>
-                  {draft.assignee.slice(0, 2).toUpperCase()}
-                </div>
-              )}
-              <Input
-                value={draft.assignee}
-                onChange={e => patchDraft({ assignee: e.target.value.toUpperCase() })}
-                placeholder="MR, JC, PL..."
-                maxLength={4}
-                style={{ borderRadius: 8, textTransform: 'uppercase' }}
+            <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 6 }}>Asignado a</div>
+            <Radio.Group
+              value={draft.assigneeType}
+              onChange={e => patchDraft({ assigneeType: e.target.value as AssigneeType })}
+              style={{ marginBottom: 10 }}
+            >
+              <Radio.Button value="internal" style={{ fontSize: 12 }}>
+                <UserOutlined style={{ marginRight: 4 }} />Interno
+              </Radio.Button>
+              <Radio.Button value="client" style={{ fontSize: 12 }}>
+                <TeamOutlined style={{ marginRight: 4 }} />Cliente
+              </Radio.Button>
+            </Radio.Group>
+            {draft.assigneeType === 'client' ? (
+              <div style={{
+                padding: '8px 12px', borderRadius: 8,
+                background: '#F5F3FF', border: '1px solid #DDD6FE',
+                fontSize: 12, color: '#7C3AED', fontWeight: 600,
+                display: 'flex', alignItems: 'center', gap: 6,
+              }}>
+                <TeamOutlined /> Visible en portal del cliente
+              </div>
+            ) : (
+              <Select
+                style={{ width: '100%' }}
+                placeholder="Seleccionar usuario interno..."
+                value={draft.assignedUserId || undefined}
+                allowClear
+                showSearch
+                filterOption={(input, opt) =>
+                  (opt?.label as string ?? '').toLowerCase().includes(input.toLowerCase())
+                }
+                onChange={(val) => val ? patchDraftUser(val) : patchDraft({ assignedUserId: undefined, assignedUserName: undefined, assignee: '' })}
+                options={users.map(u => ({
+                  value: u.id,
+                  label: `${u.firstName} ${u.lastName}`,
+                }))}
               />
-            </div>
+            )}
           </div>
 
           {/* Category indicator */}
@@ -765,14 +866,40 @@ export default function TareasPage() {
               </Select>
             </Form.Item>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Form.Item name="dueDate" label="Fecha límite">
-              <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" placeholder="Seleccionar" />
-            </Form.Item>
-            <Form.Item name="assignee" label="Asignado (iniciales)">
-              <Input placeholder="Ej: MR, JC, PL..." maxLength={4} style={{ textTransform: 'uppercase' }} />
-            </Form.Item>
-          </div>
+          <Form.Item name="dueDate" label="Fecha límite">
+            <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" placeholder="Seleccionar" />
+          </Form.Item>
+          <Form.Item label="Asignado a">
+            <Radio.Group
+              value={createAssigneeType}
+              onChange={e => { setCreateAssigneeType(e.target.value); form.setFieldValue('assignedUserId', undefined) }}
+              style={{ marginBottom: 8 }}
+            >
+              <Radio.Button value="internal"><UserOutlined style={{ marginRight: 4 }} />Interno</Radio.Button>
+              <Radio.Button value="client"><TeamOutlined style={{ marginRight: 4 }} />Cliente</Radio.Button>
+            </Radio.Group>
+            {createAssigneeType === 'client' ? (
+              <div style={{
+                padding: '8px 12px', borderRadius: 8, background: '#F5F3FF',
+                border: '1px solid #DDD6FE', fontSize: 12, color: '#7C3AED',
+                fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
+              }}>
+                <TeamOutlined /> La tarea será visible en el portal del cliente
+              </div>
+            ) : (
+              <Form.Item name="assignedUserId" noStyle>
+                <Select
+                  placeholder="Seleccionar usuario interno..."
+                  allowClear showSearch
+                  filterOption={(input, opt) =>
+                    (opt?.label as string ?? '').toLowerCase().includes(input.toLowerCase())
+                  }
+                  options={users.map(u => ({ value: u.id, label: `${u.firstName} ${u.lastName}` }))}
+                  style={{ width: '100%' }}
+                />
+              </Form.Item>
+            )}
+          </Form.Item>
           <Form.Item name="notes" label="Notas">
             <Input.TextArea rows={2} placeholder="Observaciones adicionales..." />
           </Form.Item>

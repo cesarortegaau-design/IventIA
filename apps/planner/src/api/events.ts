@@ -57,4 +57,6 @@ export const eventsApi = {
     apiClient.put(`/events/${id}/planner-store/${key}`, { data }).then((r) => r.data),
   getAllPlannerStores: (id: string) =>
     apiClient.get(`/events/${id}/planner-stores`).then((r) => r.data),
+  getAssignableUsers: () =>
+    apiClient.get('/users/assignable').then((r) => r.data),
 }
