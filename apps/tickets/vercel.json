@@ -1,3 +1,4 @@
 {
+  "ignoreCommand": "git diff HEAD^ HEAD --quiet -- apps/tickets/ packages/shared/ packages/prisma/",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }

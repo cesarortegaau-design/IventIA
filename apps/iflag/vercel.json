@@ -1,4 +1,5 @@
 {
+  "ignoreCommand": "git diff HEAD^ HEAD --quiet -- apps/iflag/ packages/shared/ packages/prisma/",
   "framework": "vite",
   "buildCommand": "pnpm run build",
   "outputDirectory": "dist",
