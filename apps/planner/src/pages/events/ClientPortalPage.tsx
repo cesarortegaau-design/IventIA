@@ -1024,6 +1024,52 @@ function buildMagicRibbon(pts: SP[], baseWidth: number): string {
   return d
 }
 
+// ── Arrow helpers (mirrors LienzoPage) ───────────────────────────────────────
+function ptLineDist(p: SP, a: SP, b: SP): number {
+  const dx = b.x-a.x; const dy = b.y-a.y; const len2 = dx*dx+dy*dy
+  if (len2 === 0) return Math.hypot(p.x-a.x, p.y-a.y)
+  const t = Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/len2))
+  return Math.hypot(p.x-(a.x+t*dx), p.y-(a.y+t*dy))
+}
+function rdpSimplify(pts: SP[], eps: number): SP[] {
+  if (pts.length < 3) return pts
+  let maxD = 0; let idx = 0
+  for (let i = 1; i < pts.length-1; i++) {
+    const d = ptLineDist(pts[i], pts[0], pts[pts.length-1])
+    if (d > maxD) { maxD = d; idx = i }
+  }
+  if (maxD < eps) return [pts[0], pts[pts.length-1]]
+  return [...rdpSimplify(pts.slice(0,idx+1), eps), ...rdpSimplify(pts.slice(idx), eps).slice(1)]
+}
+function buildArrowSvg(pts: SP[], strokeW: number): { line: string; head: string } {
+  const simplified = rdpSimplify(pts, 2.5)
+  const crLine = (ps: SP[]) => {
+    if (ps.length === 0) return ''
+    let d = `M ${ps[0].x.toFixed(1)} ${ps[0].y.toFixed(1)}`
+    for (let i = 0; i < ps.length-1; i++) {
+      const p0=ps[Math.max(0,i-1)],p1=ps[i],p2=ps[i+1],p3=ps[Math.min(ps.length-1,i+2)]
+      const cx1=p1.x+(p2.x-p0.x)/6,cy1=p1.y+(p2.y-p0.y)/6
+      const cx2=p2.x-(p3.x-p1.x)/6,cy2=p2.y-(p3.y-p1.y)/6
+      d+=` C ${cx1.toFixed(1)} ${cy1.toFixed(1)} ${cx2.toFixed(1)} ${cy2.toFixed(1)} ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`
+    }
+    return d
+  }
+  const n = simplified.length
+  const tip = simplified[n-1]
+  const prev = simplified[Math.max(0,n-2)]
+  const fwdX = tip.x-prev.x; const fwdY = tip.y-prev.y
+  const fwdLen = Math.hypot(fwdX,fwdY)||1
+  const ux = fwdX/fwdLen; const uy = fwdY/fwdLen
+  const hw = strokeW*3.5; const hl = strokeW*7
+  const base = { x: tip.x-ux*hl, y: tip.y-uy*hl }
+  const w1 = { x: base.x-uy*hw, y: base.y+ux*hw }
+  const w2 = { x: base.x+uy*hw, y: base.y-ux*hw }
+  const head = `M ${tip.x.toFixed(1)} ${tip.y.toFixed(1)} L ${w1.x.toFixed(1)} ${w1.y.toFixed(1)} L ${w2.x.toFixed(1)} ${w2.y.toFixed(1)} Z`
+  const lineEnd = { x: tip.x-ux*hl*0.5, y: tip.y-uy*hl*0.5 }
+  const trimmed = [...simplified.slice(0,n-1), lineEnd]
+  return { line: crLine(trimmed), head }
+}
+
 // ── Main Canvas ──────────────────────────────────────────────────────────────
 export default function ClientPortalPage() {
   const { id } = useParams<{ id: string }>()
@@ -1045,7 +1091,7 @@ export default function ClientPortalPage() {
 
   // Widgets state (mutable so client can add their own)
   const [widgets, setWidgets] = useState<Widget[]>([])
-  const [lienzoStrokes, setLienzoStrokes] = useState<Array<{ id: string; points: Array<{x:number;y:number}>; color: string; width: number }>>([])
+  const [lienzoStrokes, setLienzoStrokes] = useState<Array<{ id: string; points: Array<{x:number;y:number}>; color: string; width: number; isArrow?: boolean }>>([])
 
   // Add-widget modal state
   const [addWidgetOpen, setAddWidgetOpen] = useState(false)
@@ -1283,11 +1329,23 @@ export default function ClientPortalPage() {
                   <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
                 </filter>
               </defs>
-              {lienzoStrokes.map(s => (
-                <path key={s.id} d={buildMagicRibbon(s.points, s.width)}
-                  fill={s.color} stroke="none"
-                  filter="url(#cp-ink-glow)" opacity={0.92} />
-              ))}
+              {lienzoStrokes.map(s => {
+                if (s.isArrow) {
+                  const { line, head } = buildArrowSvg(s.points, s.width)
+                  return (
+                    <g key={s.id} opacity={0.92}>
+                      <path d={line} fill="none" stroke={s.color} strokeWidth={s.width}
+                        strokeLinecap="round" strokeLinejoin="round" filter="url(#cp-ink-glow)" />
+                      <path d={head} fill={s.color} stroke="none" />
+                    </g>
+                  )
+                }
+                return (
+                  <path key={s.id} d={buildMagicRibbon(s.points, s.width)}
+                    fill={s.color} stroke="none"
+                    filter="url(#cp-ink-glow)" opacity={0.92} />
+                )
+              })}
             </svg>
           )}
         </div>

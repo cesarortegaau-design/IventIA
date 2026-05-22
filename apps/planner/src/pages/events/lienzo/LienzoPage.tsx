@@ -14,7 +14,7 @@ import {
   UploadOutlined, SearchOutlined, DeleteOutlined, FilePdfOutlined,
   EyeOutlined, BarChartOutlined, CalendarOutlined, DollarOutlined,
   PrinterOutlined, LinkOutlined, YoutubeOutlined, EditOutlined,
-  AuditOutlined, ClockCircleOutlined,
+  AuditOutlined, ClockCircleOutlined, ArrowRightOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { eventsApi } from '../../../api/events'
@@ -49,10 +49,10 @@ interface Widget {
   config: Record<string, any>
 }
 
-type Tool = 'select' | 'pan' | 'widget' | 'nota' | 'texto' | 'imagen' | 'draw'
+type Tool = 'select' | 'pan' | 'widget' | 'nota' | 'texto' | 'imagen' | 'draw' | 'arrow'
 
 interface StrokePoint { x: number; y: number }
-interface Stroke { id: string; points: StrokePoint[]; color: string; width: number }
+interface Stroke { id: string; points: StrokePoint[]; color: string; width: number; isArrow?: boolean }
 
 // ── Initial widgets ────────────────────────────────────────────────────────────
 const makeDefaultWidgets = (): Widget[] => [
@@ -2785,6 +2785,71 @@ function buildMagicRibbon(pts: StrokePoint[], baseWidth: number): string {
   return d
 }
 
+// ── Arrow helpers ─────────────────────────────────────────────────────────────
+
+// Ramer-Douglas-Peucker: simplify raw points, keeping only those that deviate
+// more than `eps` from the straight segment between endpoints.
+function ptLineDist(p: StrokePoint, a: StrokePoint, b: StrokePoint): number {
+  const dx = b.x - a.x; const dy = b.y - a.y
+  if (dx === 0 && dy === 0) return Math.hypot(p.x - a.x, p.y - a.y)
+  const t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy)
+  return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy)
+}
+
+function rdpSimplify(pts: StrokePoint[], eps: number): StrokePoint[] {
+  if (pts.length <= 2) return pts
+  let maxD = 0; let maxI = 0
+  for (let i = 1; i < pts.length - 1; i++) {
+    const d = ptLineDist(pts[i], pts[0], pts[pts.length - 1])
+    if (d > maxD) { maxD = d; maxI = i }
+  }
+  if (maxD > eps) {
+    const l = rdpSimplify(pts.slice(0, maxI + 1), eps)
+    const r = rdpSimplify(pts.slice(maxI), eps)
+    return [...l.slice(0, -1), ...r]
+  }
+  return [pts[0], pts[pts.length - 1]]
+}
+
+// Build a smooth arrow SVG: Catmull-Rom line + filled arrowhead at endpoint
+function buildArrowSvg(pts: StrokePoint[], strokeW: number): { line: string; head: string } {
+  if (pts.length < 2) return { line: '', head: '' }
+
+  // Aggressive simplification — the fewer points the cleaner the curve
+  const eps = Math.max(2, strokeW * 1.2)
+  const s = rdpSimplify(pts, eps)
+  if (s.length < 2) return { line: '', head: '' }
+
+  // Catmull-Rom smooth path
+  let line = `M ${s[0].x.toFixed(1)} ${s[0].y.toFixed(1)}`
+  for (let i = 0; i < s.length - 1; i++) {
+    const p0 = s[Math.max(0, i - 1)]
+    const p1 = s[i]; const p2 = s[i + 1]
+    const p3 = s[Math.min(s.length - 1, i + 2)]
+    const cx1 = p1.x + (p2.x - p0.x) / 6; const cy1 = p1.y + (p2.y - p0.y) / 6
+    const cx2 = p2.x - (p3.x - p1.x) / 6; const cy2 = p2.y - (p3.y - p1.y) / 6
+    line += ` C ${cx1.toFixed(1)} ${cy1.toFixed(1)} ${cx2.toFixed(1)} ${cy2.toFixed(1)} ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`
+  }
+
+  // Arrowhead: triangular, size proportional to stroke width
+  const last = s[s.length - 1]; const prev = s[s.length - 2]
+  const dx = last.x - prev.x; const dy = last.y - prev.y
+  const len = Math.hypot(dx, dy) || 1
+  const ux = dx / len; const uy = dy / len            // forward unit vector
+  const S = Math.max(12, strokeW * 6)                  // arrowhead length
+  const W = S * 0.4                                    // arrowhead half-width
+
+  // Base center of the arrowhead (pulled back from tip)
+  const bx = last.x - S * ux; const by = last.y - S * uy
+  // Left/right wings (perpendicular to forward direction)
+  const lx = bx - W * uy; const ly = by + W * ux
+  const rx = bx + W * uy; const ry = by - W * ux
+
+  const head = `M ${last.x.toFixed(1)} ${last.y.toFixed(1)} L ${lx.toFixed(1)} ${ly.toFixed(1)} L ${rx.toFixed(1)} ${ry.toFixed(1)} Z`
+
+  return { line, head }
+}
+
 // ── Persistence helpers ────────────────────────────────────────────────────────
 function lienzoKey(eventId: string) { return `iventia-lienzo-${eventId}` }
 
@@ -2832,6 +2897,7 @@ export default function LienzoPage() {
   const [activeStroke, setActiveStroke] = useState<StrokePoint[] | null>(null)
   const [drawColor, setDrawColor] = useState('#1a1a1a')
   const [drawWidth, setDrawWidth] = useState(14)
+  const [arrowWidth, setArrowWidth] = useState(2.5)
   const drawingRef = useRef(false)
   const activeStrokeRef = useRef<StrokePoint[]>([])
 
@@ -2944,7 +3010,7 @@ export default function LienzoPage() {
   }
 
   const onCanvasMouseDown = (e: React.MouseEvent) => {
-    if (tool === 'draw') {
+    if (tool === 'draw' || tool === 'arrow') {
       drawingRef.current = true
       const pt = getCanvasPoint(e)
       activeStrokeRef.current = [pt]
@@ -2960,10 +3026,9 @@ export default function LienzoPage() {
   }
 
   const onMouseMove = (e: React.MouseEvent) => {
-    if (tool === 'draw' && drawingRef.current) {
+    if ((tool === 'draw' || tool === 'arrow') && drawingRef.current) {
       const pt = getCanvasPoint(e)
       activeStrokeRef.current = [...activeStrokeRef.current, pt]
-      // Update display every 3 points for performance
       if (activeStrokeRef.current.length % 3 === 0) {
         setActiveStroke([...activeStrokeRef.current])
       }
@@ -2986,15 +3051,17 @@ export default function LienzoPage() {
   }
 
   const onMouseUp = () => {
-    if (tool === 'draw' && drawingRef.current) {
+    if ((tool === 'draw' || tool === 'arrow') && drawingRef.current) {
       drawingRef.current = false
       const pts = activeStrokeRef.current
       if (pts.length >= 2) {
+        const isArrow = tool === 'arrow'
         const newStroke: Stroke = {
           id: `stroke-${Date.now()}`,
           points: pts,
           color: drawColor,
-          width: drawWidth,
+          width: isArrow ? arrowWidth : drawWidth,
+          isArrow,
         }
         setStrokes(prev => [...prev, newStroke])
       }
@@ -3015,6 +3082,7 @@ export default function LienzoPage() {
     { key: 'select', label: 'Seleccionar', icon: <SelectOutlined />, shortcut: 'V' },
     { key: 'pan', label: 'Mover lienzo', icon: <DragOutlined />, shortcut: 'H' },
     { key: 'draw', label: 'Pincel', icon: <EditOutlined />, shortcut: 'B' },
+    { key: 'arrow', label: 'Flecha', icon: <ArrowRightOutlined />, shortcut: 'A' },
     { key: 'widget', label: 'Widget', icon: <AppstoreAddOutlined />, shortcut: 'R' },
     { key: 'nota', label: 'Nota', icon: <FileTextOutlined />, shortcut: 'N' },
     { key: 'texto', label: 'Texto', icon: <FontSizeOutlined />, shortcut: 'T' },
@@ -3063,11 +3131,11 @@ export default function LienzoPage() {
           </Tooltip>
         ))}
 
-        {/* Draw tool options — shown when pincel is active */}
-        {tool === 'draw' && (
+        {/* Draw / Arrow tool options */}
+        {(tool === 'draw' || tool === 'arrow') && (
           <>
             <div style={{ width: 1, height: 24, background: '#EDE9FE', margin: '0 4px' }} />
-            {/* Color swatches */}
+            {/* Shared color swatches */}
             {[
               { color: '#1a1a1a', label: 'Tinta' },
               { color: '#7C3AED', label: 'Violeta' },
@@ -3077,59 +3145,58 @@ export default function LienzoPage() {
               { color: '#ffffff', label: 'Blanco' },
             ].map(({ color, label }) => (
               <Tooltip key={color} title={label}>
-                <div
-                  onClick={() => setDrawColor(color)}
-                  style={{
-                    width: 20, height: 20, borderRadius: '50%', background: color, cursor: 'pointer', flexShrink: 0,
-                    border: drawColor === color ? '2.5px solid #7C3AED' : '2px solid #E5E7EB',
-                    boxShadow: drawColor === color ? '0 0 0 2px #EDE9FE' : undefined,
-                    transition: 'all 0.12s',
-                  }}
-                />
+                <div onClick={() => setDrawColor(color)} style={{
+                  width: 20, height: 20, borderRadius: '50%', background: color, cursor: 'pointer', flexShrink: 0,
+                  border: drawColor === color ? '2.5px solid #7C3AED' : '2px solid #E5E7EB',
+                  boxShadow: drawColor === color ? '0 0 0 2px #EDE9FE' : undefined,
+                  transition: 'all 0.12s',
+                }} />
               </Tooltip>
             ))}
             <div style={{ width: 1, height: 24, background: '#EDE9FE', margin: '0 4px' }} />
-            {/* Width options */}
-            {[
-              { w: 6,  label: 'Fino' },
-              { w: 14, label: 'Medio' },
-              { w: 28, label: 'Grueso' },
-            ].map(({ w, label }) => (
-              <Tooltip key={w} title={label}>
-                <div
-                  onClick={() => setDrawWidth(w)}
-                  style={{
+            {/* Width options — different presets per tool */}
+            {tool === 'draw'
+              ? [{ w: 6, label: 'Fino' }, { w: 14, label: 'Medio' }, { w: 28, label: 'Grueso' }].map(({ w, label }) => (
+                <Tooltip key={w} title={label}>
+                  <div onClick={() => setDrawWidth(w)} style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     width: 32, height: 32, borderRadius: 8, cursor: 'pointer',
                     background: drawWidth === w ? '#F5F3FF' : 'transparent',
                     border: drawWidth === w ? '1.5px solid #7C3AED' : '1.5px solid transparent',
-                  }}
-                >
-                  <div style={{ height: w, width: 16, background: '#7C3AED', borderRadius: 2 }} />
-                </div>
-              </Tooltip>
-            ))}
+                  }}>
+                    <div style={{ height: Math.max(2, w / 5), width: 16, background: '#7C3AED', borderRadius: 2 }} />
+                  </div>
+                </Tooltip>
+              ))
+              : [{ w: 1.5, label: 'Fina' }, { w: 2.5, label: 'Media' }, { w: 4, label: 'Gruesa' }].map(({ w, label }) => (
+                <Tooltip key={w} title={label}>
+                  <div onClick={() => setArrowWidth(w)} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    width: 32, height: 32, borderRadius: 8, cursor: 'pointer',
+                    background: arrowWidth === w ? '#F5F3FF' : 'transparent',
+                    border: arrowWidth === w ? '1.5px solid #7C3AED' : '1.5px solid transparent',
+                  }}>
+                    <svg width="22" height="14" viewBox="0 0 22 14">
+                      <line x1="2" y1="7" x2="15" y2="7" stroke="#7C3AED" strokeWidth={w} strokeLinecap="round" />
+                      <polygon points="22,7 14,3 14,11" fill="#7C3AED" />
+                    </svg>
+                  </div>
+                </Tooltip>
+              ))
+            }
             <div style={{ width: 1, height: 24, background: '#EDE9FE', margin: '0 4px' }} />
-            {/* Undo last stroke */}
             <Tooltip title="Deshacer último trazo (Z)">
-              <Button
-                type="text" size="small"
+              <Button type="text" size="small"
                 onClick={() => setStrokes(prev => prev.slice(0, -1))}
                 disabled={strokes.length === 0}
                 style={{ borderRadius: 8, height: 32, padding: '0 8px', fontSize: 11, color: '#888' }}
-              >
-                ↩ Deshacer
-              </Button>
+              >↩ Deshacer</Button>
             </Tooltip>
             {strokes.length > 0 && (
               <Tooltip title="Borrar todos los trazos">
-                <Button
-                  type="text" size="small"
-                  onClick={() => setStrokes([])}
+                <Button type="text" size="small" onClick={() => setStrokes([])}
                   style={{ borderRadius: 8, height: 32, padding: '0 8px', fontSize: 11, color: '#EF4444' }}
-                >
-                  🗑 Limpiar
-                </Button>
+                >🗑 Limpiar</Button>
               </Tooltip>
             )}
           </>
@@ -3180,7 +3247,7 @@ export default function LienzoPage() {
           ref={canvasRef}
           style={{
             flex: 1, overflow: 'hidden', position: 'relative',
-            cursor: tool === 'pan' ? 'grab' : tool === 'draw' ? 'crosshair' : tool === 'select' ? 'default' : 'crosshair',
+            cursor: tool === 'pan' ? 'grab' : (tool === 'draw' || tool === 'arrow') ? 'crosshair' : tool === 'select' ? 'default' : 'crosshair',
           }}
           onMouseDown={onCanvasMouseDown}
           onMouseMove={onMouseMove}
@@ -3277,23 +3344,46 @@ export default function LienzoPage() {
                 <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
               </filter>
             </defs>
-            {strokes.map(s => (
-              <path
-                key={s.id}
-                d={buildMagicRibbon(s.points, s.width)}
-                fill={s.color}
-                stroke="none"
-                filter="url(#ink-glow)"
-                opacity={0.92}
-              />
-            ))}
+            {strokes.map(s => {
+              if (s.isArrow) {
+                const { line, head } = buildArrowSvg(s.points, s.width)
+                return (
+                  <g key={s.id} opacity={0.92}>
+                    <path d={line} fill="none" stroke={s.color} strokeWidth={s.width}
+                      strokeLinecap="round" strokeLinejoin="round" filter="url(#ink-glow)" />
+                    <path d={head} fill={s.color} stroke="none" />
+                  </g>
+                )
+              }
+              return (
+                <path
+                  key={s.id}
+                  d={buildMagicRibbon(s.points, s.width)}
+                  fill={s.color}
+                  stroke="none"
+                  filter="url(#ink-glow)"
+                  opacity={0.92}
+                />
+              )
+            })}
             {activeStroke && activeStroke.length >= 2 && (
-              <path
-                d={buildMagicRibbon(activeStroke, drawWidth)}
-                fill={drawColor}
-                stroke="none"
-                opacity={0.88}
-              />
+              tool === 'arrow' ? (() => {
+                const { line, head } = buildArrowSvg(activeStroke, arrowWidth)
+                return (
+                  <g opacity={0.78}>
+                    <path d={line} fill="none" stroke={drawColor} strokeWidth={arrowWidth}
+                      strokeLinecap="round" strokeLinejoin="round" strokeDasharray="5 3" />
+                    <path d={head} fill={drawColor} stroke="none" />
+                  </g>
+                )
+              })() : (
+                <path
+                  d={buildMagicRibbon(activeStroke, drawWidth)}
+                  fill={drawColor}
+                  stroke="none"
+                  opacity={0.88}
+                />
+              )
             )}
           </svg>
         </div>
