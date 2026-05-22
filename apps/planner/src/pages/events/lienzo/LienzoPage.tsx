@@ -2814,6 +2814,7 @@ function serializeWidgets(widgets: Widget[]) {
 export default function LienzoPage() {
   const { id } = useParams<{ id: string }>()
   const { event } = useOutletContext<{ event: any }>()
+  const queryClient = useQueryClient()
 
   const [widgets, setWidgets] = useState<Widget[]>(makeDefaultWidgets)
   const [lienzoReady, setLienzoReady] = useState(false)
@@ -2883,6 +2884,8 @@ export default function LienzoPage() {
         .then(() => {
           setSyncStatus('saved')
           setLastSync(dayjs().format('HH:mm'))
+          // Keep React Query cache in sync so remount doesn't revert to stale data
+          queryClient.setQueryData(['planner-lienzo', id], { data: { widgets: serializable, strokes } })
         })
         .catch(() => setSyncStatus('idle'))
     }, 1200)
