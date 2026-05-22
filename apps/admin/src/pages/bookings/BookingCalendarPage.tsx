@@ -1266,7 +1266,7 @@ export default function BookingCalendarPage() {
                               border: `2px ${borderStyle} ${borderColor}`,
                               display: 'flex',
                               alignItems: 'center',
-                              paddingLeft: 8, paddingRight: 6,
+                              paddingLeft: canDragBar ? 12 : 8, paddingRight: canDragBar ? 12 : 6,
                               cursor: isDraggedBar ? 'grabbing' : (canDragBar ? 'grab' : (selectionMode ? 'crosshair' : 'pointer')),
                               overflow: 'hidden',
                               zIndex: isDraggedBar ? 100 : 4,
@@ -1284,9 +1284,12 @@ export default function BookingCalendarPage() {
                             {/* Left resize handle */}
                             {canDragBar && (
                               <div
-                                style={{ position: 'absolute', left: 0, top: 0, width: 7, height: '100%', cursor: 'ew-resize', zIndex: 5, borderRadius: '4px 0 0 4px' }}
+                                style={{ position: 'absolute', left: 0, top: 0, width: 10, height: '100%', cursor: 'ew-resize', zIndex: 5, borderRadius: '4px 0 0 4px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5, background: 'rgba(0,0,0,0.08)' }}
                                 onMouseDown={e => { e.stopPropagation(); startBarDrag(e, 'resize-start') }}
-                              />
+                              >
+                                <div style={{ width: 1.5, height: 12, borderRadius: 1, background: 'rgba(0,0,0,0.3)' }} />
+                                <div style={{ width: 1.5, height: 12, borderRadius: 1, background: 'rgba(0,0,0,0.3)' }} />
+                              </div>
                             )}
                             <Text style={{
                               fontSize: 11, fontWeight: 600, color: textColor,
@@ -1316,9 +1319,12 @@ export default function BookingCalendarPage() {
                             {/* Right resize handle */}
                             {canDragBar && (
                               <div
-                                style={{ position: 'absolute', right: 0, top: 0, width: 7, height: '100%', cursor: 'ew-resize', zIndex: 5, borderRadius: '0 4px 4px 0' }}
+                                style={{ position: 'absolute', right: 0, top: 0, width: 10, height: '100%', cursor: 'ew-resize', zIndex: 5, borderRadius: '0 4px 4px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5, background: 'rgba(0,0,0,0.08)' }}
                                 onMouseDown={e => { e.stopPropagation(); startBarDrag(e, 'resize-end') }}
-                              />
+                              >
+                                <div style={{ width: 1.5, height: 12, borderRadius: 1, background: 'rgba(0,0,0,0.3)' }} />
+                                <div style={{ width: 1.5, height: 12, borderRadius: 1, background: 'rgba(0,0,0,0.3)' }} />
+                              </div>
                             )}
                           </div>
                         )
