@@ -702,7 +702,7 @@ function ContratoWidgetRO({
   }
 
   const statusCfg = CONTRATO_STATUS_CFG[contrato.contractStatus] ?? CONTRATO_STATUS_CFG.CONTRATO
-  const payments: any[] = contrato.scheduledPayments ?? []
+  const payments: any[] = contrato.payments ?? []
   const totalPaid = payments.filter((p: any) => p.status === 'PAGADO').reduce((s: number, p: any) => s + (p.amount ?? 0), 0)
   const totalDue = contrato.total ?? 0
 
@@ -1093,9 +1093,21 @@ export default function ClientPortalPage() {
   const [widgets, setWidgets] = useState<Widget[]>([])
   const [lienzoStrokes, setLienzoStrokes] = useState<Array<{ id: string; points: Array<{x:number;y:number}>; color: string; width: number; isArrow?: boolean }>>([])
 
+  // Tool state
+  type PortalTool = 'select' | 'pan' | 'draw' | 'arrow'
+  const [tool, setTool] = useState<PortalTool>('select')
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [drawColor, setDrawColor] = useState('#1a1a1a')
+  const [drawWidth, setDrawWidth] = useState(14)
+  const [arrowWidth, setArrowWidth] = useState(2.5)
+  const [activeStroke, setActiveStroke] = useState<Array<{x:number;y:number}> | null>(null)
+  const dragging = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number } | null>(null)
+  const drawingRef = useRef(false)
+  const activeStrokeRef = useRef<Array<{x:number;y:number}>>([])
+
   // Add-widget modal state
   const [addWidgetOpen, setAddWidgetOpen] = useState(false)
-  const [addWidgetType, setAddWidgetType] = useState<'imagen' | 'links'>('imagen')
+  const [addWidgetType, setAddWidgetType] = useState<'imagen' | 'links' | 'nota' | 'texto'>('imagen')
   const [addWidgetUrl, setAddWidgetUrl] = useState('')
 
   // Lienzo save state
@@ -1235,22 +1247,101 @@ export default function ClientPortalPage() {
     if (snapshot) lienzoLoaded.current = true
   }, [snapshot])
 
-  // Pan handlers
+  // Canvas helpers
+  const getCanvasPoint = useCallback((e: React.MouseEvent): {x:number;y:number} => {
+    const rect = canvasRef.current!.getBoundingClientRect()
+    return {
+      x: (e.clientX - rect.left - pan.x) / zoom,
+      y: (e.clientY - rect.top - pan.y) / zoom,
+    }
+  }, [pan, zoom])
+
+  const onWidgetMouseDown = useCallback((e: React.MouseEvent, widgetId: string) => {
+    if (tool !== 'select') return
+    e.stopPropagation()
+    setSelectedId(widgetId)
+    const w = widgets.find(x => x.id === widgetId)!
+    dragging.current = { id: widgetId, startX: e.clientX, startY: e.clientY, origX: w.x, origY: w.y }
+  }, [tool, widgets])
+
+  const deleteSelected = useCallback(() => {
+    if (!selectedId) return
+    setWidgets(ws => ws.filter(w => w.id !== selectedId))
+    setSelectedId(null)
+  }, [selectedId])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
+        if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') return
+        deleteSelected()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [deleteSelected, selectedId])
+
+  // Mouse handlers (tool-aware)
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (e.button === 1 || e.button === 0) {
+    if (tool === 'draw' || tool === 'arrow') {
+      drawingRef.current = true
+      const pt = getCanvasPoint(e)
+      activeStrokeRef.current = [pt]
+      setActiveStroke([pt])
+      return
+    }
+    if (tool === 'pan') {
       setIsPanning(true)
       panStart.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y }
+    } else {
+      setSelectedId(null)
     }
-  }, [pan])
+  }, [tool, getCanvasPoint, pan])
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!isPanning) return
-    const dx = e.clientX - panStart.current.x
-    const dy = e.clientY - panStart.current.y
-    setPan({ x: panStart.current.panX + dx, y: panStart.current.panY + dy })
-  }, [isPanning])
+    if ((tool === 'draw' || tool === 'arrow') && drawingRef.current) {
+      const pt = getCanvasPoint(e)
+      activeStrokeRef.current = [...activeStrokeRef.current, pt]
+      if (activeStrokeRef.current.length % 3 === 0) setActiveStroke([...activeStrokeRef.current])
+      return
+    }
+    if (dragging.current && tool === 'select') {
+      const dx = (e.clientX - dragging.current.startX) / zoom
+      const dy = (e.clientY - dragging.current.startY) / zoom
+      setWidgets(ws => ws.map(w => w.id === dragging.current!.id
+        ? { ...w, x: Math.max(0, dragging.current!.origX + dx), y: Math.max(0, dragging.current!.origY + dy) }
+        : w))
+      return
+    }
+    if (isPanning && tool === 'pan') {
+      const dx = e.clientX - panStart.current.x
+      const dy = e.clientY - panStart.current.y
+      setPan({ x: panStart.current.panX + dx, y: panStart.current.panY + dy })
+    }
+  }, [tool, zoom, isPanning, getCanvasPoint])
 
-  const handleMouseUp = useCallback(() => setIsPanning(false), [])
+  const handleMouseUp = useCallback(() => {
+    if ((tool === 'draw' || tool === 'arrow') && drawingRef.current) {
+      drawingRef.current = false
+      const pts = activeStrokeRef.current
+      if (pts.length >= 2) {
+        const isArrow = tool === 'arrow'
+        const newStroke = {
+          id: `stroke-${Date.now()}`,
+          points: pts,
+          color: drawColor,
+          width: isArrow ? arrowWidth : drawWidth,
+          isArrow,
+        }
+        setLienzoStrokes(prev => [...prev, newStroke])
+      }
+      activeStrokeRef.current = []
+      setActiveStroke(null)
+      return
+    }
+    dragging.current = null
+    setIsPanning(false)
+  }, [tool, drawColor, drawWidth, arrowWidth])
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault()
@@ -1298,6 +1389,81 @@ export default function ClientPortalPage() {
             <div style={{ flex: 1 }} />
             <span style={{ color: hdrMuted, fontSize: 12 }}>{eventName}</span>
 
+            {/* Tool buttons */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 8 }}>
+              {([
+                { key: 'select', label: '↖', title: 'Seleccionar' },
+                { key: 'pan',    label: '✋', title: 'Mover vista' },
+                { key: 'draw',   label: '✏️', title: 'Pincel' },
+                { key: 'arrow',  label: '→', title: 'Flecha' },
+              ] as const).map(t => (
+                <button
+                  key={t.key}
+                  title={t.title}
+                  onClick={() => setTool(t.key)}
+                  style={{
+                    width: 30, height: 30, borderRadius: 7, border: 'none', cursor: 'pointer',
+                    fontSize: t.key === 'arrow' ? 16 : 14, fontWeight: 700,
+                    background: tool === t.key ? branding.primaryColor : btnBg,
+                    color: hdrText,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    boxShadow: tool === t.key ? `0 0 0 2px ${hdrText}44` : 'none',
+                  }}
+                >{t.label}</button>
+              ))}
+            </div>
+
+            {/* Draw/arrow sub-toolbar */}
+            {(tool === 'draw' || tool === 'arrow') && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 8, background: 'rgba(0,0,0,0.2)', borderRadius: 8, padding: '4px 8px' }}>
+                {/* Color swatches */}
+                {['#1a1a1a','#7C3AED','#B5546A','#B7791F','#0D9488','#ffffff'].map(c => (
+                  <div
+                    key={c}
+                    onClick={() => setDrawColor(c)}
+                    style={{
+                      width: 16, height: 16, borderRadius: '50%', background: c, cursor: 'pointer',
+                      border: drawColor === c ? `2px solid ${hdrText}` : '2px solid transparent',
+                      boxSizing: 'border-box',
+                      boxShadow: c === '#ffffff' ? '0 0 0 1px rgba(255,255,255,0.4)' : 'none',
+                    }}
+                  />
+                ))}
+                <div style={{ width: 1, height: 16, background: 'rgba(255,255,255,0.2)', margin: '0 2px' }} />
+                {/* Width presets */}
+                {tool === 'draw'
+                  ? ([{ w: 6, label: 'F' }, { w: 14, label: 'M' }, { w: 28, label: 'G' }] as const).map(p => (
+                      <button key={p.w} onClick={() => setDrawWidth(p.w)}
+                        style={{
+                          background: drawWidth === p.w ? branding.primaryColor : 'rgba(255,255,255,0.15)',
+                          border: 'none', color: hdrText, borderRadius: 5, padding: '2px 6px',
+                          fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                        }}>{p.label}</button>
+                    ))
+                  : ([{ w: 1.5, label: 'F' }, { w: 2.5, label: 'M' }, { w: 4, label: 'G' }] as const).map(p => (
+                      <button key={p.w} onClick={() => setArrowWidth(p.w)}
+                        style={{
+                          background: arrowWidth === p.w ? branding.primaryColor : 'rgba(255,255,255,0.15)',
+                          border: 'none', color: hdrText, borderRadius: 5, padding: '2px 6px',
+                          fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                        }}>{p.label}</button>
+                    ))
+                }
+              </div>
+            )}
+
+            {/* Delete button when widget selected */}
+            {selectedId && tool === 'select' && (
+              <button
+                onClick={deleteSelected}
+                style={{
+                  background: '#EF4444', border: 'none', color: '#fff', borderRadius: 7,
+                  padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                  marginLeft: 8,
+                }}
+              >× Eliminar</button>
+            )}
+
             {/* Zoom controls */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 16 }}>
               <Button size="small" icon={<MinusOutlined />} onClick={() => setZoom(z => Math.max(0.25, z - 0.15))}
@@ -1322,7 +1488,9 @@ export default function ClientPortalPage() {
         onWheel={handleWheel}
         style={{
           flex: 1, overflow: 'hidden', position: 'relative',
-          cursor: isPanning ? 'grabbing' : 'grab',
+          cursor: tool === 'pan' ? (isPanning ? 'grabbing' : 'grab')
+                : tool === 'draw' || tool === 'arrow' ? 'crosshair'
+                : 'default',
           background: 'radial-gradient(circle at 50% 50%, #2D1B69 0%, #1E1040 100%)',
         }}
       >
@@ -1343,15 +1511,31 @@ export default function ClientPortalPage() {
           {widgets.map(w => (
             <div
               key={w.id}
-              onMouseDown={e => e.stopPropagation()}
+              onMouseDown={e => onWidgetMouseDown(e, w.id)}
               style={{
                 position: 'absolute',
                 left: w.x, top: w.y, width: w.w, height: w.h,
                 borderRadius: 12, overflow: 'hidden',
                 background: '#ffffff',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.15), 0 0 0 1px rgba(255,255,255,0.08)',
+                boxShadow: selectedId === w.id
+                  ? `0 0 0 2px ${branding.primaryColor}, 0 4px 20px rgba(0,0,0,0.2)`
+                  : '0 4px 20px rgba(0,0,0,0.15), 0 0 0 1px rgba(255,255,255,0.08)',
+                cursor: tool === 'select' ? 'move' : 'default',
               }}
             >
+              {selectedId === w.id && tool === 'select' && (
+                <div
+                  onMouseDown={e => { e.stopPropagation(); deleteSelected() }}
+                  style={{
+                    position: 'absolute', top: 4, right: 4, zIndex: 10,
+                    width: 22, height: 22, borderRadius: '50%',
+                    background: '#EF4444', color: '#fff',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 11, cursor: 'pointer', fontWeight: 700,
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+                  }}
+                >×</div>
+              )}
               <WidgetRendererRO
                 widget={w}
                 snapshot={snapshot}
@@ -1364,7 +1548,7 @@ export default function ClientPortalPage() {
           ))}
 
           {/* SVG stroke overlay */}
-          {lienzoStrokes.length > 0 && (
+          {(lienzoStrokes.length > 0 || activeStroke) && (
             <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', overflow: 'visible', pointerEvents: 'none' }}>
               <defs>
                 <filter id="cp-ink-glow">
@@ -1389,6 +1573,21 @@ export default function ClientPortalPage() {
                     filter="url(#cp-ink-glow)" opacity={0.92} />
                 )
               })}
+              {activeStroke && activeStroke.length >= 2 && (
+                tool === 'arrow' ? (() => {
+                  const { line, head } = buildArrowSvg(activeStroke, arrowWidth)
+                  return (
+                    <g opacity={0.7}>
+                      <path d={line} fill="none" stroke={drawColor} strokeWidth={arrowWidth}
+                        strokeLinecap="round" strokeLinejoin="round" />
+                      <path d={head} fill={drawColor} stroke="none" />
+                    </g>
+                  )
+                })() : (
+                  <path d={buildMagicRibbon(activeStroke, drawWidth)}
+                    fill={drawColor} stroke="none" opacity={0.7} />
+                )
+              )}
             </svg>
           )}
         </div>
@@ -1417,7 +1616,7 @@ export default function ClientPortalPage() {
           width={380}
         >
           <div style={{ padding: '8px 0' }}>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
               <Button type={addWidgetType === 'imagen' ? 'primary' : 'default'}
                 icon={<PictureOutlined />}
                 onClick={() => setAddWidgetType('imagen')}
@@ -1428,32 +1627,66 @@ export default function ClientPortalPage() {
                 onClick={() => setAddWidgetType('links')}
                 style={addWidgetType === 'links' ? { background: branding.primaryColor, borderColor: branding.primaryColor } : {}}
               >Enlace</Button>
+              <Button type={addWidgetType === 'nota' ? 'primary' : 'default'}
+                icon={<FileTextOutlined />}
+                onClick={() => {
+                  const newWidget: Widget = {
+                    id: `client-${Date.now()}`,
+                    type: 'nota',
+                    x: 200, y: 200, w: 300, h: 200,
+                    config: { text: '', color: '#FFF9C4' },
+                  }
+                  setWidgets(prev => [...prev, newWidget])
+                  setAddWidgetOpen(false)
+                  setAddWidgetUrl('')
+                }}
+                style={addWidgetType === 'nota' ? { background: branding.primaryColor, borderColor: branding.primaryColor } : {}}
+              >Nota</Button>
+              <Button type={addWidgetType === 'texto' ? 'primary' : 'default'}
+                icon={<EditOutlined />}
+                onClick={() => {
+                  const newWidget: Widget = {
+                    id: `client-${Date.now()}`,
+                    type: 'texto',
+                    x: 200, y: 200, w: 280, h: 120,
+                    config: { content: 'Texto libre', fontSize: 18, bold: false },
+                  }
+                  setWidgets(prev => [...prev, newWidget])
+                  setAddWidgetOpen(false)
+                  setAddWidgetUrl('')
+                }}
+                style={addWidgetType === 'texto' ? { background: branding.primaryColor, borderColor: branding.primaryColor } : {}}
+              >Texto</Button>
             </div>
-            <Input
-              placeholder={addWidgetType === 'imagen' ? 'https://url-de-imagen.jpg' : 'https://sitio-web.com'}
-              value={addWidgetUrl}
-              onChange={e => setAddWidgetUrl(e.target.value)}
-              style={{ marginBottom: 12 }}
-            />
-            <Button type="primary" block
-              disabled={!addWidgetUrl.trim()}
-              onClick={() => {
-                const url = addWidgetUrl.trim()
-                const newWidget: Widget = {
-                  id: `client-${Date.now()}`,
-                  type: addWidgetType,
-                  x: 200 + Math.random() * 100,
-                  y: 200 + Math.random() * 100,
-                  w: addWidgetType === 'imagen' ? 300 : 360,
-                  h: addWidgetType === 'imagen' ? 220 : 240,
-                  config: addWidgetType === 'imagen' ? { imageUrl: url } : { url },
-                }
-                setWidgets(prev => [...prev, newWidget])
-                setAddWidgetOpen(false)
-                setAddWidgetUrl('')
-              }}
-              style={{ background: branding.primaryColor, borderColor: branding.primaryColor }}
-            >Agregar al lienzo</Button>
+            {(addWidgetType === 'imagen' || addWidgetType === 'links') && (
+              <>
+                <Input
+                  placeholder={addWidgetType === 'imagen' ? 'https://url-de-imagen.jpg' : 'https://sitio-web.com'}
+                  value={addWidgetUrl}
+                  onChange={e => setAddWidgetUrl(e.target.value)}
+                  style={{ marginBottom: 12 }}
+                />
+                <Button type="primary" block
+                  disabled={!addWidgetUrl.trim()}
+                  onClick={() => {
+                    const url = addWidgetUrl.trim()
+                    const newWidget: Widget = {
+                      id: `client-${Date.now()}`,
+                      type: addWidgetType,
+                      x: 200 + Math.random() * 100,
+                      y: 200 + Math.random() * 100,
+                      w: addWidgetType === 'imagen' ? 300 : 360,
+                      h: addWidgetType === 'imagen' ? 220 : 240,
+                      config: addWidgetType === 'imagen' ? { imageUrl: url } : { url },
+                    }
+                    setWidgets(prev => [...prev, newWidget])
+                    setAddWidgetOpen(false)
+                    setAddWidgetUrl('')
+                  }}
+                  style={{ background: branding.primaryColor, borderColor: branding.primaryColor }}
+                >Agregar al lienzo</Button>
+              </>
+            )}
           </div>
         </Modal>
       </div>
