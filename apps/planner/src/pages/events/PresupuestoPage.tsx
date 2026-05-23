@@ -95,9 +95,9 @@ const STATUS_CFG = {
 
 const UNITS = ['pax', 'pza', 'paq', 'global', 'día', 'hora', 'turno', 'm²', 'evento', 'km']
 
-// 11 columns: checkbox | concepto | proveedor | cant×u | p.unit | costo u | total ing | costo total | utilidad | estado | actions
-const GRID = '30px 2fr 1fr 78px 108px 100px 100px 100px 88px 118px 52px'
-const HEADERS = ['', 'CONCEPTO', 'PROVEEDOR', 'CANT.×U.', 'P.UNIT.', 'COSTO U.', 'TOTAL ING.', 'COSTO TOT.', 'UTILIDAD', 'ESTADO', '']
+// 11 columns: checkbox | concepto | proveedor | cant×u | costo u | p.unit | costo total | total ing | utilidad | estado | actions
+const GRID = '30px 2fr 1fr 78px 100px 108px 100px 100px 88px 118px 52px'
+const HEADERS = ['', 'CONCEPTO', 'PROVEEDOR', 'CANT.×U.', 'COSTO U.', 'P.UNIT.', 'COSTO TOT.', 'TOTAL ING.', 'UTILIDAD', 'ESTADO', '']
 
 // ── P&L inline preview ────────────────────────────────────────────────────────
 function PLPreview({ qty, price, cost }: { qty: number; price: number; cost: number }) {
@@ -671,11 +671,11 @@ export default function PresupuestoPage() {
     update({
       items: store.items.map(i =>
         selectedItemIds.has(i.id)
-          ? { ...i, unitCost: Math.round(i.unitPrice * factor * 100) / 100 }
+          ? { ...i, unitPrice: Math.round(i.unitCost * factor * 100) / 100 }
           : i
       ),
     })
-    message.success(`Costo aplicado a ${selectedItemIds.size} item(s) — factor ${factor.toFixed(4)}`)
+    message.success(`Precio aplicado a ${selectedItemIds.size} item(s) — factor ${factor.toFixed(4)}`)
     setSelectedItemIds(new Set())
     setMarkupPct(null)
   }
@@ -1046,33 +1046,6 @@ export default function PresupuestoPage() {
                               {item.quantity.toLocaleString('es-MX')} {item.unit}
                             </div>
 
-                            {/* P. Unit — inline editable */}
-                            <div
-                              style={{ textAlign: 'right', paddingRight: 8 }}
-                              onClick={e => { e.stopPropagation(); if (!editingPrice) startCellEdit(item.id, 'unitPrice', item.unitPrice) }}
-                            >
-                              {editingPrice ? (
-                                <InputNumber
-                                  autoFocus
-                                  size="small"
-                                  value={editingCellValue}
-                                  onChange={v => setEditingCellValue(v ?? 0)}
-                                  onBlur={() => commitCellEdit(item.id, 'unitPrice', editingCellValue)}
-                                  onPressEnter={() => commitCellEdit(item.id, 'unitPrice', editingCellValue)}
-                                  onKeyDown={e => { if (e.key === 'Escape') setEditingCell(null) }}
-                                  prefix="$" min={0} style={{ width: '100%' }}
-                                  formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                                  parser={v => Number(v!.replace(/[$,]/g, '')) as unknown as 0}
-                                  onClick={e => e.stopPropagation()}
-                                />
-                              ) : (
-                                <span style={{ fontSize: 13, color: '#7C3AED', fontWeight: 600, cursor: 'text', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3 }}>
-                                  {fmt(item.unitPrice)}
-                                  <EditOutlined style={{ fontSize: 9, color: '#C4B5FD' }} />
-                                </span>
-                              )}
-                            </div>
-
                             {/* Costo U — inline editable */}
                             <div
                               style={{ textAlign: 'right', paddingRight: 8 }}
@@ -1100,14 +1073,41 @@ export default function PresupuestoPage() {
                               )}
                             </div>
 
-                            {/* Total Ingreso */}
-                            <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1a1a', textAlign: 'right', paddingRight: 8 }}>
-                              {fmt(ingreso)}
+                            {/* P. Unit — inline editable */}
+                            <div
+                              style={{ textAlign: 'right', paddingRight: 8 }}
+                              onClick={e => { e.stopPropagation(); if (!editingPrice) startCellEdit(item.id, 'unitPrice', item.unitPrice) }}
+                            >
+                              {editingPrice ? (
+                                <InputNumber
+                                  autoFocus
+                                  size="small"
+                                  value={editingCellValue}
+                                  onChange={v => setEditingCellValue(v ?? 0)}
+                                  onBlur={() => commitCellEdit(item.id, 'unitPrice', editingCellValue)}
+                                  onPressEnter={() => commitCellEdit(item.id, 'unitPrice', editingCellValue)}
+                                  onKeyDown={e => { if (e.key === 'Escape') setEditingCell(null) }}
+                                  prefix="$" min={0} style={{ width: '100%' }}
+                                  formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                                  parser={v => Number(v!.replace(/[$,]/g, '')) as unknown as 0}
+                                  onClick={e => e.stopPropagation()}
+                                />
+                              ) : (
+                                <span style={{ fontSize: 13, color: '#7C3AED', fontWeight: 600, cursor: 'text', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3 }}>
+                                  {fmt(item.unitPrice)}
+                                  <EditOutlined style={{ fontSize: 9, color: '#C4B5FD' }} />
+                                </span>
+                              )}
                             </div>
 
                             {/* Costo Total */}
                             <div style={{ fontSize: 13, color: hasCost ? '#DC2626' : '#ccc', textAlign: 'right', paddingRight: 8 }}>
                               {hasCost ? fmt(costoTot) : '—'}
+                            </div>
+
+                            {/* Total Ingreso */}
+                            <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1a1a', textAlign: 'right', paddingRight: 8 }}>
+                              {fmt(ingreso)}
                             </div>
 
                             {/* Utilidad */}
@@ -1323,7 +1323,7 @@ export default function PresupuestoPage() {
           </span>
           <Divider type="vertical" style={{ borderColor: '#444', margin: 0 }} />
           <span style={{ fontSize: 11, color: '#aaa', whiteSpace: 'nowrap' }}>
-            Costo = precio ×  (1 + X%)
+            Precio = costo × (1 + X%)
           </span>
           <InputNumber
             value={markupPct}
