@@ -27,6 +27,7 @@ import CreatePurchaseOrderModal from '../../components/CreatePurchaseOrderModal'
 import GenerateDocumentModal from '../../components/GenerateDocumentModal'
 import { templatesApi } from '../../api/templates'
 import { PageHeader, StatusTag } from '../../components/ui'
+import OrderGridItemsTab from './OrderGridItemsTab'
 import { formatMoney } from '../../utils/format'
 import ApprovalPanel from '../../components/ApprovalPanel'
 import { approvalFlowsApi } from '../../api/approvalFlows'
@@ -85,7 +86,7 @@ export default function OrderDetailPage() {
   const { message, modal } = App.useApp()
   const [paymentForm] = Form.useForm()
   const [editForm] = Form.useForm()
-  const [activeTab, setActiveTab] = useState('general')
+  const [activeTab, setActiveTab] = useState('items')
   const [paymentModalOpen, setPaymentModalOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [editLineItems, setEditLineItems] = useState<any[]>([])
@@ -659,8 +660,9 @@ export default function OrderDetailPage() {
             onChange={setActiveTab}
             style={{ marginBottom: -1 }}
             items={[
-              { key: 'general', label: 'General' },
               { key: 'items', label: `Items (${order.lineItems?.length ?? 0})` },
+              { key: 'gridItems', label: 'Grid Items' },
+              { key: 'general', label: 'General' },
               { key: 'financiero', label: 'Financiero' },
               { key: 'documentos', label: `Documentos (${order.documents?.length ?? 0})` },
               { key: 'oc', label: `Órdenes de Compra (${order.purchaseOrders?.length ?? 0})` },
@@ -916,6 +918,11 @@ export default function OrderDetailPage() {
             </div>
           </div>
           </div>
+        )}
+
+        {/* ── TAB: Grid Items ── */}
+        {activeTab === 'gridItems' && (
+          <OrderGridItemsTab order={order} canEdit={canEdit} orderId={id!} />
         )}
 
         {/* ── TAB: Financiero ── */}
