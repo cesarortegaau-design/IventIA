@@ -922,7 +922,7 @@ export default function OrderDetailPage() {
 
         {/* ── TAB: Grid Items ── */}
         {activeTab === 'gridItems' && (
-          <OrderGridItemsTab order={order} canEdit={canEdit} orderId={id!} />
+          <OrderGridItemsTab order={order} canEdit={canEdit} canEditActual={canEditActual} orderId={id!} />
         )}
 
         {/* ── TAB: Financiero ── */}
