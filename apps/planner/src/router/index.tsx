@@ -25,6 +25,7 @@ import ContratosPage from '../pages/events/ContratosPage'
 import InvitacionesPage from '../pages/events/InvitacionesPage'
 import StudioPage from '../pages/studio/StudioPage'
 import SeedPage from '../pages/seed/SeedPage'
+import RsvpPage from '../pages/rsvp/RsvpPage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.accessToken)
@@ -37,6 +38,8 @@ export default function AppRouter() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/portal-cliente/:id" element={<ClientPortalPage />} />
+      <Route path="/rsvp/:eventId/:guestId" element={<RsvpPage />} />
+      <Route path="/ticket/:eventId/:guestId" element={<RsvpPage />} />
 
       {/* Global layout (dashboard, lists) */}
       <Route path="/" element={<RequireAuth><MainLayout /></RequireAuth>}>

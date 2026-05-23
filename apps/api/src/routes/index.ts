@@ -35,6 +35,7 @@ import ticketBuyerRoutes from './ticket-buyer.routes'
 import collabTasksRoutes from './collabTasks.routes'
 import budgetsRoutes from './budgets.routes'
 import approvalFlowsRouter from './approvalFlows.routes'
+import plannerRsvpRoutes from './planner-rsvp.routes'
 
 const router = Router()
 
@@ -43,6 +44,7 @@ const router = Router()
 // would otherwise intercept all paths including public endpoints.
 router.use('/public/tickets', ticketsPublicRoutes)
 router.use('/public/tickets', ticketBuyerRoutes)
+router.use('/public/invitacion', plannerRsvpRoutes)
 router.use('/iflag', iflagRoutes)
 
 router.use('/auth', authRoutes)

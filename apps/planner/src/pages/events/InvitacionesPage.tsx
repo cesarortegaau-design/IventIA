@@ -332,6 +332,10 @@ export default function InvitacionesPage() {
   const [sendingEmailIds, setSendingEmailIds] = useState<Set<string>>(new Set())
   const [sendingAll, setSendingAll] = useState(false)
 
+  // ── WhatsApp bulk modal ──────────────────────────────────────────────────────
+  const [waModalOpen, setWaModalOpen] = useState(false)
+  const [waOpenedIds, setWaOpenedIds] = useState<Set<string>>(new Set())
+
   interface SendLogEntry {
     guestId: string
     nombre: string
@@ -983,6 +987,15 @@ export default function InvitacionesPage() {
               Enviar email a todos ({filteredForSend.filter(g => g.email).length})
             </Button>
           )}
+          {filteredForSend.some(g => g.telefono) && (
+            <Button
+              icon={<WhatsAppOutlined />}
+              onClick={() => { setWaOpenedIds(new Set()); setWaModalOpen(true) }}
+              style={{ background: '#25D366', borderColor: '#25D366', color: '#fff', borderRadius: 20, fontWeight: 600, fontSize: 12 }}
+            >
+              WhatsApp a todos ({filteredForSend.filter(g => g.telefono).length})
+            </Button>
+          )}
         </div>
 
         {/* Send log modal */}
@@ -1042,6 +1055,58 @@ export default function InvitacionesPage() {
             </Modal>
           )
         })()}
+
+        {/* WhatsApp bulk modal */}
+        <Modal
+          open={waModalOpen}
+          title={<span><WhatsAppOutlined style={{ color: '#25D366', marginRight: 8 }} />Enviar por WhatsApp</span>}
+          onCancel={() => setWaModalOpen(false)}
+          footer={<Button onClick={() => setWaModalOpen(false)}>Cerrar</Button>}
+          width={540}
+        >
+          <p style={{ color: '#666', fontSize: 13, marginBottom: 16 }}>
+            Haz clic en "Abrir WhatsApp" para cada invitado. Se abrirá WhatsApp Web con el mensaje y el link de {diseno.modo === 'rsvp' ? 'RSVP' : 'boleto'} pre-llenado.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 420, overflowY: 'auto' }}>
+            {filteredForSend.filter(g => g.telefono).map(g => {
+              const waLink = whatsappLink(g)
+              const opened = waOpenedIds.has(g.id)
+              return (
+                <div key={g.id} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  background: opened ? '#F0FDF4' : '#FAFAFA',
+                  border: `1px solid ${opened ? '#BBF7D0' : '#E5E7EB'}`,
+                  borderRadius: 12, padding: '12px 16px', gap: 12,
+                }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: '#1a1a1a' }}>{g.nombre}</div>
+                    <div style={{ fontSize: 12, color: '#888' }}>{g.telefono} · {g.numPersonas} persona{g.numPersonas !== 1 ? 's' : ''}</div>
+                  </div>
+                  <Button
+                    size="small"
+                    icon={<WhatsAppOutlined />}
+                    onClick={() => {
+                      window.open(waLink, '_blank')
+                      setWaOpenedIds(prev => new Set([...prev, g.id]))
+                    }}
+                    style={{
+                      background: opened ? '#059669' : '#25D366',
+                      borderColor: opened ? '#059669' : '#25D366',
+                      color: '#fff', fontWeight: 600, borderRadius: 8, flexShrink: 0,
+                    }}
+                  >
+                    {opened ? '✓ Enviado' : 'Abrir WhatsApp'}
+                  </Button>
+                </div>
+              )
+            })}
+          </div>
+          {filteredForSend.filter(g => g.telefono).length === 0 && (
+            <p style={{ textAlign: 'center', color: '#aaa', padding: '20px 0' }}>
+              Ningún invitado tiene teléfono registrado en este filtro.
+            </p>
+          )}
+        </Modal>
 
         {/* Guest send cards */}
         {invitadosStore.invitados.length === 0 ? (
