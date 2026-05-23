@@ -104,7 +104,7 @@ function PLPreview({ qty, price, cost }: { qty: number; price: number; cost: num
   const ingreso  = qty * price
   const costo    = qty * cost
   const utilidad = ingreso - costo
-  const margen   = ingreso > 0 ? utilidad / ingreso : 0
+  const margen   = costo > 0 ? utilidad / costo : 0
   const positive = utilidad >= 0
 
   return (
@@ -581,7 +581,7 @@ export default function PresupuestoPage() {
     return { ingreso, costo, utilidad, confirmado }
   }, [store.items])
 
-  const margenPct = kpi.ingreso > 0 ? Math.round(kpi.utilidad / kpi.ingreso * 100) : 0
+  const margenPct = kpi.costo > 0 ? Math.round(kpi.utilidad / kpi.costo * 100) : 0
   const margenColor = margenPct >= 25 ? '#059669' : margenPct >= 10 ? '#D97706' : '#DC2626'
   const lastEdit = store.updatedAt ? dayjs(store.updatedAt).fromNow() : null
 
@@ -908,7 +908,7 @@ export default function PresupuestoPage() {
               const chIngreso  = active.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
               const chCosto    = active.reduce((s, i) => s + i.quantity * (i.unitCost ?? 0), 0)
               const chUtilidad = chIngreso - chCosto
-              const chMargenPct = chIngreso > 0 ? Math.round(chUtilidad / chIngreso * 100) : 0
+              const chMargenPct = chCosto > 0 ? Math.round(chUtilidad / chCosto * 100) : 0
               const chColor2   = chMargenPct >= 25 ? '#059669' : chMargenPct >= 10 ? '#D97706' : '#DC2626'
               const open       = isOpen(ch.id)
               const allSelected = chItems.length > 0 && chItems.every(i => selectedItemIds.has(i.id))
@@ -1018,7 +1018,7 @@ export default function PresupuestoPage() {
                         const ingreso   = item.quantity * item.unitPrice
                         const costoTot  = item.quantity * (item.unitCost ?? 0)
                         const utilidad  = ingreso - costoTot
-                        const uPct      = ingreso > 0 ? Math.round(utilidad / ingreso * 100) : 0
+                        const uPct      = costoTot > 0 ? Math.round(utilidad / costoTot * 100) : 0
                         const hasCost   = (item.unitCost ?? 0) > 0
                         const uColor    = uPct >= 0 ? '#059669' : '#DC2626'
                         const s         = STATUS_CFG[item.status] ?? STATUS_CFG.PENDING
@@ -1085,6 +1085,7 @@ export default function PresupuestoPage() {
                                   size="small"
                                   value={editingCellValue}
                                   onChange={v => setEditingCellValue(v ?? 0)}
+                                  onFocus={e => e.target.select()}
                                   onBlur={() => commitCellEdit(item.id, 'unitCost', editingCellValue)}
                                   onPressEnter={() => commitCellEdit(item.id, 'unitCost', editingCellValue)}
                                   onKeyDown={e => { if (e.key === 'Escape') setEditingCell(null) }}
@@ -1112,6 +1113,7 @@ export default function PresupuestoPage() {
                                   size="small"
                                   value={editingCellValue}
                                   onChange={v => setEditingCellValue(v ?? 0)}
+                                  onFocus={e => e.target.select()}
                                   onBlur={() => commitCellEdit(item.id, 'unitPrice', editingCellValue)}
                                   onPressEnter={() => commitCellEdit(item.id, 'unitPrice', editingCellValue)}
                                   onKeyDown={e => { if (e.key === 'Escape') setEditingCell(null) }}
