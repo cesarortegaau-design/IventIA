@@ -1,5 +1,5 @@
 {
-  "ignoreCommand": "git show --name-only --format='' HEAD 2>/dev/null | grep -qE '^apps/planner/|^packages/shared/|^packages/prisma/' && exit 1; exit 0",
+  "ignoreCommand": "exit 1",
   "framework": "vite",
   "buildCommand": "pnpm run build",
   "outputDirectory": "dist",
