@@ -110,7 +110,7 @@ function NumCell({
       }}
       className={disabled ? '' : 'grid-cell-hover'}
     >
-      {value.toLocaleString('es-MX', { minimumFractionDigits: precision === 0 ? 0 : 2, maximumFractionDigits: precision })}
+      {value.toLocaleString('es-MX', { minimumFractionDigits: Math.min(precision === 0 ? 0 : 2, precision), maximumFractionDigits: precision })}
       {suffix}
     </div>
   )
