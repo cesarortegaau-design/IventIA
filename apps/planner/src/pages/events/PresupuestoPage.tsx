@@ -872,6 +872,34 @@ export default function PresupuestoPage() {
             </div>
           )}
 
+          {/* Global select / deselect all */}
+          {store.items.length > 0 && (() => {
+            const totalItems = store.items.length
+            const allSel  = totalItems > 0 && selectedItemIds.size === totalItems
+            const someSel = selectedItemIds.size > 0 && !allSel
+            return (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                <Checkbox
+                  checked={allSel}
+                  indeterminate={someSel}
+                  onChange={e => {
+                    if (e.target.checked) setSelectedItemIds(new Set(store.items.map(i => i.id)))
+                    else setSelectedItemIds(new Set())
+                  }}
+                >
+                  <span style={{ fontSize: 12, color: '#666' }}>
+                    {allSel ? 'Desmarcar todo' : 'Marcar todo'}
+                    {selectedItemIds.size > 0 && (
+                      <span style={{ marginLeft: 6, color: '#7C3AED', fontWeight: 700 }}>
+                        ({selectedItemIds.size}/{totalItems})
+                      </span>
+                    )}
+                  </span>
+                </Checkbox>
+              </div>
+            )
+          })()}
+
           {/* Chapter list */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {store.chapters.map((ch) => {
