@@ -332,19 +332,40 @@ export default function InvitacionesPage() {
   const [sendingEmailIds, setSendingEmailIds] = useState<Set<string>>(new Set())
   const [sendingAll, setSendingAll] = useState(false)
 
+  interface SendLogEntry {
+    guestId: string
+    nombre: string
+    email: string
+    success: boolean
+    error?: string
+    sentAt: string
+  }
+  const [sendLog, setSendLog] = useState<SendLogEntry[]>([])
+  const [sendLogOpen, setSendLogOpen] = useState(false)
+
+  function appendLog(entries: SendLogEntry[]) {
+    setSendLog(prev => [...entries, ...prev])
+  }
+
   async function sendEmailToGuest(guest: Invitado) {
     if (!guest.email) return message.warning(`${guest.nombre} no tiene email`)
     setSendingEmailIds(prev => new Set(prev).add(guest.id))
+    const sentAt = new Date().toISOString()
     try {
       const res = await eventsApi.sendInvitationEmails(eventId!, [guest.id])
-      if (res.sent > 0) {
+      const result = res.results?.[0]
+      const success = res.sent > 0
+      appendLog([{ guestId: guest.id, nombre: guest.nombre, email: guest.email, success, error: result?.error, sentAt }])
+      if (success) {
         message.success(`Email enviado a ${guest.nombre}`)
         markEnviado(guest.id)
       } else {
-        message.error(`No se pudo enviar a ${guest.nombre}: ${res.results?.[0]?.error ?? 'Error'}`)
+        message.error(`No se pudo enviar a ${guest.nombre}: ${result?.error ?? 'Error desconocido'}`)
       }
     } catch (err: any) {
-      message.error(err?.response?.data?.message || `Error al enviar a ${guest.nombre}`)
+      const errMsg = err?.response?.data?.message || 'Error de conexión'
+      appendLog([{ guestId: guest.id, nombre: guest.nombre, email: guest.email, success: false, error: errMsg, sentAt }])
+      message.error(errMsg)
     } finally {
       setSendingEmailIds(prev => { const s = new Set(prev); s.delete(guest.id); return s })
     }
@@ -354,15 +375,21 @@ export default function InvitacionesPage() {
     const withEmail = filteredForSend.filter(g => g.email)
     if (withEmail.length === 0) return message.warning('Ningún invitado del filtro actual tiene email')
     setSendingAll(true)
+    const sentAt = new Date().toISOString()
     try {
       const ids = withEmail.map(g => g.id)
       const res = await eventsApi.sendInvitationEmails(eventId!, ids)
-      message.success(`${res.sent} emails enviados${res.failed > 0 ? `, ${res.failed} fallaron` : ''}`)
-      // mark all sent ones as enviados
-      const sentIds = new Set((res.results ?? []).filter((r: any) => r.success).map((r: any) => r.guestId))
+      // Build log entries cross-referencing guest data
+      const entries: SendLogEntry[] = (res.results ?? []).map((r: any) => {
+        const g = withEmail.find(x => x.id === r.guestId)
+        return { guestId: r.guestId, nombre: g?.nombre ?? r.guestId, email: g?.email ?? '', success: r.success, error: r.error, sentAt }
+      })
+      appendLog(entries)
+      setSendLogOpen(true)
+      // mark sent ones
+      const sentIds = new Set(entries.filter(e => e.success).map(e => e.guestId))
       const updated = invitadosStore.invitados.map(g => sentIds.has(g.id) ? { ...g, boletosEnviados: true } : g)
-      const newStore = { ...invitadosStore, invitados: updated, updatedAt: new Date().toISOString() }
-      saveInvitados(newStore).catch(() => {})
+      saveInvitados({ ...invitadosStore, invitados: updated, updatedAt: new Date().toISOString() }).catch(() => {})
     } catch (err: any) {
       message.error(err?.response?.data?.message || 'Error al enviar emails masivos')
     } finally {
@@ -935,6 +962,16 @@ export default function InvitacionesPage() {
             </button>
           ))}
           <div style={{ flex: 1 }} />
+          {sendLog.length > 0 && (
+            <Button
+              size="small"
+              icon={<ClockCircleOutlined />}
+              onClick={() => setSendLogOpen(true)}
+              style={{ borderRadius: 20, fontSize: 12, borderColor: '#DDD6FE', color: '#7C3AED' }}
+            >
+              Ver log ({sendLog.length})
+            </Button>
+          )}
           {filteredForSend.some(g => g.email) && (
             <Button
               type="primary"
@@ -947,6 +984,64 @@ export default function InvitacionesPage() {
             </Button>
           )}
         </div>
+
+        {/* Send log modal */}
+        {(() => {
+          const succeeded = sendLog.filter(e => e.success)
+          const failed = sendLog.filter(e => !e.success)
+          return (
+            <Modal
+              open={sendLogOpen}
+              title={<span><MailOutlined style={{ color: '#7C3AED', marginRight: 8 }} />Log de envíos</span>}
+              onCancel={() => setSendLogOpen(false)}
+              footer={<Button onClick={() => setSendLogOpen(false)}>Cerrar</Button>}
+              width={560}
+            >
+              {/* Summary */}
+              <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
+                <div style={{ flex: 1, background: '#F0FDF4', borderRadius: 10, padding: '10px 14px', border: '1px solid #BBF7D0' }}>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: '#059669' }}>{succeeded.length}</div>
+                  <div style={{ fontSize: 12, color: '#065F46' }}>Enviados correctamente</div>
+                </div>
+                <div style={{ flex: 1, background: failed.length > 0 ? '#FEF2F2' : '#F9FAFB', borderRadius: 10, padding: '10px 14px', border: `1px solid ${failed.length > 0 ? '#FECACA' : '#E5E7EB'}` }}>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: failed.length > 0 ? '#DC2626' : '#9CA3AF' }}>{failed.length}</div>
+                  <div style={{ fontSize: 12, color: failed.length > 0 ? '#991B1B' : '#9CA3AF' }}>Fallaron</div>
+                </div>
+              </div>
+
+              {/* Detail rows */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 360, overflowY: 'auto' }}>
+                {sendLog.map((entry, i) => (
+                  <div key={i} style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px',
+                    borderRadius: 8, background: entry.success ? '#F0FDF4' : '#FEF2F2',
+                    border: `1px solid ${entry.success ? '#BBF7D0' : '#FECACA'}`,
+                  }}>
+                    <span style={{ fontSize: 16, flexShrink: 0 }}>{entry.success ? '✅' : '❌'}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>{entry.nombre}</div>
+                      <div style={{ fontSize: 11, color: '#888', marginTop: 1 }}>{entry.email}</div>
+                      {!entry.success && entry.error && (
+                        <div style={{ fontSize: 11, color: '#DC2626', marginTop: 4, fontFamily: 'monospace', background: '#FFF1F1', padding: '4px 8px', borderRadius: 4 }}>
+                          {entry.error}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 10, color: '#aaa', flexShrink: 0, paddingTop: 2 }}>
+                      {new Date(entry.sentAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {sendLog.length > 0 && (
+                <div style={{ marginTop: 12, textAlign: 'right' }}>
+                  <Button size="small" danger onClick={() => setSendLog([])}>Limpiar log</Button>
+                </div>
+              )}
+            </Modal>
+          )
+        })()}
 
         {/* Guest send cards */}
         {invitadosStore.invitados.length === 0 ? (
