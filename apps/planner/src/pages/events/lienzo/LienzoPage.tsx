@@ -3458,6 +3458,129 @@ function LienzoCanvas({ eventId: id, event, storeKey }: { eventId: string; event
   )
 }
 
+// ── Portal access panel (shown in Lienzo del cliente tab) ─────────────────────
+function PortalAccessPanel({ eventId }: { eventId: string }) {
+  const { message } = App.useApp()
+  const [modalOpen, setModalOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [accessCreated, setAccessCreated] = useState(false)
+  const [portalEmail, setPortalEmail] = useState('')
+  const [form] = Form.useForm()
+
+  const portalUrl = `${window.location.origin}/portal-cliente/${eventId}`
+
+  async function handleCreate(values: any) {
+    setSaving(true)
+    try {
+      await eventsApi.createPortalDirectAccess(eventId, values)
+      setPortalEmail(values.email)
+      setAccessCreated(true)
+      message.success('Acceso al portal creado correctamente')
+      setModalOpen(false)
+      form.resetFields()
+    } catch (err: any) {
+      message.error(err?.response?.data?.message || 'Error al crear acceso')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <>
+      <div style={{
+        background: 'linear-gradient(90deg, #f3f0ff 0%, #ede9fe 100%)',
+        borderBottom: '1px solid #ddd6fe',
+        padding: '8px 16px',
+        display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0,
+        flexWrap: 'wrap',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+          <LinkOutlined style={{ color: '#7C3AED', fontSize: 15 }} />
+          <Text style={{ fontSize: 12, color: '#5b21b6', fontWeight: 600 }}>
+            Portal del cliente
+          </Text>
+          {accessCreated && (
+            <Tag color="green" style={{ fontSize: 11, margin: 0 }}>Acceso activo</Tag>
+          )}
+          {accessCreated && (
+            <Text style={{ fontSize: 11, color: '#555', marginLeft: 4 }}>
+              {portalEmail}
+            </Text>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {accessCreated && (
+            <>
+              <Text
+                copyable={{ text: portalUrl }}
+                style={{ fontSize: 11, color: '#7C3AED', maxWidth: 260,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+              >
+                {portalUrl}
+              </Text>
+              <Button
+                size="small"
+                icon={<LinkOutlined />}
+                onClick={() => window.open(portalUrl, '_blank')}
+                style={{ fontSize: 11 }}
+              >
+                Abrir portal
+              </Button>
+            </>
+          )}
+          <Button
+            size="small"
+            type={accessCreated ? 'default' : 'primary'}
+            icon={<EditOutlined />}
+            onClick={() => setModalOpen(true)}
+            style={{ fontSize: 11,
+              ...(accessCreated ? {} : { background: '#7C3AED', borderColor: '#7C3AED' }) }}
+          >
+            {accessCreated ? 'Actualizar acceso' : 'Crear acceso al portal'}
+          </Button>
+        </div>
+      </div>
+
+      <Modal
+        title={<span><LinkOutlined style={{ color: '#7C3AED', marginRight: 8 }} />Acceso al portal del cliente</span>}
+        open={modalOpen}
+        onCancel={() => setModalOpen(false)}
+        onOk={() => form.submit()}
+        okText="Crear acceso"
+        confirmLoading={saving}
+        okButtonProps={{ style: { background: '#7C3AED', borderColor: '#7C3AED' } }}
+        width={420}
+      >
+        <div style={{ marginBottom: 12 }}>
+          <Text style={{ fontSize: 12, color: '#666' }}>
+            El cliente podrá acceder al lienzo desde:<br />
+            <a href={portalUrl} target="_blank" rel="noreferrer" style={{ color: '#7C3AED', wordBreak: 'break-all' }}>
+              {portalUrl}
+            </a>
+          </Text>
+        </div>
+        <Form form={form} layout="vertical" onFinish={handleCreate}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
+            <Form.Item name="firstName" label="Nombre" rules={[{ required: true, message: 'Requerido' }]}>
+              <Input placeholder="Juan" />
+            </Form.Item>
+            <Form.Item name="lastName" label="Apellido" rules={[{ required: true, message: 'Requerido' }]}>
+              <Input placeholder="García" />
+            </Form.Item>
+          </div>
+          <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email', message: 'Email válido requerido' }]}>
+            <Input placeholder="cliente@email.com" />
+          </Form.Item>
+          <Form.Item name="password" label="Contraseña" rules={[{ required: true, min: 6, message: 'Mínimo 6 caracteres' }]}>
+            <Input.Password placeholder="Contraseña de acceso" />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </>
+  )
+}
+
 // ── Outer page with tabs ────────────────────────────────────────────────────────
 export default function LienzoPage() {
   const { id = '' } = useParams<{ id: string }>()
@@ -3496,6 +3619,9 @@ export default function LienzoPage() {
           ))}
         </div>
       </div>
+
+      {/* Portal access panel — only in cliente tab */}
+      {activeTab === 'cliente' && <PortalAccessPanel eventId={id} />}
 
       {/* Canvas — remount on tab change via key prop */}
       <div style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
