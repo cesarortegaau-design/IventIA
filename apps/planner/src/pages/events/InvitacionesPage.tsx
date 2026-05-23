@@ -327,26 +327,24 @@ export default function InvitacionesPage() {
     return invs
   }, [invitadosStore.invitados, sendFilter])
 
-  // ── Sync status badge ───────────────────────────────────────────────────────
-  const SyncBadge = () => {
-    if (syncStatus === 'saving') return (
-      <span style={{ fontSize: 11, color: '#F97316', display: 'flex', alignItems: 'center', gap: 4 }}>
-        <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#F97316', display: 'inline-block', animation: 'pulse 1s infinite' }} />
-        Guardando...
-      </span>
-    )
-    if (syncStatus === 'saved') return (
-      <span style={{ fontSize: 11, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}>
-        <CheckOutlined style={{ fontSize: 10 }} /> Guardado
-      </span>
-    )
-    return null
-  }
+  // ── Sync status badge (JSX variable — NOT a component, avoids focus loss) ────
+  const syncBadge = syncStatus === 'saving' ? (
+    <span style={{ fontSize: 11, color: '#F97316', display: 'flex', alignItems: 'center', gap: 4 }}>
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#F97316', display: 'inline-block' }} />
+      Guardando...
+    </span>
+  ) : syncStatus === 'saved' ? (
+    <span style={{ fontSize: 11, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}>
+      <CheckOutlined style={{ fontSize: 10 }} /> Guardado
+    </span>
+  ) : null
 
-  // ── Invitation preview ──────────────────────────────────────────────────────
-  const InvitationPreview = () => {
-    const bg = branding.bgColor || '#F5F3FF'
-    const primary = branding.primaryColor || '#7C3AED'
+  // ── Invitation preview (JSX variable — NOT a component, avoids focus loss) ──
+  const _bg = branding.bgColor || '#F5F3FF'
+  const _primary = branding.primaryColor || '#7C3AED'
+  const invitationPreview = (() => {
+    const bg = _bg
+    const primary = _primary
     const secondary = branding.secondaryColor || '#EC4899'
     const textOnBg = branding.textOnBg || '#ffffff'
     const hasImage = !!diseno.imagenUrl
@@ -489,10 +487,10 @@ export default function InvitacionesPage() {
         </div>
       </div>
     )
-  }
+  })()
 
-  // ── Tab 1: Diseño ───────────────────────────────────────────────────────────
-  const DisenoTab = () => (
+  // ── Tab 1: Diseño (JSX variable — NOT a component) ──────────────────────────
+  const disenoTab = (
     <div style={{ display: 'flex', gap: 0, height: '100%', overflow: 'hidden' }}>
       {/* Left: Form */}
       <div style={{
@@ -502,7 +500,7 @@ export default function InvitacionesPage() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <Text style={{ fontSize: 15, fontWeight: 700, color: '#1a1a1a' }}>Contenido de la invitación</Text>
-          <SyncBadge />
+          {syncBadge}
         </div>
 
         {/* Título */}
@@ -686,7 +684,7 @@ export default function InvitacionesPage() {
             {diseno.modo === 'rsvp' ? '✉️ Modo RSVP' : '🎫 Modo Boleto'}
           </Tag>
         </div>
-        <InvitationPreview />
+        {invitationPreview}
         <div style={{ textAlign: 'center', paddingBottom: 24, fontSize: 11, color: '#ccc' }}>
           Los colores se toman del Estudio · Arte e IA
         </div>
@@ -694,10 +692,9 @@ export default function InvitacionesPage() {
     </div>
   )
 
-  // ── Tab 2: Lista de invitados ───────────────────────────────────────────────
-  const ListaTab = () => {
-    const invs = invitadosStore.invitados
-    return (
+  // ── Tab 2: Lista de invitados (JSX variable) ───────────────────────────────
+  const invs = invitadosStore.invitados
+  const listaTab = (
       <div style={{ height: '100%', overflow: 'auto', padding: '20px 28px' }}>
         {/* Stats */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
@@ -841,11 +838,10 @@ export default function InvitacionesPage() {
           </div>
         )}
       </div>
-    )
-  }
+  )
 
-  // ── Tab 3: Envío ────────────────────────────────────────────────────────────
-  const EnvioTab = () => {
+  // ── Tab 3: Envío (JSX variable) ─────────────────────────────────────────────
+  const envioTab = (() => {
     const invs = filteredForSend
     const total = invitadosStore.invitados.length
     const enviados = stats.enviados
@@ -1043,7 +1039,7 @@ export default function InvitacionesPage() {
         )}
       </div>
     )
-  }
+  })()
 
   // ── Main render ─────────────────────────────────────────────────────────────
   return (
@@ -1097,7 +1093,7 @@ export default function InvitacionesPage() {
               ),
               children: (
                 <div style={{ height: 'calc(100vh - 160px)', overflow: 'hidden' }}>
-                  <DisenoTab />
+                  {disenoTab}
                 </div>
               ),
             },
@@ -1116,7 +1112,7 @@ export default function InvitacionesPage() {
               ),
               children: (
                 <div style={{ height: 'calc(100vh - 160px)', overflow: 'hidden' }}>
-                  <ListaTab />
+                  {listaTab}
                 </div>
               ),
             },
@@ -1135,7 +1131,7 @@ export default function InvitacionesPage() {
               ),
               children: (
                 <div style={{ height: 'calc(100vh - 160px)', overflow: 'hidden' }}>
-                  <EnvioTab />
+                  {envioTab}
                 </div>
               ),
             },
