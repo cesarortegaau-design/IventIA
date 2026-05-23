@@ -1,13 +1,22 @@
 /**
- * OrderGridItemsTab — inline editable grid for order line items.
- * Excel-like: click any cell to edit, Tab/Enter to advance.
+ * OrderGridItemsTab — Excel-like editable grid for order line items.
+ *
+ * Navigation:
+ *   Click cell        → enters edit immediately
+ *   Tab / Shift+Tab   → commits and moves right / left across editable cols
+ *   Enter             → commits and moves down one row (same col)
+ *   Arrow keys        → navigate between cells when not editing
+ *   Escape            → cancel edit, restore previous value
+ *   Del / Backspace   → clear numeric cell while focused (not editing)
+ *   F2                → enter edit mode from navigation focus
+ *   Ctrl+Enter (last) → adds a new resource row
  */
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { App, Select, InputNumber, Tooltip, Spin, Button } from 'antd'
+import { App, Select, Tooltip, Spin, Button, Popconfirm } from 'antd'
 import {
   DeleteOutlined, PlusOutlined, SaveOutlined,
-  CheckCircleOutlined, WarningOutlined,
+  CheckCircleOutlined, WarningOutlined, CloseOutlined,
 } from '@ant-design/icons'
 import { ordersApi } from '../../api/orders'
 import { priceListsApi } from '../../api/priceLists'
@@ -15,8 +24,8 @@ import { formatMoney } from '../../utils/format'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface GridRow {
-  _key: string           // local identifier
-  id?: string            // DB id (undefined for new rows)
+  _key: string
+  id?: string
   resourceId: string
   priceListItemId?: string
   name: string
@@ -30,8 +39,12 @@ interface GridRow {
   discountPct: number
   observations: string
   lineTotal: number
-  isNew?: boolean
 }
+
+type EditCol = 'quantity' | 'discountPct' | 'observations'
+const EDIT_COLS: EditCol[] = ['quantity', 'discountPct', 'observations']
+
+interface EditTarget { rowIdx: number; col: EditCol }
 
 interface Props {
   order: any
@@ -40,13 +53,13 @@ interface Props {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
-function calcTotal(unitPrice: number, quantity: number, discountPct: number, factor: number, timeUnit?: string) {
-  const eff = timeUnit?.endsWith('sin factor') ? 1 : (factor || 1)
-  return unitPrice * quantity * eff * (1 - (discountPct || 0) / 100)
+function calcTotal(r: GridRow) {
+  const eff = r.timeUnit?.endsWith('sin factor') ? 1 : (r.factor || 1)
+  return r.unitPrice * r.quantity * eff * (1 - (r.discountPct || 0) / 100)
 }
 
 function rowFromLineItem(li: any): GridRow {
-  return {
+  const r: GridRow = {
     _key: li.id ?? `row-${Date.now()}-${Math.random()}`,
     id: li.id,
     resourceId: li.resourceId,
@@ -63,121 +76,50 @@ function rowFromLineItem(li: any): GridRow {
     observations: li.observations ?? '',
     lineTotal: Number(li.lineTotal),
   }
+  return r
 }
 
-// ── Inline cell ────────────────────────────────────────────────────────────────
-function NumCell({
-  value, min, max, precision = 2, suffix,
-  onChange, disabled,
-}: {
-  value: number; min?: number; max?: number; precision?: number; suffix?: string
-  onChange: (v: number) => void; disabled: boolean
-}) {
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(value)
-  useEffect(() => { if (!editing) setDraft(value) }, [value, editing])
-
-  if (!disabled && editing) {
-    return (
-      <InputNumber
-        autoFocus
-        size="small"
-        value={draft}
-        min={min}
-        max={max}
-        precision={precision}
-        style={{ width: '100%', minWidth: 64 }}
-        onFocus={e => e.target.select()}
-        onChange={v => setDraft(v ?? min ?? 0)}
-        onBlur={() => { setEditing(false); onChange(draft) }}
-        onPressEnter={() => { setEditing(false); onChange(draft) }}
-        onKeyDown={e => { if (e.key === 'Escape') { setEditing(false); setDraft(value) } }}
-        suffix={suffix}
-      />
-    )
-  }
-
-  return (
-    <div
-      onClick={() => { if (!disabled) { setDraft(value); setEditing(true) } }}
-      style={{
-        padding: '4px 8px', borderRadius: 4, cursor: disabled ? 'default' : 'text',
-        background: editing ? '#fff' : 'transparent',
-        border: disabled ? 'none' : '1px solid transparent',
-        minWidth: 56, textAlign: 'right', fontVariantNumeric: 'tabular-nums',
-        fontSize: 13,
-        ...(disabled ? { color: '#94a3b8' } : { ':hover': {} }),
-      }}
-      className={disabled ? '' : 'grid-cell-hover'}
-    >
-      {value.toLocaleString('es-MX', { minimumFractionDigits: Math.min(precision === 0 ? 0 : 2, precision), maximumFractionDigits: precision })}
-      {suffix}
-    </div>
-  )
+function getColValue(row: GridRow, col: EditCol): string | number {
+  if (col === 'quantity') return row.quantity
+  if (col === 'discountPct') return row.discountPct
+  return row.observations
 }
 
-function TextCell({
-  value, placeholder, onChange, disabled,
-}: {
-  value: string; placeholder?: string; onChange: (v: string) => void; disabled: boolean
-}) {
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(value)
-  useEffect(() => { if (!editing) setDraft(value) }, [value, editing])
-
-  if (!disabled && editing) {
-    return (
-      <input
-        autoFocus
-        value={draft}
-        placeholder={placeholder}
-        onChange={e => setDraft(e.target.value)}
-        onBlur={() => { setEditing(false); onChange(draft) }}
-        onKeyDown={e => {
-          if (e.key === 'Enter') { setEditing(false); onChange(draft) }
-          if (e.key === 'Escape') { setEditing(false); setDraft(value) }
-        }}
-        style={{
-          width: '100%', border: '1px solid #6B46C1', borderRadius: 4,
-          padding: '3px 7px', fontSize: 12, outline: 'none',
-          fontFamily: 'inherit',
-        }}
-      />
-    )
-  }
-
-  return (
-    <div
-      onClick={() => { if (!disabled) { setDraft(value); setEditing(true) } }}
-      style={{
-        padding: '4px 8px', borderRadius: 4, cursor: disabled ? 'default' : 'text',
-        fontSize: 12, color: value ? '#374151' : '#d1d5db',
-        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160,
-      }}
-    >
-      {value || (disabled ? '' : placeholder)}
-    </div>
-  )
-}
-
-// ── Main component ─────────────────────────────────────────────────────────────
+// ── Component ──────────────────────────────────────────────────────────────────
 export default function OrderGridItemsTab({ order, canEdit, orderId }: Props) {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
 
   const [rows, setRows] = useState<GridRow[]>([])
   const [dirty, setDirty] = useState(false)
+
+  // ── Edit state ──────────────────────────────────────────────────────────────
+  const [editTarget, setEditTarget] = useState<EditTarget | null>(null)
+  const [draft, setDraft] = useState<string | number>('')
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  const gridRef = useRef<HTMLDivElement>(null)
+
+  // ── Resource search state ───────────────────────────────────────────────────
+  const [showAddRow, setShowAddRow] = useState(false)
   const [addSearch, setAddSearch] = useState('')
 
-  // Init rows from order
+  // ── Init rows from order ────────────────────────────────────────────────────
   useEffect(() => {
     if (order?.lineItems) {
       setRows((order.lineItems as any[]).map(rowFromLineItem))
       setDirty(false)
+      setEditTarget(null)
     }
   }, [order])
 
-  // Price list items for adding new resources
+  // Focus input when editTarget changes
+  useEffect(() => {
+    if (editTarget) {
+      requestAnimationFrame(() => inputRef.current?.focus())
+    }
+  }, [editTarget])
+
+  // ── Price list ──────────────────────────────────────────────────────────────
   const { data: plData, isLoading: plLoading } = useQuery({
     queryKey: ['price-list', order?.priceListId],
     queryFn: () => priceListsApi.get(order!.priceListId),
@@ -187,24 +129,27 @@ export default function OrderGridItemsTab({ order, canEdit, orderId }: Props) {
 
   const plItems: any[] = useMemo(() => {
     const raw = plData?.data?.items ?? plData?.items ?? []
-    return raw.filter((pi: any) => pi.resource && !pi.resource.isPackage === false ? true : !pi.resource?.isPackage)
+    return raw.filter((pi: any) => !!pi.resource)
   }, [plData])
 
-  // Filtered options for add-row select
+  const existingIds = useMemo(() => new Set(rows.map(r => r.resourceId)), [rows])
+
   const addOptions = useMemo(() => {
-    const existingIds = new Set(rows.map(r => r.resourceId))
     const lower = addSearch.toLowerCase()
     return plItems
-      .filter((pi: any) => !existingIds.has(pi.resourceId) &&
-        (pi.resource?.name?.toLowerCase().includes(lower) || pi.resource?.code?.toLowerCase().includes(lower))
+      .filter((pi: any) =>
+        !existingIds.has(pi.resourceId) &&
+        (pi.resource?.name?.toLowerCase().includes(lower) ||
+         pi.resource?.code?.toLowerCase().includes(lower) ||
+         pi.resource?.department?.name?.toLowerCase().includes(lower))
       )
-      .slice(0, 60)
-  }, [plItems, rows, addSearch])
+      .slice(0, 80)
+  }, [plItems, existingIds, addSearch])
 
-  // Save mutation
+  // ── Save mutation ───────────────────────────────────────────────────────────
   const saveMutation = useMutation({
-    mutationFn: () => ordersApi.update(orderId, {
-      lineItems: rows.map((r, idx) => ({
+    mutationFn: (rowsToSave: GridRow[]) => ordersApi.update(orderId, {
+      lineItems: rowsToSave.map((r, idx) => ({
         resourceId: r.resourceId,
         priceListItemId: r.priceListItemId,
         quantity: r.quantity,
@@ -221,11 +166,12 @@ export default function OrderGridItemsTab({ order, canEdit, orderId }: Props) {
     onError: (err: any) => message.error(err?.response?.data?.message || 'Error al guardar'),
   })
 
-  const updateRow = useCallback((key: string, patch: Partial<GridRow>) => {
+  // ── Row helpers ─────────────────────────────────────────────────────────────
+  const applyRowPatch = useCallback((key: string, patch: Partial<GridRow>) => {
     setRows(prev => prev.map(r => {
       if (r._key !== key) return r
       const updated = { ...r, ...patch }
-      updated.lineTotal = calcTotal(updated.unitPrice, updated.quantity, updated.discountPct, updated.factor, updated.timeUnit)
+      updated.lineTotal = calcTotal(updated)
       return updated
     }))
     setDirty(true)
@@ -234,14 +180,112 @@ export default function OrderGridItemsTab({ order, canEdit, orderId }: Props) {
   const removeRow = useCallback((key: string) => {
     setRows(prev => prev.filter(r => r._key !== key))
     setDirty(true)
+    setEditTarget(null)
   }, [])
 
+  // ── Editing helpers ─────────────────────────────────────────────────────────
+  const startEdit = useCallback((rowIdx: number, col: EditCol, overrideValue?: string | number) => {
+    if (!canEdit) return
+    const row = rows[rowIdx]
+    if (!row) return
+    const val = overrideValue !== undefined ? overrideValue : getColValue(row, col)
+    setEditTarget({ rowIdx, col })
+    setDraft(val)
+  }, [canEdit, rows])
+
+  const commitEdit = useCallback((nextTarget?: EditTarget | null) => {
+    if (!editTarget) return
+    const { rowIdx, col } = editTarget
+    const row = rows[rowIdx]
+    if (row) {
+      let value: string | number = draft
+      if (col !== 'observations') {
+        value = draft === '' ? 0 : Number(draft)
+        if (isNaN(value as number)) value = getColValue(row, col) as number
+        if (col === 'discountPct') value = Math.max(0, Math.min(100, value as number))
+        if (col === 'quantity') value = Math.max(0, value as number)
+      }
+      applyRowPatch(row._key, { [col]: value })
+    }
+    if (nextTarget === undefined) {
+      setEditTarget(null)
+    } else {
+      setEditTarget(nextTarget)
+      if (nextTarget) {
+        const nextRow = rows[nextTarget.rowIdx]
+        if (nextRow) setDraft(getColValue(nextRow, nextTarget.col))
+      }
+    }
+  }, [editTarget, rows, draft, applyRowPatch])
+
+  const cancelEdit = useCallback(() => {
+    setEditTarget(null)
+  }, [])
+
+  // Navigate: Tab/Shift+Tab/Enter/arrows
+  const navigate = useCallback((direction: 'tab' | 'shifttab' | 'enter' | 'up' | 'down' | 'left' | 'right') => {
+    if (!editTarget) return
+    const { rowIdx, col } = editTarget
+    const colIdx = EDIT_COLS.indexOf(col)
+    let nextRowIdx = rowIdx
+    let nextColIdx = colIdx
+
+    if (direction === 'tab') {
+      if (colIdx < EDIT_COLS.length - 1) nextColIdx = colIdx + 1
+      else { nextRowIdx = rowIdx + 1; nextColIdx = 0 }
+    } else if (direction === 'shifttab') {
+      if (colIdx > 0) nextColIdx = colIdx - 1
+      else { nextRowIdx = rowIdx - 1; nextColIdx = EDIT_COLS.length - 1 }
+    } else if (direction === 'enter' || direction === 'down') {
+      nextRowIdx = rowIdx + 1
+    } else if (direction === 'up') {
+      nextRowIdx = rowIdx - 1
+    } else if (direction === 'right') {
+      nextColIdx = Math.min(colIdx + 1, EDIT_COLS.length - 1)
+    } else if (direction === 'left') {
+      nextColIdx = Math.max(colIdx - 1, 0)
+    }
+
+    // Clamp
+    if (nextRowIdx < 0) nextRowIdx = 0
+    if (nextRowIdx >= rows.length) {
+      // Past last row on Tab: open add-row
+      commitEdit(null)
+      if (direction === 'tab') { setShowAddRow(true); setAddSearch('') }
+      return
+    }
+
+    const nextCol = EDIT_COLS[nextColIdx]
+    commitEdit({ rowIdx: nextRowIdx, col: nextCol })
+  }, [editTarget, rows.length, commitEdit])
+
+  // ── Keyboard handler for grid container (when no cell is editing) ────────────
+  const handleGridKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (editTarget) return // handled by input
+    if (!canEdit) return
+    // Arrow keys when a row is "hovered" — no row focus tracking needed for now
+  }, [editTarget, canEdit])
+
+  // ── Input keyboard handler ──────────────────────────────────────────────────
+  const handleInputKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Tab') {
+      e.preventDefault()
+      navigate(e.shiftKey ? 'shifttab' : 'tab')
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      navigate('enter')
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      cancelEdit()
+    }
+  }, [navigate, cancelEdit])
+
+  // ── Add resource ────────────────────────────────────────────────────────────
   const addResource = useCallback((resourceId: string) => {
     const pi = plItems.find((p: any) => p.resourceId === resourceId)
     if (!pi) return
     const newRow: GridRow = {
       _key: `new-${Date.now()}`,
-      isNew: true,
       resourceId: pi.resourceId,
       priceListItemId: pi.id,
       name: pi.resource?.name ?? '',
@@ -256,293 +300,407 @@ export default function OrderGridItemsTab({ order, canEdit, orderId }: Props) {
       observations: '',
       lineTotal: Number(pi.price ?? pi.unitPrice ?? 0),
     }
-    setRows(prev => [...prev, newRow])
+    setRows(prev => {
+      const next = [...prev, newRow]
+      return next
+    })
     setDirty(true)
+    setShowAddRow(false)
     setAddSearch('')
+    // After state update, focus quantity of new row
+    requestAnimationFrame(() => {
+      setRows(prev => {
+        const idx = prev.findIndex(r => r._key === newRow._key)
+        if (idx >= 0) {
+          setEditTarget({ rowIdx: idx, col: 'quantity' })
+          setDraft(1)
+        }
+        return prev
+      })
+    })
   }, [plItems])
 
-  // Totals
+  // ── Totals ──────────────────────────────────────────────────────────────────
   const subtotal = rows.reduce((s, r) => s + r.lineTotal, 0)
-
-  // Dept groups for visual separation
   const deptGroups = useMemo(() => {
-    const groups: Record<string, GridRow[]> = {}
-    rows.forEach(r => {
-      if (!groups[r.dept]) groups[r.dept] = []
-      groups[r.dept].push(r)
-    })
-    return groups
+    const g: Record<string, GridRow[]> = {}
+    rows.forEach(r => { if (!g[r.dept]) g[r.dept] = []; g[r.dept].push(r) })
+    return g
   }, [rows])
 
-  const COL_DEPT    = 110
-  const COL_CODE    = 80
-  const COL_NAME    = 200
-  const COL_UNIT    = 60
-  const COL_PRICE   = 100
-  const COL_QTY     = 90
-  const COL_DISC    = 70
-  const COL_TOTAL   = 110
-  const COL_OBS     = 160
-  const COL_DEL     = 36
+  // ── Cell renderer ───────────────────────────────────────────────────────────
+  function renderCell(row: GridRow, rowIdx: number, col: EditCol) {
+    const isActive = editTarget?.rowIdx === rowIdx && editTarget?.col === col
+    const value = getColValue(row, col)
+    const isMoney = col === 'quantity' || col === 'discountPct'
 
-  const headerStyle: React.CSSProperties = {
-    fontSize: 10, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.08em',
-    padding: '6px 8px', textAlign: 'right', whiteSpace: 'nowrap', userSelect: 'none',
+    const cellStyle: React.CSSProperties = {
+      position: 'relative',
+      outline: isActive ? '2px solid #6B46C1' : 'none',
+      outlineOffset: -2,
+      borderRadius: 3,
+      background: isActive ? '#faf5ff' : 'transparent',
+      cursor: canEdit ? 'cell' : 'default',
+      userSelect: 'none',
+    }
+
+    if (isActive && canEdit) {
+      // Render input
+      const isText = col === 'observations'
+      return (
+        <div style={cellStyle}>
+          <input
+            ref={inputRef}
+            type={isText ? 'text' : 'number'}
+            value={String(draft)}
+            step={col === 'discountPct' ? '0.1' : '1'}
+            min={col === 'discountPct' ? '0' : col === 'quantity' ? '0' : undefined}
+            max={col === 'discountPct' ? '100' : undefined}
+            onChange={e => setDraft(isText ? e.target.value : e.target.value)}
+            onKeyDown={handleInputKeyDown}
+            onBlur={() => commitEdit(null)}
+            onFocus={e => e.target.select()}
+            style={{
+              width: '100%', border: 'none', outline: 'none',
+              background: 'transparent', fontSize: 13,
+              padding: '3px 6px', fontFamily: 'inherit',
+              textAlign: isText ? 'left' : 'right',
+              color: '#1e293b',
+            }}
+          />
+        </div>
+      )
+    }
+
+    // Display mode
+    const display = col === 'observations'
+      ? (String(value) || '')
+      : col === 'discountPct'
+      ? `${Number(value).toLocaleString('es-MX', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`
+      : Number(value).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+    return (
+      <div
+        style={cellStyle}
+        onClick={() => startEdit(rowIdx, col, value)}
+        onFocus={() => startEdit(rowIdx, col, value)}
+        tabIndex={canEdit ? 0 : -1}
+        onKeyDown={e => {
+          if (!canEdit) return
+          if (e.key === 'F2' || e.key === 'Enter') { e.preventDefault(); startEdit(rowIdx, col, value) }
+          if ((e.key === 'Delete' || e.key === 'Backspace') && isMoney) {
+            e.preventDefault()
+            applyRowPatch(row._key, { [col]: 0 })
+          }
+          if (e.key === 'ArrowRight') { e.preventDefault(); startEdit(rowIdx, EDIT_COLS[Math.min(EDIT_COLS.indexOf(col)+1, EDIT_COLS.length-1)]) }
+          if (e.key === 'ArrowLeft')  { e.preventDefault(); startEdit(rowIdx, EDIT_COLS[Math.max(EDIT_COLS.indexOf(col)-1, 0)]) }
+          if (e.key === 'ArrowDown')  { e.preventDefault(); if (rowIdx < rows.length-1) startEdit(rowIdx+1, col) }
+          if (e.key === 'ArrowUp')    { e.preventDefault(); if (rowIdx > 0) startEdit(rowIdx-1, col) }
+          if (e.key === 'Tab') {
+            e.preventDefault()
+            setEditTarget({ rowIdx, col })
+            setDraft(value)
+            navigate(e.shiftKey ? 'shifttab' : 'tab')
+          }
+        }}
+      >
+        <span style={{
+          display: 'block', padding: '4px 6px',
+          fontSize: 13,
+          color: col === 'discountPct' && Number(value) > 0 ? '#d97706'
+               : col === 'observations' ? '#64748b'
+               : '#1e293b',
+          textAlign: col === 'observations' ? 'left' : 'right',
+          fontVariantNumeric: 'tabular-nums',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {col === 'observations' && !String(value) && canEdit
+            ? <span style={{ color: '#d1d5db', fontStyle: 'italic' }}>Observación...</span>
+            : display}
+        </span>
+      </div>
+    )
   }
 
+  // ── Column widths ───────────────────────────────────────────────────────────
+  const cols = {
+    dept: 100, code: 72, name: 210, unit: 52,
+    price: 96, qty: 88, disc: 72, total: 108, obs: 170,
+    del: canEdit ? 36 : 0,
+  }
+  const gridCols = `${cols.dept}px ${cols.code}px ${cols.name}px ${cols.unit}px ${cols.price}px ${cols.qty}px ${cols.disc}px ${cols.total}px ${cols.obs}px${canEdit ? ` ${cols.del}px` : ''}`
+
+  const TH: React.CSSProperties = {
+    fontSize: 10, fontWeight: 700, color: '#94a3b8',
+    letterSpacing: '0.08em', padding: '7px 6px',
+    background: '#f8fafc', userSelect: 'none',
+  }
+
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div style={{ fontFamily: 'inherit' }}>
+    <div style={{ fontFamily: 'inherit' }} onKeyDown={handleGridKeyDown}>
+
       {/* ── Toolbar ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontWeight: 600, fontSize: 14, color: '#1e293b' }}>
-            Grid Items
-          </span>
-          <span style={{ fontSize: 12, color: '#64748b' }}>
-            {rows.length} partida{rows.length !== 1 ? 's' : ''}
-          </span>
+          <span style={{ fontWeight: 600, fontSize: 14, color: '#1e293b' }}>Grid Items</span>
+          <span style={{ fontSize: 12, color: '#64748b' }}>{rows.length} partida{rows.length !== 1 ? 's' : ''}</span>
           {dirty && (
-            <span style={{ fontSize: 12, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: 4 }}>
-              <WarningOutlined style={{ fontSize: 11 }} /> Cambios sin guardar
+            <span style={{ fontSize: 11, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <WarningOutlined style={{ fontSize: 10 }} /> Sin guardar
             </span>
           )}
           {!dirty && rows.length > 0 && (
-            <span style={{ fontSize: 12, color: '#22c55e', display: 'flex', alignItems: 'center', gap: 4 }}>
-              <CheckCircleOutlined style={{ fontSize: 11 }} /> Al día
+            <span style={{ fontSize: 11, color: '#22c55e', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <CheckCircleOutlined style={{ fontSize: 10 }} /> Al día
             </span>
           )}
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8 }}>
           {canEdit && (
-            <Button
-              type="primary"
-              icon={<SaveOutlined />}
-              disabled={!dirty}
-              loading={saveMutation.isPending}
-              onClick={() => saveMutation.mutate()}
-              style={{ background: '#6B46C1', borderColor: '#6B46C1', fontWeight: 600 }}
-            >
-              Guardar cambios
-            </Button>
+            <>
+              <Button
+                icon={<PlusOutlined />}
+                size="small"
+                onClick={() => { setShowAddRow(v => !v); setAddSearch('') }}
+                style={{ borderColor: '#6B46C1', color: '#6B46C1' }}
+              >
+                Agregar recurso
+              </Button>
+              <Button
+                type="primary"
+                icon={<SaveOutlined />}
+                size="small"
+                disabled={!dirty}
+                loading={saveMutation.isPending}
+                onClick={() => saveMutation.mutate(rows)}
+                style={{ background: '#6B46C1', borderColor: '#6B46C1' }}
+              >
+                Guardar
+              </Button>
+            </>
           )}
         </div>
       </div>
 
-      {/* ── Grid ── */}
-      <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-
-        {/* Header row */}
+      {/* ── Add resource search panel ── */}
+      {canEdit && showAddRow && (
         <div style={{
-          display: 'grid',
-          gridTemplateColumns: `${COL_DEPT}px ${COL_CODE}px ${COL_NAME}px ${COL_UNIT}px ${COL_PRICE}px ${COL_QTY}px ${COL_DISC}px ${COL_TOTAL}px ${COL_OBS}px ${canEdit ? COL_DEL + 'px' : ''}`,
-          background: '#f8fafc', borderBottom: '2px solid #e2e8f0',
-          position: 'sticky', top: 0, zIndex: 2,
+          background: '#faf5ff', border: '1px solid #d8b4fe', borderRadius: 8,
+          padding: '10px 14px', marginBottom: 10,
+          display: 'flex', alignItems: 'center', gap: 10,
         }}>
+          <PlusOutlined style={{ color: '#6B46C1', fontSize: 14, flexShrink: 0 }} />
+          {plLoading ? <Spin size="small" /> : (
+            <Select
+              autoFocus
+              showSearch
+              style={{ flex: 1, maxWidth: 560 }}
+              placeholder="Buscar recurso por nombre, código o departamento..."
+              filterOption={false}
+              onSearch={setAddSearch}
+              onSelect={(val) => { if (val) addResource(val as string) }}
+              value={null}
+              notFoundContent={addSearch.length < 1 ? 'Escribe para buscar...' : 'Sin resultados'}
+              dropdownStyle={{ minWidth: 480 }}
+              size="middle"
+            >
+              {addOptions.map((pi: any) => (
+                <Select.Option key={pi.resourceId} value={pi.resourceId}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+                    <div style={{ minWidth: 0 }}>
+                      <span style={{ fontSize: 13, fontWeight: 500 }}>{pi.resource?.name}</span>
+                      <span style={{ fontSize: 10, color: '#94a3b8', marginLeft: 8, fontFamily: 'monospace' }}>{pi.resource?.code}</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                      <span style={{ fontSize: 10, color: '#6B46C1', background: '#f3e8ff', padding: '1px 6px', borderRadius: 4 }}>
+                        {pi.resource?.department?.name ?? '—'}
+                      </span>
+                      <span style={{ fontSize: 12, fontWeight: 600 }}>
+                        {formatMoney(Number(pi.price ?? 0), 'MXN')}
+                      </span>
+                    </div>
+                  </div>
+                </Select.Option>
+              ))}
+            </Select>
+          )}
+          <Button
+            type="text" size="small" icon={<CloseOutlined />}
+            onClick={() => setShowAddRow(false)}
+            style={{ color: '#94a3b8', flexShrink: 0 }}
+          />
+        </div>
+      )}
+
+      {/* ── Grid ── */}
+      <div
+        ref={gridRef}
+        style={{ background: '#fff', borderRadius: 10, border: '1px solid #e2e8f0', overflow: 'auto' }}
+      >
+        {/* Header */}
+        <div style={{ display: 'grid', gridTemplateColumns: gridCols, borderBottom: '2px solid #e2e8f0', minWidth: 900, position: 'sticky', top: 0, zIndex: 2 }}>
           {[
-            { label: 'DEPTO.', align: 'left' }, { label: 'CÓDIGO', align: 'left' },
-            { label: 'RECURSO', align: 'left' }, { label: 'U.', align: 'center' },
-            { label: 'P. UNIT.', align: 'right' }, { label: 'CANT.', align: 'right' },
-            { label: 'DESC.%', align: 'right' }, { label: 'TOTAL', align: 'right' },
-            { label: 'OBSERVACIONES', align: 'left' },
+            { label: 'DEPTO.',        align: 'left'   },
+            { label: 'CÓDIGO',        align: 'left'   },
+            { label: 'RECURSO',       align: 'left'   },
+            { label: 'U.',            align: 'center' },
+            { label: 'P. UNIT.',      align: 'right'  },
+            { label: 'CANTIDAD',      align: 'right'  },
+            { label: 'DESC. %',       align: 'right'  },
+            { label: 'TOTAL',         align: 'right'  },
+            { label: 'OBSERVACIONES', align: 'left'   },
             ...(canEdit ? [{ label: '', align: 'center' }] : []),
-          ].map((col, i) => (
-            <div key={i} style={{ ...headerStyle, textAlign: col.align as any, paddingLeft: col.align === 'left' ? 12 : 8 }}>
-              {col.label}
+          ].map((h, i) => (
+            <div key={i} style={{ ...TH, textAlign: h.align as any }}>
+              {h.label}
             </div>
           ))}
         </div>
 
-        {/* Rows */}
-        {rows.length === 0 ? (
-          <div style={{ padding: '48px 24px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
-            Sin items. {canEdit ? 'Agrega recursos con el buscador de abajo.' : ''}
+        {/* Empty */}
+        {rows.length === 0 && (
+          <div style={{ padding: '52px 24px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
+            Sin partidas.{canEdit ? ' Usa "Agregar recurso" para comenzar.' : ''}
           </div>
-        ) : (
-          Object.entries(deptGroups).map(([dept, deptRows]) => (
-            <div key={dept}>
-              {/* Dept separator */}
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: `${COL_DEPT}px 1fr`,
-                background: '#f1f5f9', borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0',
-                padding: '4px 12px',
-              }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#6B46C1', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                  {dept}
-                </div>
-                <div style={{ fontSize: 10, color: '#94a3b8', textAlign: 'right', paddingRight: 8 }}>
-                  {deptRows.length} item{deptRows.length !== 1 ? 's' : ''} · {formatMoney(deptRows.reduce((s, r) => s + r.lineTotal, 0), 'MXN')}
-                </div>
+        )}
+
+        {/* Rows grouped by dept */}
+        {Object.entries(deptGroups).map(([dept, deptRows]) => (
+          <div key={dept} style={{ minWidth: 900 }}>
+
+            {/* Dept header */}
+            <div style={{
+              display: 'grid', gridTemplateColumns: `${cols.dept}px 1fr`,
+              background: '#f8f4ff', borderTop: '1px solid #ede9fe', borderBottom: '1px solid #ede9fe',
+              padding: '3px 6px 3px 10px',
+            }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: '#6B46C1', letterSpacing: '0.1em', textTransform: 'uppercase', lineHeight: '20px' }}>
+                {dept}
               </div>
-
-              {/* Data rows */}
-              {deptRows.map((row, rowIdx) => {
-                const isLast = rowIdx === deptRows.length - 1
-                return (
-                  <div
-                    key={row._key}
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: `${COL_DEPT}px ${COL_CODE}px ${COL_NAME}px ${COL_UNIT}px ${COL_PRICE}px ${COL_QTY}px ${COL_DISC}px ${COL_TOTAL}px ${COL_OBS}px ${canEdit ? COL_DEL + 'px' : ''}`,
-                      alignItems: 'center',
-                      borderBottom: isLast ? 'none' : '1px solid #f1f5f9',
-                      transition: 'background 0.1s',
-                    }}
-                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#faf5ff'}
-                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ''}
-                  >
-                    {/* Depto */}
-                    <div style={{ padding: '0 8px 0 12px', fontSize: 11, color: '#6B46C1', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {/* hidden in dept separator mode — keep blank */}
-                    </div>
-
-                    {/* Código */}
-                    <div style={{ padding: '0 4px', fontSize: 11, color: '#64748b', fontFamily: 'monospace' }}>
-                      {row.code}
-                    </div>
-
-                    {/* Recurso */}
-                    <Tooltip title={row.name} mouseEnterDelay={0.8}>
-                      <div style={{ padding: '0 4px', fontSize: 13, fontWeight: 500, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {row.name}
-                      </div>
-                    </Tooltip>
-
-                    {/* Unidad */}
-                    <div style={{ padding: '0 4px', fontSize: 11, color: '#64748b', textAlign: 'center' }}>
-                      {row.unit}
-                    </div>
-
-                    {/* P. Unit */}
-                    <div style={{ padding: '2px 4px', textAlign: 'right' }}>
-                      <span style={{ fontSize: 13, color: '#374151', fontVariantNumeric: 'tabular-nums' }}>
-                        {formatMoney(row.unitPrice, 'MXN')}
-                      </span>
-                    </div>
-
-                    {/* Cantidad — editable */}
-                    <div style={{ padding: '2px 4px' }}>
-                      <NumCell
-                        value={row.quantity}
-                        min={0}
-                        precision={2}
-                        disabled={!canEdit}
-                        onChange={v => updateRow(row._key, { quantity: v })}
-                      />
-                    </div>
-
-                    {/* Desc% — editable */}
-                    <div style={{ padding: '2px 4px' }}>
-                      <NumCell
-                        value={row.discountPct}
-                        min={0}
-                        max={100}
-                        precision={1}
-                        suffix="%"
-                        disabled={!canEdit}
-                        onChange={v => updateRow(row._key, { discountPct: v })}
-                      />
-                    </div>
-
-                    {/* Total */}
-                    <div style={{ padding: '0 8px 0 4px', textAlign: 'right' }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', fontVariantNumeric: 'tabular-nums' }}>
-                        {formatMoney(row.lineTotal, 'MXN')}
-                      </span>
-                    </div>
-
-                    {/* Observaciones — editable */}
-                    <div style={{ padding: '2px 4px' }}>
-                      <TextCell
-                        value={row.observations}
-                        placeholder="Observación..."
-                        disabled={!canEdit}
-                        onChange={v => updateRow(row._key, { observations: v })}
-                      />
-                    </div>
-
-                    {/* Delete */}
-                    {canEdit && (
-                      <div style={{ display: 'flex', justifyContent: 'center' }}>
-                        <button
-                          onClick={() => removeRow(row._key)}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#cbd5e1', padding: '4px 6px', borderRadius: 4, transition: 'color 0.15s' }}
-                          onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#ef4444'}
-                          onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#cbd5e1'}
-                          title="Eliminar item"
-                        >
-                          <DeleteOutlined style={{ fontSize: 13 }} />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+              <div style={{ fontSize: 10, color: '#94a3b8', textAlign: 'right', paddingRight: 8, lineHeight: '20px' }}>
+                {deptRows.length} item{deptRows.length !== 1 ? 's' : ''}
+                {' · '}
+                <strong style={{ color: '#6B46C1' }}>
+                  {formatMoney(deptRows.reduce((s, r) => s + r.lineTotal, 0), 'MXN')}
+                </strong>
+              </div>
             </div>
-          ))
-        )}
 
-        {/* ── Add resource row ── */}
-        {canEdit && (
-          <div style={{ borderTop: '2px dashed #e2e8f0', padding: '8px 12px', background: '#fafafa' }}>
-            {plLoading ? (
-              <Spin size="small" />
-            ) : (
-              <Select
-                showSearch
-                placeholder={<span style={{ color: '#94a3b8' }}><PlusOutlined style={{ marginRight: 6 }} />Agregar recurso de la lista de precios...</span>}
-                style={{ width: '100%', maxWidth: 520 }}
-                filterOption={false}
-                onSearch={setAddSearch}
-                onSelect={(val) => { if (val) addResource(val as string) }}
-                value={null}
-                notFoundContent={addSearch.length < 1 ? 'Escribe para buscar...' : 'Sin resultados'}
-                size="small"
-                variant="borderless"
-                dropdownStyle={{ minWidth: 420 }}
-              >
-                {addOptions.map((pi: any) => (
-                  <Select.Option key={pi.resourceId} value={pi.resourceId}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-                      <div>
-                        <span style={{ fontSize: 13, fontWeight: 500 }}>{pi.resource?.name}</span>
-                        <span style={{ fontSize: 10, color: '#94a3b8', marginLeft: 8, fontFamily: 'monospace' }}>{pi.resource?.code}</span>
-                      </div>
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-                        <span style={{ fontSize: 10, color: '#6B46C1', background: '#f4eeff', padding: '1px 6px', borderRadius: 4 }}>
-                          {pi.resource?.department?.name ?? '—'}
-                        </span>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: '#1e293b' }}>
-                          {formatMoney(Number(pi.price ?? 0), 'MXN')}
-                        </span>
-                      </div>
+            {/* Data rows */}
+            {deptRows.map((row) => {
+              const rowIdx = rows.indexOf(row)
+              const isRowActive = editTarget?.rowIdx === rowIdx
+
+              return (
+                <div
+                  key={row._key}
+                  style={{
+                    display: 'grid', gridTemplateColumns: gridCols,
+                    alignItems: 'center',
+                    borderBottom: '1px solid #f1f5f9',
+                    background: isRowActive ? '#fdfbff' : undefined,
+                    transition: 'background 0.1s',
+                  }}
+                  onMouseEnter={e => { if (!isRowActive) (e.currentTarget as HTMLElement).style.background = '#faf8ff' }}
+                  onMouseLeave={e => { if (!isRowActive) (e.currentTarget as HTMLElement).style.background = '' }}
+                >
+                  {/* Depto — blank (shown in separator) */}
+                  <div />
+
+                  {/* Código */}
+                  <div style={{ padding: '6px 4px 6px 0', fontSize: 11, color: '#94a3b8', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {row.code}
+                  </div>
+
+                  {/* Nombre */}
+                  <Tooltip title={row.name} mouseEnterDelay={0.6}>
+                    <div style={{ padding: '6px 8px', fontSize: 13, fontWeight: 500, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {row.name}
                     </div>
-                  </Select.Option>
-                ))}
-              </Select>
-            )}
+                  </Tooltip>
+
+                  {/* Unidad */}
+                  <div style={{ padding: '6px 4px', fontSize: 11, color: '#64748b', textAlign: 'center' }}>
+                    {row.unit}
+                  </div>
+
+                  {/* P. Unit — readonly */}
+                  <div style={{ padding: '6px 6px', textAlign: 'right', fontSize: 13, color: '#374151', fontVariantNumeric: 'tabular-nums' }}>
+                    {formatMoney(row.unitPrice, 'MXN')}
+                  </div>
+
+                  {/* Cantidad — editable */}
+                  <div style={{ padding: '2px 4px' }}>
+                    {renderCell(row, rowIdx, 'quantity')}
+                  </div>
+
+                  {/* Desc% — editable */}
+                  <div style={{ padding: '2px 4px' }}>
+                    {renderCell(row, rowIdx, 'discountPct')}
+                  </div>
+
+                  {/* Total — calculated */}
+                  <div style={{ padding: '6px 8px', textAlign: 'right', fontSize: 13, fontWeight: 700, color: '#1e293b', fontVariantNumeric: 'tabular-nums' }}>
+                    {formatMoney(row.lineTotal, 'MXN')}
+                  </div>
+
+                  {/* Observaciones — editable */}
+                  <div style={{ padding: '2px 4px' }}>
+                    {renderCell(row, rowIdx, 'observations')}
+                  </div>
+
+                  {/* Delete */}
+                  {canEdit && (
+                    <div style={{ display: 'flex', justifyContent: 'center' }}>
+                      <Popconfirm
+                        title="¿Eliminar esta partida?"
+                        onConfirm={() => removeRow(row._key)}
+                        okButtonProps={{ danger: true, size: 'small' }}
+                        cancelButtonProps={{ size: 'small' }}
+                        okText="Eliminar"
+                        cancelText="No"
+                      >
+                        <button
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e2e8f0', padding: '4px 6px', borderRadius: 4, transition: 'color 0.15s', display: 'flex', alignItems: 'center' }}
+                          onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#ef4444'}
+                          onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#e2e8f0'}
+                        >
+                          <DeleteOutlined style={{ fontSize: 12 }} />
+                        </button>
+                      </Popconfirm>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
-        )}
+        ))}
 
         {/* ── Footer totals ── */}
         {rows.length > 0 && (
           <div style={{
-            display: 'flex', justifyContent: 'flex-end', alignItems: 'center',
-            padding: '8px 16px', background: '#f8fafc',
-            borderTop: '2px solid #e2e8f0', gap: 24,
+            display: 'flex', justifyContent: 'flex-end', alignItems: 'stretch',
+            borderTop: '2px solid #e2e8f0', background: '#f8fafc', minWidth: 900,
           }}>
-            {Object.entries(deptGroups).map(([dept, deptRows]) => (
-              <div key={dept} style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700, letterSpacing: '0.06em' }}>{dept}</div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#6B46C1', fontVariantNumeric: 'tabular-nums' }}>
-                  {formatMoney(deptRows.reduce((s, r) => s + r.lineTotal, 0), 'MXN')}
+            {/* Dept subtotals */}
+            <div style={{ display: 'flex', gap: 0, flex: 1, overflow: 'hidden' }}>
+              {Object.entries(deptGroups).map(([dept, deptRows], i) => (
+                <div key={dept} style={{
+                  padding: '8px 14px', borderRight: '1px solid #e2e8f0',
+                  borderLeft: i === 0 ? 'none' : 'none',
+                }}>
+                  <div style={{ fontSize: 9, color: '#94a3b8', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{dept}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#6B46C1', fontVariantNumeric: 'tabular-nums', marginTop: 2 }}>
+                    {formatMoney(deptRows.reduce((s, r) => s + r.lineTotal, 0), 'MXN')}
+                  </div>
                 </div>
-              </div>
-            ))}
-            <div style={{ width: 1, height: 32, background: '#e2e8f0' }} />
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700, letterSpacing: '0.06em' }}>SUBTOTAL</div>
-              <div style={{ fontSize: 16, fontWeight: 800, color: '#1e293b', fontVariantNumeric: 'tabular-nums' }}>
+              ))}
+            </div>
+            {/* Grand total */}
+            <div style={{ padding: '8px 16px', minWidth: 130, textAlign: 'right', background: '#f3e8ff', borderLeft: '2px solid #d8b4fe' }}>
+              <div style={{ fontSize: 9, color: '#7c3aed', fontWeight: 700, letterSpacing: '0.08em' }}>SUBTOTAL</div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: '#4c1d95', fontVariantNumeric: 'tabular-nums', marginTop: 2 }}>
                 {formatMoney(subtotal, 'MXN')}
               </div>
             </div>
@@ -550,7 +708,18 @@ export default function OrderGridItemsTab({ order, canEdit, orderId }: Props) {
         )}
       </div>
 
-      {/* ── Sticky save bar when dirty ── */}
+      {/* ── Navigation hint ── */}
+      {canEdit && rows.length > 0 && (
+        <div style={{ marginTop: 6, fontSize: 11, color: '#94a3b8', display: 'flex', gap: 12 }}>
+          <span><kbd style={kbdStyle}>Tab</kbd> siguiente celda</span>
+          <span><kbd style={kbdStyle}>Enter</kbd> celda abajo</span>
+          <span><kbd style={kbdStyle}>↑↓←→</kbd> navegar</span>
+          <span><kbd style={kbdStyle}>Esc</kbd> cancelar</span>
+          <span><kbd style={kbdStyle}>Del</kbd> limpiar valor</span>
+        </div>
+      )}
+
+      {/* ── Sticky save bar ── */}
       {canEdit && dirty && (
         <div style={{
           position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
@@ -558,19 +727,17 @@ export default function OrderGridItemsTab({ order, canEdit, orderId }: Props) {
           display: 'flex', alignItems: 'center', gap: 12, zIndex: 200,
           boxShadow: '0 4px 24px rgba(0,0,0,0.3)', border: '1px solid #334155',
         }}>
-          <WarningOutlined style={{ color: '#f59e0b', fontSize: 15 }} />
-          <span style={{ fontSize: 13, fontWeight: 500 }}>Tienes cambios sin guardar</span>
-          <Button
-            size="small" type="primary"
-            icon={<SaveOutlined />}
+          <WarningOutlined style={{ color: '#f59e0b', fontSize: 14 }} />
+          <span style={{ fontSize: 13, fontWeight: 500 }}>Cambios sin guardar</span>
+          <Button size="small" type="primary" icon={<SaveOutlined />}
             loading={saveMutation.isPending}
-            onClick={() => saveMutation.mutate()}
+            onClick={() => saveMutation.mutate(rows)}
             style={{ background: '#6B46C1', borderColor: '#6B46C1', fontWeight: 600 }}
           >
             Guardar
           </Button>
           <button
-            onClick={() => { setRows((order?.lineItems ?? []).map(rowFromLineItem)); setDirty(false) }}
+            onClick={() => { setRows((order?.lineItems ?? []).map(rowFromLineItem)); setDirty(false); setEditTarget(null) }}
             style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 12 }}
           >
             Descartar
@@ -579,4 +746,9 @@ export default function OrderGridItemsTab({ order, canEdit, orderId }: Props) {
       )}
     </div>
   )
+}
+
+const kbdStyle: React.CSSProperties = {
+  background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 3,
+  padding: '1px 5px', fontSize: 10, fontFamily: 'monospace', color: '#475569',
 }
