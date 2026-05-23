@@ -59,4 +59,6 @@ export const eventsApi = {
     apiClient.get(`/events/${id}/planner-stores`).then((r) => r.data),
   getAssignableUsers: () =>
     apiClient.get('/users/assignable').then((r) => r.data),
+  sendInvitationEmails: (id: string, guestIds?: string[]) =>
+    apiClient.post(`/events/${id}/planner-invitaciones/send-emails`, { guestIds }).then((r) => r.data),
 }

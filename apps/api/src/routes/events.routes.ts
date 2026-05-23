@@ -12,6 +12,7 @@ import { listFloorPlans, getFloorPlanUploadSignature, createFloorPlanRecord, del
 import { listEventActivities, createEventActivity, updateEventActivity, deleteEventActivity, bulkReorderActivities, exportActivitiesCsv, importActivitiesCsv } from '../controllers/eventActivities.controller'
 import { updateMatchScore } from '../controllers/tournament.controller'
 import { publishPlannerPortal } from '../controllers/planner-portal.controller'
+import { sendInvitationEmails } from '../controllers/planner-invitaciones.controller'
 import { getLienzo, saveLienzo } from '../controllers/lienzo.controller'
 import { getPlannerStore, savePlannerStore, getAllPlannerStores } from '../controllers/planner-store.controller'
 import activityDocumentsRouter from './activityDocuments.routes'
@@ -94,6 +95,9 @@ router.use('/:eventId/activities/:activityId/documents', activityDocumentsRouter
 
 // Planner portal
 router.post('/:id/planner-portal/publish', publishPlannerPortal)
+
+// Planner invitations — send emails
+router.post('/:id/planner-invitaciones/send-emails', sendInvitationEmails)
 
 // Planner stores (presupuesto, timeline, tareas, etc.)
 router.get('/:id/planner-stores', getAllPlannerStores)

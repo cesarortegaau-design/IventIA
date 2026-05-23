@@ -230,6 +230,88 @@ export const emailService = {
     })
   },
 
+  async sendPlannerInvitation(params: {
+    to: string
+    guestName: string
+    numPersonas: number
+    eventName: string
+    eventDate?: string
+    titulo: string
+    subtitulo?: string
+    lugarTexto?: string
+    dresscode?: string
+    imagenUrl?: string
+    notasAdicionales?: string
+    modo: 'rsvp' | 'boleto'
+    invitationLink: string
+  }) {
+    if (!transporter) {
+      console.warn('[email] No SENDGRID_API_KEY — logging planner invitation instead')
+      console.log(`[email] Planner invitation to ${params.to}: ${params.invitationLink}`)
+      return
+    }
+
+    const modeLabel = params.modo === 'rsvp' ? 'Confirmar asistencia' : 'Ver mi boleto'
+    const modeSubtitle = params.modo === 'rsvp'
+      ? 'Te han invitado a un evento especial. Confirma tu asistencia haciendo clic en el botón.'
+      : 'Has recibido un boleto digital. Haz clic para verlo y guardarlo.'
+
+    const formattedDate = params.eventDate
+      ? new Date(params.eventDate).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+      : ''
+
+    const html = `
+      <div style="font-family: 'Inter', Arial, sans-serif; max-width: 560px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #7C3AED 0%, #EC4899 100%); padding: 36px; text-align: center;">
+          ${params.imagenUrl ? `<img src="${params.imagenUrl}" alt="${params.eventName}" style="width: 100%; max-height: 220px; object-fit: cover; border-radius: 12px; margin-bottom: 20px; display: block;" />` : ''}
+          <div style="font-size: 28px; font-weight: 800; color: #fff; letter-spacing: -0.5px; line-height: 1.2;">${params.titulo || params.eventName}</div>
+          ${params.subtitulo ? `<div style="font-size: 15px; color: rgba(255,255,255,0.85); margin-top: 8px;">${params.subtitulo}</div>` : ''}
+        </div>
+
+        <!-- Body -->
+        <div style="padding: 32px 36px;">
+          <p style="font-size: 16px; color: #333; margin: 0 0 8px;">Hola <strong>${params.guestName}</strong>,</p>
+          <p style="font-size: 15px; color: #555; margin: 0 0 24px;">${modeSubtitle}</p>
+
+          <!-- Event details -->
+          <div style="background: #F5F3FF; border-radius: 12px; padding: 18px 20px; margin-bottom: 24px;">
+            <div style="font-size: 17px; font-weight: 700; color: #1a1a1a; margin-bottom: 10px;">${params.eventName}</div>
+            ${formattedDate ? `<div style="display: flex; gap: 8px; align-items: center; font-size: 13px; color: #666; margin-bottom: 6px;">📅 ${formattedDate}</div>` : ''}
+            ${params.lugarTexto ? `<div style="font-size: 13px; color: #666; margin-bottom: 6px;">📍 ${params.lugarTexto}</div>` : ''}
+            ${params.dresscode ? `<div style="font-size: 13px; color: #666; margin-bottom: 6px;">👗 Dress code: ${params.dresscode}</div>` : ''}
+            <div style="font-size: 13px; color: #666;">👥 Lugares: ${params.numPersonas}</div>
+          </div>
+
+          ${params.notasAdicionales ? `<p style="font-size: 13px; color: #666; border-left: 3px solid #7C3AED; padding-left: 12px; margin: 0 0 24px;">${params.notasAdicionales}</p>` : ''}
+
+          <!-- CTA -->
+          <div style="text-align: center; margin: 0 0 24px;">
+            <a href="${params.invitationLink}" style="display: inline-block; background: linear-gradient(135deg, #7C3AED 0%, #6B21A8 100%); color: #fff; padding: 16px 40px; border-radius: 12px; text-decoration: none; font-weight: 700; font-size: 16px; letter-spacing: 0.3px;">
+              ${modeLabel} →
+            </a>
+          </div>
+
+          <p style="font-size: 12px; color: #aaa; text-align: center; margin: 0; word-break: break-all;">
+            O copia este enlace: <a href="${params.invitationLink}" style="color: #7C3AED;">${params.invitationLink}</a>
+          </p>
+        </div>
+
+        <!-- Footer -->
+        <div style="background: #F8F8F8; padding: 16px 36px; text-align: center;">
+          <p style="font-size: 12px; color: #aaa; margin: 0;">IventIA Planner · Gestión de eventos</p>
+        </div>
+      </div>
+    `
+
+    await transporter.sendMail({
+      from: `IventIA Planner <${env.EMAIL_FROM}>`,
+      to: params.to,
+      subject: `${params.modo === 'rsvp' ? '✉️' : '🎫'} ${params.titulo || params.eventName}`,
+      html,
+    })
+  },
+
   async sendPasswordReset(to: string, resetUrl: string, firstName: string, subject = 'Restablecer contraseña — IventIA') {
     if (!transporter) {
       console.warn('[email] No SENDGRID_API_KEY configured — logging reset link instead')

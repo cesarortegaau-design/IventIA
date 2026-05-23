@@ -6,6 +6,7 @@
 import { useState, useMemo } from 'react'
 import { useParams, useOutletContext } from 'react-router-dom'
 import { usePlannerStore } from '../../hooks/usePlannerStore'
+import { eventsApi } from '../../api/events'
 import {
   Button, Input, Switch, Radio, App, Typography, Space, Tag, Modal, Form,
   Upload, Tabs, Popconfirm, Tooltip, Select,
@@ -326,6 +327,48 @@ export default function InvitacionesPage() {
     if (sendFilter === 'no-enviado')  return invs.filter(g => !g.boletosEnviados)
     return invs
   }, [invitadosStore.invitados, sendFilter])
+
+  // ── Email send state ────────────────────────────────────────────────────────
+  const [sendingEmailIds, setSendingEmailIds] = useState<Set<string>>(new Set())
+  const [sendingAll, setSendingAll] = useState(false)
+
+  async function sendEmailToGuest(guest: Invitado) {
+    if (!guest.email) return message.warning(`${guest.nombre} no tiene email`)
+    setSendingEmailIds(prev => new Set(prev).add(guest.id))
+    try {
+      const res = await eventsApi.sendInvitationEmails(eventId!, [guest.id])
+      if (res.sent > 0) {
+        message.success(`Email enviado a ${guest.nombre}`)
+        markEnviado(guest.id)
+      } else {
+        message.error(`No se pudo enviar a ${guest.nombre}: ${res.results?.[0]?.error ?? 'Error'}`)
+      }
+    } catch (err: any) {
+      message.error(err?.response?.data?.message || `Error al enviar a ${guest.nombre}`)
+    } finally {
+      setSendingEmailIds(prev => { const s = new Set(prev); s.delete(guest.id); return s })
+    }
+  }
+
+  async function sendEmailToAll() {
+    const withEmail = filteredForSend.filter(g => g.email)
+    if (withEmail.length === 0) return message.warning('Ningún invitado del filtro actual tiene email')
+    setSendingAll(true)
+    try {
+      const ids = withEmail.map(g => g.id)
+      const res = await eventsApi.sendInvitationEmails(eventId!, ids)
+      message.success(`${res.sent} emails enviados${res.failed > 0 ? `, ${res.failed} fallaron` : ''}`)
+      // mark all sent ones as enviados
+      const sentIds = new Set((res.results ?? []).filter((r: any) => r.success).map((r: any) => r.guestId))
+      const updated = invitadosStore.invitados.map(g => sentIds.has(g.id) ? { ...g, boletosEnviados: true } : g)
+      const newStore = { ...invitadosStore, invitados: updated, updatedAt: new Date().toISOString() }
+      saveInvitados(newStore).catch(() => {})
+    } catch (err: any) {
+      message.error(err?.response?.data?.message || 'Error al enviar emails masivos')
+    } finally {
+      setSendingAll(false)
+    }
+  }
 
   // ── Sync status badge (JSX variable — NOT a component, avoids focus loss) ────
   const syncBadge = syncStatus === 'saving' ? (
@@ -869,8 +912,8 @@ export default function InvitacionesPage() {
           )}
         </div>
 
-        {/* Filter bar */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+        {/* Filter bar + bulk send */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
           {[
             { key: 'all',        label: `Todos (${invitadosStore.invitados.length})` },
             { key: 'pendiente',  label: `Pendientes (${invitadosStore.invitados.filter(g => g.rsvp === 'pendiente').length})` },
@@ -891,6 +934,18 @@ export default function InvitacionesPage() {
               {f.label}
             </button>
           ))}
+          <div style={{ flex: 1 }} />
+          {filteredForSend.some(g => g.email) && (
+            <Button
+              type="primary"
+              icon={<MailOutlined />}
+              loading={sendingAll}
+              onClick={sendEmailToAll}
+              style={{ background: '#7C3AED', borderColor: '#7C3AED', borderRadius: 20, fontWeight: 600, fontSize: 12 }}
+            >
+              Enviar email a todos ({filteredForSend.filter(g => g.email).length})
+            </Button>
+          )}
         </div>
 
         {/* Guest send cards */}
@@ -1003,20 +1058,15 @@ export default function InvitacionesPage() {
                     )}
 
                     {g.email && (
-                      <Tooltip title={`Enviar a ${g.email}`}>
+                      <Tooltip title={`Enviar email a ${g.email}`}>
                         <Button
                           size="small"
                           icon={<MailOutlined />}
-                          onClick={() => {
-                            const eventName = event?.name || 'el evento'
-                            window.open(
-                              `mailto:${g.email}?subject=Invitación a ${eventName}&body=Hola ${g.nombre},%0A%0ATe invitamos a ${eventName}.%0A%0ATu link: ${link}`,
-                              '_blank'
-                            )
-                          }}
-                          style={{ borderRadius: 8, borderColor: '#EDE9FE', color: '#0D9488', fontWeight: 600 }}
+                          loading={sendingEmailIds.has(g.id)}
+                          onClick={() => sendEmailToGuest(g)}
+                          style={{ borderRadius: 8, background: '#7C3AED', borderColor: '#7C3AED', color: '#fff', fontWeight: 600 }}
                         >
-                          Email
+                          Enviar email
                         </Button>
                       </Tooltip>
                     )}
