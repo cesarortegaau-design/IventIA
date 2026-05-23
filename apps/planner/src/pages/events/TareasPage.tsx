@@ -800,6 +800,21 @@ export default function TareasPage() {
             </Button>
           </Space>
         </div>
+        {/* Sync status indicator */}
+        <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
+          {syncStatus === 'saving' && <>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#F59E0B', display: 'inline-block' }} />
+            <span style={{ fontSize: 11, color: '#888' }}>Guardando...</span>
+          </>}
+          {syncStatus === 'saved' && <>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#059669', display: 'inline-block' }} />
+            <span style={{ fontSize: 11, color: '#059669' }}>Guardado</span>
+          </>}
+          {syncStatus === 'error' && <>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#DC2626', display: 'inline-block' }} />
+            <span style={{ fontSize: 11, color: '#DC2626' }}>Error al sincronizar con servidor — datos guardados localmente</span>
+          </>}
+        </div>
       </div>
 
       {/* ── Body: list + right panel ── */}
