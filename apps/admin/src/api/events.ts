@@ -29,4 +29,8 @@ export const eventsApi = {
     apiClient.delete(`/events/${id}/documents/${docId}`).then(r => r.data),
   importStands: (eventId: string, rows: any[]) =>
     apiClient.post(`/events/${eventId}/stands/import`, rows).then(r => r.data),
+  getPlannerStore: (id: string, key: string) =>
+    apiClient.get(`/events/${id}/planner-store/${key}`).then(r => r.data),
+  savePlannerStore: (id: string, key: string, data: any) =>
+    apiClient.put(`/events/${id}/planner-store/${key}`, { data }).then(r => r.data),
 }

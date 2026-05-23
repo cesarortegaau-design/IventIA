@@ -38,6 +38,7 @@ import EventTimelineTab from './EventTimelineTab'
 import EventBudgetTab from './EventBudgetTab'
 import EventTasksTab from './EventTasksTab'
 import TournamentTab from './TournamentTab'
+import PlannerPresupuestoTab from './PlannerPresupuestoTab'
 import { T } from '../../styles/tokens'
 import ApprovalPanel from '../../components/ApprovalPanel'
 import { approvalFlowsApi } from '../../api/approvalFlows'
@@ -560,6 +561,7 @@ export default function EventDetailPage() {
     contratos: 'Contratos', documentos: 'Documentos', produccion: 'Producción',
     mapa: 'Mapa del Venue', boletos: 'Boletos', portal: 'Portal',
     deporte: 'Portal Deportivo', auditoria: 'Auditoría',
+    planner: 'Planner P&L',
   }
   useRecentScreen(event ? `${event.name} › ${TAB_LABEL[activeTab] ?? activeTab}` : '', 'eventos')
 
@@ -608,6 +610,7 @@ export default function EventDetailPage() {
     { key: 'timeline',   label: 'Timeline' },
     { key: 'tareas',     label: 'Tareas' },
     { key: 'presupuesto', label: 'Presupuesto' },
+    { key: 'planner',     label: 'Planner P&L' },
     { key: 'ordenes',    label: `Órdenes (${event._count?.orders ?? event.orders?.length ?? 0})` },
     ...(eventContracts.length > 0 ? [{ key: 'contratos', label: `Contratos (${eventContracts.length})` }] : []),
     { key: 'documentos', label: `Documentos (${event.documents?.length ?? 0})` },
@@ -1072,6 +1075,9 @@ export default function EventDetailPage() {
 
         {/* ── Tab: Presupuesto ── */}
         {activeTab === 'presupuesto' && <EventBudgetTab eventId={id!} event={event} />}
+
+        {/* ── Tab: Planner P&L ── */}
+        {activeTab === 'planner' && <PlannerPresupuestoTab eventId={id!} event={event} />}
 
         {/* ── Tab: Órdenes ── */}
         {activeTab === 'ordenes' && (
