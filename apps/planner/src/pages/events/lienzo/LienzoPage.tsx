@@ -1,4 +1,3 @@
-// v2
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useParams, useOutletContext, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
