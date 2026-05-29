@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { playerApi } from '../../api/player'
+import { useThemeStore } from '../../stores/themeStore'
 
 const catColors: Record<string, string> = { FEMENIL: '#e91e63', VARONIL: '#2196f3', MIXTO: '#7b1fa2' }
 const catLabels: Record<string, string> = { FEMENIL: 'Femenil', VARONIL: 'Varonil', MIXTO: 'Mixto' }
@@ -22,6 +23,7 @@ function TournamentList() {
     queryFn: playerApi.listTournaments,
   })
   const tournaments = data?.data ?? []
+  const { isDark, toggleTheme } = useThemeStore()
 
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
@@ -30,7 +32,16 @@ function TournamentList() {
           <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--orange)' }}>TORNEOS</div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Modo espectador</div>
         </div>
-        <Link to="/" style={{ color: 'var(--text-muted)', fontSize: 12, textDecoration: 'none' }}>← Volver</Link>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button
+            onClick={toggleTheme}
+            title={isDark ? 'Modo claro' : 'Modo oscuro'}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 16, padding: 0, WebkitTapHighlightColor: 'transparent' }}
+          >
+            {isDark ? '☀' : '🌙'}
+          </button>
+          <Link to="/" style={{ color: 'var(--text-muted)', fontSize: 12, textDecoration: 'none' }}>← Volver</Link>
+        </div>
       </div>
 
       <div style={{ flex: 1, padding: '16px', maxWidth: 480, width: '100%', margin: '0 auto' }}>

@@ -3,11 +3,13 @@ import { useNavigate, Link } from 'react-router-dom'
 import { App } from 'antd'
 import { playerApi } from '../../api/player'
 import { usePlayerStore } from '../../stores/playerStore'
+import { useThemeStore } from '../../stores/themeStore'
 
 export default function PlayerLoginPage() {
   const navigate = useNavigate()
   const { message } = App.useApp()
   const setAuth = usePlayerStore((s) => s.setAuth)
+  const { isDark, toggleTheme } = useThemeStore()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -29,7 +31,21 @@ export default function PlayerLoginPage() {
   }
 
   return (
-    <div className="login-wrap">
+    <div className="login-wrap" style={{ position: 'relative' }}>
+      <button
+        onClick={toggleTheme}
+        title={isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+        style={{
+          position: 'absolute', top: 16, right: 16,
+          background: 'var(--surface2)', border: '1px solid var(--border)',
+          borderRadius: 20, padding: '6px 14px', cursor: 'pointer',
+          fontSize: 13, fontWeight: 600, color: 'var(--text-muted)',
+          display: 'flex', alignItems: 'center', gap: 6,
+          WebkitTapHighlightColor: 'transparent',
+        }}
+      >
+        {isDark ? '☀' : '🌙'} {isDark ? 'Claro' : 'Oscuro'}
+      </button>
       <div className="login-logo">I-FLAG</div>
       <div className="login-subtitle">Portal Jugador</div>
 

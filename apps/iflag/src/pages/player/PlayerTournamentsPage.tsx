@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate, Link } from 'react-router-dom'
 import { playerApi } from '../../api/player'
 import { usePlayerStore } from '../../stores/playerStore'
+import { useThemeStore } from '../../stores/themeStore'
 
 const catColors: Record<string, string> = {
   FEMENIL: '#e91e63',
@@ -19,6 +20,7 @@ const PAY_STATUS_LABELS: Record<string, string> = {
 export default function PlayerTournamentsPage() {
   const navigate = useNavigate()
   const { user, clearAuth } = usePlayerStore()
+  const { isDark, toggleTheme } = useThemeStore()
 
   const { data: meData, isLoading } = useQuery({
     queryKey: ['player-me'],
@@ -65,6 +67,13 @@ export default function PlayerTournamentsPage() {
           >
             Mi perfil
           </Link>
+          <button
+            onClick={toggleTheme}
+            title={isDark ? 'Modo claro' : 'Modo oscuro'}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 16, padding: '0 2px', WebkitTapHighlightColor: 'transparent' }}
+          >
+            {isDark ? '☀' : '🌙'}
+          </button>
           <button
             onClick={() => { clearAuth(); navigate('/') }}
             style={{
