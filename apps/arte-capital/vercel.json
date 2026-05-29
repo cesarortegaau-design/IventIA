@@ -1,4 +1,4 @@
 {
-  "ignoreCommand": "git diff HEAD^ HEAD --quiet -- apps/arte-capital/ packages/shared/ packages/prisma/",
+  "ignoreCommand": "git diff --quiet $VERCEL_GIT_PREVIOUS_SHA $VERCEL_GIT_COMMIT_SHA -- apps/arte-capital/ packages/shared/ packages/prisma/",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }
