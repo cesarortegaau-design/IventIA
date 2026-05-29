@@ -2,11 +2,13 @@ import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { usePlayerStore } from '../stores/playerStore'
+import { useThemeStore } from '../stores/themeStore'
 
 export default function ModeSelectorPage() {
   const navigate = useNavigate()
   const refereeToken = useAuthStore((s) => s.accessToken)
   const playerToken = usePlayerStore((s) => s.accessToken)
+  const { isDark, toggleTheme } = useThemeStore()
 
   useEffect(() => {
     if (refereeToken) navigate('/games', { replace: true })
@@ -14,7 +16,30 @@ export default function ModeSelectorPage() {
   }, [refereeToken, playerToken, navigate])
 
   return (
-    <div className="login-wrap">
+    <div className="login-wrap" style={{ position: 'relative' }}>
+      <button
+        onClick={toggleTheme}
+        title={isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+        style={{
+          position: 'absolute', top: 16, right: 16,
+          background: 'var(--surface2)',
+          border: '1px solid var(--border)',
+          borderRadius: 20,
+          padding: '6px 14px',
+          cursor: 'pointer',
+          fontSize: 13,
+          fontWeight: 600,
+          color: 'var(--text-muted)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          transition: 'all 0.15s',
+          WebkitTapHighlightColor: 'transparent',
+        }}
+      >
+        {isDark ? '☀' : '🌙'} {isDark ? 'Claro' : 'Oscuro'}
+      </button>
+
       <div className="login-logo">I-FLAG</div>
       <div className="login-subtitle">Fútbol bandera – Selecciona tu modo de acceso</div>
 

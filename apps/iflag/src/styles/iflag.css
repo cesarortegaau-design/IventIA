@@ -17,6 +17,22 @@
   --radius-lg: 20px;
 }
 
+/* ── Light mode ── */
+html.light {
+  --bg: #f0f4f8;
+  --surface: #ffffff;
+  --surface2: #f6f8fa;
+  --border: #d0d7de;
+  --text: #0d1117;
+  --text-muted: #57606a;
+  --green: #1a7f37;
+  --green-dark: #116329;
+  --orange: #c96500;
+  --red: #cf222e;
+  --blue: #0969da;
+  --gold: #9a6700;
+}
+
 html, body {
   margin: 0;
   padding: 0;
@@ -761,3 +777,54 @@ html, body {
 .ant-radio-button-wrapper-checked { background: rgba(0,230,118,0.15) !important; border-color: var(--green) !important; color: var(--green) !important; }
 .ant-modal-footer .ant-btn-default { background: var(--surface2) !important; border-color: var(--border) !important; color: var(--text) !important; }
 .ant-modal-close { color: var(--text-muted) !important; }
+
+/* ── Light mode overrides ── */
+
+/* Action buttons — reemplaza fondos oscuros hardcodeados */
+html.light .action-btn.td         { background: var(--green); color: #fff; }
+html.light .action-btn.xp         { background: #dafbe1; color: #1a7f37; border-color: #1a7f37; }
+html.light .action-btn.safety     { background: #ddf4ff; color: #0969da; }
+html.light .action-btn.penalty    { background: #fff1e0; color: #c96500; border-color: #c96500; }
+html.light .action-btn.nextdown   { background: #f6f8fa; color: #0d1117; border-color: #d0d7de; }
+html.light .action-btn.possession { background: #ddf4ff; color: #0969da; border-color: #0969da; }
+html.light .action-btn.halftime   { background: #fff8c5; color: #9a6700; border-color: #9a6700; }
+html.light .action-btn.end-game   { background: #ffebe9; color: #cf222e; border-color: #cf222e; }
+html.light .action-btn.interception { background: #fde8f4; color: #bf4b8a; border-color: #bf4b8a; }
+html.light .action-btn.sack        { background: #fbefff; color: #8250df; border-color: #8250df; }
+html.light .action-btn.score-adjust{ background: #fbefff; color: #8250df; border-color: #8250df; }
+html.light .action-btn.timeout     { background: #fff8c5; color: #9a6700; border-color: #9a6700; }
+html.light .action-btn.void-score  { background: #ffebe9; color: #cf222e; border-color: #cf222e; }
+
+/* Timer — elimina el glow verde en fondo blanco */
+html.light .timer-display {
+  text-shadow: none;
+}
+html.light .timer-display.warning {
+  text-shadow: none;
+}
+html.light .timer-btn.reset { background: #f6f8fa; color: #57606a; border-color: #d0d7de; }
+
+/* Logo login */
+html.light .login-logo { text-shadow: none; }
+
+/* Player card / attendance card */
+html.light .player-card.selected     { border-color: var(--green); background: rgba(26,127,55,0.08); }
+html.light .att-card.present          { border-color: var(--green); background: rgba(26,127,55,0.08); }
+html.light .attendance-player.present { background: rgba(26,127,55,0.05); }
+html.light .attendance-player.absent  { background: rgba(207,34,46,0.05); }
+html.light .attendance-toggle.present { background: var(--green); color: #fff; }
+html.light .player-option.selected    { border-color: var(--green); background: rgba(26,127,55,0.08); }
+
+/* First down buttons */
+html.light .first-down-btn.goal.active { background: rgba(26,127,55,0.12); border-color: var(--green); color: var(--green); }
+html.light .first-down-btn.line.active { background: rgba(9,105,218,0.12);  border-color: var(--blue);  color: var(--blue); }
+
+/* Status pills — reemplaza rgba hardcodeados */
+html.light .status-pill.ATTENDANCE  { background: rgba(9,105,218,0.12);   color: var(--blue); }
+html.light .status-pill.IN_PROGRESS { background: rgba(26,127,55,0.12);   color: var(--green); }
+html.light .status-pill.HALFTIME    { background: rgba(154,103,0,0.12);   color: var(--gold); }
+html.light .status-pill.FINISHED    { background: rgba(207,34,46,0.12);   color: var(--red); }
+
+/* Ant Design — overrides para modo claro */
+html.light .ant-select-item-option-selected   { background: rgba(26,127,55,0.1) !important; }
+html.light .ant-radio-button-wrapper-checked  { background: rgba(26,127,55,0.1) !important; border-color: var(--green) !important; color: var(--green) !important; }

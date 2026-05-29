@@ -6,6 +6,7 @@ import { PlusOutlined, LogoutOutlined, HistoryOutlined } from '@ant-design/icons
 import dayjs from 'dayjs'
 import { iflagApi } from '../api/iflag'
 import { useAuthStore } from '../stores/authStore'
+import { useThemeStore } from '../stores/themeStore'
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING: 'Pendiente',
@@ -36,6 +37,7 @@ export default function GamesListPage() {
   const qc = useQueryClient()
   const clearAuth = useAuthStore(s => s.clearAuth)
   const user = useAuthStore(s => s.user)
+  const { isDark, toggleTheme } = useThemeStore()
 
   // Drawer state
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -132,6 +134,9 @@ export default function GamesListPage() {
         </div>
         <button className="nav-action" onClick={() => setLogOpen(true)} title="Historial">
           <HistoryOutlined />
+        </button>
+        <button className="nav-action" onClick={toggleTheme} title={isDark ? 'Modo claro' : 'Modo oscuro'} style={{ fontSize: 16 }}>
+          {isDark ? '☀' : '🌙'}
         </button>
         <button className="nav-action" onClick={() => { clearAuth(); navigate('/login') }} title="Salir">
           <LogoutOutlined />
