@@ -13,6 +13,7 @@
   --red: #f44336;
   --blue: #2196f3;
   --gold: #ffd600;
+  --timer-track: #21262d;
   --radius: 12px;
   --radius-lg: 20px;
 }
@@ -31,6 +32,7 @@ html.light {
   --red: #cf222e;
   --blue: #0969da;
   --gold: #9a6700;
+  --timer-track: #475569;
 }
 
 html, body {

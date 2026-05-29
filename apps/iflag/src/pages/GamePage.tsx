@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useThemeStore } from '../stores/themeStore'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { App, Modal, Drawer, InputNumber } from 'antd'
@@ -132,6 +133,7 @@ function CircularTimer({
 }) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [dragging, setDragging] = useState(false)
+  const isDark = useThemeStore(s => s.isDark)
 
   const cx = size / 2
   const r = size * 0.392
@@ -139,7 +141,7 @@ function CircularTimer({
   const circ = 2 * Math.PI * r
   const progress = Math.min(elapsed / total, 1)
   const offset = circ * (1 - progress)
-  const color = warning ? 'var(--orange)' : (dragging ? '#fff' : 'var(--green)')
+  const color = warning ? 'var(--orange)' : (dragging ? 'var(--text)' : 'var(--green)')
   const shadow = warning ? 'rgba(255,152,0,0.4)' : 'rgba(0,230,118,0.4)'
   const displaySec = Math.max(0, total - elapsed)
   const fontSize = size * 0.257
@@ -194,7 +196,7 @@ function CircularTimer({
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
       >
-        <circle cx={cx} cy={cx} r={r} fill="none" stroke="var(--surface2)" strokeWidth={sw} />
+        <circle cx={cx} cy={cx} r={r} fill="none" stroke="var(--timer-track)" strokeWidth={sw} />
         <circle
           cx={cx} cy={cx} r={r} fill="none"
           stroke={color} strokeWidth={sw} strokeLinecap="round"
@@ -213,7 +215,7 @@ function CircularTimer({
       <div style={{ textAlign: 'center', zIndex: 1, pointerEvents: 'none' }}>
         <div
           className={running && !dragging ? 'timer-pulse' : ''}
-          style={{ fontFamily: "'Bebas Neue','Inter',sans-serif", fontSize, color, letterSpacing: '0.04em', lineHeight: 1, textShadow: `0 0 20px ${shadow}` }}
+          style={{ fontFamily: "'Bebas Neue','Inter',sans-serif", fontSize, color, letterSpacing: '0.04em', lineHeight: 1, textShadow: isDark ? `0 0 20px ${shadow}` : 'none' }}
         >
           {formatTimer(displaySec)}
         </div>
@@ -223,7 +225,7 @@ function CircularTimer({
           </div>
         )}
         {dragging && (
-          <div style={{ fontSize: 9, color: '#fff', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2 }}>
+          <div style={{ fontSize: 9, color: 'var(--text)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2 }}>
             AJUSTAR
           </div>
         )}
@@ -553,7 +555,7 @@ export default function GamePage() {
     VOID_SCORE: 'Anular Anotación',
   }
 
-  const labelStyle = { fontSize: 12, color: '#e6edf3', marginBottom: 8, fontWeight: 600 as const, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }
+  const labelStyle = { fontSize: 12, color: 'var(--text)', marginBottom: 8, fontWeight: 600 as const, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }
 
   function TeamButtons({ onSelect }: { onSelect?: () => void }) {
     return (
@@ -571,7 +573,7 @@ export default function GamePage() {
                 : <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, color: 'var(--text-muted)', fontWeight: 700 }}>
                     {playerName(t)[0]?.toUpperCase()}
                   </div>}
-              <div style={{ fontWeight: 700, fontSize: 13, color: '#e6edf3', textAlign: 'center' }}>{playerName(t)}</div>
+              <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)', textAlign: 'center' }}>{playerName(t)}</div>
             </div>
           </button>
         ))}
@@ -871,18 +873,18 @@ export default function GamePage() {
       {/* Action modal */}
       <Modal
         open={action !== null}
-        title={<span style={{ color: '#e6edf3' }}>{action ? actionLabel[action as string] : ''}</span>}
+        title={<span style={{ color: 'var(--text)' }}>{action ? actionLabel[action as string] : ''}</span>}
         onCancel={resetActionState}
         onOk={confirmAction}
         okText="Confirmar"
         okButtonProps={{ loading: recordEventMutation.isPending, style: { background: 'var(--green)', borderColor: 'var(--green)', color: '#000', fontWeight: 700 } }}
-        cancelButtonProps={{ style: { color: '#e6edf3' } }}
+        cancelButtonProps={{ style: { color: 'var(--text)' } }}
         destroyOnClose
       >
         {action === 'END_GAME' ? (
-          <div style={{ color: '#e6edf3', fontSize: 15 }}>
+          <div style={{ color: 'var(--text)', fontSize: 15 }}>
             ¿Confirmar el cierre del partido?<br />
-            <span style={{ color: '#adb5bd', fontSize: 13 }}>Esta acción publicará el marcador final.</span>
+            <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Esta acción publicará el marcador final.</span>
           </div>
 
         ) : action === 'POSSESSION' ? (
@@ -895,20 +897,20 @@ export default function GamePage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {isHalftime ? (
               <>
-                <div style={{ color: '#e6edf3', fontSize: 14 }}>Iniciar la segunda mitad</div>
+                <div style={{ color: 'var(--text)', fontSize: 14 }}>Iniciar la segunda mitad</div>
                 <div>
                   <div style={labelStyle}>🏈 ¿Quién recibe el saque?</div>
                   <TeamButtons />
                 </div>
               </>
             ) : (
-              <div style={{ color: '#e6edf3', fontSize: 15 }}>Pausar el partido para medio tiempo</div>
+              <div style={{ color: 'var(--text)', fontSize: 15 }}>Pausar el partido para medio tiempo</div>
             )}
           </div>
 
         ) : action === 'INTERCEPTION' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ color: '#e6edf3', fontSize: 14, padding: '8px 12px', background: 'rgba(0,230,118,0.08)', borderRadius: 8, border: '1px solid rgba(0,230,118,0.2)' }}>
+            <div style={{ color: 'var(--text)', fontSize: 14, padding: '8px 12px', background: 'rgba(0,230,118,0.08)', borderRadius: 8, border: '1px solid rgba(0,230,118,0.2)' }}>
               🏈 Posesión cambia a <strong><TeamTag team={defenseTeam} size={18} /></strong>
             </div>
             <div>
@@ -919,7 +921,7 @@ export default function GamePage() {
 
         ) : action === 'SACK' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ color: '#e6edf3', fontSize: 14, padding: '8px 12px', background: 'rgba(206,147,216,0.08)', borderRadius: 8, border: '1px solid rgba(206,147,216,0.25)' }}>
+            <div style={{ color: 'var(--text)', fontSize: 14, padding: '8px 12px', background: 'rgba(206,147,216,0.08)', borderRadius: 8, border: '1px solid rgba(206,147,216,0.25)' }}>
               💨 Sack a <strong><TeamTag team={offenseTeam} size={18} /></strong>
             </div>
             <div>
@@ -961,7 +963,7 @@ export default function GamePage() {
                         : <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, color: 'var(--text-muted)', fontWeight: 700 }}>
                             {playerName(t)[0]?.toUpperCase()}
                           </div>}
-                      <div style={{ fontWeight: 700, fontSize: 13, color: '#e6edf3', textAlign: 'center' }}>{playerName(t)}</div>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)', textAlign: 'center' }}>{playerName(t)}</div>
                       <div style={{ fontSize: 11, color: remaining > 0 ? 'var(--green)' : '#ff4d4f' }}>
                         {remaining > 0 ? `${remaining} restante${remaining > 1 ? 's' : ''}` : 'Sin tiempos'}
                       </div>
@@ -982,10 +984,10 @@ export default function GamePage() {
               <div style={labelStyle}>Tipo</div>
               <div style={{ display: 'flex', gap: 10 }}>
                 <button className={`player-option ${!tdIsRush ? 'selected' : ''}`} style={{ flex: 1, padding: 12 }} onClick={() => setTdIsRush(false)}>
-                  <div style={{ fontWeight: 700, fontSize: 15, color: '#e6edf3', textAlign: 'center' }}>🏈 Pase</div>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)', textAlign: 'center' }}>🏈 Pase</div>
                 </button>
                 <button className={`player-option ${tdIsRush ? 'selected' : ''}`} style={{ flex: 1, padding: 12 }} onClick={() => setTdIsRush(true)}>
-                  <div style={{ fontWeight: 700, fontSize: 15, color: '#e6edf3', textAlign: 'center' }}>🏃 Carrera</div>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)', textAlign: 'center' }}>🏃 Carrera</div>
                 </button>
               </div>
             </div>
@@ -1041,7 +1043,7 @@ export default function GamePage() {
                     style={{ flex: 1, padding: 12 }}
                     onClick={() => setVoidType(key)}
                   >
-                    <div style={{ fontWeight: 700, fontSize: 13, color: voidType === key ? color : '#e6edf3', textAlign: 'center' }}>{label}</div>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: voidType === key ? color : 'var(--text)', textAlign: 'center' }}>{label}</div>
                     <div style={{ fontSize: 11, color: voidType === key ? color : 'var(--text-muted)' }}>{pts} pts</div>
                   </button>
                 ))}
@@ -1069,7 +1071,7 @@ export default function GamePage() {
       </Modal>
 
       {/* Event log drawer */}
-      <Drawer title={<span style={{ color: '#e6edf3' }}>Auditoría del Partido</span>} placement="bottom" height="65vh" open={logOpen} onClose={() => setLogOpen(false)}>
+      <Drawer title={<span style={{ color: 'var(--text)' }}>Auditoría del Partido</span>} placement="bottom" height="65vh" open={logOpen} onClose={() => setLogOpen(false)}>
         <div>
           {gameEvents.length === 0 && <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 30 }}>Sin eventos registrados</div>}
           {gameEvents.map((evt: any) => (
@@ -1089,7 +1091,7 @@ export default function GamePage() {
 
       {/* Stats drawer */}
       <Drawer
-        title={<span style={{ color: '#e6edf3' }}>🏆 Estadísticas del Partido</span>}
+        title={<span style={{ color: 'var(--text)' }}>🏆 Estadísticas del Partido</span>}
         placement="bottom" height="75vh"
         open={statsOpen} onClose={() => setStatsOpen(false)}
       >
