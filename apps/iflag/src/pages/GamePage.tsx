@@ -673,7 +673,7 @@ export default function GamePage() {
                   total={HALF_DURATION}
                   running={timerRunning}
                   warning={overTime}
-                  size={190}
+                  size={210}
                   onScrub={!isSpectator && !isHalftime ? (s) => setLocalSeconds(s) : undefined}
                   onScrubEnd={!isSpectator && !isHalftime ? (s) => timerSetMutation.mutate(s) : undefined}
                 />
@@ -682,15 +682,15 @@ export default function GamePage() {
                 {!isSpectator && !isHalftime && (
                   <div style={{ display: 'flex', gap: 8, width: '100%' }}>
                     {timerRunning ? (
-                      <button className="timer-btn stop" style={{ flex: 2, padding: '10px 0', fontSize: 15 }} onClick={() => timerStopMutation.mutate()} disabled={timerStopMutation.isPending}>
-                        <PauseCircleOutlined style={{ marginRight: 5 }} /> Detener
+                      <button className="timer-btn stop" style={{ flex: 2, padding: '16px 0', fontSize: 18 }} onClick={() => timerStopMutation.mutate()} disabled={timerStopMutation.isPending}>
+                        <PauseCircleOutlined style={{ marginRight: 6 }} /> Detener
                       </button>
                     ) : (
-                      <button className="timer-btn start" style={{ flex: 2, padding: '10px 0', fontSize: 15 }} onClick={() => timerStartMutation.mutate()} disabled={timerStartMutation.isPending}>
-                        <PlayCircleOutlined style={{ marginRight: 5 }} /> Iniciar
+                      <button className="timer-btn start" style={{ flex: 2, padding: '16px 0', fontSize: 18 }} onClick={() => timerStartMutation.mutate()} disabled={timerStartMutation.isPending}>
+                        <PlayCircleOutlined style={{ marginRight: 6 }} /> Iniciar
                       </button>
                     )}
-                    <button className="timer-btn reset" style={{ flex: 1, padding: '10px 0', fontSize: 14 }} onClick={() => timerResetMutation.mutate()} disabled={timerResetMutation.isPending}>
+                    <button className="timer-btn reset" style={{ flex: 1, padding: '16px 0', fontSize: 15 }} onClick={() => timerResetMutation.mutate()} disabled={timerResetMutation.isPending}>
                       Reset
                     </button>
                   </div>
@@ -735,10 +735,10 @@ export default function GamePage() {
                             </button>
                           </div>
                           <div style={{ display: 'flex', gap: 6 }}>
-                            <button className="timer-btn reset" style={{ flex: 1, padding: '11px 0', fontSize: 15 }} onClick={doPrevDown} disabled={game.currentDown <= 1 || recordEventMutation.isPending}>
+                            <button className="timer-btn reset" style={{ flex: 1, padding: '15px 0', fontSize: 17 }} onClick={doPrevDown} disabled={game.currentDown <= 1 || recordEventMutation.isPending}>
                               ◀ Regresar
                             </button>
-                            <button className="timer-btn start" style={{ flex: 1, padding: '11px 0', fontSize: 15 }} onClick={doNextDown} disabled={recordEventMutation.isPending}>
+                            <button className="timer-btn start" style={{ flex: 2, padding: '15px 0', fontSize: 18 }} onClick={doNextDown} disabled={recordEventMutation.isPending}>
                               Siguiente ▶
                             </button>
                           </div>
@@ -749,28 +749,6 @@ export default function GamePage() {
                 )}
               </div>
 
-              {/* Timeout strip — always visible on Panel 1 */}
-              {!isHalftime && (
-                <div style={{ width: '100%', padding: '4px 4px 0' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface2)', borderRadius: 10, padding: '7px 12px', border: '1px solid var(--border)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                      {[1, 2].map(i => (
-                        <div key={i} style={{ width: 13, height: 13, borderRadius: '50%', background: i <= localTimeoutsUsed ? '#faad14' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', transition: 'background 0.2s' }} />
-                      ))}
-                      <TeamTag team={game.localTeam} size={18} />
-                    </div>
-                    <span style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                      T. Fuera {halfLabel}
-                    </span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <TeamTag team={game.visitingTeam} size={18} />
-                      {[1, 2].map(i => (
-                        <div key={i} style={{ width: 13, height: 13, borderRadius: '50%', background: i <= visitingTimeoutsUsed ? '#faad14' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', transition: 'background 0.2s' }} />
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
 
               {!isSpectator && (
                 <div style={{ padding: '4px 12px 0' }}>
@@ -809,6 +787,29 @@ export default function GamePage() {
                     </button>
                     <div className="section-header" style={{ margin: 0, flex: 1 }}>Acciones</div>
                   </div>
+                  {/* Timeout strip */}
+                  {!isHalftime && (
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface2)', borderRadius: 10, padding: '10px 14px', border: '1px solid var(--border)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {[1, 2].map(i => (
+                            <div key={i} style={{ width: 14, height: 14, borderRadius: '50%', background: i <= localTimeoutsUsed ? '#faad14' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', transition: 'background 0.2s' }} />
+                          ))}
+                          <TeamTag team={game.localTeam} size={18} />
+                        </div>
+                        <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                          T. Fuera {halfLabel}
+                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <TeamTag team={game.visitingTeam} size={18} />
+                          {[1, 2].map(i => (
+                            <div key={i} style={{ width: 14, height: 14, borderRadius: '50%', background: i <= visitingTimeoutsUsed ? '#faad14' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', transition: 'background 0.2s' }} />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="actions-grid">
                     {!isHalftime && (
                       <>
