@@ -1,5 +1,5 @@
 {
-  "ignoreCommand": "DIFF=$(git show --stat HEAD -- apps/community/ packages/shared/ packages/prisma/ 2>/dev/null); [ -n \"$DIFF\" ] && exit 1; exit 0",
+  "ignoreCommand": "CHANGED=$(curl -sf \"https://api.github.com/repos/cesarortegaau-design/IventIA/commits/$VERCEL_GIT_COMMIT_SHA\" 2>/dev/null | grep '\"filename\"' | grep -E '\"apps/community/|packages/shared/|packages/prisma/'); [ -n \"$CHANGED\" ] && exit 1; exit 0",
   "rewrites": [
     {
       "source": "/api/(.*)",
@@ -11,4 +11,3 @@
     }
   ]
 }
-
