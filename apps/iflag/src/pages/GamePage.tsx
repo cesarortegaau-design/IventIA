@@ -1,4 +1,4 @@
-// v2 — timeouts en panel acciones, botones grandes, polling 4s
+// v3 — timeouts en panel acciones, botones grandes, polling 4s
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useThemeStore } from '../stores/themeStore'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
