@@ -245,6 +245,7 @@ export default function GamePage() {
   const [localSeconds, setLocalSeconds] = useState(0)
   const [timerRunning, setTimerRunning] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const wasTimerRunningRef = useRef(false)
 
   const swipeRef = useRef<HTMLDivElement>(null)
   const [activePanel, setActivePanel] = useState(0)
@@ -266,7 +267,7 @@ export default function GamePage() {
   const { data: gameData, isLoading } = useQuery({
     queryKey: ['iflag-game', gameId],
     queryFn: () => iflagApi.getGame(gameId!),
-    refetchInterval: isSpectator ? 5000 : false,
+    refetchInterval: 4000,
   })
   const game = gameData?.data
 
@@ -279,8 +280,15 @@ export default function GamePage() {
 
   useEffect(() => {
     if (!game) return
-    setLocalSeconds(game.timerSeconds ?? 0)
-    setTimerRunning(game.timerRunning ?? false)
+    const serverRunning = game.timerRunning ?? false
+    const prevRunning = wasTimerRunningRef.current
+    wasTimerRunningRef.current = serverRunning
+    setTimerRunning(serverRunning)
+    // Sync seconds only when stopped, or when running state just changed (another referee started/stopped)
+    // While both local and server agree timer is running, keep local counter going (no visual jump)
+    if (!serverRunning || !prevRunning) {
+      setLocalSeconds(game.timerSeconds ?? 0)
+    }
   }, [game?.timerSeconds, game?.timerRunning])
 
   useEffect(() => {
